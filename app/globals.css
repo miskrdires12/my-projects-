@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --card-border: #e5e5e5;
+  --muted: #737373;
+  --muted-bg: #f5f5f5;
+  --border: #e5e5e5;
+  --sidebar-bg: #ffffff;
+  --sidebar-border: #e5e5e5;
+  --accent: #000000;
+  --accent-foreground: #ffffff;
+}
+
+body {
+  background-color: #fafafa;
+  color: #0a0a0a;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+}
+
+/* Crisp subtle scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+/* Minimalist Card & Panel Utilities */
+.white-card {
+  background-color: #ffffff;
+  border: 1px solid #e5e5e5;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+}
+
+.white-card-hover:hover {
+  border-color: #a3a3a3;
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.subtle-border {
+  border-color: #e5e5e5;
+}
