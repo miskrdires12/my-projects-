@@ -106,23 +106,23 @@ export function TeamClient({
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-white">Community & Access Control</h1>
-          <p className="text-xs text-neutral-400">
-            Role-based permissions and team management for workspace <code className="font-mono text-fuchsia-300">/{orgSlug}</code>.
+          <h1 className="text-xl font-bold tracking-tight text-neutral-950 dark:text-white">Community & Access Control</h1>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            Role-based permissions and team management for workspace <code className="font-mono text-neutral-900 dark:text-white">/{orgSlug}</code> · Developed by Miskr Dires.
           </p>
         </div>
 
         {canInvite ? (
           <button
             onClick={() => setIsInviteModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full helios-ai-btn text-white text-xs font-semibold shadow-sm transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 text-xs font-semibold shadow-xs transition-all cursor-pointer"
           >
             <UserPlus className="h-4 w-4" />
             <span>Invite Member</span>
           </button>
         ) : (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-xs text-neutral-400">
-            <Lock className="h-3.5 w-3.5 text-neutral-500" />
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/10 text-xs text-neutral-600 dark:text-neutral-400">
+            <Lock className="h-3.5 w-3.5 text-neutral-400" />
             <span>Read-only (Member role)</span>
           </div>
         )}
@@ -130,25 +130,25 @@ export function TeamClient({
 
       {/* RBAC Notice Banner if Member */}
       {!canInvite && (
-        <div className="p-4 rounded-3xl bg-[#13131b] border border-white/[0.08] text-xs text-neutral-300 flex items-start gap-3">
-          <ShieldAlert className="h-4 w-4 text-fuchsia-400 flex-shrink-0 mt-0.5" />
+        <div className="p-4 rounded-3xl bg-neutral-100 dark:bg-[#0f0f14] border border-neutral-200 dark:border-white/[0.08] text-xs text-neutral-700 dark:text-neutral-300 flex items-start gap-3">
+          <ShieldAlert className="h-4 w-4 text-neutral-900 dark:text-white flex-shrink-0 mt-0.5" />
           <div>
-            <strong className="text-white font-medium">Access Restriction:</strong> Your role in
-            this workspace is <span className="font-mono font-medium text-fuchsia-300">MEMBER</span>. You can deploy services, but only users with{" "}
-            <span className="font-mono font-medium text-fuchsia-300">OWNER</span> or <span className="font-mono font-medium text-fuchsia-300">ADMIN</span> roles can manage members or modify subscription tiers.
+            <strong className="text-neutral-950 dark:text-white font-medium">Access Restriction:</strong> Your role in
+            this workspace is <span className="font-mono font-bold text-neutral-950 dark:text-white">MEMBER</span>. You can deploy services, but only users with{" "}
+            <span className="font-mono font-bold text-neutral-950 dark:text-white">OWNER</span> or <span className="font-mono font-bold text-neutral-950 dark:text-white">ADMIN</span> roles can manage members or modify subscription tiers.
           </div>
         </div>
       )}
 
       {/* Members Table Card */}
-      <div className="rounded-3xl bg-[#13131b] border border-white/[0.08] overflow-hidden shadow-xl">
-        <div className="p-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/80 dark:border-white/[0.08] overflow-hidden shadow-sm dark:shadow-xl">
+        <div className="p-5 border-b border-neutral-100 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Users2 className="h-4 w-4 text-fuchsia-400" />
-            <h2 className="text-xs font-bold text-white">
+            <Users2 className="h-4 w-4 text-neutral-900 dark:text-white" />
+            <h2 className="text-xs font-bold text-neutral-950 dark:text-white">
               Active Members ({members.length})
             </h2>
-            <span className="text-[10px] text-neutral-500 font-mono">• {currentTier} Plan</span>
+            <span className="text-[10px] text-neutral-400 font-mono">• {currentTier} Plan</span>
           </div>
 
           <div className="relative w-64">
@@ -158,14 +158,14 @@ export function TeamClient({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search members..."
-              className="w-full pl-7 pr-3 py-1.5 text-xs rounded-full bg-white/[0.04] border border-white/10 text-white placeholder-neutral-500 focus:outline-none focus:border-fuchsia-500/40 transition-all"
+              className="w-full pl-7 pr-3 py-1.5 text-xs rounded-full bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/10 text-neutral-900 dark:text-white placeholder-neutral-500 focus:outline-none focus:border-black dark:focus:border-white transition-all"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-white/[0.02] text-neutral-400 uppercase tracking-wider text-[10px] border-b border-white/[0.05] font-mono">
+            <thead className="bg-neutral-50 dark:bg-white/[0.02] text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px] border-b border-neutral-200/80 dark:border-white/[0.05] font-mono">
               <tr>
                 <th className="px-5 py-3">Member</th>
                 <th className="px-5 py-3">Email Address</th>
@@ -174,21 +174,21 @@ export function TeamClient({
                 {canInvite && <th className="px-5 py-3 text-right">Actions</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.04] text-neutral-200">
+            <tbody className="divide-y divide-neutral-100 dark:divide-white/[0.04] text-neutral-800 dark:text-neutral-200">
               {filteredMembers.map((member) => {
                 const isSelf = member.user.id === currentUserId;
 
                 return (
-                  <tr key={member.id} className="hover:bg-white/[0.02] transition-colors">
+                  <tr key={member.id} className="hover:bg-neutral-50 dark:hover:bg-white/[0.02] transition-colors">
                     <td className="px-5 py-3.5 flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-600 to-fuchsia-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <div className="h-8 w-8 rounded-full bg-black dark:bg-white text-white dark:text-black font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-xs">
                         {(member.user.name || member.user.email).substring(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <div className="font-semibold text-white flex items-center gap-1.5">
+                        <div className="font-bold text-neutral-950 dark:text-white flex items-center gap-1.5">
                           <span>{member.user.name || "Unnamed User"}</span>
                           {isSelf && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/[0.08] text-fuchsia-300 border border-white/10 font-mono">
+                            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-black/5 dark:bg-white/[0.08] text-neutral-900 dark:text-white border border-neutral-300 dark:border-white/10 font-mono">
                               You
                             </span>
                           )}
@@ -196,27 +196,27 @@ export function TeamClient({
                       </div>
                     </td>
 
-                    <td className="px-5 py-3.5 text-neutral-400 font-mono text-[11px]">{member.user.email}</td>
+                    <td className="px-5 py-3.5 text-neutral-500 dark:text-neutral-400 font-mono text-[11px]">{member.user.email}</td>
 
                     <td className="px-5 py-3.5">
                       {isOwner && !isSelf ? (
                         <select
                           value={member.role}
                           onChange={(e) => handleRoleChange(member.id, e.target.value as MembershipRole)}
-                          className="text-xs px-2.5 py-1 rounded-full border border-white/10 bg-[#191924] text-white font-semibold focus:outline-none focus:border-fuchsia-500 cursor-pointer"
+                          className="text-xs px-2.5 py-1 rounded-full border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#191924] text-neutral-900 dark:text-white font-semibold focus:outline-none focus:border-black dark:focus:border-white cursor-pointer"
                         >
                           <option value="MEMBER">MEMBER</option>
                           <option value="ADMIN">ADMIN</option>
                           <option value="OWNER">OWNER</option>
                         </select>
                       ) : (
-                        <span className="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-white/[0.06] text-fuchsia-300 border border-white/10 font-mono">
+                        <span className="px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-neutral-100 dark:bg-white/[0.06] text-neutral-900 dark:text-white border border-neutral-200 dark:border-white/10 font-mono">
                           {member.role}
                         </span>
                       )}
                     </td>
 
-                    <td className="px-5 py-3.5 text-neutral-500 text-[11px] font-mono">
+                    <td className="px-5 py-3.5 text-neutral-400 dark:text-neutral-500 text-[11px] font-mono">
                       {new Date(member.createdAt).toLocaleDateString()}
                     </td>
 
@@ -226,7 +226,7 @@ export function TeamClient({
                           <button
                             onClick={() => handleRemoveMember(member.id)}
                             title="Remove Member"
-                            className="p-1.5 text-neutral-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -243,27 +243,27 @@ export function TeamClient({
 
       {/* Pending Invitations Table */}
       {invitations.length > 0 && (
-        <div className="rounded-3xl bg-[#13131b] border border-white/[0.08] overflow-hidden shadow-xl">
-          <div className="p-5 border-b border-white/[0.05]">
-            <h2 className="text-xs font-bold text-white flex items-center gap-2">
-              <Mail className="h-3.5 w-3.5 text-fuchsia-400" />
+        <div className="rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/80 dark:border-white/[0.08] overflow-hidden shadow-sm dark:shadow-xl">
+          <div className="p-5 border-b border-neutral-100 dark:border-white/[0.05]">
+            <h2 className="text-xs font-bold text-neutral-950 dark:text-white flex items-center gap-2">
+              <Mail className="h-3.5 w-3.5" />
               <span>Pending Invitations ({invitations.length})</span>
             </h2>
           </div>
 
-          <div className="divide-y divide-white/[0.04]">
+          <div className="divide-y divide-neutral-100 dark:divide-white/[0.04]">
             {invitations.map((inv) => (
               <div key={inv.id} className="p-4 flex items-center justify-between text-xs">
                 <div className="space-y-0.5">
-                  <div className="font-semibold text-white font-mono text-[11px]">{inv.email}</div>
-                  <div className="text-[11px] text-neutral-400 flex items-center gap-2">
-                    <span>Role: <strong className="text-fuchsia-300">{inv.role}</strong></span>
+                  <div className="font-semibold text-neutral-900 dark:text-white font-mono text-[11px]">{inv.email}</div>
+                  <div className="text-[11px] text-neutral-500 dark:text-neutral-400 flex items-center gap-2">
+                    <span>Role: <strong className="text-neutral-950 dark:text-white">{inv.role}</strong></span>
                     <span>•</span>
                     <span>Expires: {new Date(inv.expiresAt).toLocaleDateString()}</span>
                   </div>
                 </div>
 
-                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-white/[0.06] text-neutral-300 border border-white/10 font-bold font-mono">
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-white/[0.06] text-neutral-800 dark:text-neutral-300 border border-neutral-200 dark:border-white/10 font-bold font-mono">
                   {inv.status}
                 </span>
               </div>
@@ -274,18 +274,18 @@ export function TeamClient({
 
       {/* Invite Modal */}
       {isInviteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md bg-[#13131b] border border-white/10 rounded-3xl shadow-2xl p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-white dark:bg-[#13131b] border border-neutral-200 dark:border-white/10 rounded-3xl shadow-2xl p-6 space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold text-white">Invite Team Member</h2>
-                <p className="text-xs text-neutral-400 mt-0.5">
+                <h2 className="text-base font-bold text-neutral-950 dark:text-white">Invite Team Member</h2>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
                   Issue a workspace invitation with an assigned role.
                 </p>
               </div>
               <button
                 onClick={() => setIsInviteModalOpen(false)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white bg-white/[0.05] transition-colors"
+                className="p-1 rounded-full text-neutral-400 hover:text-black dark:hover:text-white bg-neutral-100 dark:bg-white/[0.05] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -293,22 +293,22 @@ export function TeamClient({
 
             <form onSubmit={handleInvite} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-neutral-300">Work Email</label>
+                <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Work Email</label>
                 <input
                   required
                   name="email"
                   type="email"
                   placeholder="colleague@company.com"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-white/[0.04] border border-white/10 text-white placeholder-neutral-500 focus:outline-none focus:border-fuchsia-500 transition-all"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/10 text-neutral-900 dark:text-white placeholder-neutral-500 focus:outline-none focus:border-black dark:focus:border-white transition-all"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-neutral-300">Role & Access Level</label>
+                <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Role & Access Level</label>
                 <select
                   name="role"
                   defaultValue="MEMBER"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-[#191924] border border-white/10 text-white focus:outline-none focus:border-fuchsia-500 font-medium cursor-pointer"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 dark:bg-[#191924] border border-neutral-200 dark:border-white/10 text-neutral-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-white font-medium cursor-pointer"
                 >
                   <option value="MEMBER">Member · Can view and deploy services</option>
                   <option value="ADMIN">Admin · Can invite members, manage billing, and configure settings</option>
@@ -320,14 +320,14 @@ export function TeamClient({
                 <button
                   type="button"
                   onClick={() => setIsInviteModalOpen(false)}
-                  className="px-4 py-2 rounded-full text-xs font-medium text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-full text-xs font-medium text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-full text-xs font-semibold text-white helios-ai-btn disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 rounded-full text-xs font-semibold bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 disabled:opacity-50 cursor-pointer shadow-xs"
                 >
                   {isSubmitting ? "Inviting..." : "Send Invitation"}
                 </button>

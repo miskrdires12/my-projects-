@@ -13,11 +13,13 @@ import {
   LogOut,
   ChevronDown,
   Lock,
+  Code2,
 } from "lucide-react";
 import { OrganizationMembershipInfo, MembershipRole } from "@/types/tenant";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { TenantSwitcher } from "./tenant-switcher";
+import { ThemeToggle } from "./theme-provider";
 
 interface SidebarProps {
   currentOrg: {
@@ -74,17 +76,17 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
   ];
 
   return (
-    <aside className="w-64 bg-[#0d0d13] border-r border-white/[0.06] flex flex-col justify-between h-full min-h-[750px] p-5 select-none">
+    <aside className="w-64 bg-white dark:bg-[#0c0c10] border-r border-neutral-200/80 dark:border-white/[0.06] flex flex-col justify-between h-full min-h-[750px] p-5 select-none transition-colors duration-200">
       {/* Top Section: Brand & Nav */}
-      <div className="space-y-7">
+      <div className="space-y-6">
         {/* Brand Header */}
-        <div className="flex items-center justify-between px-2 pt-1">
+        <div className="flex items-center justify-between px-1 pt-1">
           <Link
             href={`/${currentOrg.slug}/dashboard`}
             className="flex items-center gap-3 group transition-transform active:scale-95"
           >
-            {/* Helios Geometric Custom Icon */}
-            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-fuchsia-500/20 to-purple-600/30 border border-fuchsia-500/30 flex items-center justify-center text-white shadow-[0_0_15px_rgba(217,70,239,0.25)] group-hover:border-fuchsia-400 transition-all">
+            {/* Pure Monochrome Geometric Icon */}
+            <div className="h-8 w-8 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-sm group-hover:opacity-90 transition-opacity">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -92,7 +94,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="w-4 h-4 text-white"
+                className="w-4 h-4"
               >
                 <path d="M4 6h4v12H4z" />
                 <path d="M16 6h4v12h-4z" />
@@ -100,11 +102,11 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
               </svg>
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-sm tracking-tight text-white group-hover:text-fuchsia-200 transition-colors">
+              <span className="font-bold text-sm tracking-tight text-neutral-900 dark:text-white group-hover:opacity-80 transition-opacity">
                 Helios Investments
               </span>
-              <span className="text-[10px] text-neutral-400 font-mono">
-                {currentOrg.name} · {currentOrg.tier}
+              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
+                by Miskr Dires
               </span>
             </div>
           </Link>
@@ -112,7 +114,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
           <button
             onClick={() => setShowOrgMenu(!showOrgMenu)}
             title="Switch Workspace"
-            className="p-1 text-neutral-400 hover:text-white rounded-lg hover:bg-white/[0.05] transition-colors"
+            className="p-1.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-white/[0.05] transition-colors"
           >
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showOrgMenu ? "rotate-180" : ""}`} />
           </button>
@@ -131,7 +133,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
         )}
 
         {/* Main Navigation Links */}
-        <nav className="space-y-2">
+        <nav className="space-y-1.5 pt-1">
           {navigation.map((item) => {
             const isActive =
               item.name === "Dashboard"
@@ -148,16 +150,18 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-medium transition-all duration-200 group ${
+                className={`flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-medium transition-all duration-150 group ${
                   isActive
-                    ? "helios-pill-active text-white font-semibold"
-                    : "text-neutral-400 hover:text-white hover:bg-white/[0.04]"
+                    ? "bg-black text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                    : "text-neutral-600 hover:text-black hover:bg-neutral-100 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-white/[0.04]"
                 }`}
               >
                 <div className="flex items-center gap-3.5">
                   <div
                     className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
-                      isActive ? "text-fuchsia-300" : "text-neutral-400 group-hover:text-white"
+                      isActive
+                        ? "text-white dark:text-black"
+                        : "text-neutral-500 group-hover:text-black dark:text-neutral-400 dark:group-hover:text-white"
                     }`}
                   >
                     <item.icon className="h-4 w-4" />
@@ -167,7 +171,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
 
                 {isRestricted && (
                   <span title="Admin Access Only">
-                    <Lock className="h-3 w-3 text-neutral-500" />
+                    <Lock className="h-3 w-3 text-neutral-400" />
                   </span>
                 )}
               </Link>
@@ -176,50 +180,50 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
         </nav>
       </div>
 
-      {/* Bottom Section: Settings & Support */}
-      <div className="space-y-3 pt-6 border-t border-white/[0.05]">
-        <Link
-          href={`/${currentOrg.slug}/billing`}
-          className="flex items-center gap-3.5 px-4 py-2.5 rounded-2xl text-xs text-neutral-400 hover:text-white hover:bg-white/[0.04] transition-colors group"
-        >
-          <Settings className="h-4 w-4 text-neutral-400 group-hover:text-white transition-colors" />
-          <span>Settings</span>
-        </Link>
-
-        <a
-          href="mailto:support@helios.ai"
-          className="flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs text-neutral-400 hover:text-white hover:bg-white/[0.04] transition-colors group"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="relative">
-              <LifeBuoy className="h-4 w-4 text-neutral-400 group-hover:text-white transition-colors" />
-              <span className="absolute -top-1 -right-1 text-[7px] font-bold bg-fuchsia-500 text-black px-1 rounded-full">
-                24
-              </span>
-            </div>
-            <span>Support</span>
-          </div>
-          <span className="text-[10px] text-neutral-500 font-mono">24/7</span>
-        </a>
-
-        {/* User Mini Profile & Logout */}
-        <div className="pt-2 flex items-center justify-between px-2">
+      {/* Bottom Section: Developed by Miskr Dires + Settings + User */}
+      <div className="space-y-3 pt-4 border-t border-neutral-200/80 dark:border-white/[0.06]">
+        {/* Creator Card */}
+        <div className="p-3 rounded-2xl bg-neutral-100 dark:bg-[#141419] border border-neutral-200/80 dark:border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="h-7 w-7 rounded-full bg-gradient-to-tr from-purple-500 to-fuchsia-500 flex items-center justify-center text-white font-semibold text-xs shadow-sm">
-              {currentUser.name.charAt(0).toUpperCase()}
+            <div className="h-7 w-7 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center font-bold text-[10px] flex-shrink-0">
+              M
             </div>
-            <div className="truncate">
-              <p className="text-xs font-medium text-white truncate">{currentUser.name}</p>
-              <p className="text-[10px] text-neutral-400 truncate font-mono">{currentUser.role}</p>
+            <div className="truncate leading-tight">
+              <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
+                Miskr Dires
+              </p>
+              <p className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                Platform Developer
+              </p>
             </div>
           </div>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            title="Sign Out"
-            className="p-1.5 text-neutral-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+          <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 font-medium">
+            Creator
+          </span>
+        </div>
+
+        {/* Settings & Support Links */}
+        <div className="flex items-center justify-between px-1">
+          <Link
+            href={`/${currentOrg.slug}/billing`}
+            className="flex items-center gap-2 text-xs text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors"
           >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
+            <Settings className="h-3.5 w-3.5" />
+            <span>Settings</span>
+          </Link>
+
+          <div className="flex items-center gap-2">
+            {/* Quick Night/Day Toggle in Sidebar */}
+            <ThemeToggle className="w-7 h-7 p-1.5" />
+
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              title="Sign Out"
+              className="p-1.5 text-neutral-400 hover:text-red-500 transition-colors cursor-pointer"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </aside>

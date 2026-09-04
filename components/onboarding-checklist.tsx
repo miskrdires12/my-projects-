@@ -47,21 +47,21 @@ export function OnboardingChecklist({ orgSlug, onNavigateTab }: OnboardingCheckl
   const progressPercent = Math.round((completedCount / steps.length) * 100);
 
   return (
-    <div className="p-5 rounded-3xl bg-[#13131b] border border-white/[0.08] shadow-xl space-y-3">
+    <div className="p-5 rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/80 dark:border-white/[0.08] shadow-sm dark:shadow-xl space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-7 w-7 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-center font-bold text-xs">
+          <div className="h-7 w-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs">
             ✓
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <h3 className="text-sm font-bold text-neutral-950 dark:text-white flex items-center gap-2">
               <span>Workspace Setup</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-fuchsia-300 border border-white/[0.08]">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-white/[0.06] text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-white/[0.08]">
                 {completedCount} of {steps.length} completed
               </span>
             </h3>
-            <p className="text-xs text-neutral-400">
-              Required configuration steps to activate custom domains and edge routing.
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              Configuration checklist · Developed by Miskr Dires.
             </p>
           </div>
         </div>
@@ -69,13 +69,13 @@ export function OnboardingChecklist({ orgSlug, onNavigateTab }: OnboardingCheckl
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1.5 text-neutral-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-neutral-400 hover:text-black dark:hover:text-white rounded-lg transition-colors cursor-pointer"
           >
             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           <button
             onClick={() => setIsDismissed(true)}
-            className="p-1.5 text-neutral-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-neutral-400 hover:text-black dark:hover:text-white rounded-lg transition-colors cursor-pointer"
             title="Dismiss checklist"
           >
             <X className="h-4 w-4" />
@@ -84,16 +84,16 @@ export function OnboardingChecklist({ orgSlug, onNavigateTab }: OnboardingCheckl
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
+      <div className="w-full h-1.5 bg-neutral-200 dark:bg-white/[0.08] rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-purple-500 to-fuchsia-500 rounded-full transition-all duration-300"
+          className="h-full bg-black dark:bg-white rounded-full transition-all duration-300"
           style={{ width: `${progressPercent}%` }}
         />
       </div>
 
       {/* Steps List */}
       {isExpanded && (
-        <div className="divide-y divide-white/[0.05] pt-1">
+        <div className="divide-y divide-neutral-100 dark:divide-white/[0.05] pt-1">
           {steps.map((step) => (
             <div
               key={step.id}
@@ -101,26 +101,26 @@ export function OnboardingChecklist({ orgSlug, onNavigateTab }: OnboardingCheckl
             >
               <div className="flex items-start gap-2.5 min-w-0">
                 {step.completed ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
                 ) : (
-                  <Circle className="h-4 w-4 text-neutral-500 flex-shrink-0 mt-0.5" />
+                  <Circle className="h-4 w-4 text-neutral-400 dark:text-neutral-500 flex-shrink-0 mt-0.5" />
                 )}
                 <div className="space-y-0.5">
                   <div
                     className={`font-semibold ${
-                      step.completed ? "text-white" : "text-neutral-300"
+                      step.completed ? "text-neutral-900 dark:text-white" : "text-neutral-600 dark:text-neutral-300"
                     }`}
                   >
                     {step.title}
                   </div>
-                  <p className="text-[11px] text-neutral-400">{step.desc}</p>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400">{step.desc}</p>
                 </div>
               </div>
 
               {step.action && !step.completed && (
                 <button
                   onClick={step.action}
-                  className="px-3 py-1 rounded-full bg-gradient-to-r from-purple-900/80 to-purple-800/50 border border-purple-500/40 text-white text-[11px] font-semibold hover:border-purple-400 transition-colors flex items-center gap-1 flex-shrink-0"
+                  className="px-3 py-1 rounded-full bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 text-[11px] font-semibold transition-colors flex items-center gap-1 flex-shrink-0 cursor-pointer"
                 >
                   <span>{step.actionLabel}</span>
                   <ArrowRight className="h-3 w-3" />

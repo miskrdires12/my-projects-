@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -39,33 +40,37 @@ export default async function SelectOrganizationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07070b] text-white flex flex-col justify-center items-center p-6 font-sans relative overflow-hidden">
-      {/* Background ambient glows */}
-      <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-600/10 blur-3xl pointer-events-none rounded-full" />
-      <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-pink-600/10 blur-3xl pointer-events-none rounded-full" />
-
+    <div className="min-h-screen bg-neutral-100 dark:bg-[#07070b] text-neutral-900 dark:text-white flex flex-col justify-center items-center p-6 font-sans relative overflow-hidden transition-colors duration-200">
       <div className="w-full max-w-md space-y-6 relative z-10">
-        <div className="text-center space-y-2">
-          <div className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-fuchsia-500/20 to-purple-600/30 border border-fuchsia-500/30 flex items-center justify-center text-white mx-auto shadow-[0_0_20px_rgba(217,70,239,0.3)]">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="w-5 h-5 text-white"
-            >
-              <path d="M4 6h4v12H4z" />
-              <path d="M16 6h4v12h-4z" />
-              <path d="M8 12h8" />
-            </svg>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center font-bold text-xs shadow-sm">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
+              >
+                <path d="M4 6h4v12H4z" />
+                <path d="M16 6h4v12h-4z" />
+                <path d="M8 12h8" />
+              </svg>
+            </div>
+            <span className="font-bold text-sm">Helios Platform</span>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-white font-sans">
+
+          <ThemeToggle />
+        </div>
+
+        <div className="text-center space-y-1.5 pt-2">
+          <h1 className="text-xl font-bold tracking-tight text-neutral-950 dark:text-white font-sans">
             Select Workspace
           </h1>
-          <p className="text-xs text-neutral-400">
-            Choose an active portfolio or switch teams.
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            Engineered & Developed by <strong className="text-black dark:text-white">Miskr Dires</strong>
           </p>
         </div>
 
@@ -74,18 +79,18 @@ export default async function SelectOrganizationPage() {
             <Link
               key={org.id}
               href={`/${org.slug}/dashboard`}
-              className="p-4 rounded-3xl bg-[#13131b] border border-white/[0.08] hover:border-purple-500/40 hover:bg-[#161622] transition-all flex items-center justify-between group shadow-xl cursor-pointer"
+              className="p-4 rounded-3xl bg-white dark:bg-[#121217] border border-neutral-200/80 dark:border-white/[0.08] hover:border-black/30 dark:hover:border-white/30 hover:bg-neutral-50 dark:hover:bg-[#161622] transition-all flex items-center justify-between group shadow-sm dark:shadow-xl cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
-                <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-fuchsia-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                <div className="h-10 w-10 rounded-2xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center font-bold text-xs shadow-sm">
                   {org.name.substring(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-xs text-white group-hover:text-fuchsia-300 transition-colors">
+                  <h3 className="font-semibold text-xs text-neutral-950 dark:text-white transition-colors">
                     {org.name}
                   </h3>
-                  <div className="flex items-center gap-2 text-[11px] text-neutral-400 mt-0.5">
-                    <span className="font-mono text-fuchsia-300">/{org.slug}</span>
+                  <div className="flex items-center gap-2 text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    <span className="font-mono text-neutral-800 dark:text-neutral-200">/{org.slug}</span>
                     <span>·</span>
                     <span>{org._count.projects} services</span>
                     <span>·</span>
@@ -95,10 +100,10 @@ export default async function SelectOrganizationPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-neutral-300 border border-white/10 uppercase">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/[0.06] text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-white/10 uppercase">
                   {org.subscriptionTier}
                 </span>
-                <ArrowRight className="h-4 w-4 text-neutral-500 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                <ArrowRight className="h-4 w-4 text-neutral-400 group-hover:text-black dark:group-hover:text-white group-hover:translate-x-1 transition-all" />
               </div>
             </Link>
           ))}
@@ -107,7 +112,7 @@ export default async function SelectOrganizationPage() {
         <div className="text-center">
           <Link
             href="/login"
-            className="text-xs text-neutral-400 hover:text-white underline transition-colors"
+            className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white underline transition-colors"
           >
             ← Back to Sign In
           </Link>

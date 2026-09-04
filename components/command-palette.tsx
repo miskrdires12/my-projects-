@@ -173,27 +173,27 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-100"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-100"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl rounded-3xl bg-[#13131b] border border-white/10 shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-xl rounded-3xl bg-white dark:bg-[#13131b] border border-neutral-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}
-        <div className="relative border-b border-white/[0.06] px-4 py-4 flex items-center gap-3">
-          <Search className="h-4 w-4 text-fuchsia-400 flex-shrink-0" />
+        <div className="relative border-b border-neutral-100 dark:border-white/[0.06] px-4 py-4 flex items-center gap-3">
+          <Search className="h-4 w-4 text-neutral-500 dark:text-neutral-400 flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ask Helios AI, search stocks, or jump to page..."
-            className="w-full text-xs text-white placeholder-neutral-500 focus:outline-none bg-transparent"
+            className="w-full text-xs text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none bg-transparent"
           />
           <button
             onClick={onClose}
-            className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-neutral-400 border border-white/[0.08] hover:text-white cursor-pointer"
+            className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-white/[0.08] hover:text-black dark:hover:text-white cursor-pointer"
           >
             ESC
           </button>
@@ -202,33 +202,33 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         {/* Command List */}
         <div className="max-h-80 overflow-y-auto p-3 space-y-4">
           {filtered.length === 0 ? (
-            <div className="py-8 text-center text-xs text-neutral-500">
+            <div className="py-8 text-center text-xs text-neutral-400 dark:text-neutral-500">
               No matching commands found for &quot;{query}&quot;.
             </div>
           ) : (
             filtered.map((group) => (
               <div key={group.category} className="space-y-1">
-                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-mono">
+                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 font-mono">
                   {group.category}
                 </div>
                 {group.items.map((item) => (
                   <button
                     key={item.id}
                     onClick={item.run}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-2xl text-xs text-neutral-300 hover:text-white hover:bg-white/[0.05] transition-colors text-left group cursor-pointer"
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-2xl text-xs text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/[0.05] transition-colors text-left group cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <item.icon className="h-4 w-4 text-neutral-400 group-hover:text-fuchsia-400 flex-shrink-0 transition-colors" />
+                      <item.icon className="h-4 w-4 text-neutral-400 group-hover:text-black dark:group-hover:text-white flex-shrink-0 transition-colors" />
                       <span className="truncate font-medium">{item.name}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {item.badge && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-300 border border-purple-500/30">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-white/[0.08] text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-white/10">
                           {item.badge}
                         </span>
                       )}
-                      <ArrowRight className="h-3 w-3 text-neutral-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                      <ArrowRight className="h-3 w-3 text-neutral-400 group-hover:text-black dark:group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                     </div>
                   </button>
                 ))}
@@ -238,12 +238,12 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         </div>
 
         {/* Footer Hint */}
-        <div className="border-t border-white/[0.05] px-4 py-2.5 bg-[#0f0f15] flex items-center justify-between text-[11px] text-neutral-500">
+        <div className="border-t border-neutral-100 dark:border-white/[0.05] px-4 py-2.5 bg-neutral-50 dark:bg-[#0f0f15] flex items-center justify-between text-[11px] text-neutral-500">
           <div className="flex items-center gap-3">
-            <span>Navigation: <kbd className="font-mono bg-white/[0.06] px-1.5 py-0.2 rounded border border-white/10 text-neutral-400">↑</kbd> <kbd className="font-mono bg-white/[0.06] px-1.5 py-0.2 rounded border border-white/10 text-neutral-400">↓</kbd></span>
-            <span>Select: <kbd className="font-mono bg-white/[0.06] px-1.5 py-0.2 rounded border border-white/10 text-neutral-400">Enter</kbd></span>
+            <span>Navigation: <kbd className="font-mono bg-white dark:bg-white/[0.06] px-1.5 py-0.2 rounded border border-neutral-200 dark:border-white/10">↑</kbd> <kbd className="font-mono bg-white dark:bg-white/[0.06] px-1.5 py-0.2 rounded border border-neutral-200 dark:border-white/10">↓</kbd></span>
+            <span>Select: <kbd className="font-mono bg-white dark:bg-white/[0.06] px-1.5 py-0.2 rounded border border-neutral-200 dark:border-white/10">Enter</kbd></span>
           </div>
-          <span>Helios Intelligence Engine</span>
+          <span>Developed by Miskr Dires</span>
         </div>
       </div>
     </div>
