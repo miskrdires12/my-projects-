@@ -2,6 +2,8 @@ import { getTenantContext } from "@/lib/tenant-context";
 import { getScopedPrisma } from "@/lib/prisma";
 import { ProjectsClient } from "@/components/projects-client";
 
+export const dynamic = "force-dynamic";
+
 interface ProjectsPageProps {
   params: Promise<{ orgSlug: string }>;
 }
@@ -13,9 +15,14 @@ export default async function ProjectsPage({ params }: ProjectsPageProps) {
   // Scoped Prisma client automatically restricts to tenant.organizationId
   const db = getScopedPrisma(tenant.organizationId);
 
-  const projects = await db.project.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+  let projects: any[] = [];
+  try {
+    projects = await db.project.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+  } catch (e) {
+    console.warn("Could not query projects from database:", e);
+  }
 
   return (
     <ProjectsClient

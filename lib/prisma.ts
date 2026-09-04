@@ -1,4 +1,30 @@
 import { PrismaClient } from "@prisma/client";
+import fs from "fs";
+import path from "path";
+
+// Ensure DATABASE_URL is defined with a valid fallback
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = "file:./dev.db";
+}
+
+// When running on Vercel with SQLite, copy the pre-seeded dev.db to /tmp so write operations succeed
+if (process.env.VERCEL && process.env.DATABASE_URL.startsWith("file:")) {
+  try {
+    const tmpDbPath = "/tmp/dev.db";
+    const sourceDbPath = path.join(process.cwd(), "prisma", "dev.db");
+
+    if (!fs.existsSync(tmpDbPath) && fs.existsSync(/*turbopackIgnore: true*/ sourceDbPath)) {
+      fs.copyFileSync(sourceDbPath, tmpDbPath);
+      console.log("[Prisma] Copied database to /tmp/dev.db for writable SQLite in Vercel function.");
+    }
+
+    if (fs.existsSync(tmpDbPath)) {
+      process.env.DATABASE_URL = `file:${tmpDbPath}`;
+    }
+  } catch (err) {
+    console.warn("[Prisma] Could not copy SQLite database to /tmp:", err);
+  }
+}
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 

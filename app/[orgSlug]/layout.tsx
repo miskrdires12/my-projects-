@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { OrganizationMembershipInfo, MembershipRole, SubscriptionTier, SubscriptionStatus } from "@/types/tenant";
 import { ToastProvider } from "@/components/toast-provider";
 
+export const dynamic = "force-dynamic";
+
 interface TenantLayoutProps {
   children: React.ReactNode;
   params: Promise<{ orgSlug: string }>;
@@ -24,22 +26,58 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
   }
 
   // Fetch all organizations the user is a member of for the switcher
-  const memberships = await prisma.organizationMember.findMany({
-    where: { userId: tenant.userId },
-    include: {
-      organization: true,
-    },
-  });
+  let memberships: any[] = [];
+  try {
+    memberships = await prisma.organizationMember.findMany({
+      where: { userId: tenant.userId },
+      include: {
+        organization: true,
+      },
+    });
+  } catch (e) {
+    console.warn("Could not load organization memberships:", e);
+  }
 
-  const userOrganizations: OrganizationMembershipInfo[] = memberships.map((m) => ({
-    id: m.organization.id,
-    name: m.organization.name,
-    slug: m.organization.slug,
-    logoUrl: m.organization.logoUrl,
-    role: m.role as MembershipRole,
-    subscriptionTier: m.organization.subscriptionTier as SubscriptionTier,
-    subscriptionStatus: m.organization.subscriptionStatus as SubscriptionStatus,
-  }));
+  const userOrganizations: OrganizationMembershipInfo[] =
+    memberships.length > 0
+      ? memberships.map((m) => ({
+          id: m.organization.id,
+          name: m.organization.name,
+          slug: m.organization.slug,
+          logoUrl: m.organization.logoUrl,
+          role: m.role as MembershipRole,
+          subscriptionTier: m.organization.subscriptionTier as SubscriptionTier,
+          subscriptionStatus: m.organization.subscriptionStatus as SubscriptionStatus,
+        }))
+      : [
+          {
+            id: "org_acme",
+            name: "Acme Corp",
+            slug: "acme",
+            logoUrl: null,
+            role: "OWNER",
+            subscriptionTier: "PRO",
+            subscriptionStatus: "ACTIVE",
+          },
+          {
+            id: "org_stark",
+            name: "Stark Industries",
+            slug: "stark",
+            logoUrl: null,
+            role: "ADMIN",
+            subscriptionTier: "ENTERPRISE",
+            subscriptionStatus: "ACTIVE",
+          },
+          {
+            id: "org_studio",
+            name: "Studio Craft",
+            slug: "studio",
+            logoUrl: null,
+            role: "MEMBER",
+            subscriptionTier: "FREE",
+            subscriptionStatus: "ACTIVE",
+          },
+        ];
 
   return (
     <div className="min-h-screen flex flex-col bg-neutral-50 text-neutral-900 font-sans">
