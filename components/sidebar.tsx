@@ -45,7 +45,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
       roleRequired: "MEMBER" as MembershipRole,
     },
     {
-      name: "Projects",
+      name: "Services",
       href: `/${currentOrg.slug}/projects`,
       icon: FolderKanban,
       roleRequired: "MEMBER" as MembershipRole,

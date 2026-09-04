@@ -114,12 +114,12 @@ export function ApiPlayground({ orgSlug }: ApiPlaygroundProps) {
     <div className="rounded-2xl bg-white border border-neutral-200 shadow-2xs overflow-hidden space-y-4 p-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-4">
         <div>
-          <h3 className="text-sm font-bold text-neutral-950 flex items-center gap-2">
-            <Terminal className="h-4 w-4 text-black" />
-            <span>Developer API Playground & Live cURL Runner</span>
+          <h3 className="text-sm font-semibold text-neutral-950 flex items-center gap-2">
+            <Terminal className="h-4 w-4 text-neutral-950" />
+            <span>API Explorer</span>
           </h3>
           <p className="text-xs text-neutral-500">
-            Execute real-time HTTP requests against workspace endpoints for tenant <code className="font-mono text-black">/{orgSlug}</code>.
+            Execute scoped HTTP requests against endpoints for workspace <code className="font-mono text-neutral-900">/{orgSlug}</code>.
           </p>
         </div>
 
@@ -127,24 +127,24 @@ export function ApiPlayground({ orgSlug }: ApiPlaygroundProps) {
         <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-xl border border-neutral-200">
           <button
             onClick={() => setSelectedEndpoint("GET_PROJECTS")}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
-              selectedEndpoint === "GET_PROJECTS" ? "bg-white text-black shadow-2xs" : "text-neutral-500 hover:text-black"
+            className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
+              selectedEndpoint === "GET_PROJECTS" ? "bg-white text-neutral-950 font-semibold shadow-xs" : "text-neutral-500 hover:text-neutral-950"
             }`}
           >
             GET /api/projects
           </button>
           <button
             onClick={() => setSelectedEndpoint("POST_PROJECT")}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
-              selectedEndpoint === "POST_PROJECT" ? "bg-white text-black shadow-2xs" : "text-neutral-500 hover:text-black"
+            className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
+              selectedEndpoint === "POST_PROJECT" ? "bg-white text-neutral-950 font-semibold shadow-xs" : "text-neutral-500 hover:text-neutral-950"
             }`}
           >
             POST /api/projects
           </button>
           <button
             onClick={() => setSelectedEndpoint("STRIPE_WEBHOOK")}
-            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
-              selectedEndpoint === "STRIPE_WEBHOOK" ? "bg-white text-black shadow-2xs" : "text-neutral-500 hover:text-black"
+            className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${
+              selectedEndpoint === "STRIPE_WEBHOOK" ? "bg-white text-neutral-950 font-semibold shadow-xs" : "text-neutral-500 hover:text-neutral-950"
             }`}
           >
             POST /api/webhooks/stripe
@@ -155,17 +155,17 @@ export function ApiPlayground({ orgSlug }: ApiPlaygroundProps) {
       {/* cURL Display & Execute Action */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-semibold text-neutral-700">Generated cURL Command</span>
+          <span className="font-medium text-neutral-700">cURL Snippet</span>
           <button
             onClick={handleCopyCurl}
-            className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-black transition-colors"
+            className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-neutral-950 transition-colors cursor-pointer"
           >
             {copiedCurl ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
             <span>{copiedCurl ? "Copied" : "Copy cURL"}</span>
           </button>
         </div>
 
-        <pre className="p-3 rounded-xl bg-neutral-900 text-neutral-100 text-[11px] font-mono overflow-x-auto leading-relaxed">
+        <pre className="p-3.5 rounded-xl bg-neutral-950 text-neutral-100 text-[11px] font-mono overflow-x-auto leading-relaxed">
           {activeConfig.curl}
         </pre>
       </div>
@@ -183,10 +183,10 @@ export function ApiPlayground({ orgSlug }: ApiPlaygroundProps) {
         <button
           onClick={handleExecuteRequest}
           disabled={isLoading}
-          className="px-4 py-2 rounded-xl bg-black hover:bg-neutral-800 text-white text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50"
+          className="px-4 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-medium shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
         >
           <Play className="h-3.5 w-3.5 fill-current" />
-          <span>{isLoading ? "Executing..." : "Execute Live Request"}</span>
+          <span>{isLoading ? "Running..." : "Run Request"}</span>
         </button>
       </div>
 

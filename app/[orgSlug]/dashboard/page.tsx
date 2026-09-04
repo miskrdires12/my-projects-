@@ -57,25 +57,70 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     // Graceful fallback values for initial deployment state
     projectsCount = 3;
     membersCount = 2;
-    recentProjects = [
-      {
-        id: "proj_demo_1",
-        name: "auth-edge-service",
-        description: "OAuth2 session tokens and edge middleware verification.",
-        status: "ACTIVE",
-        createdAt: new Date(),
-      },
-      {
-        id: "proj_demo_2",
-        name: "stripe-billing-sync",
-        description: "Webhook event listener syncing customer lifecycle and invoices.",
-        status: "ACTIVE",
-        createdAt: new Date(),
-      },
-    ];
-  }
+      recentProjects = [
+        {
+          id: "proj_demo_1",
+          name: "auth-edge-service",
+          description: "JWT token validation and edge proxy authentication.",
+          status: "ACTIVE",
+          createdAt: new Date(),
+        },
+        {
+          id: "proj_demo_2",
+          name: "stripe-billing-sync",
+          description: "Webhook event processor syncing customer subscriptions.",
+          status: "ACTIVE",
+          createdAt: new Date(Date.now() - 3600000),
+        },
+        {
+          id: "proj_demo_3",
+          name: "search-indexing-worker",
+          description: "Background worker syncing tenant database records to search index.",
+          status: "ACTIVE",
+          createdAt: new Date(Date.now() - 86400000),
+        },
+      ];
+      recentAuditLogs = [
+        {
+          id: "log_1",
+          action: "ORGANIZATION_CREATED",
+          createdAt: new Date(Date.now() - 7200000),
+          user: { name: "Miskr" },
+        },
+        {
+          id: "log_2",
+          action: "MEMBER_INVITED",
+          createdAt: new Date(Date.now() - 3600000),
+          user: { name: "Alex Chen" },
+        },
+        {
+          id: "log_3",
+          action: "SUBSCRIPTION_UPGRADED",
+          createdAt: new Date(Date.now() - 1800000),
+          user: { name: "Miskr" },
+        },
+        {
+          id: "log_4",
+          action: "PROJECT_CREATED",
+          createdAt: new Date(Date.now() - 600000),
+          user: { name: "Alex Chen" },
+        },
+      ];
+    }
 
-  const planInfo = PLAN_CONFIGS[tenant.subscriptionTier];
+    const planInfo = PLAN_CONFIGS[tenant.subscriptionTier];
+
+    function formatAction(action: string) {
+      const map: Record<string, string> = {
+        ORGANIZATION_CREATED: "workspace.created",
+        MEMBER_INVITED: "member.invited",
+        SUBSCRIPTION_UPGRADED: "billing.upgraded",
+        PROJECT_CREATED: "service.deployed",
+        PROJECT_ARCHIVED: "service.archived",
+        PROJECT_DELETED: "service.deleted",
+      };
+      return map[action] || action.toLowerCase().replace(/_/g, ".");
+    }
 
   return (
     <DashboardShell orgSlug={tenant.organizationSlug}>
@@ -93,11 +138,11 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                 </span>
                 <span className="flex items-center gap-1.5 text-[11px] text-neutral-500 font-mono">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  <span>operational</span>
+                  <span>us-east-1 · operational</span>
                 </span>
               </div>
               <p className="text-xs text-neutral-500">
-                Workspace overview, active deployments, and real-time edge telemetry.
+                Active services, edge telemetry, and workspace audit logs.
               </p>
             </div>
 
@@ -107,14 +152,14 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                 className="px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-medium shadow-xs transition-all flex items-center gap-1.5"
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>New Project</span>
+                <span>Deploy Service</span>
               </Link>
               <Link
                 href={`/${tenant.organizationSlug}/billing`}
                 className="px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-800 text-xs font-medium transition-all flex items-center gap-1.5 shadow-2xs"
               >
                 <CreditCard className="h-3.5 w-3.5" />
-                <span>Billing & Plans</span>
+                <span>Billing & Usage</span>
               </Link>
             </div>
           </div>
@@ -306,15 +351,15 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                   </div>
                   <div className="space-y-0.5 min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-neutral-900 font-mono text-[10px]">
-                        {log.action}
+                      <span className="font-semibold text-neutral-900 font-mono text-[10px]">
+                        {formatAction(log.action)}
                       </span>
                       <span className="text-[10px] text-neutral-400 font-mono">
                         {new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
                     <p className="text-[10px] text-neutral-500 truncate">
-                      By {log.user?.name || "Automated"}
+                      Triggered by {log.user?.name || "Automated Worker"}
                     </p>
                   </div>
                 </div>

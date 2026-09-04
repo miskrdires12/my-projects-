@@ -125,11 +125,11 @@ export function LoginForm() {
         </button>
       </form>
 
-      {/* Understated Sandbox Access */}
+      {/* Fast Account Switcher */}
       <div className="p-3.5 rounded-xl bg-white border border-neutral-200 space-y-2.5 text-xs shadow-2xs">
-        <div className="flex items-center justify-between text-[11px] text-neutral-500 font-mono">
-          <span>Sandbox accounts</span>
-          <span className="text-[10px] text-neutral-400">1-click switch</span>
+        <div className="flex items-center justify-between text-[11px] text-neutral-500">
+          <span className="font-medium text-neutral-700">Demo Accounts</span>
+          <span className="text-[10px] text-neutral-400 font-mono">Instant sign-in</span>
         </div>
 
         <div className="grid grid-cols-3 gap-1.5">
@@ -166,7 +166,7 @@ export function LoginForm() {
       </div>
 
       <div className="text-center text-[11px] text-neutral-400">
-        Protected by tenant isolation boundaries · TLS 1.3 encrypted
+        Enterprise SSO via SAML 2.0 & OIDC supported on Enterprise tier.
       </div>
     </div>
   );

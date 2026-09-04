@@ -74,13 +74,13 @@ export function TelemetryCharts() {
         <div>
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-neutral-900" />
-            <h3 className="text-sm font-semibold text-neutral-950">Ingress & API Traffic</h3>
+            <h3 className="text-sm font-semibold text-neutral-950">Edge Ingress & Latency</h3>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
               Live · us-east-1
             </span>
           </div>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Request throughput and latency distribution over the past 30 days.
+            Aggregated traffic volume and p99 latency distribution across edge nodes.
           </p>
         </div>
 
@@ -91,11 +91,11 @@ export function TelemetryCharts() {
             <strong className="text-neutral-950">{activeData.day}</strong>
           </div>
           <div className="flex items-center gap-1.5 text-neutral-600">
-            <span>Volume:</span>
-            <strong className="text-neutral-950">{activeData.requests.toLocaleString()}</strong>
+            <span>Throughput:</span>
+            <strong className="text-neutral-950">{activeData.requests.toLocaleString()} reqs</strong>
           </div>
           <div className="flex items-center gap-1.5 text-neutral-600">
-            <span>p99:</span>
+            <span>p99 Latency:</span>
             <strong className="text-neutral-950">{activeData.p99}ms</strong>
           </div>
         </div>
@@ -205,8 +205,8 @@ export function TelemetryCharts() {
           <span className="font-semibold text-neutral-950 font-mono">16.8 ms</span>
         </div>
         <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-50 border border-neutral-200">
-          <span className="text-neutral-500">Availability</span>
-          <span className="font-semibold text-emerald-600 font-mono">99.998%</span>
+          <span className="text-neutral-500">Edge Success Rate</span>
+          <span className="font-semibold text-neutral-950 font-mono">99.98%</span>
         </div>
       </div>
     </div>

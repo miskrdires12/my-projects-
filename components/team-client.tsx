@@ -111,16 +111,16 @@ export function TeamClient({
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-950">Team & Access Control</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-neutral-950">Members & Access Control</h1>
           <p className="text-xs text-neutral-500">
-            RBAC roles and member management for organization <code className="font-mono text-black">/{orgSlug}</code>.
+            Role-based permissions and team management for workspace <code className="font-mono text-neutral-900">/{orgSlug}</code>.
           </p>
         </div>
 
         {canInvite ? (
           <button
             onClick={() => setIsInviteModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-black hover:bg-neutral-800 text-white text-xs font-semibold shadow-xs transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-medium shadow-xs transition-all cursor-pointer"
           >
             <UserPlus className="h-4 w-4" />
             <span>Invite Member</span>
@@ -128,7 +128,7 @@ export function TeamClient({
         ) : (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-neutral-100 border border-neutral-200 text-xs text-neutral-600">
             <Lock className="h-3.5 w-3.5 text-neutral-400" />
-            <span>View-Only (Member Role)</span>
+            <span>Read-only (Member role)</span>
           </div>
         )}
       </div>
@@ -138,9 +138,9 @@ export function TeamClient({
         <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 text-xs text-neutral-700 flex items-start gap-3">
           <ShieldAlert className="h-4 w-4 text-neutral-900 flex-shrink-0 mt-0.5" />
           <div>
-            <strong className="text-neutral-950 font-semibold">RBAC Policy Active:</strong> Your current role in
-            this organization is <span className="font-bold text-black">MEMBER</span>. You can view resources, but only users with{" "}
-            <span className="font-bold text-black">OWNER</span> or <span className="font-bold text-black">ADMIN</span> roles can invite members or alter access.
+            <strong className="text-neutral-950 font-medium">Access Restriction:</strong> Your role in
+            this workspace is <span className="font-mono font-medium text-neutral-950">MEMBER</span>. You can deploy services, but only users with{" "}
+            <span className="font-mono font-medium text-neutral-950">OWNER</span> or <span className="font-mono font-medium text-neutral-950">ADMIN</span> roles can manage members or modify subscription tiers.
           </div>
         </div>
       )}
@@ -299,34 +299,34 @@ export function TeamClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="w-full max-w-md bg-white border border-neutral-200 rounded-2xl shadow-xl p-6 space-y-5">
             <div>
-              <h2 className="text-base font-bold text-neutral-950">Invite Team Member</h2>
+              <h2 className="text-base font-semibold text-neutral-950">Invite Team Member</h2>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Issue an organization invitation with an assigned RBAC role.
+                Issue a workspace invitation with an assigned role.
               </p>
             </div>
 
             <form onSubmit={handleInvite} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-800">Email Address</label>
+                <label className="text-xs font-medium text-neutral-800">Work Email</label>
                 <input
                   required
                   name="email"
                   type="email"
                   placeholder="colleague@company.com"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 border border-neutral-300 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-black focus:bg-white"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-neutral-900 focus:bg-white transition-all"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-800">Role & Permissions</label>
+                <label className="text-xs font-medium text-neutral-800">Role & Access Level</label>
                 <select
                   name="role"
                   defaultValue="MEMBER"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 border border-neutral-300 text-neutral-900 focus:outline-none focus:border-black focus:bg-white font-medium"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 focus:outline-none focus:border-neutral-900 focus:bg-white font-medium"
                 >
-                  <option value="MEMBER">MEMBER (Can view and create projects)</option>
-                  <option value="ADMIN">ADMIN (Can invite members, manage billing, create resources)</option>
-                  {isOwner && <option value="OWNER">OWNER (Full organizational ownership)</option>}
+                  <option value="MEMBER">Member · Can view and deploy services</option>
+                  <option value="ADMIN">Admin · Can invite members, manage billing, and configure settings</option>
+                  {isOwner && <option value="OWNER">Owner · Full workspace administration</option>}
                 </select>
               </div>
 
@@ -334,14 +334,14 @@ export function TeamClient({
                 <button
                   type="button"
                   onClick={() => setIsInviteModalOpen(false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-medium text-neutral-600 hover:text-black hover:bg-neutral-100 transition-colors"
+                  className="px-3.5 py-2 rounded-xl text-xs font-medium text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-black hover:bg-neutral-800 text-white transition-all shadow-xs disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl text-xs font-medium bg-neutral-950 hover:bg-neutral-800 text-white transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? "Inviting..." : "Send Invitation"}
                 </button>

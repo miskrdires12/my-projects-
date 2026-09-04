@@ -137,10 +137,10 @@ export function TenantTools({
         <div>
           <h2 className="text-sm font-semibold text-neutral-950 flex items-center gap-2">
             <SlidersHorizontal className="h-4 w-4 text-neutral-900" />
-            <span>Developer Settings & Environment Keys</span>
+            <span>Developer Tools</span>
           </h2>
           <p className="text-xs text-neutral-500">
-            Scoped tokens, security enforcement, and configuration export for <code className="font-mono text-neutral-800">/{organizationSlug}</code>.
+            Service credentials, security policies, and workspace data export for <code className="font-mono text-neutral-800">/{organizationSlug}</code>.
           </p>
         </div>
       </div>
@@ -153,12 +153,12 @@ export function TenantTools({
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
                 <Key className="h-3.5 w-3.5 text-neutral-900" />
-                <span>API Tokens</span>
+                <span>Service Tokens</span>
               </span>
-              <span className="text-[10px] font-mono text-neutral-400">Secret Key</span>
+              <span className="text-[10px] font-mono text-neutral-400">Bearer Token</span>
             </div>
             <p className="text-[11px] text-neutral-500">
-              Read and write credentials for background workers and CI/CD pipelines.
+              Scoped Bearer credentials for backend workers, webhooks, and CI/CD pipelines.
             </p>
           </div>
 
@@ -182,44 +182,44 @@ export function TenantTools({
                 </div>
                 <button
                   onClick={() => setApiKey(null)}
-                  className="text-[10px] text-red-600 hover:underline"
+                  className="text-[10px] text-red-600 hover:underline font-medium"
                 >
-                  Revoke Key
+                  Revoke Token
                 </button>
               </div>
             ) : (
               <button
                 onClick={handleGenerateApiKey}
-                className="w-full py-1.5 px-3 rounded-lg bg-black hover:bg-neutral-800 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                className="w-full py-1.5 px-3 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
               >
-                <span>Generate Key</span>
+                <span>Generate Token</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Tool 2: 1-Click Tenant JSON Data Exporter */}
+        {/* Tool 2: Tenant JSON Data Exporter */}
         <div className="p-4 rounded-xl bg-white border border-neutral-200 shadow-2xs space-y-3 flex flex-col justify-between">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
-                <Download className="h-3.5 w-3.5 text-black" />
-                <span>Export Tenant Data</span>
+                <Download className="h-3.5 w-3.5 text-neutral-900" />
+                <span>Workspace Export</span>
               </span>
-              <span className="text-[10px] font-mono text-neutral-400">JSON</span>
+              <span className="text-[10px] font-mono text-neutral-400">JSON Archive</span>
             </div>
             <p className="text-[11px] text-neutral-500">
-              Export complete tenant configuration, project quotas, and policy state as JSON.
+              Download complete workspace schema, project registry, and member roster.
             </p>
           </div>
 
           <button
             onClick={handleExportTenantData}
             disabled={exporting}
-            className="w-full py-1.5 px-3 rounded-lg bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-900 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+            className="w-full py-1.5 px-3 rounded-lg bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-900 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
           >
-            <HardDrive className="h-3.5 w-3.5" />
-            <span>{exporting ? "Generating..." : "Download Backup"}</span>
+            <HardDrive className="h-3.5 w-3.5 text-neutral-700" />
+            <span>{exporting ? "Generating Archive..." : "Export Workspace JSON"}</span>
           </button>
         </div>
 
@@ -228,33 +228,33 @@ export function TenantTools({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-black" />
+                <ShieldCheck className="h-3.5 w-3.5 text-neutral-900" />
                 <span>Security Policies</span>
               </span>
-              <span className="text-[10px] font-mono text-neutral-400">Toggles</span>
+              <span className="text-[10px] font-mono text-neutral-400">Rules</span>
             </div>
             <p className="text-[11px] text-neutral-500">
-              Configure tenant-wide access restrictions and maintenance flags.
+              Tenant-wide access controls and edge maintenance boundaries.
             </p>
           </div>
 
-          <div className="space-y-1.5 text-xs">
+          <div className="space-y-2 text-xs">
             <label className="flex items-center justify-between cursor-pointer">
               <span className="text-[11px] text-neutral-700">Maintenance Mode</span>
               <input
                 type="checkbox"
                 checked={maintenanceMode}
                 onChange={(e) => setMaintenanceMode(e.target.checked)}
-                className="h-3.5 w-3.5 accent-black rounded cursor-pointer"
+                className="h-3.5 w-3.5 accent-neutral-950 rounded cursor-pointer"
               />
             </label>
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-[11px] text-neutral-700">Lock Member Invites</span>
+              <span className="text-[11px] text-neutral-700">Lock Team Invites</span>
               <input
                 type="checkbox"
                 checked={lockInvites}
                 onChange={(e) => setLockInvites(e.target.checked)}
-                className="h-3.5 w-3.5 accent-black rounded cursor-pointer"
+                className="h-3.5 w-3.5 accent-neutral-950 rounded cursor-pointer"
               />
             </label>
             <label className="flex items-center justify-between cursor-pointer">
@@ -263,7 +263,7 @@ export function TenantTools({
                 type="checkbox"
                 checked={enforce2FA}
                 onChange={(e) => setEnforce2FA(e.target.checked)}
-                className="h-3.5 w-3.5 accent-black rounded cursor-pointer"
+                className="h-3.5 w-3.5 accent-neutral-950 rounded cursor-pointer"
               />
             </label>
           </div>
@@ -274,28 +274,28 @@ export function TenantTools({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
-                <Cpu className="h-3.5 w-3.5 text-black" />
-                <span>Resource Quotas</span>
+                <Cpu className="h-3.5 w-3.5 text-neutral-900" />
+                <span>Resource Allocation</span>
               </span>
-              <span className="text-[10px] font-mono text-neutral-400">{subscriptionTier}</span>
+              <span className="text-[10px] font-mono text-neutral-500 uppercase">{subscriptionTier}</span>
             </div>
             <p className="text-[11px] text-neutral-500">
-              Live capacity and usage monitoring for this organization tier.
+              Compute capacity and seat allocation for the current plan.
             </p>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {/* Project meter */}
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] font-medium text-neutral-700">
-                <span>Projects</span>
-                <span>
-                  {projectsCount} / {maxProjects >= 999 ? "∞" : maxProjects}
+                <span>Services</span>
+                <span className="font-mono">
+                  {projectsCount} / {maxProjects >= 999 ? "Unlimited" : maxProjects}
                 </span>
               </div>
               <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-black rounded-full transition-all"
+                  className="h-full bg-neutral-950 rounded-full transition-all"
                   style={{ width: `${projectPercent}%` }}
                 />
               </div>
@@ -305,13 +305,13 @@ export function TenantTools({
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] font-medium text-neutral-700">
                 <span>Team Seats</span>
-                <span>
-                  {membersCount} / {maxMembers >= 999 ? "∞" : maxMembers}
+                <span className="font-mono">
+                  {membersCount} / {maxMembers >= 999 ? "Unlimited" : maxMembers}
                 </span>
               </div>
               <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-black rounded-full transition-all"
+                  className="h-full bg-neutral-950 rounded-full transition-all"
                   style={{ width: `${memberPercent}%` }}
                 />
               </div>

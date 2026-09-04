@@ -64,10 +64,10 @@ export default async function SelectOrganizationPage() {
             <Link
               key={org.id}
               href={`/${org.slug}/dashboard`}
-              className="p-4 rounded-xl bg-white border border-neutral-200 hover:border-neutral-400 transition-all flex items-center justify-between group shadow-2xs"
+              className="p-4 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 transition-all flex items-center justify-between group shadow-2xs cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
-                <div className="h-10 w-10 rounded-xl bg-neutral-900 text-white flex items-center justify-center font-bold text-xs">
+                <div className="h-10 w-10 rounded-xl bg-neutral-950 text-white flex items-center justify-center font-bold text-xs">
                   {org.name.substring(0, 2).toUpperCase()}
                 </div>
                 <div>
@@ -75,20 +75,20 @@ export default async function SelectOrganizationPage() {
                     {org.name}
                   </h3>
                   <div className="flex items-center gap-2 text-[11px] text-neutral-500">
-                    <span className="font-mono">/{org.slug}</span>
-                    <span>•</span>
-                    <span>{org._count.projects} projects</span>
-                    <span>•</span>
-                    <span>{org._count.members} members</span>
+                    <span className="font-mono text-neutral-600">/{org.slug}</span>
+                    <span>·</span>
+                    <span>{org._count.projects} services</span>
+                    <span>·</span>
+                    <span>{org._count.members} seats</span>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-900 border border-neutral-300">
+                <span className="text-[10px] font-mono uppercase font-medium px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-900 border border-neutral-200">
                   {org.subscriptionTier}
                 </span>
-                <ArrowRight className="h-4 w-4 text-neutral-400 group-hover:text-black group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight className="h-4 w-4 text-neutral-400 group-hover:text-neutral-950 group-hover:translate-x-0.5 transition-all" />
               </div>
             </Link>
           ))}

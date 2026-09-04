@@ -17,28 +17,28 @@ export function OnboardingChecklist({ orgSlug, onNavigateTab }: OnboardingCheckl
   const steps = [
     {
       id: "step-1",
-      title: "Workspace Provisioned",
-      desc: "Primary organization and production schema initialized.",
+      title: "Database Partition Initialized",
+      desc: "Row-level tenant isolation and scoped database context active.",
       completed: true,
     },
     {
       id: "step-2",
-      title: "Access Permissions Assigned",
-      desc: "Role-based boundaries defined for Owner, Admin, and Member.",
+      title: "Role-Based Access Configured",
+      desc: "Owner, Admin, and Member boundaries enforced across workspace.",
       completed: true,
     },
     {
       id: "step-3",
-      title: "Domain & Webhook Endpoints",
-      desc: "Configure custom CNAME routing and HMAC-signed webhook dispatches.",
+      title: "Custom Domain & Routing",
+      desc: "Configure CNAME records and automatic TLS certificate provisioning.",
       completed: false,
       action: () => (onNavigateTab ? onNavigateTab("domains") : undefined),
       actionLabel: "Configure",
     },
     {
       id: "step-4",
-      title: "API Verification",
-      desc: "Verify edge request throughput and Bearer token authentication.",
+      title: "Edge API Verification",
+      desc: "Verify Bearer token authentication against edge endpoints.",
       completed: true,
     },
   ];
@@ -55,13 +55,13 @@ export function OnboardingChecklist({ orgSlug, onNavigateTab }: OnboardingCheckl
           </div>
           <div>
             <h3 className="text-sm font-semibold text-neutral-950 flex items-center gap-2">
-              <span>Setup Checklist</span>
+              <span>Workspace Setup</span>
               <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
                 {completedCount} of {steps.length} completed
               </span>
             </h3>
             <p className="text-xs text-neutral-500">
-              Required configuration before publishing production services.
+              Required configuration steps to activate custom domains and edge routing.
             </p>
           </div>
         </div>

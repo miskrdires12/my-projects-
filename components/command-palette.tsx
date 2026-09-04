@@ -74,7 +74,7 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
       items: [
         {
           id: "nav-dash",
-          name: "Go to Dashboard Overview",
+          name: "Go to Dashboard",
           icon: LayoutDashboard,
           run: () => {
             onClose();
@@ -83,7 +83,7 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         },
         {
           id: "nav-proj",
-          name: "Go to Projects Management",
+          name: "Go to Services",
           icon: FolderKanban,
           run: () => {
             onClose();
@@ -92,7 +92,7 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         },
         {
           id: "nav-team",
-          name: "Go to Team & Access Control",
+          name: "Go to Members & Access",
           icon: Users2,
           run: () => {
             onClose();
@@ -101,7 +101,7 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         },
         {
           id: "nav-bill",
-          name: "Go to Billing & Subscriptions",
+          name: "Go to Billing & Plans",
           icon: CreditCard,
           run: () => {
             onClose();
@@ -111,13 +111,13 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
       ],
     },
     {
-      category: "Developer & Enterprise Tools",
+      category: "Developer Tools",
       items: [
         {
           id: "tool-api",
-          name: "Open Developer API Playground & cURL Runner",
+          name: "Open API Explorer",
           icon: Terminal,
-          badge: "Playground",
+          badge: "cURL",
           run: () => {
             onClose();
             if (onSelectTab) onSelectTab("playground");
@@ -126,9 +126,9 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         },
         {
           id: "tool-webhook",
-          name: "Open Stripe Webhook Delivery Inspector",
+          name: "Inspect Webhook Deliveries",
           icon: Zap,
-          badge: "Live Log",
+          badge: "Stripe",
           run: () => {
             onClose();
             if (onSelectTab) onSelectTab("webhooks");
@@ -137,9 +137,9 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         },
         {
           id: "tool-sec",
-          name: "Open Enterprise Security & Compliance Center",
+          name: "Open Security & Audit Controls",
           icon: ShieldCheck,
-          badge: "SOC2",
+          badge: "SOC 2",
           run: () => {
             onClose();
             if (onSelectTab) onSelectTab("compliance");
@@ -149,7 +149,7 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
       ],
     },
     {
-      category: "Switch Workspace Tenant",
+      category: "Switch Workspace",
       items: [
         {
           id: "org-acme",

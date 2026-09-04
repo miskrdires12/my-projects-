@@ -104,9 +104,9 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-neutral-950">Services & Projects</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-neutral-950">Services & Microservices</h1>
           <p className="text-xs text-neutral-500">
-            Active service deployments and background pipelines for <span className="font-mono text-neutral-800">/{orgSlug}</span>.
+            Independent services and background jobs partitioned within <span className="font-mono text-neutral-800">/{orgSlug}</span>.
           </p>
         </div>
 
@@ -115,7 +115,7 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-medium shadow-xs transition-all cursor-pointer"
         >
           <Plus className="h-4 w-4" />
-          <span>New Project</span>
+          <span>Deploy Service</span>
         </button>
       </div>
 
@@ -127,8 +127,8 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Filter projects by title, keywords, or branch..."
-            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-black focus:bg-white transition-all"
+            placeholder="Filter services by name, git branch, or runtime..."
+            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-neutral-900 focus:bg-white transition-all"
           />
         </div>
 
@@ -137,13 +137,13 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
             <button
               key={tab}
               onClick={() => setFilterStatus(tab)}
-              className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer ${
                 filterStatus === tab
-                  ? "bg-white text-black font-semibold shadow-2xs"
-                  : "text-neutral-500 hover:text-black"
+                  ? "bg-white text-neutral-950 font-semibold shadow-2xs"
+                  : "text-neutral-500 hover:text-neutral-950"
               }`}
             >
-              {tab.charAt(0) + tab.slice(1).toLowerCase()}
+              {tab === "ALL" ? "All Services" : tab === "ACTIVE" ? "Active" : "Paused"}
             </button>
           ))}
         </div>
@@ -158,7 +158,7 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
             <p className="text-xs text-neutral-500 max-w-sm mx-auto">
               {searchQuery
                 ? "No services match your current search query. Try clearing the filter."
-                : "Create a new service or deploy a pipeline for this workspace."}
+                : "Deploy a microservice or background pipeline to begin routing traffic."}
             </p>
           </div>
         ) : (
@@ -166,33 +166,38 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
             const isProd = idx % 2 === 0;
             const branchName = isProd ? "main" : "feat/v2-refactor";
             const commitHash = `sha_${project.id.slice(-6)}`;
+            const runtime = idx % 3 === 0 ? "Node.js 20" : idx % 3 === 1 ? "Go 1.22" : "Python 3.12";
 
             return (
               <div
                 key={project.id}
-                className="p-5 rounded-2xl bg-white border border-neutral-200 hover:border-neutral-400 flex flex-col justify-between space-y-4 group transition-all duration-150 shadow-2xs"
+                className="p-5 rounded-2xl bg-white border border-neutral-200 hover:border-neutral-300 flex flex-col justify-between space-y-4 group transition-all duration-150 shadow-2xs"
               >
                 <div className="space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-xs text-neutral-950 group-hover:underline transition-colors">
+                    <h3 className="font-semibold text-xs text-neutral-950 group-hover:underline transition-colors font-mono">
                       {project.name}
                     </h3>
                     <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Healthy" />
                       <span
-                        className={`text-[9px] font-bold px-2 py-0.2 rounded-full ${
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          project.status === "ACTIVE" ? "bg-emerald-500" : "bg-neutral-400"
+                        }`}
+                      />
+                      <span
+                        className={`text-[9px] font-medium font-mono px-2 py-0.5 rounded-full ${
                           project.status === "ACTIVE"
-                            ? "bg-neutral-100 text-neutral-900 border border-neutral-300"
-                            : "bg-neutral-100 text-neutral-400"
+                            ? "bg-neutral-100 text-neutral-900 border border-neutral-200"
+                            : "bg-neutral-100 text-neutral-500"
                         }`}
                       >
-                        {project.status}
+                        {project.status === "ACTIVE" ? "active" : "paused"}
                       </span>
                     </div>
                   </div>
 
                   <p className="text-[11px] text-neutral-500 line-clamp-2 leading-relaxed">
-                    {project.description || "Production service configured with tenant boundaries."}
+                    {project.description || "Microservice deployment bounded to workspace partition."}
                   </p>
 
                   {/* Production Git & Environment Badges */}
@@ -203,7 +208,10 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
                     </span>
                     <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-100 border border-neutral-200">
                       <Server className="h-3 w-3 text-neutral-500" />
-                      <span>{isProd ? "Production" : "Staging"}</span>
+                      <span>{isProd ? "production" : "staging"}</span>
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-neutral-50 text-neutral-500 border border-neutral-200">
+                      {runtime}
                     </span>
                     <span className="text-neutral-400">#{commitHash}</span>
                   </div>
@@ -211,27 +219,27 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
 
                 <div className="pt-3 border-t border-neutral-100 flex items-center justify-between text-xs">
                   <span className="text-[10px] text-neutral-400 font-mono">
-                    {new Date(project.createdAt).toLocaleDateString()}
+                    Deployed {new Date(project.createdAt).toLocaleDateString()}
                   </span>
 
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleToggleStatus(project.id, project.status)}
-                      title={project.status === "ACTIVE" ? "Archive" : "Activate"}
-                      className="p-1.5 rounded-lg text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors"
+                      title={project.status === "ACTIVE" ? "Pause Service" : "Resume Service"}
+                      className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-950 hover:bg-neutral-100 transition-colors cursor-pointer"
                     >
                       {project.status === "ACTIVE" ? (
                         <Archive className="h-3.5 w-3.5" />
                       ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-black" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-neutral-950" />
                       )}
                     </button>
 
                     {canManage && (
                       <button
                         onClick={() => handleDelete(project.id)}
-                        title="Delete Project (Admin/Owner only)"
-                        className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="Delete Service"
+                        className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -249,9 +257,9 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
           <div className="w-full max-w-md bg-white border border-neutral-200 rounded-2xl shadow-xl p-6 space-y-5">
             <div>
-              <h2 className="text-base font-bold text-neutral-950">Create New Project</h2>
+              <h2 className="text-base font-semibold text-neutral-950">Deploy New Service</h2>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Automatically bounded to tenant <code className="text-black font-mono font-medium">/{orgSlug}</code>.
+                Automatically bounded to workspace context <code className="text-neutral-950 font-mono font-medium">/{orgSlug}</code>.
               </p>
             </div>
 
@@ -264,23 +272,23 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
 
             <form onSubmit={handleCreateProject} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-800">Project Name</label>
+                <label className="text-xs font-medium text-neutral-800">Service Name</label>
                 <input
                   required
                   name="name"
                   type="text"
-                  placeholder="e.g. Real-Time Telemetry Pipeline"
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 border border-neutral-300 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-black focus:bg-white"
+                  placeholder="e.g. auth-gateway or telemetry-sync"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-neutral-900 focus:bg-white font-mono transition-all"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-800">Description</label>
+                <label className="text-xs font-medium text-neutral-800">Service Description</label>
                 <textarea
                   name="description"
                   rows={3}
-                  placeholder="Summarize the resource scope and requirements..."
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 border border-neutral-300 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-black focus:bg-white"
+                  placeholder="Describe service responsibilities, dependencies, or routing targets..."
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-50 border border-neutral-200 text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-neutral-900 focus:bg-white transition-all"
                 />
               </div>
 
@@ -288,16 +296,16 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-medium text-neutral-600 hover:text-black hover:bg-neutral-100 transition-colors"
+                  className="px-3.5 py-2 rounded-xl text-xs font-medium text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-black hover:bg-neutral-800 text-white transition-all shadow-xs disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl text-xs font-medium bg-neutral-950 hover:bg-neutral-800 text-white transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? "Creating..." : "Create Project"}
+                  {isSubmitting ? "Deploying..." : "Deploy Service"}
                 </button>
               </div>
             </form>
