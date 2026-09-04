@@ -135,12 +135,12 @@ export function TenantTools({
       {/* Section Header */}
       <div className="flex items-center justify-between pt-2">
         <div>
-          <h2 className="text-sm font-bold text-neutral-950 flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-black" />
-            <span>Tenant Tools & Developer Utilities</span>
+          <h2 className="text-sm font-semibold text-neutral-950 flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-neutral-900" />
+            <span>Developer Settings & Environment Keys</span>
           </h2>
           <p className="text-xs text-neutral-500">
-            Self-service options and developer utilities for workspace <code className="font-mono text-black">/{organizationSlug}</code>.
+            Scoped tokens, security enforcement, and configuration export for <code className="font-mono text-neutral-800">/{organizationSlug}</code>.
           </p>
         </div>
       </div>
@@ -152,13 +152,13 @@ export function TenantTools({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-neutral-900 flex items-center gap-1.5">
-                <Key className="h-3.5 w-3.5 text-black" />
-                <span>API Key Access</span>
+                <Key className="h-3.5 w-3.5 text-neutral-900" />
+                <span>API Tokens</span>
               </span>
-              <span className="text-[10px] font-mono text-neutral-400">Scoped Token</span>
+              <span className="text-[10px] font-mono text-neutral-400">Secret Key</span>
             </div>
             <p className="text-[11px] text-neutral-500">
-              Generate a scoped API token for automated CI/CD and programmatic CRUD.
+              Read and write credentials for background workers and CI/CD pipelines.
             </p>
           </div>
 

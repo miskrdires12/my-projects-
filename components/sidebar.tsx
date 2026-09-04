@@ -13,6 +13,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { TenantSwitcher } from "./tenant-switcher";
+import { BrandLogo } from "./brand-logo";
 import { OrganizationMembershipInfo, MembershipRole } from "@/types/tenant";
 import { signOut } from "next-auth/react";
 
@@ -70,12 +71,15 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
       {/* Top Header & Tenant Switcher */}
       <div className="p-4 space-y-4">
         <div className="flex items-center gap-2.5 px-1">
-          <div className="h-6 w-6 rounded-md bg-black flex items-center justify-center text-white font-bold text-xs shadow-xs">
-            ▲
+          <div className="h-7 w-7 rounded-lg bg-black flex items-center justify-center text-white shadow-xs">
+            <BrandLogo className="h-4 w-4" />
           </div>
-          <span className="font-bold text-sm tracking-tight text-neutral-950 flex items-center gap-1.5">
-            OmniTenant <span className="text-[10px] text-neutral-600 font-mono bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200">SaaS</span>
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-sm tracking-tight text-neutral-950">Omni</span>
+            <span className="text-[10px] font-mono text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200">
+              v2.4
+            </span>
+          </div>
         </div>
 
         {/* Tenant Switcher dropdown */}

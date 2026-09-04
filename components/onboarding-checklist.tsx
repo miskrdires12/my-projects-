@@ -17,28 +17,28 @@ export function OnboardingChecklist({ orgSlug, onNavigateTab }: OnboardingCheckl
   const steps = [
     {
       id: "step-1",
-      title: "Organization & Multi-Tenant Setup",
-      desc: "Workspace /" + orgSlug + " initialized with Prisma multi-tenant isolation.",
+      title: "Workspace Provisioned",
+      desc: "Primary organization and production schema initialized.",
       completed: true,
     },
     {
       id: "step-2",
-      title: "Team Access & RBAC Roles",
-      desc: "Owner, Admin, and Member permissions mapped with security rules.",
+      title: "Access Permissions Assigned",
+      desc: "Role-based boundaries defined for Owner, Admin, and Member.",
       completed: true,
     },
     {
       id: "step-3",
-      title: "Configure Custom Domain & Outbound Webhook",
-      desc: "Register a custom CNAME domain and HMAC signing webhook endpoint.",
+      title: "Domain & Webhook Endpoints",
+      desc: "Configure custom CNAME routing and HMAC-signed webhook dispatches.",
       completed: false,
       action: () => (onNavigateTab ? onNavigateTab("domains") : undefined),
-      actionLabel: "Configure Now",
+      actionLabel: "Configure",
     },
     {
       id: "step-4",
-      title: "Developer API & cURL Benchmark",
-      desc: "Test live tenant REST API with latency telemetry.",
+      title: "API Verification",
+      desc: "Verify edge request throughput and Bearer token authentication.",
       completed: true,
     },
   ];
@@ -50,18 +50,18 @@ export function OnboardingChecklist({ orgSlug, onNavigateTab }: OnboardingCheckl
     <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="h-6 w-6 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs">
+          <div className="h-6 w-6 rounded-full bg-neutral-950 text-white flex items-center justify-center font-bold text-xs">
             ✓
           </div>
           <div>
-            <h3 className="text-sm font-bold text-neutral-950 flex items-center gap-2">
-              <span>Production Workspace Setup</span>
-              <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-neutral-100 text-neutral-900 border border-neutral-300">
-                {progressPercent}% Complete
+            <h3 className="text-sm font-semibold text-neutral-950 flex items-center gap-2">
+              <span>Setup Checklist</span>
+              <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
+                {completedCount} of {steps.length} completed
               </span>
             </h3>
             <p className="text-xs text-neutral-500">
-              Complete these operational steps to prepare your tenant for public launch.
+              Required configuration before publishing production services.
             </p>
           </div>
         </div>

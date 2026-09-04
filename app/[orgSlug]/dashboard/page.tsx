@@ -60,8 +60,15 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     recentProjects = [
       {
         id: "proj_demo_1",
-        name: "Enterprise Multi-Tenant Core",
-        description: "Core isolation kernel, middleware router, and schema extensions.",
+        name: "auth-edge-service",
+        description: "OAuth2 session tokens and edge middleware verification.",
+        status: "ACTIVE",
+        createdAt: new Date(),
+      },
+      {
+        id: "proj_demo_2",
+        name: "stripe-billing-sync",
+        description: "Webhook event listener syncing customer lifecycle and invoices.",
         status: "ACTIVE",
         createdAt: new Date(),
       },
@@ -73,120 +80,131 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
   return (
     <DashboardShell orgSlug={tenant.organizationSlug}>
       <div className="space-y-6 animate-in fade-in duration-200">
-        {/* Welcome Banner */}
-      <div className="rounded-2xl p-6 bg-white border border-neutral-200 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-neutral-950">
-                {tenant.organizationName}
-              </h1>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-900 border border-neutral-300">
-                {tenant.subscriptionTier}
-              </span>
+        {/* Workspace Overview Header */}
+        <div className="rounded-2xl p-6 bg-white border border-neutral-200 shadow-2xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-semibold tracking-tight text-neutral-950">
+                  {tenant.organizationName}
+                </h1>
+                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200 font-medium">
+                  {tenant.subscriptionTier}
+                </span>
+                <span className="flex items-center gap-1.5 text-[11px] text-neutral-500 font-mono">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span>operational</span>
+                </span>
+              </div>
+              <p className="text-xs text-neutral-500">
+                Workspace overview, active deployments, and real-time edge telemetry.
+              </p>
             </div>
-            <p className="text-xs text-neutral-500">
-              Workspace tenant: <code className="text-neutral-900 font-mono font-medium">/{tenant.organizationSlug}</code>.
-              Logged in as <strong className="text-neutral-900">{tenant.userName}</strong> ({tenant.userRole}).
-            </p>
-          </div>
 
-          <div className="flex items-center gap-2.5">
-            <Link
-              href={`/${tenant.organizationSlug}/projects`}
-              className="px-3.5 py-2 rounded-xl bg-black hover:bg-neutral-800 text-white text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Create Project</span>
-            </Link>
-            <Link
-              href={`/${tenant.organizationSlug}/billing`}
-              className="px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-900 text-xs font-semibold transition-all flex items-center gap-1.5"
-            >
-              <CreditCard className="h-3.5 w-3.5" />
-              <span>Manage Billing</span>
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Production Onboarding Readiness Checklist */}
-      <OnboardingChecklist orgSlug={tenant.organizationSlug} />
-
-      {/* KPI Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1 */}
-        <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-neutral-500">Total Projects</span>
-            <div className="p-2 rounded-lg bg-neutral-100 text-neutral-900">
-              <FolderKanban className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-2xl font-bold text-neutral-950">{projectsCount}</div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
-              <span>Limit:</span>
-              <span className="text-neutral-800 font-semibold">
-                {planInfo.limits.maxProjects >= 999 ? "Unlimited" : `${planInfo.limits.maxProjects} max`}
-              </span>
+            <div className="flex items-center gap-2.5">
+              <Link
+                href={`/${tenant.organizationSlug}/projects`}
+                className="px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-medium shadow-xs transition-all flex items-center gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>New Project</span>
+              </Link>
+              <Link
+                href={`/${tenant.organizationSlug}/billing`}
+                className="px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-800 text-xs font-medium transition-all flex items-center gap-1.5 shadow-2xs"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                <span>Billing & Plans</span>
+              </Link>
             </div>
           </div>
         </div>
 
-        {/* Metric 2 */}
-        <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-neutral-500">Team Size</span>
-            <div className="p-2 rounded-lg bg-neutral-100 text-neutral-900">
-              <Users2 className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-2xl font-bold text-neutral-950">{membersCount} members</div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
-              <span>Capacity:</span>
-              <span className="text-neutral-800 font-semibold">
-                {planInfo.limits.maxMembers >= 999 ? "Unlimited" : `${planInfo.limits.maxMembers} seats`}
-              </span>
-            </div>
-          </div>
-        </div>
+        {/* Production Readiness Checklist */}
+        <OnboardingChecklist orgSlug={tenant.organizationSlug} />
 
-        {/* Metric 3 */}
-        <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-neutral-500">Subscription Tier</span>
-            <div className="p-2 rounded-lg bg-neutral-100 text-neutral-900">
-              <CreditCard className="h-4 w-4" />
+        {/* Primary Metric Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Metric 1 */}
+          <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-neutral-500">Active Services</span>
+              <div className="p-1.5 rounded-lg bg-neutral-100 text-neutral-800">
+                <FolderKanban className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="text-2xl font-semibold tracking-tight text-neutral-950 font-mono">
+                {projectsCount}
+              </div>
+              <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
+                <span>Quota:</span>
+                <span className="text-neutral-800 font-medium font-mono">
+                  {planInfo.limits.maxProjects >= 999 ? "Unlimited" : `${planInfo.limits.maxProjects} max`}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-2xl font-bold text-neutral-950">${planInfo.monthlyPrice} /mo</div>
-            <div className="text-[11px] text-neutral-600 mt-1 font-medium flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-black" />
-              <span>Status: {tenant.subscriptionStatus}</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Metric 4 */}
-        <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-neutral-500">Tenant Latency & SLA</span>
-            <div className="p-2 rounded-lg bg-neutral-100 text-neutral-900">
-              <Activity className="h-4 w-4" />
+          {/* Metric 2 */}
+          <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-neutral-500">Team Capacity</span>
+              <div className="p-1.5 rounded-lg bg-neutral-100 text-neutral-800">
+                <Users2 className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="text-2xl font-semibold tracking-tight text-neutral-950 font-mono">
+                {membersCount} <span className="text-xs font-normal text-neutral-500">seats</span>
+              </div>
+              <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
+                <span>Available:</span>
+                <span className="text-neutral-800 font-medium font-mono">
+                  {planInfo.limits.maxMembers >= 999 ? "Unlimited" : `${planInfo.limits.maxMembers} total`}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-2xl font-bold text-neutral-950">99.98%</div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
-              <Zap className="h-3 w-3 text-neutral-900" />
-              <span>Zero cross-tenant overhead</span>
+
+          {/* Metric 3 */}
+          <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-neutral-500">Monthly Plan</span>
+              <div className="p-1.5 rounded-lg bg-neutral-100 text-neutral-800">
+                <CreditCard className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="text-2xl font-semibold tracking-tight text-neutral-950 font-mono">
+                ${planInfo.monthlyPrice} <span className="text-xs font-normal text-neutral-500">/mo</span>
+              </div>
+              <div className="text-[11px] text-neutral-600 mt-1 font-medium flex items-center gap-1.5 font-mono">
+                <span className="h-1.5 w-1.5 rounded-full bg-neutral-900" />
+                <span>Renewal active</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Metric 4 */}
+          <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-neutral-500">Edge Uptime (30d)</span>
+              <div className="p-1.5 rounded-lg bg-neutral-100 text-neutral-800">
+                <Activity className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="text-2xl font-semibold tracking-tight text-neutral-950 font-mono">
+                99.99%
+              </div>
+              <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1 font-mono">
+                <Zap className="h-3 w-3 text-neutral-800" />
+                <span>p95: 14ms latency</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Interactive Telemetry & Latency Throughput Chart */}
       <TelemetryCharts />
@@ -210,29 +228,29 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         <div className="lg:col-span-2 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-neutral-950">Active Tenant Projects</h2>
-              <p className="text-xs text-neutral-500">Isolated to {tenant.organizationName}</p>
+              <h2 className="text-sm font-semibold text-neutral-950">Deployed Services</h2>
+              <p className="text-xs text-neutral-500">Active pipelines and microservices in {tenant.organizationName}</p>
             </div>
             <Link
               href={`/${tenant.organizationSlug}/projects`}
-              className="text-xs font-semibold text-neutral-900 hover:underline flex items-center gap-1"
+              className="text-xs font-medium text-neutral-700 hover:text-neutral-950 hover:underline flex items-center gap-1"
             >
-              <span>View all ({projectsCount})</span>
+              <span>All services ({projectsCount})</span>
               <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
           </div>
 
           <div className="space-y-2">
             {recentProjects.length === 0 ? (
-              <div className="p-8 rounded-2xl bg-white border border-dashed border-neutral-300 text-center space-y-3">
-                <FolderKanban className="h-8 w-8 text-neutral-400 mx-auto" />
-                <p className="text-xs text-neutral-500">No projects created yet for this organization.</p>
+              <div className="p-8 rounded-2xl bg-white border border-dashed border-neutral-200 text-center space-y-3">
+                <FolderKanban className="h-7 w-7 text-neutral-400 mx-auto" />
+                <p className="text-xs text-neutral-500">No services deployed yet for this workspace.</p>
                 <Link
                   href={`/${tenant.organizationSlug}/projects`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black text-white text-xs font-medium hover:bg-neutral-800"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-950 text-white text-xs font-medium hover:bg-neutral-800 shadow-2xs"
                 >
                   <Plus className="h-3 w-3" />
-                  <span>Create First Project</span>
+                  <span>Deploy First Service</span>
                 </Link>
               </div>
             ) : (
@@ -243,21 +261,21 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                 >
                   <div className="space-y-0.5 min-w-0 pr-4">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-xs text-neutral-900 group-hover:underline truncate">
+                      <span className="font-medium text-xs text-neutral-900 group-hover:underline truncate font-mono">
                         {proj.name}
                       </span>
                       <span
-                        className={`text-[9px] px-2 py-0.2 rounded-full font-bold ${
+                        className={`text-[9px] px-2 py-0.2 rounded-full font-medium font-mono ${
                           proj.status === "ACTIVE"
-                            ? "bg-neutral-100 text-neutral-800 border border-neutral-300"
+                            ? "bg-neutral-100 text-neutral-800 border border-neutral-200"
                             : "bg-neutral-100 text-neutral-500"
                         }`}
                       >
-                        {proj.status}
+                        {proj.status.toLowerCase()}
                       </span>
                     </div>
                     <p className="text-[11px] text-neutral-500 line-clamp-1">
-                      {proj.description || "No description provided."}
+                      {proj.description || "Service deployment configured."}
                     </p>
                   </div>
 
@@ -273,8 +291,8 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         {/* Right Column: Audit Logs & Tenant Events */}
         <div className="space-y-3">
           <div>
-            <h2 className="text-sm font-bold text-neutral-950">Security Audit Trail</h2>
-            <p className="text-xs text-neutral-500">Tenant lifecycle events</p>
+            <h2 className="text-sm font-semibold text-neutral-950">Audit Trail</h2>
+            <p className="text-xs text-neutral-500">Immutable workspace activity log</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-white border border-neutral-200 space-y-3 shadow-2xs">

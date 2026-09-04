@@ -104,15 +104,15 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-950">Tenant Projects</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-neutral-950">Services & Projects</h1>
           <p className="text-xs text-neutral-500">
-            Isolated micro-services, APIs, and database partitions for <code className="font-mono text-black">/{orgSlug}</code> ({projects.length} total).
+            Active service deployments and background pipelines for <span className="font-mono text-neutral-800">/{orgSlug}</span>.
           </p>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-black hover:bg-neutral-800 text-white text-xs font-semibold shadow-xs transition-all"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-medium shadow-xs transition-all cursor-pointer"
         >
           <Plus className="h-4 w-4" />
           <span>New Project</span>
@@ -152,13 +152,13 @@ export function ProjectsClient({ initialProjects, orgSlug, userRole, currentTier
       {/* Projects Grid with Production Metadata */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProjects.length === 0 ? (
-          <div className="col-span-full p-12 rounded-2xl bg-white border border-dashed border-neutral-300 text-center space-y-3">
-            <FolderKanban className="h-10 w-10 text-neutral-400 mx-auto" />
-            <h3 className="text-sm font-semibold text-neutral-900">No projects found</h3>
+          <div className="col-span-full p-12 rounded-2xl bg-white border border-dashed border-neutral-200 text-center space-y-3">
+            <FolderKanban className="h-8 w-8 text-neutral-400 mx-auto" />
+            <h3 className="text-sm font-semibold text-neutral-900">No services found</h3>
             <p className="text-xs text-neutral-500 max-w-sm mx-auto">
               {searchQuery
-                ? "No projects match your current filter query. Try clearing the search."
-                : "Create your first project for this tenant. All records are isolated with the organization foreign key."}
+                ? "No services match your current search query. Try clearing the filter."
+                : "Create a new service or deploy a pipeline for this workspace."}
             </p>
           </div>
         ) : (

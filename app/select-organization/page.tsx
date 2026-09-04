@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { ArrowRight, Plus, Building2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 
 export const dynamic = "force-dynamic";
 
@@ -47,14 +48,14 @@ export default async function SelectOrganizationPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 flex flex-col justify-center items-center p-6 font-sans">
-      <div className="w-full max-w-lg space-y-6">
+      <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-          <div className="h-10 w-10 rounded-xl bg-black flex items-center justify-center text-white font-bold mx-auto shadow-xs">
-            ▲
+          <div className="h-9 w-9 rounded-xl bg-neutral-950 flex items-center justify-center text-white mx-auto shadow-xs">
+            <BrandLogo className="h-5 w-5" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Select Organization</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-neutral-950">Select Workspace</h1>
           <p className="text-xs text-neutral-500">
-            Choose a workspace tenant or launch a new multi-tenant organization.
+            Choose an active organization or switch teams.
           </p>
         </div>
 

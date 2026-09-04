@@ -73,29 +73,29 @@ export function TelemetryCharts() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-black" />
-            <h3 className="text-sm font-bold text-neutral-950">Tenant Telemetry & API Throughput</h3>
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
-              Live Edge Network
+            <Activity className="h-4 w-4 text-neutral-900" />
+            <h3 className="text-sm font-semibold text-neutral-950">Ingress & API Traffic</h3>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
+              Live · us-east-1
             </span>
           </div>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Real-time request volume and latency telemetry for this organization.
+            Request throughput and latency distribution over the past 30 days.
           </p>
         </div>
 
         {/* Real-time Hover Readout */}
         <div className="flex items-center gap-4 text-xs font-mono">
           <div className="flex items-center gap-1.5 text-neutral-600">
-            <span>Day:</span>
+            <span>Date:</span>
             <strong className="text-neutral-950">{activeData.day}</strong>
           </div>
           <div className="flex items-center gap-1.5 text-neutral-600">
-            <span>Requests:</span>
+            <span>Volume:</span>
             <strong className="text-neutral-950">{activeData.requests.toLocaleString()}</strong>
           </div>
           <div className="flex items-center gap-1.5 text-neutral-600">
-            <span>P99:</span>
+            <span>p99:</span>
             <strong className="text-neutral-950">{activeData.p99}ms</strong>
           </div>
         </div>
@@ -196,17 +196,17 @@ export function TelemetryCharts() {
 
       {/* Footer Sub-Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-neutral-100 text-xs">
-        <div className="flex items-center justify-between p-2 rounded-xl bg-neutral-50 border border-neutral-200">
-          <span className="text-neutral-500">30-Day Total</span>
-          <span className="font-bold text-neutral-900 font-mono">349,240 reqs</span>
+        <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-50 border border-neutral-200">
+          <span className="text-neutral-500">30-Day Aggregate</span>
+          <span className="font-semibold text-neutral-950 font-mono">349,240 reqs</span>
         </div>
-        <div className="flex items-center justify-between p-2 rounded-xl bg-neutral-50 border border-neutral-200">
-          <span className="text-neutral-500">Avg Global Latency</span>
-          <span className="font-bold text-neutral-900 font-mono">16.8 ms</span>
+        <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-50 border border-neutral-200">
+          <span className="text-neutral-500">Median Latency (p50)</span>
+          <span className="font-semibold text-neutral-950 font-mono">16.8 ms</span>
         </div>
-        <div className="flex items-center justify-between p-2 rounded-xl bg-neutral-50 border border-neutral-200">
-          <span className="text-neutral-500">Error Rate</span>
-          <span className="font-bold text-emerald-600 font-mono">0.002% (Healthy)</span>
+        <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-50 border border-neutral-200">
+          <span className="text-neutral-500">Availability</span>
+          <span className="font-semibold text-emerald-600 font-mono">99.998%</span>
         </div>
       </div>
     </div>
