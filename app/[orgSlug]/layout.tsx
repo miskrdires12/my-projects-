@@ -51,8 +51,8 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
         }))
       : [
           {
-            id: "org_acme",
-            name: "Acme Corp",
+            id: "org_helios",
+            name: "Helios Capital",
             slug: "acme",
             logoUrl: null,
             role: "OWNER",
@@ -61,63 +61,59 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
           },
           {
             id: "org_stark",
-            name: "Stark Industries",
+            name: "Stark Innovations",
             slug: "stark",
             logoUrl: null,
             role: "ADMIN",
             subscriptionTier: "ENTERPRISE",
             subscriptionStatus: "ACTIVE",
           },
-          {
-            id: "org_studio",
-            name: "Studio Craft",
-            slug: "studio",
-            logoUrl: null,
-            role: "MEMBER",
-            subscriptionTier: "FREE",
-            subscriptionStatus: "ACTIVE",
-          },
         ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-50 text-neutral-900 font-sans">
-      {/* Dev Architecture Simulator Bar */}
-      <RoleSimulatorBar
-        currentOrgSlug={tenant.organizationSlug}
-        currentRole={tenant.userRole}
-        currentTier={tenant.subscriptionTier}
-      />
-
-      <div className="flex flex-1 min-h-0">
-        {/* Modern B2B Sidebar */}
-        <Sidebar
-          currentOrg={{
-            id: tenant.organizationId,
-            slug: tenant.organizationSlug,
-            name: tenant.organizationName,
-            tier: tenant.subscriptionTier,
-          }}
-          currentUser={{
-            id: tenant.userId,
-            name: tenant.userName,
-            email: tenant.userEmail,
-            role: tenant.userRole,
-          }}
-          userOrganizations={userOrganizations}
+    <div className="min-h-screen bg-[#07070b] text-[#f4f4f7] font-sans antialiased selection:bg-fuchsia-500/30 selection:text-white p-2 sm:p-4 lg:p-6 flex flex-col justify-center items-center">
+      {/* Outer ambient dark container matching the screenshot */}
+      <div className="w-full max-w-[1600px] rounded-[2rem] sm:rounded-[2.5rem] bg-[#0c0c12]/95 border border-white/[0.08] shadow-[0_25px_70px_-15px_rgba(0,0,0,0.9)] backdrop-blur-2xl flex flex-col overflow-hidden min-h-[92vh]">
+        {/* Dev Architecture Simulator Bar */}
+        <RoleSimulatorBar
+          currentOrgSlug={tenant.organizationSlug}
+          currentRole={tenant.userRole}
+          currentTier={tenant.subscriptionTier}
         />
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-          <Header
-            organizationName={tenant.organizationName}
-            organizationSlug={tenant.organizationSlug}
-            tier={tenant.subscriptionTier}
-            status={tenant.subscriptionStatus}
-            role={tenant.userRole}
+        <div className="flex flex-1 min-h-0 flex-col md:flex-row">
+          {/* Dark Luxury Sidebar */}
+          <Sidebar
+            currentOrg={{
+              id: tenant.organizationId,
+              slug: tenant.organizationSlug,
+              name: tenant.organizationName,
+              tier: tenant.subscriptionTier,
+            }}
+            currentUser={{
+              id: tenant.userId,
+              name: tenant.userName || "Nadia Rachel",
+              email: tenant.userEmail || "rachel_helios@gmail.com",
+              role: tenant.userRole,
+            }}
+            userOrganizations={userOrganizations}
           />
-          <main className="p-6 max-w-7xl w-full mx-auto space-y-6 flex-1">
-            <ToastProvider>{children}</ToastProvider>
-          </main>
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-[#0a0a0f]">
+            <Header
+              organizationName={tenant.organizationName}
+              organizationSlug={tenant.organizationSlug}
+              tier={tenant.subscriptionTier}
+              status={tenant.subscriptionStatus}
+              role={tenant.userRole}
+              userName={tenant.userName || "Nadia Rachel"}
+              userEmail={tenant.userEmail || "rachel_helios@gmail.com"}
+            />
+            <main className="p-4 sm:p-6 w-full mx-auto space-y-6 flex-1">
+              <ToastProvider>{children}</ToastProvider>
+            </main>
+          </div>
         </div>
       </div>
     </div>

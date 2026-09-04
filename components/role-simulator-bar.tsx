@@ -2,6 +2,8 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { MembershipRole } from "@/types/tenant";
+import { useState } from "react";
+import { Shield, ChevronRight, X } from "lucide-react";
 
 interface RoleSimulatorBarProps {
   currentOrgSlug: string;
@@ -12,63 +14,63 @@ interface RoleSimulatorBarProps {
 export function RoleSimulatorBar({ currentOrgSlug, currentRole, currentTier }: RoleSimulatorBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [isDismissed, setIsDismissed] = useState(false);
 
   const switchTenant = (slug: string) => {
     const currentSubpath = pathname?.replace(`/${currentOrgSlug}`, "") || "/dashboard";
     router.push(`/${slug}${currentSubpath}`);
   };
 
+  if (isDismissed) return null;
+
   return (
-    <div className="bg-white border-b border-neutral-200 px-6 py-2 flex flex-wrap items-center justify-between text-xs gap-3">
-      <div className="flex items-center gap-2.5 text-neutral-600">
-        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-100 border border-neutral-200 text-[11px] font-mono text-neutral-800">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          <span>production</span>
+    <div className="bg-[#0c0c12]/95 border-b border-white/[0.06] px-4 sm:px-6 py-1.5 flex flex-wrap items-center justify-between text-xs gap-3 backdrop-blur-md">
+      <div className="flex items-center gap-2.5 text-neutral-400">
+        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>live instance</span>
         </span>
-        <span className="text-neutral-400">·</span>
-        <span className="text-neutral-500">
-          Workspace: <span className="font-mono text-neutral-900 font-medium">{currentOrgSlug}.omnitenant.io</span>
+        <span className="text-white/20">·</span>
+        <span className="text-neutral-400 text-[11px]">
+          Workspace: <span className="font-mono text-white font-medium">{currentOrgSlug}.omnitenant.io</span>
         </span>
-        <span className="text-neutral-400 hidden sm:inline">·</span>
-        <span className="text-neutral-500 hidden sm:inline">
-          Role: <strong className="text-neutral-900 font-medium">{currentRole}</strong>
+        <span className="text-white/20 hidden sm:inline">·</span>
+        <span className="text-neutral-400 text-[11px] hidden sm:inline">
+          Role: <strong className="text-fuchsia-400 font-medium">{currentRole}</strong>
         </span>
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-neutral-400 text-[11px] hidden md:inline font-mono">Switch:</span>
-        <div className="flex items-center gap-1 bg-neutral-100 p-0.5 rounded-lg border border-neutral-200">
+        <span className="text-neutral-500 text-[10px] hidden md:inline font-mono">Simulate:</span>
+        <div className="flex items-center gap-1 bg-white/[0.03] p-0.5 rounded-lg border border-white/[0.06]">
           <button
             onClick={() => switchTenant("acme")}
-            className={`px-2 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
+            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
               currentOrgSlug === "acme"
-                ? "bg-white text-neutral-950 font-semibold shadow-xs"
-                : "text-neutral-600 hover:text-neutral-950"
+                ? "bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30"
+                : "text-neutral-400 hover:text-white"
             }`}
           >
-            Acme Tech
+            Acme (Pro)
           </button>
           <button
             onClick={() => switchTenant("stark")}
-            className={`px-2 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
+            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
               currentOrgSlug === "stark"
-                ? "bg-white text-neutral-950 font-semibold shadow-xs"
-                : "text-neutral-600 hover:text-neutral-950"
+                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                : "text-neutral-400 hover:text-white"
             }`}
           >
-            Stark Innovations
-          </button>
-          <button
-            onClick={() => switchTenant("studio")}
-            className={`px-2 py-1 rounded text-[11px] font-medium transition-all cursor-pointer ${
-              currentOrgSlug === "studio"
-                ? "bg-white text-neutral-950 font-semibold shadow-xs"
-                : "text-neutral-600 hover:text-neutral-950"
-            }`}
-          >
-            Startup Studio
+            Stark (Enterprise)
           </button>
         </div>
+        <button
+          onClick={() => setIsDismissed(true)}
+          title="Hide bar"
+          className="text-neutral-500 hover:text-white p-1 rounded transition-colors"
+        >
+          <X className="h-3 w-3" />
+        </button>
       </div>
     </div>
   );

@@ -64,39 +64,39 @@ export function TelemetryCharts() {
 
   const areaD = `${pathD} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
 
-  const activeData = hoveredIndex !== null ? data[hoveredIndex] : data[data.length - 1];
-  const activePoint = hoveredIndex !== null ? points[hoveredIndex] : points[points.length - 1];
+  const activeIndex = hoveredIndex !== null ? hoveredIndex : points.length - 1;
+  const activeData = points[activeIndex];
 
   return (
-    <div className="rounded-2xl bg-white border border-neutral-200 shadow-2xs p-5 space-y-4">
+    <div className="rounded-3xl bg-[#13131b] border border-white/[0.08] shadow-xl p-5 sm:p-6 space-y-4">
       {/* Chart Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.05] pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-neutral-900" />
-            <h3 className="text-sm font-semibold text-neutral-950">Edge Ingress & Latency</h3>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
+            <Activity className="h-4 w-4 text-fuchsia-400" />
+            <h3 className="text-sm font-semibold text-white">Edge Ingress & Latency</h3>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               Live · us-east-1
             </span>
           </div>
-          <p className="text-xs text-neutral-500 mt-0.5">
+          <p className="text-xs text-neutral-400 mt-0.5">
             Aggregated traffic volume and p99 latency distribution across edge nodes.
           </p>
         </div>
 
         {/* Real-time Hover Readout */}
         <div className="flex items-center gap-4 text-xs font-mono">
-          <div className="flex items-center gap-1.5 text-neutral-600">
+          <div className="flex items-center gap-1.5 text-neutral-400">
             <span>Date:</span>
-            <strong className="text-neutral-950">{activeData.day}</strong>
+            <strong className="text-white">{activeData.day}</strong>
           </div>
-          <div className="flex items-center gap-1.5 text-neutral-600">
+          <div className="flex items-center gap-1.5 text-neutral-400">
             <span>Throughput:</span>
-            <strong className="text-neutral-950">{activeData.requests.toLocaleString()} reqs</strong>
+            <strong className="text-fuchsia-300">{activeData.requests.toLocaleString()} reqs</strong>
           </div>
-          <div className="flex items-center gap-1.5 text-neutral-600">
-            <span>p99 Latency:</span>
-            <strong className="text-neutral-950">{activeData.p99}ms</strong>
+          <div className="flex items-center gap-1.5 text-neutral-400">
+            <span>p99:</span>
+            <strong className="text-emerald-400">{activeData.p99}ms</strong>
           </div>
         </div>
       </div>
@@ -110,8 +110,8 @@ export function TelemetryCharts() {
         >
           <defs>
             <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#000000" stopOpacity="0.08" />
-              <stop offset="100%" stopColor="#000000" stopOpacity="0.00" />
+              <stop offset="0%" stopColor="#e879f9" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#e879f9" stopOpacity="0.00" />
             </linearGradient>
           </defs>
 
@@ -121,7 +121,7 @@ export function TelemetryCharts() {
             y1={paddingY}
             x2={width - paddingX}
             y2={paddingY}
-            stroke="#f0f0f0"
+            stroke="rgba(255, 255, 255, 0.04)"
             strokeDasharray="4 4"
           />
           <line
@@ -129,7 +129,7 @@ export function TelemetryCharts() {
             y1={height / 2}
             x2={width - paddingX}
             y2={height / 2}
-            stroke="#f0f0f0"
+            stroke="rgba(255, 255, 255, 0.04)"
             strokeDasharray="4 4"
           />
           <line
@@ -137,50 +137,52 @@ export function TelemetryCharts() {
             y1={height - paddingY}
             x2={width - paddingX}
             y2={height - paddingY}
-            stroke="#f0f0f0"
+            stroke="rgba(255, 255, 255, 0.04)"
             strokeDasharray="4 4"
           />
 
-          {/* Gradient Fill Area */}
+          {/* Area Fill */}
           <path d={areaD} fill="url(#chartGradient)" />
 
-          {/* Trend Line */}
+          {/* Primary Trend Line */}
           <path
             d={pathD}
             fill="none"
-            stroke="#0a0a0a"
-            strokeWidth="2"
+            stroke="#e879f9"
+            strokeWidth="2.5"
             strokeLinecap="round"
-            strokeLinejoin="round"
+            className="drop-shadow-[0_0_10px_rgba(232,121,249,0.5)]"
           />
 
-          {/* Interactive Crosshair & Active Point */}
-          {activePoint && (
-            <>
+          {/* Active Hover Point Line & Dot */}
+          {activeData && (
+            <g>
               <line
-                x1={activePoint.x}
-                y1={0}
-                x2={activePoint.x}
+                x1={activeData.x}
+                y1={paddingY}
+                x2={activeData.x}
                 y2={height}
-                stroke="#a3a3a3"
+                stroke="#e879f9"
                 strokeWidth="1"
-                strokeDasharray="2 2"
+                strokeDasharray="3 3"
+                opacity="0.6"
               />
               <circle
-                cx={activePoint.x}
-                cy={activePoint.y}
-                r="4.5"
-                fill="#000000"
-                stroke="#ffffff"
-                strokeWidth="2"
+                cx={activeData.x}
+                cy={activeData.y}
+                r="6"
+                fill="#ffffff"
+                stroke="#e879f9"
+                strokeWidth="2.5"
+                className="drop-shadow-[0_0_8px_rgba(232,121,249,0.8)]"
               />
-            </>
+            </g>
           )}
 
-          {/* Invisible Touch/Mouse Hover Targets */}
+          {/* Transparent Overlay Bars for Smooth Hover Detection */}
           {points.map((p, idx) => (
             <rect
-              key={idx}
+              key={p.day}
               x={p.x - width / points.length / 2}
               y={0}
               width={width / points.length}
@@ -194,19 +196,23 @@ export function TelemetryCharts() {
         </svg>
       </div>
 
-      {/* Footer Sub-Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-neutral-100 text-xs">
-        <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-50 border border-neutral-200">
-          <span className="text-neutral-500">30-Day Aggregate</span>
-          <span className="font-semibold text-neutral-950 font-mono">349,240 reqs</span>
+      {/* Footer Metrics Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-white/[0.05] text-xs">
+        <div className="space-y-0.5">
+          <span className="text-[10px] text-neutral-400 font-mono">AVG THROUGHPUT</span>
+          <p className="font-semibold text-white font-mono">11,940 req/day</p>
         </div>
-        <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-50 border border-neutral-200">
-          <span className="text-neutral-500">Median Latency (p50)</span>
-          <span className="font-semibold text-neutral-950 font-mono">16.8 ms</span>
+        <div className="space-y-0.5">
+          <span className="text-[10px] text-neutral-400 font-mono">PEAK VOLUME</span>
+          <p className="font-semibold text-white font-mono">16,240 reqs</p>
         </div>
-        <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-50 border border-neutral-200">
-          <span className="text-neutral-500">Edge Success Rate</span>
-          <span className="font-semibold text-neutral-950 font-mono">99.98%</span>
+        <div className="space-y-0.5">
+          <span className="text-[10px] text-neutral-400 font-mono">MEDIAN LATENCY</span>
+          <p className="font-semibold text-white font-mono">16.4ms</p>
+        </div>
+        <div className="space-y-0.5">
+          <span className="text-[10px] text-neutral-400 font-mono">EDGE AVAILABILITY</span>
+          <p className="font-semibold text-emerald-400 font-mono">99.995%</p>
         </div>
       </div>
     </div>

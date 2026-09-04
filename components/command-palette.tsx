@@ -16,7 +16,7 @@ import {
   Zap,
   LogOut,
   ArrowRight,
-  ExternalLink,
+  Sparkles,
 } from "lucide-react";
 
 interface CommandPaletteProps {
@@ -68,13 +68,38 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
 
   if (!isOpen) return null;
 
-  const actions: CommandCategory[] = [
+  const categories: CommandCategory[] = [
+    {
+      category: "Helios AI Intelligence",
+      items: [
+        {
+          id: "ai-insights",
+          name: "Ask Helios: Generate Portfolio Risk Analysis",
+          icon: Sparkles,
+          badge: "AI Alpha",
+          run: () => {
+            onClose();
+            router.push(`/${currentOrgSlug}/dashboard`);
+          },
+        },
+        {
+          id: "ai-market",
+          name: "Ask Helios: Analyze Tech & Semiconductor Breakouts",
+          icon: Sparkles,
+          badge: "Insights",
+          run: () => {
+            onClose();
+            router.push(`/${currentOrgSlug}/dashboard`);
+          },
+        },
+      ],
+    },
     {
       category: "Navigation",
       items: [
         {
           id: "nav-dash",
-          name: "Go to Dashboard",
+          name: "Investment Overview (Wallet)",
           icon: LayoutDashboard,
           run: () => {
             onClose();
@@ -83,7 +108,7 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         },
         {
           id: "nav-proj",
-          name: "Go to Services",
+          name: "Portfolio Services & Assets",
           icon: FolderKanban,
           run: () => {
             onClose();
@@ -92,7 +117,7 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         },
         {
           id: "nav-team",
-          name: "Go to Members & Access",
+          name: "Community & Team Access",
           icon: Users2,
           run: () => {
             onClose();
@@ -101,7 +126,7 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         },
         {
           id: "nav-bill",
-          name: "Go to Billing & Plans",
+          name: "Billing & Tier Plans",
           icon: CreditCard,
           run: () => {
             onClose();
@@ -115,77 +140,29 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
       items: [
         {
           id: "tool-api",
-          name: "Open API Explorer",
+          name: "Open Developer Tools",
           icon: Terminal,
-          badge: "cURL",
+          badge: "API",
           run: () => {
             onClose();
-            if (onSelectTab) onSelectTab("playground");
-            router.push(`/${currentOrgSlug}/dashboard`);
+            router.push(`/${currentOrgSlug}/dashboard?tab=tools`);
           },
         },
         {
           id: "tool-webhook",
-          name: "Inspect Webhook Deliveries",
+          name: "Inspect Edge Telemetry & Ingress",
           icon: Zap,
-          badge: "Stripe",
+          badge: "Telemetry",
           run: () => {
             onClose();
-            if (onSelectTab) onSelectTab("webhooks");
-            router.push(`/${currentOrgSlug}/dashboard`);
-          },
-        },
-        {
-          id: "tool-sec",
-          name: "Open Security & Audit Controls",
-          icon: ShieldCheck,
-          badge: "SOC 2",
-          run: () => {
-            onClose();
-            if (onSelectTab) onSelectTab("compliance");
-            router.push(`/${currentOrgSlug}/dashboard`);
-          },
-        },
-      ],
-    },
-    {
-      category: "Switch Workspace",
-      items: [
-        {
-          id: "org-acme",
-          name: "Acme Technologies (PRO)",
-          icon: Building2,
-          badge: "/acme",
-          run: () => {
-            onClose();
-            router.push("/acme/dashboard");
-          },
-        },
-        {
-          id: "org-stark",
-          name: "Stark Innovations (ENTERPRISE)",
-          icon: Building2,
-          badge: "/stark",
-          run: () => {
-            onClose();
-            router.push("/stark/dashboard");
-          },
-        },
-        {
-          id: "org-studio",
-          name: "Startup Studio (FREE)",
-          icon: Building2,
-          badge: "/studio",
-          run: () => {
-            onClose();
-            router.push("/studio/dashboard");
+            router.push(`/${currentOrgSlug}/dashboard?tab=market`);
           },
         },
       ],
     },
   ];
 
-  const filtered = actions
+  const filtered = categories
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
@@ -195,60 +172,63 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
     .filter((group) => group.items.length > 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-100">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-100"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-xl bg-white border border-neutral-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-xl rounded-3xl bg-[#13131b] border border-white/10 shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}
-        <div className="relative border-b border-neutral-200 px-4 py-3.5 flex items-center gap-3">
-          <Search className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+        <div className="relative border-b border-white/[0.06] px-4 py-4 flex items-center gap-3">
+          <Search className="h-4 w-4 text-fuchsia-400 flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command, search pages, or switch tenant..."
-            className="w-full text-xs text-neutral-900 placeholder-neutral-400 focus:outline-none bg-transparent"
+            placeholder="Ask Helios AI, search stocks, or jump to page..."
+            className="w-full text-xs text-white placeholder-neutral-500 focus:outline-none bg-transparent"
           />
           <button
             onClick={onClose}
-            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 border border-neutral-200 hover:text-black"
+            className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-neutral-400 border border-white/[0.08] hover:text-white cursor-pointer"
           >
             ESC
           </button>
         </div>
 
         {/* Command List */}
-        <div className="max-h-80 overflow-y-auto p-2 space-y-4">
+        <div className="max-h-80 overflow-y-auto p-3 space-y-4">
           {filtered.length === 0 ? (
-            <div className="py-8 text-center text-xs text-neutral-400">
-              No matching commands or tools found for &quot;{query}&quot;.
+            <div className="py-8 text-center text-xs text-neutral-500">
+              No matching commands found for &quot;{query}&quot;.
             </div>
           ) : (
             filtered.map((group) => (
               <div key={group.category} className="space-y-1">
-                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-mono">
                   {group.category}
                 </div>
                 {group.items.map((item) => (
                   <button
                     key={item.id}
                     onClick={item.run}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-neutral-700 hover:text-black hover:bg-neutral-100 transition-colors text-left group"
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-2xl text-xs text-neutral-300 hover:text-white hover:bg-white/[0.05] transition-colors text-left group cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <item.icon className="h-4 w-4 text-neutral-500 group-hover:text-black flex-shrink-0" />
+                      <item.icon className="h-4 w-4 text-neutral-400 group-hover:text-fuchsia-400 flex-shrink-0 transition-colors" />
                       <span className="truncate font-medium">{item.name}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
                       {item.badge && (
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-neutral-100 text-neutral-600 border border-neutral-200">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-300 border border-purple-500/30">
                           {item.badge}
                         </span>
                       )}
-                      <ArrowRight className="h-3 w-3 text-neutral-400 group-hover:text-black group-hover:translate-x-0.5 transition-all" />
+                      <ArrowRight className="h-3 w-3 text-neutral-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                     </div>
                   </button>
                 ))}
@@ -258,12 +238,12 @@ export function CommandPalette({ currentOrgSlug, isOpen, onClose, onSelectTab }:
         </div>
 
         {/* Footer Hint */}
-        <div className="border-t border-neutral-100 px-4 py-2 bg-neutral-50 flex items-center justify-between text-[11px] text-neutral-400">
+        <div className="border-t border-white/[0.05] px-4 py-2.5 bg-[#0f0f15] flex items-center justify-between text-[11px] text-neutral-500">
           <div className="flex items-center gap-3">
-            <span>Navigation: <kbd className="font-mono bg-white px-1 rounded border border-neutral-200">↑</kbd> <kbd className="font-mono bg-white px-1 rounded border border-neutral-200">↓</kbd></span>
-            <span>Select: <kbd className="font-mono bg-white px-1 rounded border border-neutral-200">Enter</kbd></span>
+            <span>Navigation: <kbd className="font-mono bg-white/[0.06] px-1.5 py-0.2 rounded border border-white/10 text-neutral-400">↑</kbd> <kbd className="font-mono bg-white/[0.06] px-1.5 py-0.2 rounded border border-white/10 text-neutral-400">↓</kbd></span>
+            <span>Select: <kbd className="font-mono bg-white/[0.06] px-1.5 py-0.2 rounded border border-white/10 text-neutral-400">Enter</kbd></span>
           </div>
-          <span>OmniTenant Command Palette</span>
+          <span>Helios Intelligence Engine</span>
         </div>
       </div>
     </div>

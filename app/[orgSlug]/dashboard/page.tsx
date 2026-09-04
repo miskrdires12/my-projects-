@@ -5,6 +5,7 @@ import { TenantTools } from "@/components/tenant-tools";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TelemetryCharts } from "@/components/telemetry-charts";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { HeliosPortfolioView } from "@/components/helios-portfolio-view";
 import Link from "next/link";
 import {
   FolderKanban,
@@ -16,16 +17,21 @@ import {
   Plus,
   Shield,
   Zap,
+  Layers,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 interface DashboardPageProps {
   params: Promise<{ orgSlug: string }>;
+  searchParams?: Promise<{ tab?: string }>;
 }
 
-export default async function DashboardPage({ params }: DashboardPageProps) {
+export default async function DashboardPage({ params, searchParams }: DashboardPageProps) {
   const { orgSlug } = await params;
+  const sParams = await searchParams;
+  const activeTab = sParams?.tab || "wallet";
+
   const tenant = await getTenantContext(orgSlug);
   const db = getScopedPrisma(tenant.organizationId);
 
@@ -54,320 +60,309 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     recentAuditLogs = rAuditLogs;
   } catch (e) {
     console.warn("Could not query dashboard data from database:", e);
-    // Graceful fallback values for initial deployment state
+    // Graceful fallback values
     projectsCount = 3;
     membersCount = 2;
-      recentProjects = [
-        {
-          id: "proj_demo_1",
-          name: "auth-edge-service",
-          description: "JWT token validation and edge proxy authentication.",
-          status: "ACTIVE",
-          createdAt: new Date(),
-        },
-        {
-          id: "proj_demo_2",
-          name: "stripe-billing-sync",
-          description: "Webhook event processor syncing customer subscriptions.",
-          status: "ACTIVE",
-          createdAt: new Date(Date.now() - 3600000),
-        },
-        {
-          id: "proj_demo_3",
-          name: "search-indexing-worker",
-          description: "Background worker syncing tenant database records to search index.",
-          status: "ACTIVE",
-          createdAt: new Date(Date.now() - 86400000),
-        },
-      ];
-      recentAuditLogs = [
-        {
-          id: "log_1",
-          action: "ORGANIZATION_CREATED",
-          createdAt: new Date(Date.now() - 7200000),
-          user: { name: "Miskr" },
-        },
-        {
-          id: "log_2",
-          action: "MEMBER_INVITED",
-          createdAt: new Date(Date.now() - 3600000),
-          user: { name: "Alex Chen" },
-        },
-        {
-          id: "log_3",
-          action: "SUBSCRIPTION_UPGRADED",
-          createdAt: new Date(Date.now() - 1800000),
-          user: { name: "Miskr" },
-        },
-        {
-          id: "log_4",
-          action: "PROJECT_CREATED",
-          createdAt: new Date(Date.now() - 600000),
-          user: { name: "Alex Chen" },
-        },
-      ];
-    }
+    recentProjects = [
+      {
+        id: "proj_demo_1",
+        name: "auth-edge-service",
+        description: "JWT token validation and edge proxy authentication.",
+        status: "ACTIVE",
+        createdAt: new Date(),
+      },
+      {
+        id: "proj_demo_2",
+        name: "stripe-billing-sync",
+        description: "Webhook event processor syncing customer subscriptions.",
+        status: "ACTIVE",
+        createdAt: new Date(Date.now() - 3600000),
+      },
+      {
+        id: "proj_demo_3",
+        name: "search-indexing-worker",
+        description: "Background worker syncing tenant database records to search index.",
+        status: "ACTIVE",
+        createdAt: new Date(Date.now() - 86400000),
+      },
+    ];
+    recentAuditLogs = [
+      {
+        id: "log_1",
+        action: "ORGANIZATION_CREATED",
+        createdAt: new Date(Date.now() - 7200000),
+        user: { name: "Nadia Rachel" },
+      },
+      {
+        id: "log_2",
+        action: "MEMBER_INVITED",
+        createdAt: new Date(Date.now() - 3600000),
+        user: { name: "Alex Chen" },
+      },
+      {
+        id: "log_3",
+        action: "SUBSCRIPTION_UPGRADED",
+        createdAt: new Date(Date.now() - 1800000),
+        user: { name: "Nadia Rachel" },
+      },
+      {
+        id: "log_4",
+        action: "PROJECT_CREATED",
+        createdAt: new Date(Date.now() - 600000),
+        user: { name: "Alex Chen" },
+      },
+    ];
+  }
 
-    const planInfo = PLAN_CONFIGS[tenant.subscriptionTier];
+  const planInfo = PLAN_CONFIGS[tenant.subscriptionTier];
 
-    function formatAction(action: string) {
-      const map: Record<string, string> = {
-        ORGANIZATION_CREATED: "workspace.created",
-        MEMBER_INVITED: "member.invited",
-        SUBSCRIPTION_UPGRADED: "billing.upgraded",
-        PROJECT_CREATED: "service.deployed",
-        PROJECT_ARCHIVED: "service.archived",
-        PROJECT_DELETED: "service.deleted",
-      };
-      return map[action] || action.toLowerCase().replace(/_/g, ".");
-    }
+  function formatAction(action: string) {
+    const map: Record<string, string> = {
+      ORGANIZATION_CREATED: "workspace.created",
+      MEMBER_INVITED: "member.invited",
+      SUBSCRIPTION_UPGRADED: "billing.upgraded",
+      PROJECT_CREATED: "service.deployed",
+      PROJECT_ARCHIVED: "service.archived",
+      PROJECT_DELETED: "service.deleted",
+    };
+    return map[action] || action.toLowerCase().replace(/_/g, ".");
+  }
 
   return (
     <DashboardShell orgSlug={tenant.organizationSlug}>
-      <div className="space-y-6 animate-in fade-in duration-200">
-        {/* Workspace Overview Header */}
-        <div className="rounded-2xl p-6 bg-white border border-neutral-200 shadow-2xs">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-xl font-semibold tracking-tight text-neutral-950">
-                  {tenant.organizationName}
-                </h1>
-                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200 font-medium">
-                  {tenant.subscriptionTier}
-                </span>
-                <span className="flex items-center gap-1.5 text-[11px] text-neutral-500 font-mono">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  <span>us-east-1 · operational</span>
-                </span>
+      <div className="space-y-6">
+        {/* If user selected Market tab */}
+        {activeTab === "market" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Primary Metric Grid in Dark Luxury */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-5 rounded-3xl bg-[#13131b] border border-white/[0.08] shadow-xl flex flex-col justify-between hover:border-purple-500/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-neutral-400">Active Services</span>
+                  <div className="p-2 rounded-xl bg-white/[0.05] text-fuchsia-400">
+                    <FolderKanban className="h-4 w-4" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-bold tracking-tight text-white font-mono">
+                    {projectsCount}
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-1 flex items-center gap-1">
+                    <span>Quota:</span>
+                    <span className="text-fuchsia-300 font-medium font-mono">
+                      {planInfo.limits.maxProjects >= 999 ? "Unlimited" : `${planInfo.limits.maxProjects} max`}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <p className="text-xs text-neutral-500">
-                Active services, edge telemetry, and workspace audit logs.
-              </p>
+
+              <div className="p-5 rounded-3xl bg-[#13131b] border border-white/[0.08] shadow-xl flex flex-col justify-between hover:border-purple-500/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-neutral-400">Team Capacity</span>
+                  <div className="p-2 rounded-xl bg-white/[0.05] text-fuchsia-400">
+                    <Users2 className="h-4 w-4" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-bold tracking-tight text-white font-mono">
+                    {membersCount} <span className="text-xs font-normal text-neutral-500">seats</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-1 flex items-center gap-1">
+                    <span>Available:</span>
+                    <span className="text-fuchsia-300 font-medium font-mono">
+                      {planInfo.limits.maxMembers >= 999 ? "Unlimited" : `${planInfo.limits.maxMembers} total`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-[#13131b] border border-white/[0.08] shadow-xl flex flex-col justify-between hover:border-purple-500/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-neutral-400">Monthly Plan</span>
+                  <div className="p-2 rounded-xl bg-white/[0.05] text-fuchsia-400">
+                    <CreditCard className="h-4 w-4" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-bold tracking-tight text-white font-mono">
+                    ${planInfo.monthlyPrice} <span className="text-xs font-normal text-neutral-500">/mo</span>
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-1 font-medium flex items-center gap-1.5 font-mono">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    <span>Renewal active</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-[#13131b] border border-white/[0.08] shadow-xl flex flex-col justify-between hover:border-purple-500/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-neutral-400">Edge Uptime</span>
+                  <div className="p-2 rounded-xl bg-white/[0.05] text-emerald-400">
+                    <Activity className="h-4 w-4" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-bold tracking-tight text-white font-mono">
+                    99.99%
+                  </div>
+                  <div className="text-[11px] text-neutral-400 mt-1 flex items-center gap-1 font-mono">
+                    <Zap className="h-3 w-3 text-fuchsia-400" />
+                    <span>p95: 14ms latency</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <Link
-                href={`/${tenant.organizationSlug}/projects`}
-                className="px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-medium shadow-xs transition-all flex items-center gap-1.5"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Deploy Service</span>
-              </Link>
-              <Link
-                href={`/${tenant.organizationSlug}/billing`}
-                className="px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-800 text-xs font-medium transition-all flex items-center gap-1.5 shadow-2xs"
-              >
-                <CreditCard className="h-3.5 w-3.5" />
-                <span>Billing & Usage</span>
-              </Link>
-            </div>
-          </div>
-        </div>
+            {/* Interactive Telemetry Chart */}
+            <TelemetryCharts />
 
-        {/* Production Readiness Checklist */}
-        <OnboardingChecklist orgSlug={tenant.organizationSlug} />
-
-        {/* Primary Metric Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Metric 1 */}
-          <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-neutral-500">Active Services</span>
-              <div className="p-1.5 rounded-lg bg-neutral-100 text-neutral-800">
-                <FolderKanban className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-2xl font-semibold tracking-tight text-neutral-950 font-mono">
-                {projectsCount}
-              </div>
-              <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
-                <span>Quota:</span>
-                <span className="text-neutral-800 font-medium font-mono">
-                  {planInfo.limits.maxProjects >= 999 ? "Unlimited" : `${planInfo.limits.maxProjects} max`}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Metric 2 */}
-          <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-neutral-500">Team Capacity</span>
-              <div className="p-1.5 rounded-lg bg-neutral-100 text-neutral-800">
-                <Users2 className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-2xl font-semibold tracking-tight text-neutral-950 font-mono">
-                {membersCount} <span className="text-xs font-normal text-neutral-500">seats</span>
-              </div>
-              <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
-                <span>Available:</span>
-                <span className="text-neutral-800 font-medium font-mono">
-                  {planInfo.limits.maxMembers >= 999 ? "Unlimited" : `${planInfo.limits.maxMembers} total`}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Metric 3 */}
-          <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-neutral-500">Monthly Plan</span>
-              <div className="p-1.5 rounded-lg bg-neutral-100 text-neutral-800">
-                <CreditCard className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-2xl font-semibold tracking-tight text-neutral-950 font-mono">
-                ${planInfo.monthlyPrice} <span className="text-xs font-normal text-neutral-500">/mo</span>
-              </div>
-              <div className="text-[11px] text-neutral-600 mt-1 font-medium flex items-center gap-1.5 font-mono">
-                <span className="h-1.5 w-1.5 rounded-full bg-neutral-900" />
-                <span>Renewal active</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Metric 4 */}
-          <div className="p-5 rounded-2xl bg-white border border-neutral-200 shadow-2xs flex flex-col justify-between hover:border-neutral-300 transition-colors">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-neutral-500">Edge Uptime (30d)</span>
-              <div className="p-1.5 rounded-lg bg-neutral-100 text-neutral-800">
-                <Activity className="h-4 w-4" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-2xl font-semibold tracking-tight text-neutral-950 font-mono">
-                99.99%
-              </div>
-              <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1 font-mono">
-                <Zap className="h-3 w-3 text-neutral-800" />
-                <span>p95: 14ms latency</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      {/* Interactive Telemetry & Latency Throughput Chart */}
-      <TelemetryCharts />
-
-      {/* Embedded Suite of Developer & Tenant Tools */}
-      <TenantTools
-        organizationId={tenant.organizationId}
-        organizationName={tenant.organizationName}
-        organizationSlug={tenant.organizationSlug}
-        subscriptionTier={tenant.subscriptionTier}
-        userRole={tenant.userRole}
-        projectsCount={projectsCount}
-        membersCount={membersCount}
-        maxProjects={planInfo.limits.maxProjects}
-        maxMembers={planInfo.limits.maxMembers}
-      />
-
-      {/* Main Grid: Projects + Activity Logs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
-        {/* Left Column: Recent Projects */}
-        <div className="lg:col-span-2 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-950">Deployed Services</h2>
-              <p className="text-xs text-neutral-500">Active pipelines and microservices in {tenant.organizationName}</p>
-            </div>
-            <Link
-              href={`/${tenant.organizationSlug}/projects`}
-              className="text-xs font-medium text-neutral-700 hover:text-neutral-950 hover:underline flex items-center gap-1"
-            >
-              <span>All services ({projectsCount})</span>
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-
-          <div className="space-y-2">
-            {recentProjects.length === 0 ? (
-              <div className="p-8 rounded-2xl bg-white border border-dashed border-neutral-200 text-center space-y-3">
-                <FolderKanban className="h-7 w-7 text-neutral-400 mx-auto" />
-                <p className="text-xs text-neutral-500">No services deployed yet for this workspace.</p>
+            {/* Deployed Services List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Deployed Services</h2>
+                  <p className="text-xs text-neutral-400">Active pipelines and microservices</p>
+                </div>
                 <Link
                   href={`/${tenant.organizationSlug}/projects`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-950 text-white text-xs font-medium hover:bg-neutral-800 shadow-2xs"
+                  className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-white flex items-center gap-1.5"
                 >
-                  <Plus className="h-3 w-3" />
-                  <span>Deploy First Service</span>
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Deploy Service</span>
                 </Link>
               </div>
-            ) : (
-              recentProjects.map((proj) => (
-                <div
-                  key={proj.id}
-                  className="p-4 rounded-xl bg-white border border-neutral-200 hover:border-neutral-300 transition-colors flex items-center justify-between shadow-2xs group"
-                >
-                  <div className="space-y-0.5 min-w-0 pr-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-xs text-neutral-900 group-hover:underline truncate font-mono">
-                        {proj.name}
-                      </span>
-                      <span
-                        className={`text-[9px] px-2 py-0.2 rounded-full font-medium font-mono ${
-                          proj.status === "ACTIVE"
-                            ? "bg-neutral-100 text-neutral-800 border border-neutral-200"
-                            : "bg-neutral-100 text-neutral-500"
-                        }`}
-                      >
-                        {proj.status.toLowerCase()}
+
+              <div className="space-y-2">
+                {recentProjects.map((proj) => (
+                  <div
+                    key={proj.id}
+                    className="p-4 rounded-2xl bg-[#13131b] border border-white/[0.08] hover:border-purple-500/40 transition-all flex items-center justify-between shadow-sm group"
+                  >
+                    <div className="space-y-1 min-w-0 pr-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-semibold text-xs text-white group-hover:text-fuchsia-300 transition-colors font-mono">
+                          {proj.name}
+                        </span>
+                        <span className="text-[9px] px-2 py-0.5 rounded-full font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {proj.status.toLowerCase()}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-neutral-400 line-clamp-1">
+                        {proj.description || "Service deployment active."}
+                      </p>
+                    </div>
+
+                    <span className="text-[10px] text-neutral-500 whitespace-nowrap font-mono">
+                      {new Date(proj.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* If user selected Tools tab */}
+        {activeTab === "tools" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <TenantTools
+              organizationId={tenant.organizationId}
+              organizationName={tenant.organizationName}
+              organizationSlug={tenant.organizationSlug}
+              subscriptionTier={tenant.subscriptionTier}
+              userRole={tenant.userRole}
+              projectsCount={projectsCount}
+              membersCount={membersCount}
+              maxProjects={planInfo.limits.maxProjects}
+              maxMembers={planInfo.limits.maxMembers}
+            />
+
+            <OnboardingChecklist orgSlug={tenant.organizationSlug} />
+          </div>
+        )}
+
+        {/* Default: Wallet view - EXACT screenshot reproduction! */}
+        {activeTab === "wallet" && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* The Master Helios Investment Dashboard */}
+            <HeliosPortfolioView />
+
+            {/* Quick Access to Services and Audit Trail */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 pt-2">
+              {/* Deployed Services Quick Card */}
+              <div className="lg:col-span-2 rounded-3xl bg-[#13131b] border border-white/[0.08] p-5 shadow-xl space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.05]">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Active Infrastructure & Pipelines</h3>
+                    <p className="text-xs text-neutral-400">Microservices in {tenant.organizationName}</p>
+                  </div>
+                  <Link
+                    href={`/${tenant.organizationSlug}/projects`}
+                    className="text-xs text-fuchsia-400 hover:text-fuchsia-300 flex items-center gap-1"
+                  >
+                    <span>Manage All ({projectsCount})</span>
+                    <ArrowUpRight className="h-3 w-3" />
+                  </Link>
+                </div>
+
+                <div className="space-y-2">
+                  {recentProjects.map((proj) => (
+                    <div
+                      key={proj.id}
+                      className="p-3.5 rounded-2xl bg-[#181824] border border-white/[0.05] hover:border-purple-500/40 transition-all flex items-center justify-between group"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs text-white group-hover:text-fuchsia-300 font-mono">
+                            {proj.name}
+                          </span>
+                          <span className="text-[9px] px-2 py-0.5 rounded-full font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            {proj.status.toLowerCase()}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-400 line-clamp-1">{proj.description}</p>
+                      </div>
+                      <span className="text-[10px] text-neutral-500 font-mono">
+                        {new Date(proj.createdAt).toLocaleDateString()}
                       </span>
                     </div>
-                    <p className="text-[11px] text-neutral-500 line-clamp-1">
-                      {proj.description || "Service deployment configured."}
-                    </p>
-                  </div>
-
-                  <span className="text-[10px] text-neutral-400 whitespace-nowrap font-mono">
-                    {new Date(proj.createdAt).toLocaleDateString()}
-                  </span>
+                  ))}
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+              </div>
 
-        {/* Right Column: Audit Logs & Tenant Events */}
-        <div className="space-y-3">
-          <div>
-            <h2 className="text-sm font-semibold text-neutral-950">Audit Trail</h2>
-            <p className="text-xs text-neutral-500">Immutable workspace activity log</p>
-          </div>
+              {/* Audit Trail Quick Card */}
+              <div className="rounded-3xl bg-[#13131b] border border-white/[0.08] p-5 shadow-xl space-y-3">
+                <div className="pb-2 border-b border-white/[0.05]">
+                  <h3 className="text-sm font-semibold text-white">Activity Trail</h3>
+                  <p className="text-xs text-neutral-400">Real-time immutable audit logs</p>
+                </div>
 
-          <div className="p-4 rounded-2xl bg-white border border-neutral-200 space-y-3 shadow-2xs">
-            {recentAuditLogs.length === 0 ? (
-              <p className="text-xs text-neutral-400 text-center py-4">No activity logged yet.</p>
-            ) : (
-              recentAuditLogs.map((log) => (
-                <div key={log.id} className="flex items-start gap-3 text-xs">
-                  <div className="h-6 w-6 rounded-md bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-700 flex-shrink-0 mt-0.5">
-                    <Clock className="h-3 w-3" />
-                  </div>
-                  <div className="space-y-0.5 min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-neutral-900 font-mono text-[10px]">
-                        {formatAction(log.action)}
-                      </span>
-                      <span className="text-[10px] text-neutral-400 font-mono">
-                        {new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
+                <div className="space-y-2.5">
+                  {recentAuditLogs.map((log) => (
+                    <div key={log.id} className="flex items-start gap-2.5 text-xs">
+                      <div className="h-6 w-6 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center text-fuchsia-400 flex-shrink-0 mt-0.5">
+                        <Clock className="h-3 w-3" />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[10px] text-white font-semibold">
+                            {formatAction(log.action)}
+                          </span>
+                          <span className="text-[9px] text-neutral-500 font-mono">
+                            {new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-neutral-400 truncate">
+                          Triggered by {log.user?.name || "Automated Worker"}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-neutral-500 truncate">
-                      Triggered by {log.user?.name || "Automated Worker"}
-                    </p>
-                  </div>
+                  ))}
                 </div>
-              ))
-            )}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        )}
       </div>
     </DashboardShell>
   );

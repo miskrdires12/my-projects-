@@ -1,28 +1,31 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --card: #ffffff;
-  --card-foreground: #0a0a0a;
-  --card-border: #e5e5e5;
-  --muted: #737373;
-  --muted-bg: #f5f5f5;
-  --border: #e5e5e5;
-  --sidebar-bg: #ffffff;
-  --sidebar-border: #e5e5e5;
-  --accent: #000000;
-  --accent-foreground: #ffffff;
+  --background: #09090d;
+  --foreground: #f4f4f7;
+  --card: #14141c;
+  --card-elevated: #181824;
+  --card-border: rgba(255, 255, 255, 0.08);
+  --muted: #8e8e9f;
+  --muted-bg: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.08);
+  --accent-purple: #a855f7;
+  --accent-pink: #ec4899;
 }
 
 body {
-  background-color: #fafafa;
-  color: #0a0a0a;
+  background-color: #08080c;
+  color: #f4f4f7;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   overflow-x: hidden;
+  background-image: 
+    radial-gradient(ellipse 60% 40% at 50% -10%, rgba(168, 85, 247, 0.15), transparent 70%),
+    radial-gradient(ellipse 50% 50% at 100% 50%, rgba(236, 72, 153, 0.1), transparent 60%),
+    radial-gradient(ellipse 50% 50% at 0% 80%, rgba(168, 85, 247, 0.08), transparent 60%);
+  min-height: 100vh;
 }
 
-/* Crisp subtle scrollbars */
+/* Crisp subtle dark scrollbars */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -31,25 +34,59 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d4;
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a3a3a3;
+  background: rgba(255, 255, 255, 0.22);
 }
 
-/* Minimalist Card & Panel Utilities */
-.white-card {
-  background-color: #ffffff;
-  border: 1px solid #e5e5e5;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+/* Glass & Ambient Card Styles */
+.dark-card {
+  background-color: #14141c;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 1.5rem;
 }
 
-.white-card-hover:hover {
-  border-color: #a3a3a3;
-  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.05);
+.dark-card-elevated {
+  background-color: #181824;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 1.25rem;
 }
 
-.subtle-border {
-  border-color: #e5e5e5;
+/* Glowing active pills matching the screenshot */
+.helios-pill-active {
+  background: linear-gradient(90deg, rgba(88, 28, 112, 0.85) 0%, rgba(46, 17, 63, 0.55) 100%);
+  border: 1px solid rgba(217, 70, 239, 0.45);
+  box-shadow: 0 0 22px -4px rgba(168, 85, 247, 0.35);
+}
+
+.helios-pill-inactive {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #9ca3af;
+}
+.helios-pill-inactive:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+/* AI Spotlight glow button */
+.helios-ai-btn {
+  background: linear-gradient(90deg, rgba(236, 72, 153, 0.22) 0%, rgba(168, 85, 247, 0.26) 100%);
+  border: 1px solid rgba(236, 72, 153, 0.45);
+  box-shadow: 0 0 25px -4px rgba(236, 72, 153, 0.4), 0 8px 30px -6px rgba(236, 72, 153, 0.3);
+}
+.helios-ai-btn:hover {
+  border-color: rgba(236, 72, 153, 0.7);
+  box-shadow: 0 0 35px -2px rgba(236, 72, 153, 0.6), 0 10px 40px -4px rgba(236, 72, 153, 0.45);
+}
+
+/* Ambient glows */
+.glow-ambient-violet {
+  box-shadow: 0 0 40px -10px rgba(168, 85, 247, 0.3);
+}
+
+.glow-ambient-pink {
+  box-shadow: 0 0 40px -10px rgba(236, 72, 153, 0.35);
 }
