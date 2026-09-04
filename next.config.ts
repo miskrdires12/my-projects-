@@ -8,8 +8,21 @@ if (!process.env.NEXTAUTH_SECRET) {
   process.env.NEXTAUTH_SECRET = "fallback-secret-for-jwt-signing-saas-platform-32chars";
 }
 
+// Fallback for NEXTAUTH_URL to prevent TypeError: Invalid URL on Vercel
+const rawNextAuthUrl = process.env.NEXTAUTH_URL;
+const resolvedNextAuthUrl =
+  rawNextAuthUrl && rawNextAuthUrl.trim().length > 0
+    ? rawNextAuthUrl.trim()
+    : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+
+process.env.NEXTAUTH_URL = resolvedNextAuthUrl;
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  env: {
+    NEXTAUTH_URL: resolvedNextAuthUrl,
+  },
 };
 
 export default nextConfig;

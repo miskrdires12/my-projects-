@@ -18,4 +18,12 @@ if (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://')) {
     process.env.DATABASE_URL = "file:./dev.db";
   }
 }
-console.log('[Prisma Init] Schema prepared successfully.');
+
+if (!process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL.trim() === '') {
+  process.env.NEXTAUTH_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+}
+if (!process.env.NEXTAUTH_SECRET) {
+  process.env.NEXTAUTH_SECRET = 'fallback-secret-for-jwt-signing-saas-platform-32chars';
+}
+
+console.log('[Prisma Init] Schema and environment prepared successfully.');
