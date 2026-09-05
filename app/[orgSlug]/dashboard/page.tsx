@@ -134,7 +134,7 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
           <div className="flex items-center justify-between pb-2 border-b border-neutral-100 dark:border-white/[0.05]">
             <div>
               <h3 className="text-sm font-bold text-neutral-950 dark:text-white">Active Infrastructure & Pipelines</h3>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">Microservices in {tenant.organizationName} · Developed by Miskr Dires</p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">Microservices and real-time event workers in {tenant.organizationName}</p>
             </div>
             <Link
               href={`/${tenant.organizationSlug}/projects`}

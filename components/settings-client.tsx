@@ -20,6 +20,9 @@ import {
   CheckCircle2,
   Trash2,
   Plus,
+  Sun,
+  Moon,
+  Sparkles,
 } from "lucide-react";
 import {
   updateOrganizationSettingsAction,
@@ -28,6 +31,7 @@ import {
 } from "@/app/actions/settings";
 import { MembershipRole } from "@/types/tenant";
 import { useToast } from "./toast-provider";
+import { useTheme } from "./theme-provider";
 import { toTiny } from "@/lib/tiny-text";
 import { TelebirrIcon } from "./payment-icons";
 
@@ -51,8 +55,9 @@ export function SettingsClient({
   userEmail,
 }: SettingsClientProps) {
   const toast = useToast();
+  const { theme, setTheme } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<"GENERAL" | "SECURITY" | "NOTIFICATIONS" | "BACKUPS" | "DANGER">("GENERAL");
+  const [activeTab, setActiveTab] = useState<"GENERAL" | "THEME" | "SECURITY" | "NOTIFICATIONS" | "BACKUPS" | "DANGER">("GENERAL");
 
   // General Settings state
   const [name, setName] = useState(orgName);
@@ -194,6 +199,7 @@ export function SettingsClient({
       <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/[0.08] overflow-x-auto">
         {[
           { id: "GENERAL", label: "General", icon: Building },
+          { id: "THEME", label: "Day & Night Mode", icon: Sun },
           { id: "SECURITY", label: "Security & Access", icon: ShieldCheck },
           { id: "NOTIFICATIONS", label: "Notifications", icon: Bell },
           { id: "BACKUPS", label: "Backups & Compliance", icon: HardDrive },
@@ -347,6 +353,188 @@ export function SettingsClient({
               )}
             </div>
           </form>
+        </div>
+      )}
+
+      {/* =====================================================================
+          TAB: DAY & NIGHT THEME SETTINGS (Exclusively adjusted in Settings)
+          ===================================================================== */}
+      {activeTab === "THEME" && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/80 dark:border-white/[0.08] shadow-sm dark:shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-100 dark:border-white/[0.06]">
+              <div>
+                <h2 className="text-sm font-bold text-neutral-950 dark:text-white flex items-center gap-2">
+                  <Sun className="h-4 w-4 text-amber-500" />
+                  <span>Day & Night Display Mode</span>
+                </h2>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Visual theme configuration for workspace interfaces. Day and Night modes are exclusively adjusted here.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-white/[0.06] border border-neutral-200 dark:border-white/10 text-xs">
+                <span className="text-neutral-500 dark:text-neutral-400 font-mono text-[11px]">Active:</span>
+                <span className="font-bold text-neutral-900 dark:text-white uppercase tracking-wider text-[10px]">
+                  {theme === "dark" ? "Night Mode (Dark)" : "Day Mode (Light)"}
+                </span>
+              </div>
+            </div>
+
+            {/* Side-by-side Theme Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Day Mode (Light) Card */}
+              <div
+                onClick={() => {
+                  setTheme("light");
+                  toast.success("Day Mode Activated", "Full high-contrast white daylight display enabled.");
+                }}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
+                  theme === "light"
+                    ? "bg-white border-black text-black shadow-lg ring-2 ring-black"
+                    : "bg-neutral-50 dark:bg-[#14141a] border-neutral-200 dark:border-white/10 text-neutral-700 dark:text-neutral-300 hover:border-black/30 dark:hover:border-white/30"
+                }`}
+              >
+                <div className="flex items-start justify-between pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center border border-amber-500/20">
+                      <Sun className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-neutral-950 dark:text-white">Day Mode (Light)</h3>
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Pure White Canvas</p>
+                    </div>
+                  </div>
+
+                  {theme === "light" && (
+                    <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-black text-white text-[10px] font-bold uppercase tracking-wider">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Active</span>
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed pt-2">
+                  High-contrast crisp white background designed for bright ambient environments, daytime trading, and clean presentation clarity.
+                </p>
+
+                {/* Visual miniature mockup */}
+                <div className="mt-4 p-3 rounded-xl bg-white border border-neutral-200 text-neutral-900 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="h-3 w-20 bg-neutral-900 rounded-sm" />
+                    <div className="h-4 w-12 bg-black text-white rounded-full text-[8px] font-bold flex items-center justify-center">
+                      DAY
+                    </div>
+                  </div>
+                  <div className="h-8 bg-neutral-100 rounded-lg border border-neutral-200 flex items-center px-2">
+                    <span className="text-[9px] text-neutral-600 font-mono">100% Crisp White Canvas</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTheme("light");
+                    toast.success("Day Mode Activated", "Full high-contrast white daylight display enabled.");
+                  }}
+                  className={`mt-4 w-full py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    theme === "light"
+                      ? "bg-black text-white shadow-xs"
+                      : "bg-neutral-200 hover:bg-neutral-300 dark:bg-white/10 dark:hover:bg-white/20 text-neutral-900 dark:text-white"
+                  }`}
+                >
+                  {theme === "light" ? "Active Theme" : "Activate Day Mode"}
+                </button>
+              </div>
+
+              {/* Night Mode (Dark) Card */}
+              <div
+                onClick={() => {
+                  setTheme("dark");
+                  toast.success("Night Mode Activated", "Obsidian dark night display enabled.");
+                }}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
+                  theme === "dark"
+                    ? "bg-[#09090d] border-white text-white shadow-2xl ring-2 ring-white/80"
+                    : "bg-neutral-50 dark:bg-[#14141a] border-neutral-200 dark:border-white/10 text-neutral-700 dark:text-neutral-300 hover:border-black/30 dark:hover:border-white/30"
+                }`}
+              >
+                <div className="flex items-start justify-between pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-10 w-10 rounded-xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+                      <Moon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-neutral-950 dark:text-white">Night Mode (Dark)</h3>
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Deep Obsidian Space</p>
+                    </div>
+                  </div>
+
+                  {theme === "dark" && (
+                    <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white text-black text-[10px] font-bold uppercase tracking-wider">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Active</span>
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed pt-2">
+                  Sleek low-light aesthetic engineered for night operations, microservices monitoring, and reduced eye strain with luminous typography.
+                </p>
+
+                {/* Visual miniature mockup */}
+                <div className="mt-4 p-3 rounded-xl bg-[#09090d] border border-white/10 text-white shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="h-3 w-20 bg-white/90 rounded-sm" />
+                    <div className="h-4 w-12 bg-white text-black rounded-full text-[8px] font-bold flex items-center justify-center">
+                      NIGHT
+                    </div>
+                  </div>
+                  <div className="h-8 bg-white/[0.04] rounded-lg border border-white/[0.08] flex items-center px-2">
+                    <span className="text-[9px] text-neutral-400 font-mono">Deep Obsidian Theme</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTheme("dark");
+                    toast.success("Night Mode Activated", "Obsidian dark night display enabled.");
+                  }}
+                  className={`mt-4 w-full py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    theme === "dark"
+                      ? "bg-white text-black shadow-xs font-bold"
+                      : "bg-neutral-200 hover:bg-neutral-300 dark:bg-white/10 dark:hover:bg-white/20 text-neutral-900 dark:text-white"
+                  }`}
+                >
+                  {theme === "dark" ? "Active Theme" : "Activate Night Mode"}
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <p className="text-xs font-bold text-neutral-900 dark:text-white">Persistent System Preference</p>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                  Theme selection is preserved across sessions and automatically synced with workspace interfaces.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = theme === "dark" ? "light" : "dark";
+                  setTheme(next);
+                  toast.info("Theme Switched", `Switched to ${next === "dark" ? "Night" : "Day"} mode.`);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-neutral-900 text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Switch to {theme === "dark" ? "Day" : "Night"}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

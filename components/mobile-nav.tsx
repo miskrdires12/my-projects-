@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { OrganizationMembershipInfo, MembershipRole } from "@/types/tenant";
 import { TenantSwitcher } from "./tenant-switcher";
-import { ThemeToggle } from "./theme-provider";
 import { StylishMenuButton } from "./header";
 import { signOut } from "next-auth/react";
 import { toTiny } from "@/lib/tiny-text";
@@ -127,10 +126,6 @@ export function MobileNav({
               </div>
             </div>
           </Link>
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <ThemeToggle className="h-8 px-2" />
         </div>
       </div>
 

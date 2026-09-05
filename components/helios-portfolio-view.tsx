@@ -384,7 +384,7 @@ export function HeliosPortfolioView() {
               Portfolio Performance
             </h3>
             <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Real-time asset appreciation index · Developed by Miskr Dires
+              Real-time asset appreciation index
             </p>
           </div>
 

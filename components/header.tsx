@@ -22,7 +22,7 @@ import {
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { CommandPalette } from "./command-palette";
-import { ThemeToggle, useTheme } from "./theme-provider";
+import { useTheme } from "./theme-provider";
 import { OrganizationMembershipInfo } from "@/types/tenant";
 import { toTiny } from "@/lib/tiny-text";
 
@@ -106,6 +106,42 @@ export function Header({
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([
+    {
+      id: "notif-1",
+      title: "Telebirr Deposit Confirmed",
+      message: "+5,000.00 ETB settled to liquidity vault via Telebirr.",
+      time: "2m ago",
+      read: false,
+      type: "payment" as const,
+    },
+    {
+      id: "notif-2",
+      title: "payment-telebirr-gateway Active",
+      message: "Microservice running with 99.99% uptime on Edge runtime.",
+      time: "15m ago",
+      read: false,
+      type: "service" as const,
+    },
+    {
+      id: "notif-3",
+      title: "Market Appreciation Alert",
+      message: "Helios Composite index gained +2.42% in latest session.",
+      time: "1h ago",
+      read: false,
+      type: "market" as const,
+    },
+    {
+      id: "notif-4",
+      title: "Security Session Verified",
+      message: "Direct credentials authenticated with zero risk flags.",
+      time: "3h ago",
+      read: true,
+      type: "security" as const,
+    },
+  ]);
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   // Close drawer on route change or Escape key
   useEffect(() => {
@@ -217,13 +253,31 @@ export function Header({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            <ThemeToggle className="h-9 px-2" />
+            <button
+              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              title="Notifications"
+              className="relative p-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] border border-neutral-200 dark:border-white/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+            >
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center border-2 border-white dark:border-[#09090d]">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => setIsCommandOpen(true)}
               title="Search System"
-              className="p-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] border border-neutral-200 dark:border-white/10 text-neutral-700 dark:text-neutral-300"
+              className="p-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] border border-neutral-200 dark:border-white/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
             >
               <Search className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              title="Log Out Immediately"
+              className="p-2 rounded-xl bg-neutral-100 hover:bg-rose-500/10 hover:text-rose-600 dark:bg-white/[0.08] dark:hover:bg-rose-500/20 dark:hover:text-rose-400 border border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-neutral-400 transition-colors cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
             </button>
             <div className="h-8 w-8 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[11px] font-bold flex-shrink-0 shadow-xs">
               {capitalizedFirstWord.charAt(0)}
@@ -233,7 +287,7 @@ export function Header({
 
         {/* Desktop & Mobile Main Row */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Left: Menu Button + Greeting + Subtitle + Pill Tabs */}
+          {/* Left: Menu Button + Greeting + Pill Tabs */}
           <div className="space-y-2.5">
             <div>
               <div className="flex items-center gap-3">
@@ -254,11 +308,6 @@ export function Header({
                   </span>
                 </div>
               </div>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 font-normal mt-0.5 flex items-center gap-1.5 flex-wrap">
-                <span>Developed by <strong className="text-neutral-900 dark:text-white font-semibold">Miskr Dires</strong></span>
-                <span>·</span>
-                <span>Investment portfolio & cloud services</span>
-              </p>
             </div>
 
             {/* Pill Selector: Market, Wallet, Tools */}
@@ -310,16 +359,18 @@ export function Header({
               </span>
             </button>
 
-            {/* Day / Night Theme Toggle */}
-            <ThemeToggle />
-
-            {/* Notifications Button */}
+            {/* Dedicated Notifications Button */}
             <button
-              onClick={() => setIsCommandOpen(true)}
-              title={toTiny("Notifications")}
-              className="p-2 rounded-full bg-neutral-100 dark:bg-[#15151c] hover:bg-neutral-200/80 dark:hover:bg-[#1a1a24] border border-neutral-200 dark:border-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
+              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              title="Notifications"
+              className="relative p-2 rounded-full bg-neutral-100 dark:bg-[#15151c] hover:bg-neutral-200/80 dark:hover:bg-[#1a1a24] border border-neutral-200 dark:border-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
             >
               <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center border-2 border-white dark:border-[#09090d]">
+                  {unreadCount}
+                </span>
+              )}
             </button>
 
             {/* User Profile Pill */}
@@ -332,9 +383,148 @@ export function Header({
                 <p className="text-[10px] text-neutral-500 dark:text-neutral-400 leading-tight">{resolvedEmail}</p>
               </div>
             </div>
+
+            {/* Direct Instant LogOut Button (No prompt, no question asked) */}
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              title="Log Out"
+              className="p-2 rounded-full bg-neutral-100 dark:bg-[#15151c] hover:bg-rose-500/15 hover:text-rose-600 dark:hover:bg-rose-500/20 dark:hover:text-rose-400 border border-neutral-200 dark:border-white/[0.08] text-neutral-500 dark:text-neutral-400 transition-colors cursor-pointer flex items-center justify-center"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </header>
+
+      {/* DEDICATED NOTIFICATIONS DROPDOWN PANEL (Appears ONLY when bell is clicked) */}
+      {isNotificationsOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setIsNotificationsOpen(false)}
+          />
+          <div className="absolute right-3 sm:right-6 top-16 w-[calc(100vw-24px)] sm:w-96 rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/90 dark:border-white/[0.1] shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+            {/* Header */}
+            <div className="p-3.5 px-4 border-b border-neutral-100 dark:border-white/[0.06] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold text-neutral-950 dark:text-white tracking-wide uppercase">
+                  Notifications
+                </h3>
+                {unreadCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-[10px] font-mono font-semibold text-neutral-700 dark:text-neutral-300">
+                    {unreadCount} new
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {notifications.length > 0 && (
+                  <button
+                    onClick={() => setNotifications(notifications.map((n) => ({ ...n, read: true })))}
+                    className="text-[11px] text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer font-medium"
+                  >
+                    Mark read
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsNotificationsOpen(false)}
+                  className="p-1 rounded-full text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* List */}
+            <div className="max-h-80 overflow-y-auto divide-y divide-neutral-100 dark:divide-white/[0.04]">
+              {notifications.length > 0 ? (
+                notifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    className={`p-3.5 px-4 transition-colors flex items-start gap-3 ${
+                      notif.read
+                        ? "bg-transparent opacity-75 hover:opacity-100"
+                        : "bg-black/[0.02] dark:bg-white/[0.02]"
+                    }`}
+                  >
+                    <div className="mt-0.5 flex-shrink-0">
+                      {notif.type === "payment" && (
+                        <div className="h-7 w-7 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                      {notif.type === "service" && (
+                        <div className="h-7 w-7 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                          <ShoppingBag className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                      {notif.type === "market" && (
+                        <div className="h-7 w-7 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                          <TrendingUp className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                      {notif.type === "security" && (
+                        <div className="h-7 w-7 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-xs font-semibold text-neutral-950 dark:text-white truncate">
+                          {notif.title}
+                        </p>
+                        <span className="text-[10px] text-neutral-400 font-mono flex-shrink-0">
+                          {notif.time}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5 leading-snug">
+                        {notif.message}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setNotifications(notifications.filter((n) => n.id !== notif.id))}
+                      className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 p-0.5 transition-colors cursor-pointer"
+                      title="Dismiss"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center space-y-2">
+                  <div className="h-10 w-10 mx-auto rounded-full bg-neutral-100 dark:bg-white/[0.05] flex items-center justify-center text-neutral-400">
+                    <Bell className="h-5 w-5" />
+                  </div>
+                  <p className="text-xs font-semibold text-neutral-900 dark:text-white">
+                    No new notifications
+                  </p>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                    You're completely caught up! We will alert you on updates.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {notifications.length > 0 && (
+              <div className="p-2.5 px-4 bg-neutral-50 dark:bg-white/[0.02] border-t border-neutral-100 dark:border-white/[0.06] flex items-center justify-between">
+                <button
+                  onClick={() => setNotifications([])}
+                  className="text-[11px] font-semibold text-neutral-500 hover:text-rose-500 dark:text-neutral-400 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                >
+                  Clear all notifications
+                </button>
+                <span className="text-[10px] text-neutral-400 font-mono">
+                  {notifications.length} item{notifications.length > 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Global ⌘K Command Palette & AI Dialog */}
       <CommandPalette
@@ -528,19 +718,19 @@ export function Header({
                 </button>
               </div>
 
-              {/* Bottom Footer Row: Settings link + Day/Night Pill Switcher */}
-              <div className="flex items-center justify-between gap-2 pt-0.5">
+              {/* Bottom Footer Row: Settings link */}
+              <div className="pt-0.5">
                 <Link
                   href={`/${organizationSlug}/settings`}
                   onClick={() => setIsNavDrawerOpen(false)}
-                  className="flex items-center gap-2 text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/[0.06]"
+                  className="flex items-center justify-between gap-2 text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer p-2.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-white/[0.06] border border-neutral-200/80 dark:border-white/[0.08]"
                 >
-                  <Settings className="h-4 w-4" />
-                  <span>Settings</span>
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    <span>Workspace & System Settings</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-neutral-400">Day/Night</span>
                 </Link>
-
-                {/* Day / Night pill toggle matching screenshot */}
-                <ThemeToggle />
               </div>
             </div>
           </aside>

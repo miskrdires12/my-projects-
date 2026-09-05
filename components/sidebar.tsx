@@ -18,7 +18,6 @@ import { OrganizationMembershipInfo, MembershipRole } from "@/types/tenant";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { TenantSwitcher } from "./tenant-switcher";
-import { ThemeToggle } from "./theme-provider";
 
 interface SidebarProps {
   currentOrg: {
@@ -217,9 +216,6 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
           </Link>
 
           <div className="flex items-center gap-2">
-            {/* Quick Night/Day Toggle in Sidebar */}
-            <ThemeToggle className="h-8 px-2.5" />
-
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               title="Sign Out"
