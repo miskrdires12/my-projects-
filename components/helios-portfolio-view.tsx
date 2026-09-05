@@ -166,7 +166,7 @@ export function HeliosPortfolioView() {
           {/* Total Holding Card */}
           <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/80 dark:border-white/[0.08] p-5 shadow-sm dark:shadow-xl flex flex-col justify-between group hover:border-black/20 dark:hover:border-white/20 transition-all min-h-[140px]">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{toTiny("Total Holding")}</span>
+              <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">Total Holding</span>
               <div className="relative">
                 <button
                   onClick={() => setTimeRange(timeRange === "6M" ? "1Y" : "6M")}
@@ -183,7 +183,7 @@ export function HeliosPortfolioView() {
                 $ 12,304.11
               </div>
               <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1 flex items-center gap-2">
-                <span>{toTiny("Holdings across 4 managed portfolios")}</span>
+                <span>Holdings across 4 managed portfolios</span>
               </div>
             </div>
           </div>
@@ -192,10 +192,10 @@ export function HeliosPortfolioView() {
           <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/80 dark:border-white/[0.08] p-6 shadow-sm dark:shadow-xl flex flex-col justify-between flex-1 group hover:border-black/20 dark:hover:border-white/20 transition-all min-h-[180px]">
             <div>
               <h3 className="text-sm font-bold text-neutral-950 dark:text-white tracking-wide">
-                {toTiny("Decisions Powered by Data")}
+                Decisions Powered by Data
               </h3>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2 leading-relaxed max-w-[280px]">
-                {toTiny("Move beyond guesswork with AI-driven investment insights tailored to your strategy.")}
+                Move beyond guesswork with AI-driven investment insights tailored to your strategy.
               </p>
             </div>
 
@@ -208,7 +208,7 @@ export function HeliosPortfolioView() {
                 onClick={() => setIsAiModalOpen(true)}
                 className="relative z-10 px-7 py-2.5 rounded-full text-xs font-semibold bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 shadow-md dark:shadow-[0_0_25px_rgba(255,255,255,0.35)] transition-all cursor-pointer hover:scale-[1.02] active:scale-95"
               >
-                <span>{toTiny("Explore AI Insights")}</span>
+                <span>Explore AI Insights</span>
               </button>
             </div>
           </div>
@@ -218,7 +218,7 @@ export function HeliosPortfolioView() {
         <div className="md:col-span-4 rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/80 dark:border-white/[0.08] p-5 shadow-sm dark:shadow-xl flex flex-col justify-between hover:border-black/20 dark:hover:border-white/20 transition-all">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-white/[0.05]">
-              <h3 className="text-sm font-bold text-neutral-950 dark:text-white tracking-wide">{toTiny("Watchlist")}</h3>
+              <h3 className="text-sm font-bold text-neutral-950 dark:text-white tracking-wide">Watchlist</h3>
 
               {/* Pill Switcher */}
               <div className="flex items-center gap-1 bg-neutral-100 dark:bg-white/[0.04] p-0.5 rounded-full border border-neutral-200/80 dark:border-white/[0.06]">
@@ -230,7 +230,7 @@ export function HeliosPortfolioView() {
                       : "text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
                   }`}
                 >
-                  {toTiny("Most Viewed")}
+                  Most Viewed
                 </button>
                 <button
                   onClick={() => setWatchlistTab("GAIN")}
@@ -240,7 +240,7 @@ export function HeliosPortfolioView() {
                       : "text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
                   }`}
                 >
-                  {toTiny("Gain")}
+                  Gain
                 </button>
                 <button
                   onClick={() => setWatchlistTab("LOSE")}
@@ -250,7 +250,7 @@ export function HeliosPortfolioView() {
                       : "text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
                   }`}
                 >
-                  {toTiny("Lose")}
+                  Lose
                 </button>
               </div>
             </div>
@@ -270,7 +270,7 @@ export function HeliosPortfolioView() {
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-neutral-900 dark:text-white transition-colors">
-                          {toTiny(item.name)}
+                          {item.name}
                         </p>
                         <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">{item.ticker}</p>
                       </div>
@@ -293,12 +293,12 @@ export function HeliosPortfolioView() {
         <div className="md:col-span-4 rounded-3xl bg-white dark:bg-[#0f0f14] border border-neutral-200/80 dark:border-white/[0.08] p-5 shadow-sm dark:shadow-xl flex flex-col justify-between hover:border-black/20 dark:hover:border-white/20 transition-all">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-white/[0.05]">
-              <h3 className="text-sm font-bold text-neutral-950 dark:text-white tracking-wide">{toTiny("My Portfolio")}</h3>
+              <h3 className="text-sm font-bold text-neutral-950 dark:text-white tracking-wide">My Portfolio</h3>
               <button
                 onClick={() => setIsAiModalOpen(true)}
                 className="flex items-center gap-1 px-3 py-1 rounded-full bg-neutral-100 dark:bg-white/[0.04] hover:bg-neutral-200 dark:hover:bg-white/[0.08] border border-neutral-200 dark:border-white/10 text-xs text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
               >
-                <span>{toTiny("See all")}</span>
+                <span>See all</span>
                 <ArrowUpRight className="h-3 w-3" />
               </button>
             </div>
@@ -327,7 +327,7 @@ export function HeliosPortfolioView() {
                         <span className="font-semibold text-[11px] text-neutral-900 dark:text-white">{asset.ticker}</span>
                       </div>
                       <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
-                        {toTiny("Units")} <strong className="text-neutral-800 dark:text-neutral-200">{asset.units}</strong>
+                        Units <strong className="text-neutral-800 dark:text-neutral-200">{asset.units}</strong>
                       </span>
                     </div>
                   </div>
@@ -343,11 +343,11 @@ export function HeliosPortfolioView() {
         {/* Chart Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
           <div>
-            <h3 className="text-sm font-bold text-neutral-950 dark:text-white tracking-wide">
-              {toTiny("Portfolio Performance")}
+            <h3 className="text-sm font-bold text-neutral-950 dark:text-white tracking-wide font-sans">
+              Portfolio Performance
             </h3>
             <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-              {toTiny("Real-time asset appreciation index · Developed by Miskr Dires")}
+              Real-time asset appreciation index · Developed by Miskr Dires
             </p>
           </div>
 
@@ -538,8 +538,8 @@ export function HeliosPortfolioView() {
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-neutral-950 dark:text-white">{toTiny("Helios AI Insights")}</h3>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">{toTiny("Autonomous risk analysis & alpha allocation · By Miskr Dires")}</p>
+                <h3 className="text-base font-bold text-neutral-950 dark:text-white">Helios AI Insights</h3>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">Autonomous risk analysis & alpha allocation · By Miskr Dires</p>
               </div>
             </div>
 
@@ -548,14 +548,14 @@ export function HeliosPortfolioView() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
                     <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                    {toTiny("Alpha Momentum Detected")}
+                    Alpha Momentum Detected
                   </span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                    {toTiny("High Confidence")}
+                    High Confidence
                   </span>
                 </div>
                 <p className="text-xs text-neutral-600 dark:text-neutral-300">
-                  {toTiny("Spotify (SPOT) showing 16.31% breakout volume over the 30-day moving average. Projected continuation target: +8.4%.")}
+                  Spotify (SPOT) showing 16.31% breakout volume over the 30-day moving average. Projected continuation target: +8.4%.
                 </p>
               </div>
 
@@ -563,14 +563,14 @@ export function HeliosPortfolioView() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-neutral-900 dark:text-white" />
-                    {toTiny("Hedging Optimization")}
+                    Hedging Optimization
                   </span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/5 dark:bg-white/10 text-neutral-800 dark:text-neutral-200">
-                    {toTiny("Balanced")}
+                    Balanced
                   </span>
                 </div>
                 <p className="text-xs text-neutral-600 dark:text-neutral-300">
-                  {toTiny("Reallocating 5% cash reserves into NVDA & MSFT units reduces overall portfolio volatility by 14.2%.")}
+                  Reallocating 5% cash reserves into NVDA & MSFT units reduces overall portfolio volatility by 14.2%.
                 </p>
               </div>
             </div>
@@ -580,13 +580,13 @@ export function HeliosPortfolioView() {
                 onClick={() => setIsAiModalOpen(false)}
                 className="px-4 py-2 rounded-full text-xs text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white cursor-pointer"
               >
-                {toTiny("Close")}
+                Close
               </button>
               <button
                 onClick={() => setIsAiModalOpen(false)}
                 className="px-5 py-2 rounded-full text-xs font-semibold bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 shadow-sm cursor-pointer"
               >
-                {toTiny("Apply Rebalance")}
+                Apply Rebalance
               </button>
             </div>
           </div>

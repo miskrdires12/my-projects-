@@ -50,16 +50,16 @@ export function Header({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white font-sans">
-                {toTiny("Welcome,")} {firstName}
+                Welcome, {firstName}
               </h1>
-              <span className="text-[11px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 font-medium">
-                {toTiny(tier)}
+              <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 font-semibold border border-black/10 dark:border-white/10">
+                {tier}
               </span>
             </div>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 font-normal mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span>{toTiny("Developed by")} <strong className="text-neutral-900 dark:text-white font-semibold">{toTiny("Miskr Dires")}</strong></span>
+              <span>Developed by <strong className="text-neutral-900 dark:text-white font-semibold">Miskr Dires</strong></span>
               <span>·</span>
-              <span>{toTiny("Investment portfolio & cloud services")}</span>
+              <span>Investment portfolio & cloud services</span>
             </p>
           </div>
 
@@ -73,7 +73,7 @@ export function Header({
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
               }`}
             >
-              {toTiny("Market")}
+              Market
             </button>
             <button
               onClick={() => handleTabSwitch("wallet")}
@@ -83,7 +83,7 @@ export function Header({
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
               }`}
             >
-              {toTiny("Wallet")}
+              Wallet
             </button>
             <button
               onClick={() => handleTabSwitch("tools")}
@@ -93,7 +93,7 @@ export function Header({
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
               }`}
             >
-              {toTiny("Tools")}
+              Tools
             </button>
           </div>
         </div>

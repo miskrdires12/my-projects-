@@ -27,17 +27,12 @@ export function RoleSimulatorBar({ currentOrgSlug, currentRole, currentTier }: R
   return (
     <div className="bg-neutral-50 dark:bg-[#0a0a0f] border-b border-neutral-200/80 dark:border-white/[0.06] px-4 sm:px-6 py-1.5 flex flex-wrap items-center justify-between text-xs gap-3 transition-colors duration-200">
       <div className="flex items-center gap-2.5 text-neutral-600 dark:text-neutral-400">
-        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>{toTiny("live instance")}</span>
-        </span>
-        <span className="text-neutral-300 dark:text-white/20">·</span>
         <span className="text-[11px]">
-          {toTiny("Workspace:")} <span className="font-mono text-neutral-900 dark:text-white font-semibold">{currentOrgSlug}.omnitenant.io</span>
+          Workspace: <span className="font-mono text-neutral-900 dark:text-white font-semibold">{currentOrgSlug}.omnitenant.io</span>
         </span>
         <span className="text-neutral-300 dark:text-white/20 hidden sm:inline">·</span>
         <span className="text-[11px] hidden sm:inline">
-          {toTiny("Role:")} <strong className="text-neutral-900 dark:text-white font-semibold">{toTiny(currentRole)}</strong>
+          Role: <strong className="text-neutral-900 dark:text-white font-semibold">{currentRole}</strong>
         </span>
       </div>
 

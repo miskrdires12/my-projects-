@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
-import { RoleSimulatorBar } from "@/components/role-simulator-bar";
 import { getTenantContext } from "@/lib/tenant-context";
 import { prisma } from "@/lib/prisma";
 import { OrganizationMembershipInfo, MembershipRole, SubscriptionTier, SubscriptionStatus } from "@/types/tenant";
@@ -75,13 +74,6 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
     <div className="min-h-screen bg-neutral-100 dark:bg-[#050507] text-neutral-900 dark:text-[#f4f4f7] font-sans antialiased selection:bg-black dark:selection:bg-white selection:text-white dark:selection:text-black p-2 sm:p-4 lg:p-6 flex flex-col justify-center items-center transition-colors duration-200">
       {/* Outer Console Frame supporting Day/Night modes */}
       <div className="w-full max-w-[1600px] rounded-[2rem] sm:rounded-[2.5rem] bg-white dark:bg-[#0c0c10] border border-neutral-200/80 dark:border-white/[0.08] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] dark:shadow-[0_25px_70px_-15px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden min-h-[92vh] transition-colors duration-200">
-        {/* Simulator Bar */}
-        <RoleSimulatorBar
-          currentOrgSlug={tenant.organizationSlug}
-          currentRole={tenant.userRole}
-          currentTier={tenant.subscriptionTier}
-        />
-
         <div className="flex flex-1 min-h-0 flex-col md:flex-row">
           {/* Monochrome Sidebar */}
           <Sidebar

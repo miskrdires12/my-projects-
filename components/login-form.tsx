@@ -76,7 +76,7 @@ export function LoginForm() {
               <path d="M8 12h8" />
             </svg>
           </div>
-          <span className="font-bold text-sm text-neutral-900 dark:text-white">{toTiny("Helios")}</span>
+          <span className="font-bold text-sm text-neutral-900 dark:text-white font-sans">Helios</span>
         </div>
 
         {/* Day / Night Mode Switcher */}
@@ -86,10 +86,10 @@ export function LoginForm() {
       {/* Brand Title */}
       <div className="text-center space-y-1.5 pt-2">
         <h1 className="text-xl font-bold tracking-tight text-neutral-950 dark:text-white font-sans">
-          {toTiny("Sign In to Workspace")}
+          Sign In to Workspace
         </h1>
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          {toTiny("Engineered & Developed by")} <strong className="text-black dark:text-white font-semibold">{toTiny("Miskr Dires")}</strong>
+          Engineered & Developed by <strong className="text-black dark:text-white font-semibold">Miskr Dires</strong>
         </p>
       </div>
 
@@ -105,7 +105,7 @@ export function LoginForm() {
         )}
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{toTiny("Work Email")}</label>
+          <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Work Email</label>
           <div className="relative">
             <Mail className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
             <input
@@ -121,9 +121,9 @@ export function LoginForm() {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{toTiny("Password")}</label>
+            <label className="text-xs font-medium text-neutral-700 dark:text-neutral-300">Password</label>
             <span className="text-[11px] text-neutral-400 hover:text-black dark:hover:text-white cursor-pointer">
-              {toTiny("Forgot?")}
+              Forgot?
             </span>
           </div>
           <div className="relative">
@@ -143,7 +143,7 @@ export function LoginForm() {
           disabled={isLoading}
           className="w-full py-2.5 rounded-full bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
         >
-          <span>{isLoading ? toTiny("Signing in...") : toTiny("Continue")}</span>
+          <span>{isLoading ? "Signing in..." : "Continue"}</span>
           <ArrowRight className="h-3.5 w-3.5" />
         </button>
       </form>
@@ -153,7 +153,7 @@ export function LoginForm() {
         <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
           <span className="font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
             <Sparkles className="h-3 w-3" />
-            <span>{toTiny("Instant Demo Sign-in")}</span>
+            <span>Instant Demo Sign-in</span>
           </span>
           <span className="text-[10px] font-mono">1-click</span>
         </div>
@@ -165,8 +165,8 @@ export function LoginForm() {
             disabled={isLoading}
             className="p-2 rounded-2xl bg-neutral-100 hover:bg-neutral-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-neutral-200 dark:border-white/10 text-center transition-colors cursor-pointer group"
           >
-            <span className="font-semibold text-neutral-900 dark:text-white block truncate text-[11px]">{toTiny("Miskr")}</span>
-            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 block truncate">{toTiny("Owner")}</span>
+            <span className="font-semibold text-neutral-900 dark:text-white block truncate text-[11px]">Miskr</span>
+            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 block truncate">Owner</span>
           </button>
 
           <button
@@ -175,8 +175,8 @@ export function LoginForm() {
             disabled={isLoading}
             className="p-2 rounded-2xl bg-neutral-100 hover:bg-neutral-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-neutral-200 dark:border-white/10 text-center transition-colors cursor-pointer group"
           >
-            <span className="font-semibold text-neutral-900 dark:text-white block truncate text-[11px]">{toTiny("Alex")}</span>
-            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 block truncate">{toTiny("Admin")}</span>
+            <span className="font-semibold text-neutral-900 dark:text-white block truncate text-[11px]">Alex</span>
+            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 block truncate">Admin</span>
           </button>
 
           <button
@@ -185,14 +185,14 @@ export function LoginForm() {
             disabled={isLoading}
             className="p-2 rounded-2xl bg-neutral-100 hover:bg-neutral-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-neutral-200 dark:border-white/10 text-center transition-colors cursor-pointer group"
           >
-            <span className="font-semibold text-neutral-900 dark:text-white block truncate text-[11px]">{toTiny("Sarah")}</span>
-            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 block truncate">{toTiny("Member")}</span>
+            <span className="font-semibold text-neutral-900 dark:text-white block truncate text-[11px]">Sarah</span>
+            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 block truncate">Member</span>
           </button>
         </div>
       </div>
 
       <div className="text-center text-[11px] text-neutral-400">
-        {toTiny("Enterprise multi-tenant core · Developed by Miskr Dires.")}
+        Enterprise multi-tenant core · Developed by Miskr Dires.
       </div>
     </div>
   );
