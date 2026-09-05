@@ -325,11 +325,6 @@ export function HeliosMarketView({
               </linearGradient>
             </defs>
 
-            {/* Background Grid Lines */}
-            <line x1="0" y1="40" x2="1000" y2="40" stroke={isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} strokeDasharray="4 4" />
-            <line x1="0" y1="100" x2="1000" y2="100" stroke={isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} strokeDasharray="4 4" />
-            <line x1="0" y1="160" x2="1000" y2="160" stroke={isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} strokeDasharray="4 4" />
-
             {/* Gradient Fill */}
             <path
               d="M 0 160 C 180 140, 320 170, 500 110 C 680 50, 840 70, 1000 20 L 1000 200 L 0 200 Z"

@@ -417,20 +417,12 @@ export function HeliosPortfolioView() {
               </linearGradient>
             </defs>
 
-            {/* Horizontal Gridlines & Y-axis labels */}
+            {/* Y-axis labels */}
             {[200, 150, 100, 50, 10].map((tick) => {
               const normalized = (tick - 10) / (200 - 10);
               const y = svgHeight - paddingY - normalized * (svgHeight - paddingY * 2);
               return (
                 <g key={tick}>
-                  <line
-                    x1={paddingX}
-                    y1={y}
-                    x2={svgWidth - paddingX}
-                    y2={y}
-                    stroke={gridStroke}
-                    strokeDasharray="2 4"
-                  />
                   <text
                     x={paddingX - 10}
                     y={y + 3}
