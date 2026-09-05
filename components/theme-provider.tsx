@@ -97,7 +97,7 @@ export function ThemeToggle({
   className?: string;
   showLabel?: boolean;
 }) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -106,35 +106,47 @@ export function ThemeToggle({
 
   if (!mounted) {
     return (
-      <div className={`h-9 px-3 rounded-full bg-neutral-200/50 dark:bg-neutral-800/50 flex items-center gap-1.5 ${className}`} />
+      <div className={`h-9 w-28 rounded-full bg-neutral-100 dark:bg-white/[0.05] border border-neutral-200 dark:border-white/10 ${className}`} />
     );
   }
 
   const isDark = theme === "dark";
 
   return (
-    <button
-      onClick={toggleTheme}
-      type="button"
-      id="theme-toggle-btn"
-      title={isDark ? "Switch to Day Mode" : "Switch to Night Mode"}
-      aria-label={isDark ? "Switch to Day Mode" : "Switch to Night Mode"}
-      className={`group relative h-9 px-3 rounded-full border transition-all duration-200 cursor-pointer flex items-center gap-2 font-medium text-xs select-none ${
-        isDark
-          ? "bg-[#181820] hover:bg-[#22222c] border-white/20 text-yellow-300 shadow-[0_0_15px_rgba(253,224,71,0.15)] active:scale-95"
-          : "bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-900 shadow-sm active:scale-95"
-      } ${className}`}
+    <div
+      className={`inline-flex items-center p-0.5 rounded-full bg-neutral-100 dark:bg-white/[0.08] border border-neutral-200 dark:border-white/10 text-xs select-none shadow-2xs transition-all ${className}`}
     >
-      <span className="relative flex items-center justify-center">
-        {isDark ? (
-          <Sun className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90 text-amber-300" />
-        ) : (
-          <Moon className="h-4 w-4 transition-transform duration-300 group-hover:-rotate-45 text-neutral-900" />
-        )}
-      </span>
-      <span className="font-semibold tracking-wide">
-        {isDark ? toTiny("Day Mode") : toTiny("Night Mode")}
-      </span>
-    </button>
+      <button
+        type="button"
+        id="theme-day-btn"
+        onClick={() => setTheme("light")}
+        title="Day Mode (Full White)"
+        aria-label="Day Mode (Full White)"
+        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+          !isDark
+            ? "bg-white text-black shadow-xs border border-neutral-200/80 font-bold"
+            : "text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white"
+        }`}
+      >
+        <Sun className="h-3.5 w-3.5 text-amber-500" />
+        <span>{toTiny("Day")}</span>
+      </button>
+
+      <button
+        type="button"
+        id="theme-night-btn"
+        onClick={() => setTheme("dark")}
+        title="Night Mode (Dark)"
+        aria-label="Night Mode (Dark)"
+        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+          isDark
+            ? "bg-white text-black shadow-xs border border-white/20 font-bold"
+            : "text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white"
+        }`}
+      >
+        <Moon className="h-3.5 w-3.5 text-neutral-900 dark:text-black" />
+        <span>{toTiny("Night")}</span>
+      </button>
+    </div>
   );
 }

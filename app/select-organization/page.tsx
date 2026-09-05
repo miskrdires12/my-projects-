@@ -41,7 +41,7 @@ export default async function SelectOrganizationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-100 dark:bg-[#07070b] text-neutral-900 dark:text-white flex flex-col justify-center items-center p-6 font-sans relative overflow-hidden transition-colors duration-200">
+    <div className="min-h-screen bg-white dark:bg-[#07070b] text-neutral-900 dark:text-white flex flex-col justify-center items-center p-6 font-sans relative overflow-hidden transition-colors duration-200">
       <div className="w-full max-w-md space-y-6 relative z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
