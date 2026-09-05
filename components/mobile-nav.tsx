@@ -124,14 +124,14 @@ export function MobileNav({
           {/* Day / Night Theme Toggle */}
           <ThemeToggle className="h-8 px-2" />
 
-          {/* Structured Menu Button */}
+          {/* Pure Menu Icon Button (no text label) */}
           <button
             onClick={() => setIsOpen(!isOpen)}
+            title="Toggle Navigation Menu"
             aria-label="Toggle Navigation Menu"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] text-neutral-900 dark:text-white border border-neutral-200 dark:border-white/10 text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
+            className="p-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] text-neutral-900 dark:text-white border border-neutral-200 dark:border-white/10 transition-all cursor-pointer shadow-xs active:scale-90"
           >
             {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            <span>{isOpen ? "Close" : "Menu"}</span>
           </button>
         </div>
       </div>
