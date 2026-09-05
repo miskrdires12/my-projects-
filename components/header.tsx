@@ -20,7 +20,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
-import { signOut, useSession } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import { CommandPalette } from "./command-palette";
 import { ThemeToggle, useTheme } from "./theme-provider";
 import { OrganizationMembershipInfo } from "@/types/tenant";
@@ -102,7 +102,6 @@ export function Header({
   const searchParams = useSearchParams();
   const { theme } = useTheme();
   const isDark = theme === "dark";
-  const { data: session } = useSession();
 
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
@@ -149,8 +148,8 @@ export function Header({
   };
 
   // Extract first word of what the user signed in with (name or email prefix)
-  const resolvedDisplayName = session?.user?.name || userName || "Miskr";
-  const resolvedEmail = session?.user?.email || userEmail || "miskr@example.com";
+  const resolvedDisplayName = userName || "Miskr";
+  const resolvedEmail = userEmail || "miskr@example.com";
   const rawFirstWord = resolvedDisplayName.trim().split(/[\s._@-]+/)[0] || "Miskr";
   const capitalizedFirstWord = rawFirstWord.charAt(0).toUpperCase() + rawFirstWord.slice(1);
 

@@ -33,12 +33,17 @@ export function assertAuthorizedRole(currentRole: MembershipRole, requiredRole: 
  * Safely extracts header injections from middleware or falls back to database lookup.
  */
 export async function getTenantContext(explicitSlug?: string): Promise<TenantContext> {
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch (err) {
+    console.warn("[TenantContext] Could not retrieve session:", err);
+  }
 
   // Fallback demo user for immediate inspection if not signed in
   let userId = session?.user && (session.user as any).id;
   let userEmail = session?.user?.email;
-  let userName = session?.user?.name || "Demo User";
+  let userName = session?.user?.name || "Miskr";
 
   if (!userId) {
     try {

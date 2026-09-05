@@ -87,22 +87,27 @@ export const authOptions: NextAuthOptions = {
 
       // Fetch latest tenant memberships whenever JWT is evaluated
       if (token.sub) {
-        const memberships = await prisma.organizationMember.findMany({
-          where: { userId: token.sub },
-          include: {
-            organization: true,
-          },
-        });
+        try {
+          const memberships = await prisma.organizationMember.findMany({
+            where: { userId: token.sub },
+            include: {
+              organization: true,
+            },
+          });
 
-        token.organizations = memberships.map((m) => ({
-          id: m.organization.id,
-          slug: m.organization.slug,
-          name: m.organization.name,
-          logoUrl: m.organization.logoUrl,
-          role: m.role as MembershipRole,
-          subscriptionTier: m.organization.subscriptionTier as SubscriptionTier,
-          subscriptionStatus: m.organization.subscriptionStatus as SubscriptionStatus,
-        }));
+          token.organizations = memberships.map((m) => ({
+            id: m.organization.id,
+            slug: m.organization.slug,
+            name: m.organization.name,
+            logoUrl: m.organization.logoUrl,
+            role: m.role as MembershipRole,
+            subscriptionTier: m.organization.subscriptionTier as SubscriptionTier,
+            subscriptionStatus: m.organization.subscriptionStatus as SubscriptionStatus,
+          }));
+        } catch (err) {
+          console.warn("[Auth JWT] Could not fetch memberships:", err);
+          token.organizations = [];
+        }
       }
 
       return token;
