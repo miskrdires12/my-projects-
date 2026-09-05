@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Sun, Moon } from "lucide-react";
+import { toTiny } from "@/lib/tiny-text";
 
 type Theme = "dark" | "light";
 
@@ -9,12 +10,14 @@ interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
+  isDark: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
   theme: "dark",
   toggleTheme: () => {},
   setTheme: () => {},
+  isDark: true,
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -36,21 +39,38 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const applyTheme = (newTheme: Theme) => {
+    if (typeof document === "undefined") return;
     const root = document.documentElement;
+    const body = document.body;
+
     if (newTheme === "dark") {
       root.classList.add("dark");
       root.classList.remove("light");
       root.setAttribute("data-theme", "dark");
+      root.style.colorScheme = "dark";
+      if (body) {
+        body.classList.add("dark");
+        body.classList.remove("light");
+      }
     } else {
       root.classList.remove("dark");
       root.classList.add("light");
       root.setAttribute("data-theme", "light");
+      root.style.colorScheme = "light";
+      if (body) {
+        body.classList.remove("dark");
+        body.classList.add("light");
+      }
     }
   };
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem("helios-theme", newTheme);
+    try {
+      localStorage.setItem("helios-theme", newTheme);
+    } catch (e) {
+      console.warn("Could not persist theme to localStorage:", e);
+    }
     applyTheme(newTheme);
   };
 
@@ -60,7 +80,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, isDark: theme === "dark" }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -70,7 +90,13 @@ export function useTheme() {
   return useContext(ThemeContext);
 }
 
-export function ThemeToggle({ className = "" }: { className?: string }) {
+export function ThemeToggle({
+  className = "",
+  showLabel = false,
+}: {
+  className?: string;
+  showLabel?: boolean;
+}) {
   const { theme, toggleTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -80,7 +106,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
 
   if (!mounted) {
     return (
-      <div className={`w-9 h-9 rounded-full bg-neutral-200/50 dark:bg-neutral-800/50 ${className}`} />
+      <div className={`h-9 px-3 rounded-full bg-neutral-200/50 dark:bg-neutral-800/50 flex items-center gap-1.5 ${className}`} />
     );
   }
 
@@ -90,19 +116,25 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     <button
       onClick={toggleTheme}
       type="button"
+      id="theme-toggle-btn"
       title={isDark ? "Switch to Day Mode" : "Switch to Night Mode"}
-      className={`relative p-2 rounded-full border transition-all duration-200 cursor-pointer flex items-center justify-center ${
+      aria-label={isDark ? "Switch to Day Mode" : "Switch to Night Mode"}
+      className={`group relative h-9 px-3 rounded-full border transition-all duration-200 cursor-pointer flex items-center gap-2 font-medium text-xs select-none ${
         isDark
-          ? "bg-[#16161d] hover:bg-[#202028] border-white/10 text-yellow-400 shadow-[0_0_12px_rgba(250,204,21,0.15)]"
-          : "bg-white hover:bg-neutral-100 border-neutral-200 text-neutral-800 shadow-sm"
+          ? "bg-[#181820] hover:bg-[#22222c] border-white/20 text-yellow-300 shadow-[0_0_15px_rgba(253,224,71,0.15)] active:scale-95"
+          : "bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-900 shadow-sm active:scale-95"
       } ${className}`}
     >
-      {isDark ? (
-        <Sun className="h-4 w-4 transition-transform hover:rotate-45" />
-      ) : (
-        <Moon className="h-4 w-4 transition-transform hover:-rotate-12" />
-      )}
-      <span className="sr-only">Toggle Night/Day Mode</span>
+      <span className="relative flex items-center justify-center">
+        {isDark ? (
+          <Sun className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90 text-amber-300" />
+        ) : (
+          <Moon className="h-4 w-4 transition-transform duration-300 group-hover:-rotate-45 text-neutral-900" />
+        )}
+      </span>
+      <span className="font-semibold tracking-wide">
+        {isDark ? toTiny("Day Mode") : toTiny("Night Mode")}
+      </span>
     </button>
   );
 }

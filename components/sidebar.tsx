@@ -13,13 +13,13 @@ import {
   LogOut,
   ChevronDown,
   Lock,
-  Code2,
 } from "lucide-react";
 import { OrganizationMembershipInfo, MembershipRole } from "@/types/tenant";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { TenantSwitcher } from "./tenant-switcher";
 import { ThemeToggle } from "./theme-provider";
+import { toTiny } from "@/lib/tiny-text";
 
 interface SidebarProps {
   currentOrg: {
@@ -45,30 +45,35 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
   const navigation = [
     {
       name: "Dashboard",
+      displayName: toTiny("Dashboard"),
       href: `/${currentOrg.slug}/dashboard`,
       icon: Compass,
       roleRequired: "MEMBER" as MembershipRole,
     },
     {
       name: "Portfolio",
+      displayName: toTiny("Portfolio"),
       href: `/${currentOrg.slug}/projects`,
       icon: ShoppingBag,
       roleRequired: "MEMBER" as MembershipRole,
     },
     {
       name: "Analysis",
+      displayName: toTiny("Analysis"),
       href: `/${currentOrg.slug}/billing`,
       icon: BarChart3,
       roleRequired: "ADMIN" as MembershipRole,
     },
     {
       name: "Market",
+      displayName: toTiny("Market"),
       href: `/${currentOrg.slug}/dashboard?tab=market`,
       icon: TrendingUp,
       roleRequired: "MEMBER" as MembershipRole,
     },
     {
       name: "Community",
+      displayName: toTiny("Community"),
       href: `/${currentOrg.slug}/team`,
       icon: Users2,
       roleRequired: "ADMIN" as MembershipRole,
@@ -103,18 +108,18 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
             </div>
             <div className="flex flex-col">
               <span className="font-bold text-sm tracking-tight text-neutral-900 dark:text-white group-hover:opacity-80 transition-opacity">
-                Helios Investments
+                {toTiny("Helios Investments")}
               </span>
-              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
-                by Miskr Dires
+              <span className="text-[11px] text-neutral-500 dark:text-neutral-400 font-mono">
+                {toTiny("by Miskr Dires")}
               </span>
             </div>
           </Link>
 
           <button
             onClick={() => setShowOrgMenu(!showOrgMenu)}
-            title="Switch Workspace"
-            className="p-1.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-white/[0.05] transition-colors"
+            title={toTiny("Switch Workspace")}
+            className="p-1.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
           >
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showOrgMenu ? "rotate-180" : ""}`} />
           </button>
@@ -132,7 +137,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
           </div>
         )}
 
-        {/* Main Navigation Links */}
+        {/* Main Navigation Links with Tiny Font */}
         <nav className="space-y-1.5 pt-1">
           {navigation.map((item) => {
             const isActive =
@@ -166,11 +171,11 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
                   >
                     <item.icon className="h-4 w-4" />
                   </div>
-                  <span className="tracking-wide text-xs">{item.name}</span>
+                  <span className="tracking-wide text-xs">{item.displayName}</span>
                 </div>
 
                 {isRestricted && (
-                  <span title="Admin Access Only">
+                  <span title={toTiny("Admin Access Only")}>
                     <Lock className="h-3 w-3 text-neutral-400" />
                   </span>
                 )}
@@ -190,15 +195,15 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
             </div>
             <div className="truncate leading-tight">
               <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
-                Miskr Dires
+                {toTiny("Miskr Dires")}
               </p>
               <p className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
-                Platform Developer
+                {toTiny("Platform Developer")}
               </p>
             </div>
           </div>
           <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 font-medium">
-            Creator
+            {toTiny("Creator")}
           </span>
         </div>
 
@@ -209,16 +214,16 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
             className="flex items-center gap-2 text-xs text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors"
           >
             <Settings className="h-3.5 w-3.5" />
-            <span>Settings</span>
+            <span>{toTiny("Settings")}</span>
           </Link>
 
           <div className="flex items-center gap-2">
             {/* Quick Night/Day Toggle in Sidebar */}
-            <ThemeToggle className="w-7 h-7 p-1.5" />
+            <ThemeToggle className="h-8 px-2.5" />
 
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              title="Sign Out"
+              title={toTiny("Sign Out")}
               className="p-1.5 text-neutral-400 hover:text-red-500 transition-colors cursor-pointer"
             >
               <LogOut className="h-3.5 w-3.5" />

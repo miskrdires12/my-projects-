@@ -6,6 +6,7 @@ import { getTenantContext } from "@/lib/tenant-context";
 import { prisma } from "@/lib/prisma";
 import { OrganizationMembershipInfo, MembershipRole, SubscriptionTier, SubscriptionStatus } from "@/types/tenant";
 import { ToastProvider } from "@/components/toast-provider";
+import { toTiny } from "@/lib/tiny-text";
 
 export const dynamic = "force-dynamic";
 
@@ -117,13 +118,13 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
             {/* Global Watermark Footer: Developed by Miskr Dires */}
             <footer className="px-6 py-4 border-t border-neutral-200/70 dark:border-white/[0.06] flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 dark:text-neutral-400 gap-2">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-neutral-900 dark:text-white">Helios Enterprise</span>
+                <span className="font-semibold text-neutral-900 dark:text-white">{toTiny("Helios Enterprise")}</span>
                 <span>·</span>
-                <span>Engineered & Developed by <strong className="text-black dark:text-white font-semibold">Miskr Dires</strong></span>
+                <span>{toTiny("Engineered & Developed by")} <strong className="text-black dark:text-white font-semibold">{toTiny("Miskr Dires")}</strong></span>
               </div>
               <div className="flex items-center gap-3 font-mono text-[11px]">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span>v3.0.0 · Production Ready</span>
+                <span>{toTiny("v3.0.0 · Production Ready")}</span>
               </div>
             </footer>
           </div>

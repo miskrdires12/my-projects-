@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search, Bell, Settings, Sparkles } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Search, Bell, Sparkles } from "lucide-react";
 import { CommandPalette } from "./command-palette";
 import { ThemeToggle } from "./theme-provider";
+import { toTiny } from "@/lib/tiny-text";
 
 interface HeaderProps {
   organizationName: string;
@@ -49,16 +50,16 @@ export function Header({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white font-sans">
-                Welcome, {firstName}
+                {toTiny("Welcome,")} {firstName}
               </h1>
-              <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 font-medium">
-                {tier}
+              <span className="text-[11px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 font-medium">
+                {toTiny(tier)}
               </span>
             </div>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 font-normal mt-0.5 flex items-center gap-1.5">
-              <span>Developed by <strong className="text-neutral-800 dark:text-neutral-200">Miskr Dires</strong></span>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 font-normal mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>{toTiny("Developed by")} <strong className="text-neutral-900 dark:text-white font-semibold">{toTiny("Miskr Dires")}</strong></span>
               <span>·</span>
-              <span>Investment portfolio & cloud services</span>
+              <span>{toTiny("Investment portfolio & cloud services")}</span>
             </p>
           </div>
 
@@ -72,7 +73,7 @@ export function Header({
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
               }`}
             >
-              Market
+              {toTiny("Market")}
             </button>
             <button
               onClick={() => handleTabSwitch("wallet")}
@@ -82,7 +83,7 @@ export function Header({
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
               }`}
             >
-              Wallet
+              {toTiny("Wallet")}
             </button>
             <button
               onClick={() => handleTabSwitch("tools")}
@@ -92,20 +93,20 @@ export function Header({
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
               }`}
             >
-              Tools
+              {toTiny("Tools")}
             </button>
           </div>
         </div>
 
         {/* Right: AI Search Pill + Day/Night Toggle + Profile */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Ask AI Search Pill Bar */}
+          {/* Ask AI Search Pill Bar with 'Type something to start' font */}
           <button
             onClick={() => setIsCommandOpen(true)}
-            className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-neutral-100 dark:bg-[#15151c] hover:bg-neutral-200/80 dark:hover:bg-[#1a1a24] border border-neutral-200 dark:border-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-all text-xs cursor-pointer group shadow-2xs w-full sm:w-auto"
+            className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-neutral-100 dark:bg-[#15151c] hover:bg-neutral-200/80 dark:hover:bg-[#1a1a24] border border-neutral-200 dark:border-white/[0.08] text-neutral-700 dark:text-neutral-300 hover:text-black dark:hover:text-white transition-all text-xs cursor-pointer group shadow-2xs w-full sm:w-auto"
           >
             <Sparkles className="h-3.5 w-3.5 text-neutral-800 dark:text-white group-hover:scale-110 transition-transform" />
-            <span className="truncate pr-2">Ask helios.ai anything</span>
+            <span className="truncate pr-2 font-medium">{toTiny("Type something to start")}</span>
             <span className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.5 rounded bg-white dark:bg-white/[0.08] text-neutral-500 dark:text-neutral-400 border border-neutral-200 dark:border-white/[0.08]">
               ⌘K
             </span>
@@ -118,7 +119,7 @@ export function Header({
 
             <button
               onClick={() => setIsCommandOpen(true)}
-              title="Notifications"
+              title={toTiny("Notifications")}
               className="p-2 rounded-full bg-neutral-100 dark:bg-[#15151c] hover:bg-neutral-200/80 dark:hover:bg-[#1a1a24] border border-neutral-200 dark:border-white/[0.08] text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
             >
               <Bell className="h-4 w-4" />

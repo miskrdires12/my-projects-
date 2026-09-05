@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-provider";
+import { toTiny } from "@/lib/tiny-text";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,7 @@ export default async function SelectOrganizationPage() {
                 <path d="M8 12h8" />
               </svg>
             </div>
-            <span className="font-bold text-sm">Helios Platform</span>
+            <span className="font-bold text-sm">{toTiny("Helios Platform")}</span>
           </div>
 
           <ThemeToggle />
@@ -67,10 +68,10 @@ export default async function SelectOrganizationPage() {
 
         <div className="text-center space-y-1.5 pt-2">
           <h1 className="text-xl font-bold tracking-tight text-neutral-950 dark:text-white font-sans">
-            Select Workspace
+            {toTiny("Select Workspace")}
           </h1>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Engineered & Developed by <strong className="text-black dark:text-white">Miskr Dires</strong>
+            {toTiny("Engineered & Developed by")} <strong className="text-black dark:text-white font-semibold">{toTiny("Miskr Dires")}</strong>
           </p>
         </div>
 
@@ -87,21 +88,21 @@ export default async function SelectOrganizationPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-xs text-neutral-950 dark:text-white transition-colors">
-                    {org.name}
+                    {toTiny(org.name)}
                   </h3>
                   <div className="flex items-center gap-2 text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
                     <span className="font-mono text-neutral-800 dark:text-neutral-200">/{org.slug}</span>
                     <span>·</span>
-                    <span>{org._count.projects} services</span>
+                    <span>{org._count.projects} {toTiny("services")}</span>
                     <span>·</span>
-                    <span>{org._count.members} seats</span>
+                    <span>{org._count.members} {toTiny("seats")}</span>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/[0.06] text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-white/10 uppercase">
-                  {org.subscriptionTier}
+                  {toTiny(org.subscriptionTier)}
                 </span>
                 <ArrowRight className="h-4 w-4 text-neutral-400 group-hover:text-black dark:group-hover:text-white group-hover:translate-x-1 transition-all" />
               </div>
@@ -114,7 +115,7 @@ export default async function SelectOrganizationPage() {
             href="/login"
             className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white underline transition-colors"
           >
-            ← Back to Sign In
+            ← {toTiny("Back to Sign In")}
           </Link>
         </div>
       </div>
