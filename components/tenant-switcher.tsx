@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Check, Plus, Building2 } from "lucide-react";
+import { ChevronDown, SquareCheck, Plus, Building2 } from "lucide-react";
 import { OrganizationMembershipInfo } from "@/types/tenant";
 
 interface TenantSwitcherProps {
@@ -92,7 +92,7 @@ export function TenantSwitcher({
                   </div>
                 </div>
 
-                {isSelected && <Check className="h-3.5 w-3.5" />}
+                {isSelected && <SquareCheck className="h-3.5 w-3.5" />}
               </button>
             );
           })}

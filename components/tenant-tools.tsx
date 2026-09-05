@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   Cpu,
   Copy,
-  Check,
+  SquareCheck,
   RotateCcw,
   SlidersHorizontal,
   Lock,
@@ -177,7 +177,7 @@ export function TenantTools({
                     title="Copy Key"
                     className="p-1 text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white rounded transition-colors"
                   >
-                    {copiedKey ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedKey ? <SquareCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
                   </button>
                 </div>
                 <button

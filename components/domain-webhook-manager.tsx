@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, ShieldCheck, Key, Zap, Check, Copy, Play, Plus, Trash2, ArrowRight } from "lucide-react";
+import { Globe, ShieldCheck, Key, Zap, SquareCheck, Square, Copy, Play, Plus, Trash2, ArrowRight } from "lucide-react";
 import { useToast } from "./toast-provider";
 
 interface DomainWebhookManagerProps {
@@ -20,6 +20,17 @@ export function DomainWebhookManager({ orgSlug }: DomainWebhookManagerProps) {
   const [signingSecret, setSigningSecret] = useState(`whsec_live_${orgSlug}_${Math.random().toString(36).substring(2, 12)}`);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [isSendingPing, setIsSendingPing] = useState(false);
+  const [activeEvents, setActiveEvents] = useState<string[]>([
+    "project.created",
+    "member.invited",
+    "subscription.updated",
+  ]);
+
+  const toggleEvent = (evt: string) => {
+    setActiveEvents((prev) =>
+      prev.includes(evt) ? prev.filter((e) => e !== evt) : [...prev, evt]
+    );
+  };
 
   function handleSaveDomain(e: React.FormEvent) {
     e.preventDefault();
@@ -140,7 +151,7 @@ export function DomainWebhookManager({ orgSlug }: DomainWebhookManagerProps) {
               onClick={handleCopySecret}
               className="text-neutral-500 hover:text-neutral-950 flex items-center gap-1 text-[10px] cursor-pointer"
             >
-              {copiedSecret ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+              {copiedSecret ? <SquareCheck className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
               <span>{copiedSecret ? "Copied" : "Copy Secret"}</span>
             </button>
           </div>
@@ -153,19 +164,25 @@ export function DomainWebhookManager({ orgSlug }: DomainWebhookManagerProps) {
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-neutral-600">
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" defaultChecked className="h-3.5 w-3.5 accent-neutral-950 rounded" />
-              <span className="font-mono text-[10px]">project.created</span>
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" defaultChecked className="h-3.5 w-3.5 accent-neutral-950 rounded" />
-              <span className="font-mono text-[10px]">member.invited</span>
-            </label>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" defaultChecked className="h-3.5 w-3.5 accent-neutral-950 rounded" />
-              <span className="font-mono text-[10px]">subscription.updated</span>
-            </label>
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-neutral-600 select-none">
+            {["project.created", "member.invited", "subscription.updated"].map((evt) => {
+              const isChecked = activeEvents.includes(evt);
+              return (
+                <button
+                  key={evt}
+                  type="button"
+                  onClick={() => toggleEvent(evt)}
+                  className="flex items-center gap-1.5 cursor-pointer text-left"
+                >
+                  {isChecked ? (
+                    <SquareCheck className="h-3.5 w-3.5 text-neutral-950" />
+                  ) : (
+                    <Square className="h-3.5 w-3.5 text-neutral-400" />
+                  )}
+                  <span className="font-mono text-[10px]">{evt}</span>
+                </button>
+              );
+            })}
           </div>
 
           <button

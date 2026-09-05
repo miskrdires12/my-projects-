@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Zap, CheckCircle2, ChevronDown, ChevronUp, RotateCcw, Copy, Check, Clock } from "lucide-react";
+import { Zap, SquareCheck, ChevronDown, ChevronUp, RotateCcw, Copy, Clock } from "lucide-react";
 
 interface WebhookInspectorProps {
   orgSlug: string;
@@ -133,8 +133,9 @@ export function WebhookInspector({ orgSlug }: WebhookInspectorProps) {
                 className="flex items-center justify-between cursor-pointer hover:bg-neutral-50 p-2 rounded-xl transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-medium font-mono bg-emerald-50 text-emerald-800 border border-emerald-200">
-                    {evt.status} OK
+                  <span className="px-2 py-0.5 rounded text-[10px] font-medium font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                    <SquareCheck className="h-3 w-3 text-emerald-600" />
+                    <span>{evt.status} OK</span>
                   </span>
                   <span className="text-xs font-semibold font-mono text-neutral-900">{evt.type}</span>
                   <span className="text-[11px] text-neutral-400 font-mono hidden md:inline">({evt.id})</span>
@@ -168,7 +169,7 @@ export function WebhookInspector({ orgSlug }: WebhookInspectorProps) {
                         onClick={() => handleCopy(evt.id, evt.payload)}
                         className="flex items-center gap-1 text-[11px] text-neutral-700 hover:text-neutral-950 font-medium cursor-pointer"
                       >
-                        {copiedId === evt.id ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                        {copiedId === evt.id ? <SquareCheck className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                         <span>{copiedId === evt.id ? "Copied" : "Copy Payload"}</span>
                       </button>
                     </div>

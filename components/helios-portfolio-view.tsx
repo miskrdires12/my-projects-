@@ -12,9 +12,12 @@ import {
   ArrowDownRight,
   Check,
   X,
+  SquareCheck,
+  PhoneCall,
 } from "lucide-react";
 import { useTheme } from "./theme-provider";
 import { toTiny } from "@/lib/tiny-text";
+import { TelebirrIcon } from "./payment-icons";
 
 // Inline brand SVGs for pixel-perfect logos
 function SpotifyIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -66,6 +69,23 @@ export function HeliosPortfolioView() {
   const [hoveredMonthIndex, setHoveredMonthIndex] = useState<number>(5); // June (index 5)
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState("6M");
+  const [totalBalance, setTotalBalance] = useState(12304.11);
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const [depositStep, setDepositStep] = useState<"INPUT" | "PUSH" | "SUCCESS">("INPUT");
+  const [depositAmt, setDepositAmt] = useState(100);
+  const [depositPhone, setDepositPhone] = useState("+251 91 849 2011");
+  const [depositTxRef, setDepositTxRef] = useState("");
+
+  const handleDepositConfirm = () => {
+    setDepositStep("PUSH");
+    const ref = `TB-${Math.floor(100000000 + Math.random() * 900000000)}`;
+    setDepositTxRef(ref);
+
+    setTimeout(() => {
+      setTotalBalance((prev) => prev + depositAmt);
+      setDepositStep("SUCCESS");
+    }, 2200);
+  };
 
   // Spline data points for 12 months
   const chartPoints = [
@@ -179,8 +199,20 @@ export function HeliosPortfolioView() {
             </div>
 
             <div className="mt-5 mb-1">
-              <div className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-950 dark:text-white font-sans">
-                $ 12,304.11
+              <div className="flex items-center justify-between">
+                <div className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-950 dark:text-white font-sans">
+                  $ {totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <button
+                  onClick={() => {
+                    setDepositStep("INPUT");
+                    setIsDepositOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <TelebirrIcon className="h-3.5 w-3.5" />
+                  <span>Top Up</span>
+                </button>
               </div>
               <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1 flex items-center gap-2">
                 <span>Holdings across 4 managed portfolios</span>
@@ -581,6 +613,138 @@ export function HeliosPortfolioView() {
                 Apply Rebalance
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Telebirr Top Up Modal */}
+      {isDepositOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-[#121218] border border-neutral-200 dark:border-white/10 p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <TelebirrIcon className="h-6 w-6" />
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-950 dark:text-white">Top Up with Telebirr</h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">Ethio Telecom Mobile Money</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDepositOpen(false)}
+                className="text-neutral-400 hover:text-black dark:hover:text-white p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {depositStep === "INPUT" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                    Select Top-Up Amount
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[25, 50, 100, 250].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setDepositAmt(amt)}
+                        className={`py-2 rounded-2xl text-xs font-mono font-bold border transition-all cursor-pointer ${
+                          depositAmt === amt
+                            ? "bg-black text-white dark:bg-white dark:text-black border-black dark:border-white shadow-xs"
+                            : "bg-neutral-50 dark:bg-white/[0.04] border-neutral-200 dark:border-white/10 text-neutral-700 dark:text-neutral-300"
+                        }`}
+                      >
+                        ${amt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-white/[0.03] border border-neutral-200/80 dark:border-white/[0.06] space-y-1.5 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500 dark:text-neutral-400">Total:</span>
+                    <span className="font-bold text-neutral-950 dark:text-white">${depositAmt}.00 USD</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500 dark:text-neutral-400">Telebirr Total:</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      {(depositAmt * 130).toLocaleString()} ETB
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={depositPhone}
+                    onChange={(e) => setDepositPhone(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-neutral-50 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/10 text-neutral-950 dark:text-white focus:outline-none"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsDepositOpen(false)}
+                    className="px-4 py-2 rounded-full text-xs font-medium text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDepositConfirm}
+                    className="px-5 py-2 rounded-full text-xs font-semibold bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <TelebirrIcon className="h-3.5 w-3.5" />
+                    <span>Pay with Telebirr</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {depositStep === "PUSH" && (
+              <div className="py-6 text-center space-y-4">
+                <div className="h-12 w-12 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mx-auto animate-pulse">
+                  <PhoneCall className="h-6 w-6" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-neutral-950 dark:text-white">
+                    USSD Prompt Sent to Handset
+                  </h4>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-xs mx-auto">
+                    Please check your handset ({depositPhone}) and enter your 4-digit Telebirr PIN to authorize.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {depositStep === "SUCCESS" && (
+              <div className="space-y-4 py-2 text-center">
+                <div className="h-12 w-12 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+                  <SquareCheck className="h-7 w-7" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-neutral-950 dark:text-white">
+                    Deposit Added to Wallet!
+                  </h4>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    ${depositAmt}.00 settled instantly via Telebirr ({depositTxRef}).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsDepositOpen(false)}
+                  className="w-full py-2.5 rounded-full text-xs font-semibold bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 transition-all shadow-xs cursor-pointer"
+                >
+                  Back to Portfolio
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

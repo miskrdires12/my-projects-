@@ -12,6 +12,7 @@ import {
   Sparkles,
   Search,
   Check,
+  SquareCheck,
   Globe,
   DollarSign,
   BarChart2,
@@ -563,7 +564,7 @@ export function HeliosMarketView({
 
             {tradeSuccess ? (
               <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold text-center flex items-center justify-center gap-2">
-                <Check className="h-4 w-4" />
+                <SquareCheck className="h-4 w-4" />
                 <span>Order Filled Instantly at {selectedAssetForTrade.price}</span>
               </div>
             ) : (

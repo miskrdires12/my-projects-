@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Terminal, Play, Copy, Check, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { Terminal, Play, Copy, SquareCheck, Clock, AlertCircle } from "lucide-react";
 
 interface ApiPlaygroundProps {
   orgSlug: string;
@@ -160,7 +160,7 @@ export function ApiPlayground({ orgSlug }: ApiPlaygroundProps) {
             onClick={handleCopyCurl}
             className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-neutral-950 transition-colors cursor-pointer"
           >
-            {copiedCurl ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+            {copiedCurl ? <SquareCheck className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
             <span>{copiedCurl ? "Copied" : "Copy cURL"}</span>
           </button>
         </div>

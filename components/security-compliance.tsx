@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, Lock, Globe, Smartphone, Laptop, Trash2, Plus, Download, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Lock, Globe, Smartphone, Laptop, Trash2, Plus, Download, SquareCheck } from "lucide-react";
 
 interface SecurityComplianceProps {
   orgSlug: string;
@@ -102,7 +102,7 @@ export function SecurityCompliance({ orgSlug }: SecurityComplianceProps) {
         <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-neutral-950">SOC 2 Type II</span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <SquareCheck className="h-4 w-4 text-emerald-600" />
           </div>
           <p className="text-[11px] text-neutral-500 leading-relaxed">Continuous controls verified across tenant data boundaries.</p>
         </div>
@@ -110,7 +110,7 @@ export function SecurityCompliance({ orgSlug }: SecurityComplianceProps) {
         <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-neutral-950">ISO 27001</span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <SquareCheck className="h-4 w-4 text-emerald-600" />
           </div>
           <p className="text-[11px] text-neutral-500 leading-relaxed">Certified information security management systems.</p>
         </div>
@@ -118,7 +118,7 @@ export function SecurityCompliance({ orgSlug }: SecurityComplianceProps) {
         <div className="p-3.5 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-neutral-950">GDPR & HIPAA</span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <SquareCheck className="h-4 w-4 text-emerald-600" />
           </div>
           <p className="text-[11px] text-neutral-500 leading-relaxed">Data processing addendum and AES-256 encryption at rest.</p>
         </div>
