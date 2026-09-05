@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
-import { MobileNav } from "@/components/mobile-nav";
 import { Header } from "@/components/header";
 import { getTenantContext } from "@/lib/tenant-context";
 import { prisma } from "@/lib/prisma";
@@ -73,23 +72,6 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#050507] text-neutral-900 dark:text-[#f4f4f7] font-sans antialiased selection:bg-black dark:selection:bg-white selection:text-white dark:selection:text-black flex flex-col transition-colors duration-200">
-      {/* Mobile Structured Navigation (Phones/Tablets < md) */}
-      <MobileNav
-        currentOrg={{
-          id: tenant.organizationId,
-          slug: tenant.organizationSlug,
-          name: tenant.organizationName,
-          tier: tenant.subscriptionTier,
-        }}
-        currentUser={{
-          id: tenant.userId,
-          name: tenant.userName || "Nadia Rachel",
-          email: tenant.userEmail || "rachel_helios@gmail.com",
-          role: tenant.userRole,
-        }}
-        userOrganizations={userOrganizations}
-      />
-
       <div className="flex flex-1 min-h-screen flex-col md:flex-row">
         {/* Monochrome Desktop Sidebar (hidden on mobile) */}
         <Sidebar
@@ -118,6 +100,7 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
             role={tenant.userRole}
             userName={tenant.userName || "Nadia Rachel"}
             userEmail={tenant.userEmail || "rachel_helios@gmail.com"}
+            userOrganizations={userOrganizations}
           />
           <main className="p-4 sm:p-6 w-full mx-auto space-y-6 flex-1">
             <ToastProvider>{children}</ToastProvider>

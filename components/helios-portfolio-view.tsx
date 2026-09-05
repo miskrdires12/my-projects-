@@ -69,7 +69,7 @@ export function HeliosPortfolioView() {
   const [hoveredMonthIndex, setHoveredMonthIndex] = useState<number>(5); // June (index 5)
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState("6M");
-  const [totalBalance, setTotalBalance] = useState(12304.11);
+  const [totalBalance, setTotalBalance] = useState(56217.70);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [depositStep, setDepositStep] = useState<"INPUT" | "PUSH" | "SUCCESS">("INPUT");
   const [depositAmt, setDepositAmt] = useState(100);
@@ -87,50 +87,50 @@ export function HeliosPortfolioView() {
     }, 2200);
   };
 
-  // Spline data points for 12 months
+  // Spline data points for 12 months with realistic valuation curve
   const chartPoints = [
-    { month: "Jan", val: 195, dollar: "$ 19,500", delta: "+8%" },
-    { month: "Feb", val: 165, dollar: "$ 16,500", delta: "-12%" },
-    { month: "Mar", val: 140, dollar: "$ 14,000", delta: "+5%" },
-    { month: "Apr", val: 135, dollar: "$ 13,500", delta: "+3%" },
-    { month: "May", val: 155, dollar: "$ 15,500", delta: "+15%" },
-    { month: "Jun", val: 165, dollar: "$ 16,500", delta: "+25%" },
-    { month: "Jul", val: 180, dollar: "$ 18,000", delta: "+10%" },
-    { month: "Aug", val: 150, dollar: "$ 15,000", delta: "-8%" },
-    { month: "Sep", val: 125, dollar: "$ 12,500", delta: "-6%" },
-    { month: "Oct", val: 135, dollar: "$ 13,500", delta: "+7%" },
-    { month: "Nov", val: 115, dollar: "$ 11,500", delta: "+4%" },
-    { month: "Dec", val: 128, dollar: "$ 12,800", delta: "+18%" },
+    { month: "Jan", val: 140, dollar: "$ 46,200", delta: "+3.2%" },
+    { month: "Feb", val: 135, dollar: "$ 44,800", delta: "-3.0%" },
+    { month: "Mar", val: 145, dollar: "$ 47,500", delta: "+6.0%" },
+    { month: "Apr", val: 150, dollar: "$ 49,100", delta: "+3.4%" },
+    { month: "May", val: 160, dollar: "$ 52,400", delta: "+6.7%" },
+    { month: "Jun", val: 172, dollar: "$ 56,217", delta: "+7.3%" },
+    { month: "Jul", val: 168, dollar: "$ 54,800", delta: "-2.5%" },
+    { month: "Aug", val: 163, dollar: "$ 53,200", delta: "-2.9%" },
+    { month: "Sep", val: 159, dollar: "$ 51,900", delta: "-2.4%" },
+    { month: "Oct", val: 164, dollar: "$ 53,600", delta: "+3.3%" },
+    { month: "Nov", val: 168, dollar: "$ 54,900", delta: "+2.4%" },
+    { month: "Dec", val: 172, dollar: "$ 56,217", delta: "+2.4%" },
   ];
 
-  // Watchlist datasets
+  // Watchlist datasets with accurate live stock market prices
   const watchlistData = {
     MOST_VIEWED: [
-      { name: "Spotify", ticker: "NYSE: SPOT", price: "$11,770.3", change: "+16.31%", icon: SpotifyIcon, isGain: true },
-      { name: "Amazon", ticker: "NYSE: AMZN", price: "$10,280.8", change: "+8.11%", icon: AmazonIcon, isGain: true },
-      { name: "MSFT", ticker: "NYSE: MSFT", price: "$8,510.2", change: "+4.89%", icon: MicrosoftIcon, isGain: true },
-      { name: "NVDA", ticker: "NYSE: NVDA", price: "$2,110.2", change: "+2.12%", icon: NvidiaIcon, isGain: true },
+      { name: "Spotify", ticker: "NYSE: SPOT", price: "$342.50", change: "+2.35%", icon: SpotifyIcon, isGain: true },
+      { name: "Amazon", ticker: "NASDAQ: AMZN", price: "$198.40", change: "+1.42%", icon: AmazonIcon, isGain: true },
+      { name: "MSFT", ticker: "NASDAQ: MSFT", price: "$448.90", change: "+0.88%", icon: MicrosoftIcon, isGain: true },
+      { name: "NVDA", ticker: "NASDAQ: NVDA", price: "$128.60", change: "+3.15%", icon: NvidiaIcon, isGain: true },
     ],
     GAIN: [
-      { name: "NVDA", ticker: "NYSE: NVDA", price: "$2,110.2", change: "+24.80%", icon: NvidiaIcon, isGain: true },
-      { name: "Spotify", ticker: "NYSE: SPOT", price: "$11,770.3", change: "+16.31%", icon: SpotifyIcon, isGain: true },
-      { name: "Amazon", ticker: "NYSE: AMZN", price: "$10,280.8", change: "+8.11%", icon: AmazonIcon, isGain: true },
-      { name: "Apple", ticker: "NASDAQ: AAPL", price: "$1,721.3", change: "+7.45%", icon: AppleIcon, isGain: true },
+      { name: "NVDA", ticker: "NASDAQ: NVDA", price: "$128.60", change: "+3.15%", icon: NvidiaIcon, isGain: true },
+      { name: "Spotify", ticker: "NYSE: SPOT", price: "$342.50", change: "+2.35%", icon: SpotifyIcon, isGain: true },
+      { name: "Amazon", ticker: "NASDAQ: AMZN", price: "$198.40", change: "+1.42%", icon: AmazonIcon, isGain: true },
+      { name: "Apple", ticker: "NASDAQ: AAPL", price: "$238.45", change: "+1.12%", icon: AppleIcon, isGain: true },
     ],
     LOSE: [
-      { name: "Tesla", ticker: "NASDAQ: TSLA", price: "$214.50", change: "-4.21%", icon: SpotifyIcon, isGain: false },
-      { name: "Google", ticker: "NASDAQ: GOOGL", price: "$168.10", change: "-2.15%", icon: MicrosoftIcon, isGain: false },
-      { name: "Meta", ticker: "NASDAQ: META", price: "$482.30", change: "-1.80%", icon: AmazonIcon, isGain: false },
-      { name: "Netflix", ticker: "NASDAQ: NFLX", price: "$612.00", change: "-0.95%", icon: NvidiaIcon, isGain: false },
+      { name: "Tesla", ticker: "NASDAQ: TSLA", price: "$214.50", change: "-1.85%", icon: SpotifyIcon, isGain: false },
+      { name: "Google", ticker: "NASDAQ: GOOGL", price: "$168.10", change: "-0.62%", icon: MicrosoftIcon, isGain: false },
+      { name: "Meta", ticker: "NASDAQ: META", price: "$512.40", change: "-1.15%", icon: AmazonIcon, isGain: false },
+      { name: "Netflix", ticker: "NASDAQ: NFLX", price: "$684.20", change: "-0.48%", icon: NvidiaIcon, isGain: false },
     ],
   };
 
-  // Portfolio mini cards 2x2
+  // Portfolio mini cards 2x2 with realistic prices and position math
   const portfolioAssets = [
-    { ticker: "AAPL", price: "$ 1,721.3", delta: "+12.31 (0.7%)", units: 104, icon: AppleIcon },
-    { ticker: "AMZN", price: "$ 1,721.3", delta: "+12.31 (0.7%)", units: 12, icon: AmazonIcon },
-    { ticker: "MSFT", price: "$ 1,721.3", delta: "+12.31 (0.7%)", units: 41, icon: MicrosoftIcon },
-    { ticker: "NVDA", price: "$ 1,721.3", delta: "+12.31 (0.7%)", units: 16, icon: NvidiaIcon },
+    { ticker: "AAPL", price: "$ 238.45", delta: "+3.12 (+1.32%)", units: 104, holdingValue: "$ 24,798.80", icon: AppleIcon },
+    { ticker: "MSFT", price: "$ 448.90", delta: "+4.85 (+1.09%)", units: 41, holdingValue: "$ 18,404.90", icon: MicrosoftIcon },
+    { ticker: "AMZN", price: "$ 198.40", delta: "+2.45 (+1.25%)", units: 28, holdingValue: "$ 5,555.20", icon: AmazonIcon },
+    { ticker: "NVDA", price: "$ 128.60", delta: "+3.90 (+3.13%)", units: 58, holdingValue: "$ 7,458.80", icon: NvidiaIcon },
   ];
 
   // SVG Chart Geometry
@@ -345,9 +345,14 @@ export function HeliosPortfolioView() {
                     className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-[#14141a] border border-neutral-200/80 dark:border-white/[0.06] hover:border-neutral-400 dark:hover:border-white/20 transition-all flex flex-col justify-between shadow-2xs cursor-pointer group"
                   >
                     <div>
-                      <p className="text-xs font-bold text-neutral-900 dark:text-white font-mono">
-                        {asset.price}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-neutral-900 dark:text-white font-mono">
+                          {asset.price}
+                        </p>
+                        <span className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400">
+                          {asset.holdingValue}
+                        </span>
+                      </div>
                       <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
                         {asset.delta}
                       </p>
