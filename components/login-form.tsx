@@ -89,7 +89,7 @@ export function LoginForm() {
           Sign In to Workspace
         </h1>
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          Engineered & Developed by <strong className="text-black dark:text-white font-semibold">Miskr Dires</strong>
+          Universal Access Enabled · Enter any email or use 1-click sign-in
         </p>
       </div>
 

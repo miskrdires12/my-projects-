@@ -20,7 +20,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { CommandPalette } from "./command-palette";
 import { ThemeToggle, useTheme } from "./theme-provider";
 import { OrganizationMembershipInfo } from "@/types/tenant";
@@ -102,6 +102,7 @@ export function Header({
   const searchParams = useSearchParams();
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const { data: session } = useSession();
 
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
@@ -147,7 +148,11 @@ export function Header({
     }
   };
 
-  const firstName = userName?.split(" ")[0] || "Miskr";
+  // Extract first word of what the user signed in with (name or email prefix)
+  const resolvedDisplayName = session?.user?.name || userName || "Miskr";
+  const resolvedEmail = session?.user?.email || userEmail || "miskr@example.com";
+  const rawFirstWord = resolvedDisplayName.trim().split(/[\s._@-]+/)[0] || "Miskr";
+  const capitalizedFirstWord = rawFirstWord.charAt(0).toUpperCase() + rawFirstWord.slice(1);
 
   // The 6 exact requested destinations
   const menuDestinations = [
@@ -157,7 +162,7 @@ export function Header({
       icon: Compass,
     },
     {
-      name: "Portfolio",
+      name: "Portfolio & Microservices",
       href: `/${organizationSlug}/projects`,
       icon: ShoppingBag,
     },
@@ -222,7 +227,7 @@ export function Header({
               <Search className="h-4 w-4" />
             </button>
             <div className="h-8 w-8 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[11px] font-bold flex-shrink-0 shadow-xs">
-              {firstName.charAt(0)}
+              {capitalizedFirstWord.charAt(0)}
             </div>
           </div>
         </div>
@@ -243,7 +248,7 @@ export function Header({
 
                 <div className="flex items-center gap-2">
                   <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white font-sans">
-                    Welcome, {firstName}
+                    Welcome, {capitalizedFirstWord}
                   </h1>
                   <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 font-semibold border border-black/10 dark:border-white/10">
                     {tier}
@@ -321,11 +326,11 @@ export function Header({
             {/* User Profile Pill */}
             <div className="flex items-center gap-2.5 pl-2 py-1 pr-3 rounded-full bg-neutral-100 dark:bg-[#15151c] border border-neutral-200 dark:border-white/[0.08]">
               <div className="h-8 w-8 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center text-[11px] font-bold flex-shrink-0 shadow-sm">
-                {firstName.charAt(0)}
+                {capitalizedFirstWord.charAt(0)}
               </div>
               <div className="text-left leading-tight">
-                <p className="text-xs font-semibold text-neutral-900 dark:text-white leading-tight">{userName}</p>
-                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 leading-tight">{userEmail}</p>
+                <p className="text-xs font-semibold text-neutral-900 dark:text-white leading-tight">{resolvedDisplayName}</p>
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 leading-tight">{resolvedEmail}</p>
               </div>
             </div>
           </div>
@@ -345,18 +350,18 @@ export function Header({
           className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm transition-opacity duration-300 ease-out animate-in fade-in"
           onClick={() => setIsNavDrawerOpen(false)}
         >
-          {/* Left Panel matching user screenshot exactly */}
+          {/* Left Panel matching user screenshot exactly with identical day & night balance */}
           <aside
             onClick={(e) => e.stopPropagation()}
-            className="fixed inset-y-0 left-0 z-[10000] w-72 sm:w-80 bg-[#09090d] dark:bg-[#07070b] text-white border-r border-white/[0.08] shadow-2xl flex flex-col justify-between p-5 select-none animate-in slide-in-from-left duration-300 ease-out"
+            className="fixed inset-y-0 left-0 z-[10000] w-72 sm:w-80 bg-white dark:bg-[#09090d] text-neutral-950 dark:text-white border-r border-neutral-200/90 dark:border-white/[0.08] shadow-2xl flex flex-col justify-between p-5 select-none animate-in slide-in-from-left duration-300 ease-out overflow-y-auto"
           >
             {/* Top Section: Brand + Navigation Items */}
             <div className="space-y-6">
-              {/* Header: Rounded white square logo + Title + Dropdown chevron */}
+              {/* Header: Rounded square logo + Title + Dropdown chevron */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
-                  {/* White rounded square logo container with bold black "HI" */}
-                  <div className="h-10 w-10 rounded-2xl bg-white text-black flex items-center justify-center font-bold text-sm shadow-md flex-shrink-0">
+                  {/* Square logo container with bold "HI" */}
+                  <div className="h-10 w-10 rounded-2xl bg-black text-white dark:bg-white dark:text-black flex items-center justify-center font-bold text-sm shadow-md flex-shrink-0">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -377,16 +382,16 @@ export function Header({
                       onClick={() => setShowWorkspaceDropdown(!showWorkspaceDropdown)}
                       className="flex items-center gap-1.5 text-left group cursor-pointer"
                     >
-                      <span className="font-bold text-sm tracking-tight text-white font-sans truncate group-hover:text-neutral-200">
+                      <span className="font-bold text-sm tracking-tight text-neutral-950 dark:text-white font-sans truncate group-hover:text-neutral-700 dark:group-hover:text-neutral-200">
                         {organizationName || "Helios Investments"}
                       </span>
                       <ChevronDown
-                        className={`h-3.5 w-3.5 text-neutral-400 transition-transform duration-200 ${
-                          showWorkspaceDropdown ? "rotate-180 text-white" : ""
+                        className={`h-3.5 w-3.5 text-neutral-500 dark:text-neutral-400 transition-transform duration-200 ${
+                          showWorkspaceDropdown ? "rotate-180 text-black dark:text-white" : ""
                         }`}
                       />
                     </button>
-                    <p className="text-[11px] text-neutral-400 font-mono leading-tight mt-0.5">
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-mono leading-tight mt-0.5">
                       by Miskr Dires
                     </p>
                   </div>
@@ -395,7 +400,7 @@ export function Header({
                 {/* Close (X) button */}
                 <button
                   onClick={() => setIsNavDrawerOpen(false)}
-                  className="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-xl text-neutral-400 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
                   title="Close navigation"
                 >
                   <X className="h-4 w-4" />
@@ -404,8 +409,8 @@ export function Header({
 
               {/* Workspace Switcher dropdown (if chevron clicked) */}
               {showWorkspaceDropdown && userOrganizations.length > 0 && (
-                <div className="p-3 rounded-2xl bg-white/[0.04] border border-white/10 space-y-2 animate-in fade-in duration-150">
-                  <span className="text-[10px] font-mono font-semibold text-neutral-400 uppercase tracking-wider block">
+                <div className="p-3 rounded-2xl bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200 dark:border-white/10 space-y-2 animate-in fade-in duration-150">
+                  <span className="text-[10px] font-mono font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider block">
                     Switch Workspace
                   </span>
                   <div className="space-y-1">
@@ -419,8 +424,8 @@ export function Header({
                         }}
                         className={`w-full flex items-center justify-between p-2 rounded-xl text-xs transition-colors cursor-pointer ${
                           org.slug === organizationSlug
-                            ? "bg-white text-black font-semibold shadow-xs"
-                            : "text-neutral-300 hover:bg-white/[0.06] hover:text-white"
+                            ? "bg-black text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                            : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-white/[0.06] hover:text-black dark:hover:text-white"
                         }`}
                       >
                         <span className="truncate">{org.name}</span>
@@ -445,13 +450,15 @@ export function Header({
                       onClick={() => setIsNavDrawerOpen(false)}
                       className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all duration-150 cursor-pointer group ${
                         isActive
-                          ? "bg-white text-black font-semibold shadow-md"
-                          : "text-neutral-400 hover:text-white hover:bg-white/[0.06]"
+                          ? "bg-black text-white dark:bg-white dark:text-black font-semibold shadow-md"
+                          : "text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/[0.06]"
                       }`}
                     >
                       <item.icon
                         className={`h-4 w-4 flex-shrink-0 transition-colors ${
-                          isActive ? "text-black" : "text-neutral-400 group-hover:text-white"
+                          isActive
+                            ? "text-white dark:text-black"
+                            : "text-neutral-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white"
                         }`}
                       />
                       <span className="text-sm font-medium tracking-tight font-sans">
@@ -461,27 +468,39 @@ export function Header({
                   );
                 })}
               </nav>
+
+              {/* Bottom of nav lists: Attribution & Tagline matching user prompt */}
+              <div className="pt-3.5 pb-1 px-3 border-t border-neutral-200/70 dark:border-white/[0.08] text-xs space-y-0.5 select-none">
+                <p className="font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                  <span>Developed by</span>
+                  <strong className="text-black dark:text-white font-bold">Miskr Dires</strong>
+                </p>
+                <p className="text-neutral-400 dark:text-neutral-500 font-mono text-[10px]">·</p>
+                <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-snug">
+                  Investment portfolio & cloud services
+                </p>
+              </div>
             </div>
 
             {/* Bottom Section: User Card & Footer Row matching user screenshot */}
-            <div className="space-y-3.5 pt-4 border-t border-white/[0.08]">
+            <div className="space-y-3.5 pt-4 border-t border-neutral-200/70 dark:border-white/[0.08]">
               {/* User Card */}
-              <div className="p-3 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-between">
+              <div className="p-3 rounded-2xl bg-neutral-100 dark:bg-white/[0.04] border border-neutral-200/80 dark:border-white/10 flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
-                  {/* Circular white container with bold black "M" */}
-                  <div className="h-9 w-9 rounded-full bg-white text-black flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm">
-                    {firstName.charAt(0) || "M"}
+                  {/* Circular avatar with bold initial */}
+                  <div className="h-9 w-9 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm">
+                    {capitalizedFirstWord.charAt(0) || "M"}
                   </div>
                   <div className="truncate leading-tight">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-white truncate">
-                        {userName || "Miskr Dires"}
+                      <span className="text-xs font-bold text-neutral-950 dark:text-white truncate">
+                        {resolvedDisplayName}
                       </span>
                       {/* Green verified checkmark */}
                       <svg
                         viewBox="0 0 24 24"
                         fill="currentColor"
-                        className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0"
+                        className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 flex-shrink-0"
                       >
                         <path
                           fillRule="evenodd"
@@ -490,11 +509,11 @@ export function Header({
                         />
                       </svg>
                       {/* VERIFIED badge pill */}
-                      <span className="text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded-md bg-white/10 text-neutral-300 border border-white/10 uppercase tracking-wider">
+                      <span className="text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded-md bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 border border-black/10 dark:border-white/10 uppercase tracking-wider">
                         VERIFIED
                       </span>
                     </div>
-                    <p className="text-[10px] text-neutral-400 font-mono truncate mt-0.5">
+                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono truncate mt-0.5">
                       Platform Developer
                     </p>
                   </div>
@@ -504,7 +523,7 @@ export function Header({
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
                   title="Sign Out"
-                  className="p-1.5 rounded-xl text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-xl text-neutral-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors cursor-pointer"
                 >
                   <LogOut className="h-4 w-4" />
                 </button>
@@ -515,7 +534,7 @@ export function Header({
                 <Link
                   href={`/${organizationSlug}/settings`}
                   onClick={() => setIsNavDrawerOpen(false)}
-                  className="flex items-center gap-2 text-xs font-medium text-neutral-400 hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-white/[0.06]"
+                  className="flex items-center gap-2 text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-white/[0.06]"
                 >
                   <Settings className="h-4 w-4" />
                   <span>Settings</span>

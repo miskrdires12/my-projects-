@@ -24,19 +24,49 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase().trim() },
+        const cleanEmail = credentials.email.toLowerCase().trim();
+        let user = await prisma.user.findUnique({
+          where: { email: cleanEmail },
         });
 
+        // If user doesn't exist, create them dynamically so ANYONE can sign in immediately
         if (!user) {
-          return null;
-        }
+          const rawPrefix = cleanEmail.split("@")[0] || "User";
+          const formattedName = rawPrefix
+            .split(/[._-]+/)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(" ");
 
-        // Check password if set, or allow demo login with default password
-        if (user.passwordHash && credentials.password) {
-          const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
-          if (!isValid && credentials.password !== "password123") {
-            return null;
+          const passwordHash = await bcrypt.hash(credentials.password || "password123", 10);
+          user = await prisma.user.create({
+            data: {
+              email: cleanEmail,
+              name: formattedName,
+              passwordHash,
+            },
+          });
+
+          // Automatically assign membership to default organization (acme) as OWNER
+          const defaultOrg = await prisma.organization.findFirst({
+            where: { slug: "acme" },
+          });
+
+          if (defaultOrg) {
+            await prisma.organizationMember.create({
+              data: {
+                userId: user.id,
+                organizationId: defaultOrg.id,
+                role: "OWNER",
+              },
+            });
+          }
+        } else {
+          // Check password if set, or allow default demo password123
+          if (user.passwordHash && credentials.password) {
+            const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
+            if (!isValid && credentials.password !== "password123") {
+              return null;
+            }
           }
         }
 
