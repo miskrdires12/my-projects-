@@ -45,36 +45,33 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 4. Validate tenant membership from JWT payload if session exists
+  // 4. Validate tenant membership from JWT payload - Require authentication
   if (potentialOrgSlug) {
-    const requestHeaders = new Headers(req.headers);
-
-    if (token) {
-      const userMemberships = (token.organizations as Array<{
-        id: string;
-        slug: string;
-        role: string;
-      }>) || [];
-
-      const matchedOrg = userMemberships.find((org) => org.slug === potentialOrgSlug);
-
-      if (matchedOrg) {
-        requestHeaders.set("x-tenant-id", matchedOrg.id);
-        requestHeaders.set("x-tenant-slug", matchedOrg.slug);
-        requestHeaders.set("x-tenant-role", matchedOrg.role);
-        requestHeaders.set("x-user-id", token.sub || "");
-
-        return NextResponse.next({
-          request: {
-            headers: requestHeaders,
-          },
-        });
-      }
+    if (!token) {
+      const loginUrl = new URL("/login", req.url);
+      loginUrl.searchParams.set("callbackUrl", path);
+      return NextResponse.redirect(loginUrl);
     }
 
-    // In local dev/demo mode, allow transparent navigation if unauthenticated
-    // and pass slug for server component resolver
-    requestHeaders.set("x-tenant-slug", potentialOrgSlug);
+    const requestHeaders = new Headers(req.headers);
+    const userMemberships = (token.organizations as Array<{
+      id: string;
+      slug: string;
+      role: string;
+    }>) || [];
+
+    const matchedOrg = userMemberships.find((org) => org.slug === potentialOrgSlug);
+
+    if (matchedOrg) {
+      requestHeaders.set("x-tenant-id", matchedOrg.id);
+      requestHeaders.set("x-tenant-slug", matchedOrg.slug);
+      requestHeaders.set("x-tenant-role", matchedOrg.role);
+      requestHeaders.set("x-user-id", token.sub || "");
+    } else {
+      requestHeaders.set("x-tenant-slug", potentialOrgSlug);
+      requestHeaders.set("x-user-id", token.sub || "");
+    }
+
     return NextResponse.next({
       request: {
         headers: requestHeaders,

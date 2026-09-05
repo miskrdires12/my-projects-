@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { getTenantContext } from "@/lib/tenant-context";
 import { prisma } from "@/lib/prisma";
@@ -72,34 +71,17 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#050507] text-neutral-900 dark:text-[#f4f4f7] font-sans antialiased selection:bg-black dark:selection:bg-white selection:text-white dark:selection:text-black flex flex-col transition-colors duration-200">
-      <div className="flex flex-1 min-h-screen flex-col md:flex-row">
-        {/* Monochrome Desktop Sidebar (hidden on mobile) */}
-        <Sidebar
-          currentOrg={{
-            id: tenant.organizationId,
-            slug: tenant.organizationSlug,
-            name: tenant.organizationName,
-            tier: tenant.subscriptionTier,
-          }}
-          currentUser={{
-            id: tenant.userId,
-            name: tenant.userName || "Nadia Rachel",
-            email: tenant.userEmail || "rachel_helios@gmail.com",
-            role: tenant.userRole,
-          }}
-          userOrganizations={userOrganizations}
-        />
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#07070a] transition-colors duration-200">
+      <div className="flex flex-1 min-h-screen flex-col w-full">
+        {/* Main Content Area - Full width with left slide-out navigation on click */}
+        <div className="flex-1 flex flex-col min-w-0 w-full bg-white dark:bg-[#07070a] transition-colors duration-200">
           <Header
             organizationName={tenant.organizationName}
             organizationSlug={tenant.organizationSlug}
             tier={tenant.subscriptionTier}
             status={tenant.subscriptionStatus}
             role={tenant.userRole}
-            userName={tenant.userName || "Nadia Rachel"}
-            userEmail={tenant.userEmail || "rachel_helios@gmail.com"}
+            userName={tenant.userName || "Miskr Dires"}
+            userEmail={tenant.userEmail || "miskr@example.com"}
             userOrganizations={userOrganizations}
           />
           <main className="p-4 sm:p-6 w-full mx-auto space-y-6 flex-1">

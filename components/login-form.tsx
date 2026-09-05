@@ -138,13 +138,27 @@ export function LoginForm() {
           </div>
         </div>
 
+        <div className="flex items-center justify-between text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
+          <span>Demo Password: password123</span>
+          <span className="text-emerald-500 font-semibold">Ready</span>
+        </div>
+
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-2.5 rounded-full bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+          className="w-full py-2.5 rounded-full bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200 text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
         >
-          <span>{isLoading ? "Signing in..." : "Continue"}</span>
-          <ArrowRight className="h-3.5 w-3.5" />
+          {isLoading ? (
+            <div className="flex items-center gap-2">
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              <span>Authenticating...</span>
+            </div>
+          ) : (
+            <>
+              <span>Continue to Workspace</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </>
+          )}
         </button>
       </form>
 
