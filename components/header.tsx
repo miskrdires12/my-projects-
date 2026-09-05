@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Search, Bell, Sparkles } from "lucide-react";
 import { CommandPalette } from "./command-palette";
 import { ThemeToggle } from "./theme-provider";
@@ -27,16 +27,24 @@ export function Header({
   userEmail = "rachel_helios@gmail.com",
 }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isCommandOpen, setIsCommandOpen] = useState(false);
 
-  const currentTab = searchParams?.get("tab") || "wallet";
+  const currentTab =
+    pathname?.endsWith("/market") || searchParams?.get("tab") === "market"
+      ? "market"
+      : pathname?.endsWith("/tools") || searchParams?.get("tab") === "tools"
+      ? "tools"
+      : "wallet";
 
   const handleTabSwitch = (tab: string) => {
-    if (tab === "wallet") {
-      router.push(`/${organizationSlug}/dashboard`);
+    if (tab === "market") {
+      router.push(`/${organizationSlug}/market`);
+    } else if (tab === "tools") {
+      router.push(`/${organizationSlug}/tools`);
     } else {
-      router.push(`/${organizationSlug}/dashboard?tab=${tab}`);
+      router.push(`/${organizationSlug}/dashboard`);
     }
   };
 

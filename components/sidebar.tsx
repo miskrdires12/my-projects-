@@ -62,7 +62,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
     },
     {
       name: "Market",
-      href: `/${currentOrg.slug}/dashboard?tab=market`,
+      href: `/${currentOrg.slug}/market`,
       icon: TrendingUp,
       roleRequired: "MEMBER" as MembershipRole,
     },
@@ -135,11 +135,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
         <nav className="space-y-1 pt-1">
           {navigation.map((item) => {
             const isActive =
-              item.name === "Dashboard"
-                ? pathname === item.href && !pathname?.includes("tab=market")
-                : item.name === "Market"
-                ? pathname?.includes("tab=market")
-                : pathname === item.href || pathname?.startsWith(`${item.href}/`);
+              pathname === item.href || (item.name !== "Dashboard" && pathname?.startsWith(`${item.href}/`));
 
             const isRestricted =
               currentUser.role === "MEMBER" &&
