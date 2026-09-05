@@ -52,12 +52,12 @@ export function Header({
 
   return (
     <>
-      <header className="px-6 py-5 flex flex-col md:flex-row md:items-center justify-between gap-5 border-b border-neutral-200/80 dark:border-white/[0.06] bg-white/70 dark:bg-[#0c0c10]/70 backdrop-blur-md transition-colors duration-200">
+      <header className="px-4 sm:px-6 py-4 sm:py-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-200/80 dark:border-white/[0.06] bg-white/70 dark:bg-[#0c0c10]/70 backdrop-blur-md transition-colors duration-200">
         {/* Left: Greeting + Subtitle + Pill Tabs */}
         <div className="space-y-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white font-sans">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white font-sans">
                 Welcome, {firstName}
               </h1>
               <span className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 font-semibold border border-black/10 dark:border-white/10">
@@ -72,10 +72,10 @@ export function Header({
           </div>
 
           {/* Pill Selector: Market, Wallet, Tools */}
-          <div className="flex items-center gap-1.5 pt-0.5">
+          <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-1 sm:pb-0">
             <button
               onClick={() => handleTabSwitch("market")}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                 currentTab === "market"
                   ? "bg-black text-white dark:bg-white dark:text-black font-semibold shadow-xs dark:shadow-[0_0_15px_rgba(255,255,255,0.2)]"
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
@@ -85,7 +85,7 @@ export function Header({
             </button>
             <button
               onClick={() => handleTabSwitch("wallet")}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                 currentTab === "wallet"
                   ? "bg-black text-white dark:bg-white dark:text-black font-semibold shadow-xs dark:shadow-[0_0_15px_rgba(255,255,255,0.2)]"
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
@@ -95,7 +95,7 @@ export function Header({
             </button>
             <button
               onClick={() => handleTabSwitch("tools")}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                 currentTab === "tools"
                   ? "bg-black text-white dark:bg-white dark:text-black font-semibold shadow-xs dark:shadow-[0_0_15px_rgba(255,255,255,0.2)]"
                   : "bg-black/[0.04] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white"
@@ -107,7 +107,7 @@ export function Header({
         </div>
 
         {/* Right: AI Search Pill + Day/Night Toggle + Profile */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto">
           {/* Ask AI Search Pill Bar with 'Type something to start' font */}
           <button
             onClick={() => setIsCommandOpen(true)}

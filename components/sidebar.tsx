@@ -72,10 +72,16 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
       icon: Users2,
       roleRequired: "ADMIN" as MembershipRole,
     },
+    {
+      name: "Settings",
+      href: `/${currentOrg.slug}/settings`,
+      icon: Settings,
+      roleRequired: "ADMIN" as MembershipRole,
+    },
   ];
 
   return (
-    <aside className="w-64 bg-white dark:bg-[#0c0c10] border-r border-neutral-200/80 dark:border-white/[0.06] flex flex-col justify-between h-full min-h-[750px] p-5 select-none transition-colors duration-200">
+    <aside className="hidden md:flex w-64 bg-white dark:bg-[#0c0c10] border-r border-neutral-200/80 dark:border-white/[0.06] flex-col justify-between h-screen sticky top-0 p-5 select-none transition-colors duration-200 z-20">
       {/* Top Section: Brand & Nav */}
       <div className="space-y-6">
         {/* Brand Header */}
@@ -203,7 +209,7 @@ export function Sidebar({ currentOrg, currentUser, userOrganizations }: SidebarP
         {/* Settings & Support Links */}
         <div className="flex items-center justify-between px-1">
           <Link
-            href={`/${currentOrg.slug}/billing`}
+            href={`/${currentOrg.slug}/settings`}
             className="flex items-center gap-2 text-xs text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors font-medium"
           >
             <Settings className="h-3.5 w-3.5" />

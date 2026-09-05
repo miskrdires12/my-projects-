@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -126,15 +126,74 @@ export function HeliosMarketView({
     },
   ];
 
-  // Market spline chart data
-  const marketChartPoints = [
-    { time: "00:00", val: 120, label: "$3.34T" },
-    { time: "04:00", val: 135, label: "$3.38T" },
-    { time: "08:00", val: 130, label: "$3.36T" },
-    { time: "12:00", val: 155, label: "$3.42T" },
-    { time: "16:00", val: 175, label: "$3.46T" },
-    { time: "20:00", val: 185, label: "$3.48T" },
+  // Base fluctuating area chart coordinates across 1000px coordinate system
+  const initialMarketPoints = [
+    { x: 0, y: 155, time: "00:00", val: "$3.34T" },
+    { x: 90, y: 146, time: "02:00", val: "$3.36T" },
+    { x: 180, y: 138, time: "04:00", val: "$3.37T" },
+    { x: 270, y: 142, time: "06:00", val: "$3.36T" },
+    { x: 360, y: 128, time: "08:00", val: "$3.39T" },
+    { x: 450, y: 120, time: "10:00", val: "$3.41T" },
+    { x: 540, y: 105, time: "12:00", val: "$3.43T" },
+    { x: 630, y: 92, time: "14:00", val: "$3.45T" },
+    { x: 720, y: 78, time: "16:00", val: "$3.46T" },
+    { x: 810, y: 64, time: "18:00", val: "$3.47T" },
+    { x: 900, y: 48, time: "20:00", val: "$3.48T" },
+    { x: 1000, y: 32, time: "Live", val: "$3.51T" },
   ];
+
+  const [chartPoints, setChartPoints] = useState(initialMarketPoints);
+  const [liveMarketCap, setLiveMarketCap] = useState(3482910400000);
+  const [livePercentDelta, setLivePercentDelta] = useState("+3.42%");
+  const [tickDirection, setTickDirection] = useState<"up" | "down">("up");
+  const [hoveredChartPoint, setHoveredChartPoint] = useState<(typeof initialMarketPoints)[0] | null>(null);
+
+  // Live market area chart fluctuation engine
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Natural micro-fluctuations (every 1.6s)
+      const deltaAmount = (Math.random() - 0.47) * 1800000000;
+      const isUp = deltaAmount >= 0;
+      setTickDirection(isUp ? "up" : "down");
+
+      setLiveMarketCap((prev) => {
+        const next = Math.max(3400000000000, prev + deltaAmount);
+        const percentChange = (((next - 3360000000000) / 3360000000000) * 100).toFixed(2);
+        setLivePercentDelta(`${parseFloat(percentChange) >= 0 ? "+" : ""}${percentChange}%`);
+        return next;
+      });
+
+      setChartPoints((prev) =>
+        prev.map((pt, idx) => {
+          if (idx === 0) return pt;
+          const noise = (Math.random() - 0.48) * (idx === prev.length - 1 ? 7 : 3.5);
+          const newY = Math.min(175, Math.max(20, pt.y + noise));
+          return { ...pt, y: newY };
+        })
+      );
+    }, 1600);
+
+    return () => clearInterval(interval);
+  }, [activeTimeframe]);
+
+  function getSplinePath(pts: typeof initialMarketPoints) {
+    if (pts.length === 0) return "";
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i === 0 ? 0 : i - 1];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[i + 2] || p2;
+
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+      d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+  }
 
   // Full asset screener data
   const assets = [
@@ -316,45 +375,111 @@ export function HeliosMarketView({
           </div>
         </div>
 
-        {/* Dynamic Glowing SVG Spline */}
+        {/* Dynamic Glowing Fluctuating SVG Area Graph */}
         <div className="relative h-64 sm:h-72 w-full pt-4">
           <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 1000 200">
             <defs>
-              <linearGradient id="marketGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={isDark ? "0.25" : "0.15"} />
+              <linearGradient id="marketAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={isDark ? "0.32" : "0.20"} />
+                <stop offset="50%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity={isDark ? "0.10" : "0.05"} />
                 <stop offset="100%" stopColor={isDark ? "#ffffff" : "#000000"} stopOpacity="0.0" />
               </linearGradient>
+
+              <filter id="areaGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
             </defs>
 
-            {/* Gradient Fill */}
+            {/* Fluctuating Shaded Area Path */}
             <path
-              d="M 0 160 C 180 140, 320 170, 500 110 C 680 50, 840 70, 1000 20 L 1000 200 L 0 200 Z"
-              fill="url(#marketGradient)"
+              d={`${getSplinePath(chartPoints)} L 1000 200 L 0 200 Z`}
+              fill="url(#marketAreaGradient)"
+              className="transition-all duration-700 ease-out"
             />
 
-            {/* Glowing Spline Line */}
+            {/* Glowing Fluctuating Spline Curve */}
             <path
-              d="M 0 160 C 180 140, 320 170, 500 110 C 680 50, 840 70, 1000 20"
+              d={getSplinePath(chartPoints)}
               fill="none"
               stroke={isDark ? "#ffffff" : "#000000"}
-              strokeWidth="2.75"
+              strokeWidth="2.5"
               strokeLinecap="round"
-              className="transition-all duration-300"
+              strokeLinejoin="round"
+              filter="url(#areaGlow)"
+              className="transition-all duration-700 ease-out"
             />
 
-            {/* Active Peak Indicator */}
-            <circle cx="1000" cy="20" r="5" fill={isDark ? "#ffffff" : "#000000"} className="animate-ping" />
-            <circle cx="1000" cy="20" r="4" fill={isDark ? "#ffffff" : "#000000"} />
-            <circle cx="500" cy="110" r="4" fill={isDark ? "#ffffff" : "#000000"} />
+            {/* Live Interactive Nodes along the curve */}
+            {chartPoints.map((pt, i) => (
+              <g
+                key={i}
+                className="cursor-pointer group"
+                onMouseEnter={() => setHoveredChartPoint(pt)}
+                onMouseLeave={() => setHoveredChartPoint(null)}
+              >
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r="12"
+                  fill="transparent"
+                />
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r="3.5"
+                  fill={isDark ? "#ffffff" : "#000000"}
+                  className="transition-all duration-500 group-hover:scale-150"
+                />
+              </g>
+            ))}
+
+            {/* Live Pulsing Beacon on Leading Edge */}
+            <circle
+              cx={chartPoints[chartPoints.length - 1]?.x || 1000}
+              cy={chartPoints[chartPoints.length - 1]?.y || 32}
+              r="6"
+              fill={isDark ? "#ffffff" : "#000000"}
+              className="animate-ping opacity-75"
+            />
+            <circle
+              cx={chartPoints[chartPoints.length - 1]?.x || 1000}
+              cy={chartPoints[chartPoints.length - 1]?.y || 32}
+              r="4"
+              fill={isDark ? "#ffffff" : "#000000"}
+            />
           </svg>
 
-          {/* Value Floating Callout */}
+          {/* Value Floating Callout with Live Micro-Ticking Indicator */}
           <div className="absolute top-2 right-4 bg-black dark:bg-white text-white dark:text-black px-3.5 py-1.5 rounded-2xl shadow-xl border border-white/10 flex items-center gap-2">
-            <span className="text-xs font-mono font-bold">$3,482,910,000,000</span>
-            <span className="text-[10px] font-mono font-semibold text-emerald-400 dark:text-emerald-700 bg-emerald-500/20 px-1.5 py-0.2 rounded">
-              +3.42%
+            <span className="h-2 w-2 rounded-full bg-emerald-400 dark:bg-emerald-600 animate-pulse" />
+            <span className="text-xs font-mono font-bold">
+              ${liveMarketCap.toLocaleString()}
+            </span>
+            <span
+              className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded transition-colors duration-300 ${
+                tickDirection === "up"
+                  ? "bg-emerald-500/20 text-emerald-400 dark:text-emerald-700"
+                  : "bg-rose-500/20 text-rose-400 dark:text-rose-700"
+              }`}
+            >
+              {livePercentDelta}
             </span>
           </div>
+
+          {/* Interactive Hover Point Tooltip */}
+          {hoveredChartPoint && (
+            <div
+              className="absolute pointer-events-none -translate-x-1/2 -translate-y-full mb-3 bg-white dark:bg-[#181822] text-neutral-900 dark:text-white px-2.5 py-1.5 rounded-xl shadow-lg border border-neutral-200 dark:border-white/10 text-[11px] font-mono flex items-center gap-2 z-10 animate-in fade-in zoom-in-95 duration-100"
+              style={{
+                left: `${(hoveredChartPoint.x / 1000) * 100}%`,
+                top: `${(hoveredChartPoint.y / 200) * 100}%`,
+              }}
+            >
+              <span className="text-neutral-400">{hoveredChartPoint.time}:</span>
+              <span className="font-bold">{hoveredChartPoint.val}</span>
+            </div>
+          )}
         </div>
 
         {/* X-Axis Ticks */}
