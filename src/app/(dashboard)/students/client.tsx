@@ -24,9 +24,10 @@ import {
   UserPlus,
   Users,
   Upload,
+  FileSpreadsheet,
 } from "lucide-react";
 import Link from "next/link";
-import { deleteStudentAction, clearAllStudentsAction } from "@/actions/students";
+import { deleteStudentAction, clearAllStudentsAction, deleteMultipleStudentsAction } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync } from "@/lib/sync-client";
 
@@ -300,13 +301,61 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       const raw = localStorage.getItem("sb_enrolled_students");
       if (raw) {
         const localList = JSON.parse(raw);
-        const filtered = localList.filter((s: any) => s.id !== id && s.studentId !== studentId);
+        const filtered = localList.filter(
+          (s: any) => s.id !== id && s.studentId !== studentId && s.id !== studentId
+        );
         localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
       }
     } catch {}
-    setDisplayStudents((prev) => prev.filter((s) => s.id !== id && s.studentId !== studentId));
+    setDisplayStudents((prev) =>
+      prev.filter((s) => s.id !== id && s.studentId !== studentId && s.id !== studentId)
+    );
     startTransition(async () => {
-      await deleteStudentAction(id);
+      try {
+        const res = await deleteStudentAction(id, studentId);
+        if (!res.success && res.error) {
+          console.warn("Delete warning:", res.error);
+        }
+      } catch (err) {
+        console.warn("Delete communication error:", err);
+      }
+      router.refresh();
+    });
+  };
+
+  // Bulk Delete Selected Students
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete the ${selectedIds.size} selected student records?`
+      )
+    )
+      return;
+
+    const idsToDelete = Array.from(selectedIds);
+    try {
+      const raw = localStorage.getItem("sb_enrolled_students");
+      if (raw) {
+        const localList = JSON.parse(raw);
+        const filtered = localList.filter(
+          (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
+        );
+        localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
+      }
+    } catch {}
+
+    setDisplayStudents((prev) =>
+      prev.filter((s) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId))
+    );
+    setSelectedIds(new Set());
+
+    startTransition(async () => {
+      try {
+        await deleteMultipleStudentsAction(idsToDelete);
+      } catch (err) {
+        console.warn("Bulk delete error:", err);
+      }
       router.refresh();
     });
   };
@@ -323,10 +372,109 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       } catch {}
       setDisplayStudents([]);
       startTransition(async () => {
-        await clearAllStudentsAction();
+        try {
+          await clearAllStudentsAction();
+        } catch (err) {
+          console.warn("Clear all action error:", err);
+        }
         router.refresh();
       });
     }
+  };
+
+  // Export Feeded Data to CSV (Fulfills User Requirement)
+  const handleExportCSV = (selectedOnly: boolean = false) => {
+    const listToExport = selectedOnly
+      ? displayStudents.filter(
+          (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+        )
+      : displayStudents;
+
+    if (listToExport.length === 0) {
+      alert("No student records available to export.");
+      return;
+    }
+
+    const headers = [
+      "Student ID",
+      "Full Name",
+      "Grade",
+      "Gender",
+      "Phone",
+      "Email Address",
+      "Department",
+      "School",
+      "Academic Year",
+      "Date of Birth",
+      "Blood Type",
+      "Roll Number",
+      "Guardian Name",
+      "Emergency Contact Name",
+      "Emergency Contact Phone",
+      "Nationality",
+      "Address",
+      "Status",
+      "Batch Number",
+      "Photo Available",
+      "QR Code Attached",
+      "Exported At",
+    ];
+
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).trim();
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const rows = listToExport.map((s) => {
+      const dobStr = s.dateOfBirth
+        ? typeof s.dateOfBirth === "string"
+          ? s.dateOfBirth.split("T")[0]
+          : new Date(s.dateOfBirth).toISOString().split("T")[0]
+        : "";
+      const hasPhoto = s.photoPath ? "YES" : "NO";
+      const hasQR = s.qrCodeData ? "YES" : "NO";
+
+      return [
+        escapeCSV(s.studentId),
+        escapeCSV(s.fullName),
+        escapeCSV(s.grade),
+        escapeCSV(s.sex),
+        escapeCSV(s.phone),
+        escapeCSV(s.emailAddress || ""),
+        escapeCSV(s.department || ""),
+        escapeCSV(s.school || ""),
+        escapeCSV(s.academicYear || ""),
+        escapeCSV(dobStr),
+        escapeCSV(s.bloodType || ""),
+        escapeCSV(s.studentId || ""),
+        escapeCSV(s.guardianFullName || ""),
+        escapeCSV(s.emergencyContactName || ""),
+        escapeCSV(s.emergencyContactPhone || ""),
+        escapeCSV(s.nationality || "Citizen"),
+        escapeCSV(s.address || ""),
+        escapeCSV(s.status || "ACTIVE"),
+        escapeCSV(s.batch?.batchNumber || ""),
+        escapeCSV(hasPhoto),
+        escapeCSV(hasQR),
+        escapeCSV(new Date().toISOString().split("T")[0]),
+      ].join(",");
+    });
+
+    // Add UTF-8 BOM so Excel opens with proper character encoding
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const dateTag = new Date().toISOString().split("T")[0];
+    a.download = selectedOnly
+      ? `Student_Credentials_Selected_${listToExport.length}_${dateTag}.csv`
+      : `Student_Credential_Directory_${listToExport.length}_Records_${dateTag}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
   const totalEffective = Math.max(totalCount, displayStudents.length);
@@ -354,6 +502,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             className="rounded-xl bg-black px-5 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors"
           >
             Search
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExportCSV(false)}
+            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5"
+            title="Export all feeded student data to CSV file"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span>Export CSV</span>
           </button>
           <button
             type="button"
@@ -433,18 +590,27 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       {/* Bulk Action Bar (Visible when 1+ selected) */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between rounded-xl border border-accent/40 bg-accent/10 px-5 py-3 shadow-glow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/10 px-5 py-3 shadow-glow-sm">
           <div className="flex items-center gap-2 text-xs font-semibold text-accent">
             <span>{selectedIds.size} students selected</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => handleExportCSV(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+              title="Export only selected students to CSV"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              <span>Export Selected ({selectedIds.size}) to CSV</span>
+            </button>
+
             <button
               onClick={handleBulkDownloadPhotos}
               className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20 transition-colors"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>Download Selected Photos (.zip)</span>
+              <span>Download Photos (.zip)</span>
             </button>
 
             <button
@@ -453,6 +619,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             >
               <Printer className="h-3.5 w-3.5" />
               <span>Print ID Cards</span>
+            </button>
+
+            <button
+              onClick={handleBulkDelete}
+              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-colors"
+              title="Delete selected student records"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete Selected</span>
             </button>
           </div>
         </div>

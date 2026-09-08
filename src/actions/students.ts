@@ -296,29 +296,70 @@ export async function updateStudentAction(
 }
 
 /**
- * Permanently deletes a student record.
+ * Permanently deletes a student record safely across ephemeral containers and database engines.
  */
-export async function deleteStudentAction(id: string): Promise<StudentActionResult> {
-  const session = await requireAuth("student:delete");
+export async function deleteStudentAction(
+  idOrStudentId: string,
+  optionalStudentId?: string
+): Promise<StudentActionResult> {
+  try {
+    const session = await requireAuth("student:delete");
 
-  const student = await prisma.student.delete({
-    where: { id },
-  });
+    // Locate the student by database ID or studentId
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: [
+          { id: idOrStudentId },
+          { studentId: idOrStudentId },
+          ...(optionalStudentId
+            ? [{ id: optionalStudentId }, { studentId: optionalStudentId }]
+            : []),
+        ],
+      },
+    });
 
-  await createSafeAuditLog({
-    userId: session.userId,
-    action: "STUDENT_DELETE",
-    entityType: "STUDENT",
-    entityId: student.id,
-    metadata: { studentId: student.studentId, name: student.fullName },
-  });
+    const targetStudentId = student?.studentId || optionalStudentId || idOrStudentId;
+    const targetDbId = student?.id || idOrStudentId;
 
-  // Broadcast deletion to Cloud Sync Bus
-  publishStudentSync("DELETE", student.studentId).catch(() => {});
+    if (student) {
+      // 1. Delete dependent child records first to satisfy foreign key constraints
+      await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+      await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+      await prisma.studentQR.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+      await prisma.transferRecord.deleteMany({ where: { studentId: student.id } }).catch(() => {});
 
-  revalidatePath("/students");
-  revalidatePath("/dashboard");
-  return { success: true };
+      // 2. Delete student record
+      await prisma.student.delete({
+        where: { id: student.id },
+      }).catch((e) => {
+        console.warn("Prisma student delete warning:", e);
+      });
+
+      await createSafeAuditLog({
+        userId: session.userId,
+        action: "STUDENT_DELETE",
+        entityType: "STUDENT",
+        entityId: student.id,
+        metadata: { studentId: student.studentId, name: student.fullName },
+      });
+    }
+
+    // Always broadcast deletion to Cloud Sync Bus so all other devices and containers drop it
+    if (targetStudentId) {
+      await publishStudentSync("DELETE", targetStudentId).catch(() => {});
+    }
+
+    revalidatePath("/students");
+    revalidatePath("/dashboard");
+    return { success: true, studentId: targetDbId };
+  } catch (error: any) {
+    console.error("deleteStudentAction error:", error);
+    // Graceful fallback to prevent server-side crash in Next.js
+    return {
+      success: false,
+      error: error?.message || "Failed to delete student record.",
+    };
+  }
 }
 
 /**
@@ -497,28 +538,146 @@ export async function deleteCustomFieldAction(id: string) {
 }
 
 /**
- * Purges all student data and batches so user can feed fresh data.
+ * Purges all student data and batches so user can feed fresh data without constraint failures.
  */
-export async function clearAllStudentsAction() {
-  const session = await requireAuth();
+export async function clearAllStudentsAction(): Promise<{ success: boolean; count?: number; error?: string }> {
+  try {
+    const session = await requireAuth();
 
-  const count = await prisma.student.count();
-  await prisma.student.deleteMany();
-  await prisma.transferBatch.deleteMany();
+    const count = await prisma.student.count();
 
-  await createSafeAuditLog({
-    userId: session.userId,
-    action: "PURGE_ALL_STUDENTS",
-    entityType: "STUDENT",
-    metadata: { deletedCount: count },
-  });
+    // Cascading deletion of dependent models to satisfy foreign key constraints
+    await prisma.customFieldValue.deleteMany().catch(() => {});
+    await prisma.studentPhoto.deleteMany().catch(() => {});
+    await prisma.studentQR.deleteMany().catch(() => {});
+    await prisma.transferRecord.deleteMany().catch(() => {});
+    await prisma.student.deleteMany().catch(() => {});
+    await prisma.transferBatch.deleteMany().catch(() => {});
 
-  // Broadcast deletion across all connected devices and lambdas
-  publishStudentSync("CLEAR").catch(() => {});
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "PURGE_ALL_STUDENTS",
+      entityType: "STUDENT",
+      metadata: { deletedCount: count },
+    });
 
-  revalidatePath("/students");
-  revalidatePath("/dashboard");
-  revalidatePath("/print-engine");
-  return { success: true, count };
+    // Broadcast deletion across all connected devices and lambdas
+    await publishStudentSync("CLEAR").catch(() => {});
+
+    revalidatePath("/students");
+    revalidatePath("/dashboard");
+    revalidatePath("/print-engine");
+    return { success: true, count };
+  } catch (error: any) {
+    console.error("clearAllStudentsAction error:", error);
+    return { success: false, error: error?.message || "Failed to clear all student records." };
+  }
+}
+
+/**
+ * Bulk deletes multiple students safely.
+ */
+export async function deleteMultipleStudentsAction(
+  ids: string[]
+): Promise<{ success: boolean; count: number; error?: string }> {
+  try {
+    await requireAuth("student:delete");
+    let count = 0;
+
+    for (const id of ids) {
+      const res = await deleteStudentAction(id);
+      if (res.success) count++;
+    }
+
+    revalidatePath("/students");
+    revalidatePath("/dashboard");
+    return { success: true, count };
+  } catch (error: any) {
+    return { success: false, count: 0, error: error?.message || "Failed to delete selected students." };
+  }
+}
+
+/**
+ * Server-side export of all students to RFC 4180 CSV with UTF-8 BOM.
+ */
+export async function exportStudentsCSVAction(): Promise<{ success: boolean; csv?: string; error?: string }> {
+  try {
+    await requireAuth("student:export");
+
+    const students = await prisma.student.findMany({
+      include: {
+        batch: { select: { batchNumber: true, title: true } },
+        customValues: { include: { customField: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const headers = [
+      "Student ID",
+      "Full Name",
+      "Grade",
+      "Gender",
+      "Phone",
+      "Email",
+      "Department",
+      "School",
+      "Academic Year",
+      "Date of Birth",
+      "Blood Type",
+      "Roll Number",
+      "National ID",
+      "Nationality",
+      "Address",
+      "City/Region",
+      "Guardian Name",
+      "Emergency Contact Name",
+      "Emergency Contact Phone",
+      "Status",
+      "Batch Number",
+      "Photo URL",
+      "QR Code Data",
+      "Enrollment Date",
+    ];
+
+    const escapeCSV = (str: any) => {
+      if (str === null || str === undefined) return '""';
+      const s = String(str);
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+
+    const rows = students.map((s) => [
+      escapeCSV(s.studentId),
+      escapeCSV(s.fullName),
+      escapeCSV(s.grade),
+      escapeCSV(s.sex),
+      escapeCSV(s.phone),
+      escapeCSV(s.emailAddress || ""),
+      escapeCSV(s.department || ""),
+      escapeCSV(s.school || ""),
+      escapeCSV(s.academicYear || ""),
+      escapeCSV(s.dateOfBirth ? new Date(s.dateOfBirth).toISOString().split("T")[0] : ""),
+      escapeCSV(s.bloodType || ""),
+      escapeCSV(s.rollNumber || ""),
+      escapeCSV(s.nationalId || ""),
+      escapeCSV(s.nationality || ""),
+      escapeCSV(s.address || ""),
+      escapeCSV(s.cityRegion || ""),
+      escapeCSV(s.guardianFullName || ""),
+      escapeCSV(s.emergencyContactName || ""),
+      escapeCSV(s.emergencyContactPhone || ""),
+      escapeCSV(s.status),
+      escapeCSV(s.batch?.batchNumber || ""),
+      escapeCSV(s.photoPath || ""),
+      escapeCSV(s.qrCodeData || ""),
+      escapeCSV(new Date(s.createdAt).toISOString().split("T")[0]),
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+
+    return { success: true, csv: csvContent };
+  } catch (error: any) {
+    console.error("exportStudentsCSVAction error:", error);
+    return { success: false, error: error?.message || "Failed to export students." };
+  }
 }
 

@@ -19,6 +19,8 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionAction[]> = {
     "student:photo_upload",
     "student:qr_generate",
     "student:qr_scan",
+    "student:delete",
+    "student:export",
     "print:generate",
     "settings:update",
   ],

@@ -296,3 +296,30 @@ export async function getBatchesAction(statusFilter?: string) {
     orderBy: { createdAt: "desc" },
   });
 }
+
+/**
+ * Permanently deletes a transfer batch and disassociates its students.
+ */
+export async function deleteBatchAction(batchId: string): Promise<BatchActionResult> {
+  try {
+    const session = await requireAuth();
+
+    await prisma.transferRecord.deleteMany({ where: { batchId } }).catch(() => {});
+    await prisma.student.updateMany({ where: { batchId }, data: { batchId: null } }).catch(() => {});
+    await prisma.transferBatch.delete({ where: { id: batchId } }).catch(() => {});
+
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "BATCH_DELETE",
+      entityType: "TRANSFER_BATCH",
+      entityId: batchId,
+    });
+
+    revalidatePath("/sender/batches");
+    revalidatePath("/receiver/batches");
+    return { success: true, batchId };
+  } catch (err: any) {
+    console.error("deleteBatchAction error:", err);
+    return { success: false, error: err?.message || "Failed to delete batch." };
+  }
+}

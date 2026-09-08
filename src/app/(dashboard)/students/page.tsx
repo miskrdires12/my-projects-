@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Users, UserPlus, Printer, Download, QrCode, ArrowLeft } from "lucide-react";
+import { Users, UserPlus, Printer, Download, QrCode, ArrowLeft, FileSpreadsheet } from "lucide-react";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -138,6 +138,16 @@ export default async function StudentsPage({
         </div>
 
         <div className="flex items-center gap-3">
+          <a
+            href="/api/students/export-csv"
+            download
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+            title="Download full database student directory as CSV"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
+            <span>Export CSV</span>
+          </a>
+
           <Link
             href="/students/download-photos"
             className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-xs font-semibold text-foreground hover:bg-surface-secondary transition-colors"
