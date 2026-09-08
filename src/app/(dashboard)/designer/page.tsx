@@ -321,12 +321,14 @@ export default function CanvaDesignerPage() {
   // Status message
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  // Right-Click Context Menu State
+  // Right-Click Context Menu State & Refs
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
     elementId: string | null;
   } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Webcam Capture Modal
   const [isWebcamModalOpen, setIsWebcamModalOpen] = useState(false);
@@ -339,18 +341,33 @@ export default function CanvaDesignerPage() {
   const currentElements = activeSide === "FRONT" ? frontElements : backElements;
   const currentBg = activeSide === "FRONT" ? frontBg : backBg;
 
-  // Close context menu on outside click
+  // Close context menu only on outside pointer click
   useEffect(() => {
-    const handleCloseMenu = () => setContextMenu(null);
-    window.addEventListener("click", handleCloseMenu);
-    return () => window.removeEventListener("click", handleCloseMenu);
+    const handlePointerDown = (e: PointerEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
-  // Load sample students on mount
+  // Load sample students on mount, including dual-persistence local enrolled students
   useEffect(() => {
-    getStudentsAction({ pageSize: 10 }).then((res) => {
-      if (res.students && res.students.length > 0) {
-        setSampleStudents(res.students);
+    getStudentsAction({ pageSize: 15 }).then((res) => {
+      let list = res.students || [];
+      try {
+        const raw = localStorage.getItem("sb_enrolled_students");
+        if (raw) {
+          const localList = JSON.parse(raw);
+          const map = new Map();
+          localList.forEach((s: any) => map.set(s.studentId, s));
+          list.forEach((s: any) => map.set(s.studentId, s));
+          list = Array.from(map.values());
+        }
+      } catch {}
+      if (list.length > 0) {
+        setSampleStudents(list);
       }
     });
 
@@ -618,22 +635,22 @@ export default function CanvaDesignerPage() {
     e.preventDefault();
     e.stopPropagation();
     if (elemId) setSelectedElementId(elemId);
+    const posX = Math.min(Math.max(10, e.clientX), window.innerWidth - 230);
+    const posY = Math.min(Math.max(10, e.clientY), window.innerHeight - 320);
     setContextMenu({
-      x: Math.min(e.clientX, window.innerWidth - 220),
-      y: Math.min(e.clientY, window.innerHeight - 280),
+      x: posX,
+      y: posY,
       elementId: elemId,
     });
   };
 
   // Direct Webcam Capture for Canva ID Card
-  const handleWebcamCaptureCanva = async (file: File, previewUrl: string) => {
+  const handleWebcamCaptureCanva = async (_file: File, previewUrl: string) => {
     setIsWebcamModalOpen(false);
 
     try {
-      const form = new FormData();
-      form.append("file", file, `canva_portrait_${Date.now()}.jpg`);
-      const res = await fetch("/api/uploads", { method: "POST", body: form });
-      const photoUrl = res.ok ? (await res.json()).relativePath : previewUrl;
+      // Use the persistent Base64 Data URL directly
+      const photoUrl = previewUrl;
 
       const existingPhoto = currentElements.find((e) => e.type === "photo");
       if (existingPhoto) {
@@ -752,6 +769,7 @@ export default function CanvaDesignerPage() {
 
   // Drag element on canvas
   const handleElementMouseDown = (e: React.MouseEvent, elem: CanvasElement) => {
+    if (e.button !== 0) return; // Ignore right-click and middle-click to preserve context menu!
     if (elem.isLocked) return;
     e.stopPropagation();
     setSelectedElementId(elem.id);
@@ -760,6 +778,35 @@ export default function CanvaDesignerPage() {
       x: e.clientX - elem.x * zoom,
       y: e.clientY - elem.y * zoom,
     });
+  };
+
+  // Mobile / Phone touch start for dragging and long-press editing
+  const handleElementTouchStart = (e: React.TouchEvent, elem: CanvasElement) => {
+    if (elem.isLocked) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    setSelectedElementId(elem.id);
+
+    // Start long-press timer for phone right-click context menu
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      setContextMenu({
+        x: Math.min(Math.max(10, touch.clientX), window.innerWidth - 230),
+        y: Math.min(Math.max(10, touch.clientY), window.innerHeight - 320),
+        elementId: elem.id,
+      });
+    }, 450);
+
+    setIsDragging(true);
+    setDragOffset({
+      x: touch.clientX - elem.x * zoom,
+      y: touch.clientY - elem.y * zoom,
+    });
+  };
+
+  const handleElementTouchEnd = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    setIsDragging(false);
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent) => {
@@ -1546,15 +1593,28 @@ export default function CanvaDesignerPage() {
         {/* CENTER INTERACTIVE WORKSPACE CANVAS (90% WHITE)                            */}
         {/* ────────────────────────────────────────────────────────────────────────── */}
         <main
-          className="flex-1 bg-neutral-100 relative overflow-auto flex flex-col items-center justify-center p-8 transition-colors"
+          className="flex-1 bg-neutral-100 relative overflow-auto flex flex-col items-center justify-center p-4 sm:p-8 transition-colors"
           onMouseMove={handleCanvasMouseMove}
           onMouseUp={handleCanvasMouseUp}
+          onTouchMove={(e) => {
+            if (!isDragging || !selectedElementId) return;
+            const touch = e.touches[0];
+            if (!touch) return;
+            let nextX = (touch.clientX - dragOffset.x) / zoom;
+            let nextY = (touch.clientY - dragOffset.y) / zoom;
+            if (snapToGrid) {
+              nextX = Math.round(nextX / gridSize) * gridSize;
+              nextY = Math.round(nextY / gridSize) * gridSize;
+            }
+            updateSelected({ x: Math.max(0, nextX), y: Math.max(0, nextY) });
+          }}
+          onTouchEnd={handleCanvasMouseUp}
           onClick={() => setSelectedElementId(null)}
         >
           {/* FLOATING CONTEXTUAL TOOLBAR FOR SELECTED ELEMENT */}
           {selectedElement && (
             <div
-              className="absolute top-4 z-20 flex items-center gap-2 bg-white border border-neutral-300 rounded-xl px-3 py-2 shadow-lg text-xs"
+              className="absolute top-4 z-20 flex items-center gap-2 bg-white border border-neutral-300 rounded-xl px-3 py-2 shadow-lg text-xs max-w-[95vw] overflow-x-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <span className="font-mono text-[11px] font-bold text-black pr-2 border-r border-neutral-200">
@@ -1782,6 +1842,8 @@ export default function CanvaDesignerPage() {
                   <div
                     key={elem.id}
                     onMouseDown={(e) => handleElementMouseDown(e, elem)}
+                    onTouchStart={(e) => handleElementTouchStart(e, elem)}
+                    onTouchEnd={handleElementTouchEnd}
                     onContextMenu={(e) => handleContextMenu(e, elem.id)}
                     className={`absolute select-none cursor-move transition-shadow ${
                       isSelected
@@ -1803,6 +1865,21 @@ export default function CanvaDesignerPage() {
                       borderRadius: elem.borderRadius ? `${elem.borderRadius * zoom}px` : "0px",
                     }}
                   >
+                    {/* Floating One-Tap Edit Button on Selection (for Phone & Desktop) */}
+                    {isSelected && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleContextMenu(e, elem.id);
+                        }}
+                        className="absolute -top-7 left-0 z-[60] flex items-center gap-1 rounded bg-black text-white px-2 py-0.5 text-[10px] font-mono shadow-md hover:bg-neutral-800 transition-colors pointer-events-auto"
+                        title="Edit Element Actions"
+                      >
+                        <span>Edit</span>
+                        <span>⋮</span>
+                      </button>
+                    )}
                     {/* Render Types */}
                     {elem.type === "text" && (
                       <div
@@ -1897,7 +1974,8 @@ export default function CanvaDesignerPage() {
       {/* CANVA RIGHT-CLICK CONTEXT MENU (USER REQUIREMENT) */}
       {contextMenu && (
         <div
-          className="fixed z-[100] w-52 rounded-xl border border-neutral-300 bg-white shadow-2xl py-1.5 text-xs text-neutral-800 animate-in fade-in zoom-in-95 duration-100 font-mono select-none"
+          ref={contextMenuRef}
+          className="fixed z-[100] w-52 rounded-xl border-2 border-black bg-white shadow-2xl py-1.5 text-xs text-black animate-in fade-in zoom-in-95 duration-100 font-mono select-none"
           style={{
             top: `${contextMenu.y}px`,
             left: `${contextMenu.x}px`,

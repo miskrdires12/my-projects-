@@ -200,10 +200,12 @@ export default function RegisterPage() {
   };
 
   /**
-   * Called when webcam captures an image. Directly attaches photo.
+   * Called when webcam captures an image. Directly attaches photo and sets preview.
    */
   const handleWebcamCaptured = (file: File, previewUrl: string) => {
     setIsCameraOpen(false);
+    setEditedPhotoPreview(previewUrl);
+    setOfficialPhotoPath(previewUrl);
     handleDirectPhotoUpload(file, previewUrl);
   };
 
@@ -214,8 +216,14 @@ export default function RegisterPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const previewUrl = URL.createObjectURL(file);
-    handleDirectPhotoUpload(file, previewUrl);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setEditedPhotoPreview(dataUrl);
+      setOfficialPhotoPath(dataUrl);
+      handleDirectPhotoUpload(file, dataUrl);
+    };
+    reader.readAsDataURL(file);
   };
 
   /**
@@ -282,7 +290,41 @@ export default function RegisterPage() {
           setSuccessId(result.studentId);
           try {
             localStorage.removeItem("sb_student_draft");
-          } catch {}
+            // Dual-persistence: store student record into localStorage
+            const newRecord = {
+              id: result.studentId,
+              studentId: payload.studentId,
+              fullName: payload.fullName,
+              grade: payload.grade,
+              sex: payload.sex,
+              phone: payload.phone,
+              emailAddress: payload.emailAddress || null,
+              address: payload.address || null,
+              school: payload.school || null,
+              department: payload.department || null,
+              academicYear: payload.academicYear || null,
+              guardianFullName: payload.guardianFullName || null,
+              emergencyContactPhone: payload.emergencyContactPhone || null,
+              emergencyContactName: payload.emergencyContactName || null,
+              bloodType: payload.bloodType || null,
+              nationality: payload.nationality || null,
+              photoPath: officialPhotoPath,
+              qrCodeData: `STUDENT:${payload.studentId}`,
+              status: payload.status || "ACTIVE",
+              createdAt: new Date().toISOString(),
+              customValues: Object.entries(customFieldValues).map(([k, v]) => ({
+                customField: { label: k, fieldKey: k },
+                value: v,
+              })),
+            };
+            const existingRaw = localStorage.getItem("sb_enrolled_students");
+            const existing = existingRaw ? JSON.parse(existingRaw) : [];
+            const updated = [newRecord, ...existing.filter((s: any) => s.studentId !== payload.studentId)];
+            localStorage.setItem("sb_enrolled_students", JSON.stringify(updated));
+            window.dispatchEvent(new Event("storage"));
+          } catch (e) {
+            console.warn("Dual persistence save warning:", e);
+          }
         } else {
           setErrorMessage(result.error || "Failed to register student.");
         }
@@ -369,15 +411,15 @@ export default function RegisterPage() {
 
       {/* Success Notification Banner */}
       {successId && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center justify-between">
+        <div className="rounded-xl border-2 border-black bg-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs text-black">
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="h-5 w-5 text-black shrink-0" />
             <div>
-              <div className="text-sm font-semibold text-emerald-300">
-                Student Registered Successfully!
+              <div className="text-sm font-bold text-black">
+                Student Enrolled Successfully
               </div>
-              <div className="text-xs text-emerald-400/80">
-                Record #{formData.studentId} has been securely added to the active directory.
+              <div className="text-xs text-neutral-600 font-mono">
+                Record #{formData.studentId} has been added to the credential directory.
               </div>
             </div>
           </div>
@@ -385,22 +427,16 @@ export default function RegisterPage() {
             <button
               type="button"
               onClick={handleResetForm}
-              className="rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-neutral-100 transition-colors"
             >
-              Register Another
+              Enroll Next Student
             </button>
             <Link
               href={`/sender/receipts?studentId=${formData.studentId}`}
-              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-black hover:bg-accent-hover transition-all flex items-center gap-1.5 shadow-sm"
+              className="rounded-lg bg-black px-3.5 py-1.5 text-xs font-bold text-white hover:bg-neutral-800 transition-all flex items-center gap-1.5 shadow-xs"
             >
               <Receipt className="h-3.5 w-3.5" />
               <span>Print Receipt</span>
-            </Link>
-            <Link
-              href="/sender/batches"
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-secondary transition-colors"
-            >
-              Sender Batches
             </Link>
           </div>
         </div>
@@ -408,9 +444,9 @@ export default function RegisterPage() {
 
       {/* Error Banner */}
       {errorMessage && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-rose-400 shrink-0" />
-          <div className="text-xs text-rose-300 font-medium">{errorMessage}</div>
+        <div className="rounded-xl border-2 border-black bg-neutral-50 p-4 flex items-center gap-3 text-black">
+          <AlertCircle className="h-5 w-5 text-black shrink-0" />
+          <div className="text-xs font-semibold text-black">{errorMessage}</div>
         </div>
       )}
 
@@ -749,7 +785,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isPending || isUploadingPhoto || idAvailability.available === false}
-              className="flex items-center gap-2 rounded-xl bg-accent px-6 py-2.5 text-xs font-semibold text-white shadow-glow hover:bg-accent-hover disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 rounded-xl bg-black px-6 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 disabled:opacity-50 transition-colors shadow-xs"
             >
               {isPending ? (
                 <>
@@ -775,16 +811,16 @@ export default function RegisterPage() {
                 Official Photograph
               </h3>
               {officialPhotoPath ? (
-                <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
+                <span className="flex items-center gap-1 text-[10px] text-black font-mono font-bold">
                   <CheckCircle2 className="h-3 w-3" /> ATTACHED
                 </span>
               ) : (
-                <span className="text-[10px] text-foreground-muted font-mono">PENDING</span>
+                <span className="text-[10px] text-neutral-400 font-mono">PENDING</span>
               )}
             </div>
 
             {/* Photo Preview Box */}
-            <div className="relative aspect-[3/4] w-full rounded-xl border border-border bg-black overflow-hidden flex items-center justify-center group shadow-inner">
+            <div className="relative aspect-[3/4] w-full rounded-xl border border-neutral-300 bg-neutral-100 overflow-hidden flex items-center justify-center group shadow-xs">
               {editedPhotoPreview ? (
                 <img
                   src={editedPhotoPreview}
@@ -792,10 +828,10 @@ export default function RegisterPage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center p-6 text-center text-foreground-muted">
-                  <Camera className="h-10 w-10 stroke-[1.25] text-foreground-subtle mb-2" />
-                  <span className="text-xs font-medium">No Portrait Captured</span>
-                  <span className="text-[10px] text-foreground-subtle mt-0.5">
+                <div className="flex flex-col items-center justify-center p-6 text-center text-neutral-500">
+                  <Camera className="h-10 w-10 stroke-[1.25] text-neutral-400 mb-2" />
+                  <span className="text-xs font-medium text-black">No Portrait Captured</span>
+                  <span className="text-[10px] text-neutral-400 mt-0.5">
                     Capture via webcam or upload image
                   </span>
                 </div>
@@ -832,14 +868,14 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() => setIsCameraOpen(true)}
-                className="flex items-center justify-center gap-2 rounded-lg border border-accent/30 bg-accent/10 p-2.5 text-xs font-semibold text-accent hover:bg-accent/20 transition-colors"
+                className="flex items-center justify-center gap-2 rounded-lg bg-black p-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-xs"
               >
                 <Camera className="h-4 w-4" />
                 <span>Webcam</span>
               </button>
 
-              <label className="flex items-center justify-center gap-2 rounded-lg border border-border bg-surface-secondary p-2.5 text-xs font-medium text-foreground hover:bg-surface-tertiary transition-colors cursor-pointer">
-                <Upload className="h-4 w-4 text-foreground-muted" />
+              <label className="flex items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white p-2.5 text-xs font-medium text-black hover:bg-neutral-100 transition-colors cursor-pointer">
+                <Upload className="h-4 w-4 text-neutral-600" />
                 <span>Upload File</span>
                 <input
                   type="file"

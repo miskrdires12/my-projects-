@@ -53,11 +53,22 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       const res = await fetch("/api/dashboard/live-metrics?role=RECEIVER", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
+        let localCount = 0;
+        let localPhotos = 0;
+        try {
+          const raw = localStorage.getItem("sb_enrolled_students");
+          if (raw) {
+            const list = JSON.parse(raw);
+            localCount = list.length;
+            localPhotos = list.filter((s: any) => Boolean(s.photoPath)).length;
+          }
+        } catch {}
+
         setData({
-          totalStudents: json.metrics.totalStudents,
-          photosCount: json.metrics.photosCount,
-          qrCount: json.metrics.qrCount,
-          readyForPrintCount: json.metrics.readyForPrintCount,
+          totalStudents: Math.max(json.metrics.totalStudents, localCount),
+          photosCount: Math.max(json.metrics.photosCount, localPhotos),
+          qrCount: Math.max(json.metrics.qrCount, localCount),
+          readyForPrintCount: Math.max(json.metrics.readyForPrintCount, localCount),
           pendingVerification: json.metrics.pendingVerification,
           activeJobsCount: json.metrics.activeJobsCount,
           recentBatches: json.recentBatches || [],

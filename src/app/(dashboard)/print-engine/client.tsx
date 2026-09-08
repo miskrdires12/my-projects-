@@ -53,6 +53,9 @@ interface PrintEngineClientProps {
 
 export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, totalCount }) => {
   const [activeTab, setActiveTab] = useState<"imposition" | "designer">("imposition");
+  const [displayStudents, setDisplayStudents] = useState<StudentProjection[]>(students);
+  const [selectedQueueCard, setSelectedQueueCard] = useState<StudentProjection | null>(null);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(students.map((s) => s.id))
   );
@@ -75,14 +78,26 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Synchronize first 8 slots when students cohort arrives if slots are empty
+  // Synchronize with local storage enrolled students so they persist across lambda container cycles
   useEffect(() => {
-    if (students.length > 0) {
-      setImpositionSlots((prev) => {
-        if (prev.some(Boolean)) return prev;
-        return Array.from({ length: 8 }).map((_, idx) => students[idx] || null);
-      });
-    }
+    try {
+      const raw = localStorage.getItem("sb_enrolled_students");
+      if (raw) {
+        const localList: StudentProjection[] = JSON.parse(raw);
+        const map = new Map<string, StudentProjection>();
+        localList.forEach((s) => map.set(s.studentId, s));
+        students.forEach((s) => map.set(s.studentId, s));
+        const merged = Array.from(map.values());
+        setDisplayStudents(merged);
+        setSelectedIds(new Set(merged.map((s) => s.id)));
+        setImpositionSlots((prev) => {
+          if (prev.some(Boolean)) return prev;
+          return Array.from({ length: 8 }).map((_, idx) => merged[idx] || null);
+        });
+        return;
+      }
+    } catch {}
+    setDisplayStudents(students);
   }, [students]);
 
   const selectedCount = selectedIds.size;
@@ -161,6 +176,27 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
     setDraggedFromSlotIndex(null);
   };
 
+  // Tap-to-Place (Click card in queue, then click any slot to place/swap)
+  const handleSlotClick = (slotIdx: number) => {
+    if (selectedQueueCard) {
+      setImpositionSlots((prev) => {
+        const next = [...prev];
+        next[slotIdx] = selectedQueueCard;
+        return next;
+      });
+      setSelectedIds((s) => new Set(s).add(selectedQueueCard.id));
+      setSelectedQueueCard(null);
+    }
+  };
+
+  const handleQueueCardClick = (student: StudentProjection) => {
+    if (selectedQueueCard?.id === student.id) {
+      setSelectedQueueCard(null);
+    } else {
+      setSelectedQueueCard(student);
+    }
+  };
+
   const handleClearSlot = (slotIdx: number) => {
     setImpositionSlots((prev) => {
       const next = [...prev];
@@ -174,8 +210,8 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
       const next = [...prev];
       let stuIdx = 0;
       for (let i = 0; i < 8; i++) {
-        if (!next[i] && stuIdx < students.length) {
-          next[i] = students[stuIdx];
+        if (!next[i] && stuIdx < displayStudents.length) {
+          next[i] = displayStudents[stuIdx];
           stuIdx++;
         }
       }
@@ -197,7 +233,7 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
   };
 
   const handleSelectAll = () => {
-    setSelectedIds(new Set(students.map((s) => s.id)));
+    setSelectedIds(new Set(displayStudents.map((s) => s.id)));
   };
 
   const handleDeselectAll = () => {
@@ -405,8 +441,11 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                         onDragOver={(e) => handleSlotDragOver(e, idx)}
                         onDragLeave={() => setHoveredSlotIndex(null)}
                         onDrop={(e) => handleSlotDrop(idx, e)}
-                        className={`rounded-lg border text-[8px] p-2 flex flex-col justify-between transition-all relative select-none ${
-                          isHovered
+                        onClick={() => handleSlotClick(idx)}
+                        className={`rounded-lg border text-[8px] p-2 flex flex-col justify-between transition-all relative select-none cursor-pointer ${
+                          selectedQueueCard
+                            ? "border-black ring-2 ring-black bg-neutral-100 animate-pulse"
+                            : isHovered
                             ? "border-black ring-4 ring-black/20 bg-neutral-100 scale-[1.02]"
                             : isOccupied
                             ? "border-black bg-white text-black shadow-sm cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-black"
@@ -595,10 +634,10 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-mono uppercase text-black font-bold">
-                    Queue Selection ({selectedCount}/{students.length})
+                    Queue Selection ({selectedCount}/{displayStudents.length})
                   </span>
                   <p className="text-[10px] text-neutral-500">
-                    Drag any card from below into the A4 Sheet
+                    Drag card or tap to select, then tap any A4 sheet slot
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-[11px]">
@@ -620,26 +659,49 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                 </div>
               </div>
 
+              {/* Mobile / Tap Selection Banner */}
+              {selectedQueueCard && (
+                <div className="p-2.5 rounded-lg border-2 border-black bg-neutral-50 text-xs flex items-center justify-between animate-fadeIn">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="h-2 w-2 rounded-full bg-black animate-ping" />
+                    <span className="text-neutral-700 truncate">
+                      Selected: <strong className="text-black">{selectedQueueCard.fullName}</strong> — Tap any slot on the sheet above to place
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedQueueCard(null)}
+                    className="text-[11px] font-mono underline hover:text-red-600 shrink-0 ml-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
               {/* Student draggable list */}
               <div className="max-h-96 overflow-y-auto space-y-1.5 divide-y divide-neutral-100 text-xs pr-1">
-                {students.length === 0 ? (
+                {displayStudents.length === 0 ? (
                   <div className="text-center py-6 text-neutral-500 font-mono text-xs">
                     No student records in queue. Import students or enroll via sender.
                   </div>
                 ) : (
-                  students.map((s) => {
+                  displayStudents.map((s) => {
                     const checked = selectedIds.has(s.id);
                     const isPlaced = impositionSlots.some((slot) => slot?.id === s.id);
+                    const isSelectedForTap = selectedQueueCard?.id === s.id;
 
                     return (
                       <div
                         key={s.id}
                         draggable={true}
                         onDragStart={(e) => handleQueueDragStart(e, s)}
-                        className={`flex items-center justify-between p-2 rounded cursor-grab active:cursor-grabbing transition-colors ${
-                          isPlaced
-                            ? "bg-neutral-100 border border-neutral-300"
-                            : "hover:bg-neutral-50"
+                        onClick={() => handleQueueCardClick(s)}
+                        className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all ${
+                          isSelectedForTap
+                            ? "bg-neutral-100 border-2 border-black shadow-sm ring-1 ring-black"
+                            : isPlaced
+                            ? "bg-neutral-100 border border-neutral-300 hover:bg-neutral-100"
+                            : "hover:bg-neutral-50 border border-transparent"
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0 pr-2">
@@ -678,7 +740,8 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                           )}
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               // Find first empty slot or swap first
                               const emptyIdx = impositionSlots.findIndex((slot) => slot === null);
                               if (emptyIdx !== -1) {

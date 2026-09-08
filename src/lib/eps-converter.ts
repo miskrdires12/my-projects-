@@ -127,8 +127,8 @@ function parseEpsToSvg(epsText: string): ParsedTemplateResult {
 
   // Current graphics state
   let currentPath = "";
-  let currentColor = "#37E310"; // Default accent
-  let currentFill = "#0D0F12";
+  let currentColor = "#000000"; // Default monochromatic black
+  let currentFill = "#FFFFFF";
   let strokeWidth = 1;
   let currentX = 0;
   let currentY = 0;
@@ -334,10 +334,10 @@ function parseEpsToSvg(epsText: string): ParsedTemplateResult {
   // generate an elegant vector card canvas base matching the exact bounding box
   if (svgElements.length === 0) {
     svgElements.push(
-      `<rect width="${width}" height="${height}" rx="10" fill="#0D0F12" stroke="#22272F" stroke-width="2"/>`,
-      `<rect x="0" y="0" width="${width}" height="34" rx="10" fill="#16191E"/>`,
-      `<line x1="0" y1="34" x2="${width}" y2="34" stroke="#37E310" stroke-width="2"/>`,
-      `<text x="14" y="22" fill="#37E310" font-family="sans-serif" font-size="12" font-weight="bold">EPS VECTOR TEMPLATE</text>`
+      `<rect width="${width}" height="${height}" rx="10" fill="#FFFFFF" stroke="#000000" stroke-width="2"/>`,
+      `<rect x="0" y="0" width="${width}" height="34" rx="10" fill="#000000"/>`,
+      `<line x1="0" y1="34" x2="${width}" y2="34" stroke="#000000" stroke-width="2"/>`,
+      `<text x="14" y="22" fill="#FFFFFF" font-family="sans-serif" font-size="12" font-weight="bold">EPS VECTOR TEMPLATE</text>`
     );
   }
 

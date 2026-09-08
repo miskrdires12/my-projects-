@@ -30,15 +30,15 @@ import { saveCardTemplateAction } from "@/actions/import";
 export const DEFAULT_FIELD_CONFIG: CardFieldConfig = {
   photo: { x: 14, y: 38, width: 72, height: 96, label: "Student Photo" },
   qr: { x: 254, y: 110, size: 60, label: "QR Code" },
-  fullName: { x: 96, y: 44, fontSize: 13, color: "#FFFFFF", label: "Name" },
-  studentId: { x: 96, y: 64, fontSize: 10, color: "#37E310", label: "Student ID" },
-  grade: { x: 96, y: 82, fontSize: 9, color: "#9CA3AF", label: "Grade / Batch" },
-  rollNumber: { x: 190, y: 82, fontSize: 9, color: "#FFFFFF", label: "Roll Number" },
-  phone: { x: 96, y: 100, fontSize: 8.5, color: "#9CA3AF", label: "Phone" },
-  sex: { x: 96, y: 118, fontSize: 8.5, color: "#9CA3AF", label: "Gender" },
+  fullName: { x: 96, y: 44, fontSize: 13, color: "#000000", label: "Name" },
+  studentId: { x: 96, y: 64, fontSize: 10, color: "#000000", label: "Student ID" },
+  grade: { x: 96, y: 82, fontSize: 9, color: "#525252", label: "Grade" },
+  rollNumber: { x: 190, y: 82, fontSize: 9, color: "#525252", label: "Roll Number" },
+  phone: { x: 96, y: 100, fontSize: 8.5, color: "#525252", label: "Phone" },
+  sex: { x: 96, y: 118, fontSize: 8.5, color: "#525252", label: "Gender" },
 };
 
-// Built-in professional vector templates
+// Built-in professional vector templates (90% White, 10% Black Monochromatic)
 const VECTOR_PRESETS: Array<{
   name: string;
   bgColor: string;
@@ -46,61 +46,54 @@ const VECTOR_PRESETS: Array<{
   svg: string;
 }> = [
   {
-    name: "Enterprise Cyber (Default)",
-    bgColor: "#0D0F12",
-    borderColor: "#37E310",
+    name: "Minimalist Monochrome (Default)",
+    bgColor: "#FFFFFF",
+    borderColor: "#000000",
     svg: `<svg viewBox="0 0 340 214" width="340" height="214" xmlns="http://www.w3.org/2000/svg">
-  <rect width="340" height="214" rx="10" fill="#0D0F12" stroke="#22272F" stroke-width="2"/>
-  <rect x="0" y="0" width="340" height="34" rx="10" fill="#16191E"/>
-  <line x1="0" y1="34" x2="340" y2="34" stroke="#37E310" stroke-width="1.5"/>
-  <circle cx="318" cy="17" r="4" fill="#37E310"/>
-  <path d="M 0 190 L 340 190" stroke="#22272F" stroke-width="1"/>
-  <rect x="0" y="194" width="340" height="20" fill="#16191E"/>
-  <text x="14" y="21" fill="#37E310" font-family="monospace" font-size="10" font-weight="bold">STUDENT BRIDGE</text>
-  <text x="210" y="20" fill="#6B7280" font-family="sans-serif" font-size="7" font-weight="bold">OFFICIAL CREDENTIAL</text>
+  <rect width="340" height="214" rx="10" fill="#FFFFFF" stroke="#000000" stroke-width="2"/>
+  <rect x="0" y="0" width="340" height="34" rx="10" fill="#000000"/>
+  <line x1="0" y1="34" x2="340" y2="34" stroke="#000000" stroke-width="1.5"/>
+  <circle cx="318" cy="17" r="4" fill="#FFFFFF"/>
+  <path d="M 0 190 L 340 190" stroke="#E5E7EB" stroke-width="1"/>
+  <rect x="0" y="194" width="340" height="20" fill="#F9FAFB"/>
+  <text x="14" y="21" fill="#FFFFFF" font-family="monospace" font-size="10" font-weight="bold">STUDENT BRIDGE</text>
+  <text x="220" y="21" fill="#D1D5DB" font-family="sans-serif" font-size="7" font-weight="bold">OFFICIAL ID</text>
   <text x="14" y="207" fill="#6B7280" font-family="monospace" font-size="6">CR80 VERIFIED • 8-UP PHYSICAL IMPOSITION</text>
 </svg>`,
   },
   {
-    name: "Executive Navy Gold",
-    bgColor: "#0A1128",
-    borderColor: "#FBBF24",
+    name: "Executive Bordered White",
+    bgColor: "#FFFFFF",
+    borderColor: "#262626",
     svg: `<svg viewBox="0 0 340 214" width="340" height="214" xmlns="http://www.w3.org/2000/svg">
-  <rect width="340" height="214" rx="10" fill="#0A1128" stroke="#1E293B" stroke-width="2"/>
-  <rect x="0" y="0" width="340" height="36" rx="10" fill="#1C2541"/>
-  <line x1="0" y1="36" x2="340" y2="36" stroke="#FBBF24" stroke-width="2"/>
-  <circle cx="316" cy="18" r="5" fill="#FBBF24"/>
-  <path d="M 94 36 L 94 185" stroke="#1E293B" stroke-width="1" stroke-dasharray="3 3"/>
-  <rect x="0" y="196" width="340" height="18" fill="#1C2541"/>
-  <text x="14" y="22" fill="#FBBF24" font-family="sans-serif" font-size="11" font-weight="bold">ACADEMIC HONORS COUNCIL</text>
-  <text x="14" y="208" fill="#94A3B8" font-family="sans-serif" font-size="6">ACCREDITED INSTITUTIONAL ID</text>
+  <rect width="340" height="214" rx="10" fill="#FFFFFF" stroke="#262626" stroke-width="2"/>
+  <line x1="14" y1="34" x2="326" y2="34" stroke="#000000" stroke-width="1.5"/>
+  <text x="14" y="24" fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold">ACADEMIC CREDENTIAL</text>
+  <line x1="94" y1="38" x2="94" y2="185" stroke="#E5E7EB" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="14" y="206" fill="#737373" font-family="sans-serif" font-size="6">ACCREDITED INSTITUTIONAL IDENTIFICATION</text>
 </svg>`,
   },
   {
-    name: "Minimalist Light Pearl",
-    bgColor: "#F8FAFC",
-    borderColor: "#0284C7",
+    name: "Modern Minimal Line",
+    bgColor: "#FFFFFF",
+    borderColor: "#000000",
     svg: `<svg viewBox="0 0 340 214" width="340" height="214" xmlns="http://www.w3.org/2000/svg">
-  <rect width="340" height="214" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
-  <rect x="0" y="0" width="340" height="34" rx="10" fill="#0284C7"/>
-  <line x1="0" y1="34" x2="340" y2="34" stroke="#0369A1" stroke-width="1.5"/>
-  <rect x="0" y="196" width="340" height="18" fill="#F1F5F9"/>
-  <text x="14" y="21" fill="#FFFFFF" font-family="sans-serif" font-size="10" font-weight="bold">INSTITUTION OF ADVANCED STUDIES</text>
-  <text x="14" y="208" fill="#64748B" font-family="sans-serif" font-size="6">CR80 PHOTO ID SPECIFICATION</text>
+  <rect width="340" height="214" rx="10" fill="#FFFFFF" stroke="#000000" stroke-width="1"/>
+  <rect x="14" y="14" width="312" height="186" rx="6" fill="none" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="24" y="28" fill="#000000" font-family="sans-serif" font-size="9" font-weight="bold">INSTITUTE IDENTIFICATION</text>
+  <text x="24" y="206" fill="#737373" font-family="sans-serif" font-size="6">CR80 SECURE PASS</text>
 </svg>`,
   },
   {
-    name: "Cyber Stealth Tech",
-    bgColor: "#050507",
-    borderColor: "#EC4899",
+    name: "Deep Inverted Monochrome",
+    bgColor: "#000000",
+    borderColor: "#FFFFFF",
     svg: `<svg viewBox="0 0 340 214" width="340" height="214" xmlns="http://www.w3.org/2000/svg">
-  <rect width="340" height="214" rx="10" fill="#050507" stroke="#1F2937" stroke-width="2"/>
-  <path d="M 0 0 L 340 0 L 340 32 L 0 32 Z" fill="#111827"/>
-  <path d="M 0 32 L 120 32 L 140 10 L 340 10 L 340 32" stroke="#EC4899" stroke-width="2" fill="none"/>
-  <circle cx="318" cy="20" r="4" fill="#EC4899"/>
-  <rect x="0" y="196" width="340" height="18" fill="#111827"/>
-  <text x="14" y="21" fill="#EC4899" font-family="monospace" font-size="10" font-weight="bold">POLYTECHNIC MATRIX ID</text>
-  <text x="14" y="208" fill="#6B7280" font-family="monospace" font-size="6">SECURE QUANTUM ACCESS KEY</text>
+  <rect width="340" height="214" rx="10" fill="#000000" stroke="#FFFFFF" stroke-width="2"/>
+  <rect x="0" y="0" width="340" height="34" rx="10" fill="#171717"/>
+  <line x1="0" y1="34" x2="340" y2="34" stroke="#FFFFFF" stroke-width="1.5"/>
+  <text x="14" y="21" fill="#FFFFFF" font-family="monospace" font-size="10" font-weight="bold">STUDENT BRIDGE</text>
+  <text x="14" y="206" fill="#A3A3A3" font-family="monospace" font-size="6">CR80 PHOTO ID SPECIFICATION</text>
 </svg>`,
   },
 ];
@@ -574,7 +567,7 @@ export const VisualCardDesigner: React.FC<VisualCardDesignerProps> = ({
                     left: config.studentId.x,
                     top: config.studentId.y,
                     fontSize: config.studentId.fontSize ?? 10,
-                    color: config.studentId.color ?? "#37E310",
+                    color: config.studentId.color ?? "#000000",
                   }}
                   className={`absolute cursor-move font-mono font-bold whitespace-nowrap px-1 rounded select-none ${
                     activeElement === "studentId"

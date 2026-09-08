@@ -39,16 +39,16 @@ const DEFAULT_COLUMNS = 2;
 const DEFAULT_ROWS = 4;
 
 const PALETTE = {
-  sheetBackground: rgb(0.98, 0.98, 0.99),
-  cardBackground: rgb(13 / 255, 15 / 255, 18 / 255), // #0D0F12
-  cardHeader: rgb(22 / 255, 25 / 255, 30 / 255), // #16191E
-  accentGreen: rgb(55 / 255, 227 / 255, 16 / 255), // #37E310
-  textPrimary: rgb(1, 1, 1),
-  textSecondary: rgb(156 / 255, 163 / 255, 175 / 255),
-  textSubtle: rgb(107 / 255, 114 / 255, 128 / 255),
-  borderDark: rgb(34 / 255, 39 / 255, 47 / 255),
-  cutMarkColor: rgb(120 / 255, 120 / 255, 120 / 255),
-  photoPlaceholder: rgb(20 / 255, 24 / 255, 29 / 255),
+  sheetBackground: rgb(1, 1, 1),
+  cardBackground: rgb(1, 1, 1), // 90% White
+  cardHeader: rgb(0, 0, 0), // 10% Black
+  accentGreen: rgb(0, 0, 0), // Monochromatic Black
+  textPrimary: rgb(0, 0, 0), // Black
+  textSecondary: rgb(100 / 255, 100 / 255, 100 / 255),
+  textSubtle: rgb(140 / 255, 140 / 255, 140 / 255),
+  borderDark: rgb(0, 0, 0),
+  cutMarkColor: rgb(160 / 255, 160 / 255, 160 / 255),
+  photoPlaceholder: rgb(245 / 255, 245 / 255, 245 / 255),
 };
 
 function fitText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string {
@@ -281,7 +281,7 @@ async function renderStudentCard(
     y: cardY + cardHeight - 16,
     size: 8,
     font: fonts.bold,
-    color: PALETTE.accentGreen,
+    color: rgb(1, 1, 1),
   });
 
   page.drawText("OFFICIAL STUDENT ID", {
@@ -289,7 +289,7 @@ async function renderStudentCard(
     y: cardY + cardHeight - 15.5,
     size: 6,
     font: fonts.bold,
-    color: PALETTE.textSecondary,
+    color: rgb(0.8, 0.8, 0.8),
   });
 
   // 3. Student Portrait Slot
@@ -304,7 +304,7 @@ async function renderStudentCard(
     width: photoW,
     height: photoH,
     color: PALETTE.photoPlaceholder,
-    borderColor: PALETTE.accentGreen,
+    borderColor: PALETTE.borderDark,
     borderWidth: 0.75,
   });
 
@@ -351,7 +351,7 @@ async function renderStudentCard(
     y: cardY + heightAdjusted(cardHeight, 27),
     size: 7,
     font: fonts.mono,
-    color: PALETTE.accentGreen,
+    color: PALETTE.textPrimary,
   });
 
   page.drawText("GRADE:", {

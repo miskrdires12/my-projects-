@@ -281,12 +281,12 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
     ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, destW, destH);
 
+    const dataUrl = canvas.toDataURL("image/jpeg", compressionQuality);
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
-        const previewUrl = URL.createObjectURL(blob);
         setCapturedBlob(blob);
-        setCapturedPreview(previewUrl);
+        setCapturedPreview(dataUrl);
         setCameraState("captured");
         stopMediaTracks();
       },
@@ -338,12 +338,12 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       if (!ctx) return;
 
       ctx.drawImage(img, sX, sY, sW, sH, 0, 0, dW, dH);
+      const dataUrl = canvas.toDataURL("image/jpeg", compressionQuality);
       canvas.toBlob(
         (blob) => {
           if (!blob) return;
-          const previewUrl = URL.createObjectURL(blob);
           setCapturedBlob(blob);
-          setCapturedPreview(previewUrl);
+          setCapturedPreview(dataUrl);
           setCameraState("captured");
           stopMediaTracks();
         },
@@ -403,12 +403,12 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     ctx.font = "14px monospace";
     ctx.fillText("OFFICIAL ID PASSPORT SPEC", width / 2, height * 0.49);
 
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
-        const previewUrl = URL.createObjectURL(blob);
         setCapturedBlob(blob);
-        setCapturedPreview(previewUrl);
+        setCapturedPreview(dataUrl);
         setCameraState("captured");
         stopMediaTracks();
       },
@@ -418,10 +418,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   };
 
   const handleRetake = () => {
-    if (capturedPreview) {
-      URL.revokeObjectURL(capturedPreview);
-      setCapturedPreview(null);
-    }
+    setCapturedPreview(null);
     setCapturedBlob(null);
     startCamera();
   };
@@ -430,16 +427,17 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     if (!capturedBlob || !capturedPreview) return;
     const fileName = `student-photo-${Date.now()}.jpg`;
     const file = new File([capturedBlob], fileName, { type: "image/jpeg" });
-    onCapture(file, capturedPreview);
-    handleClose();
+    const finalUrl = capturedPreview;
+    onCapture(file, finalUrl);
+    stopMediaTracks();
+    setCapturedBlob(null);
+    setCapturedPreview(null);
+    onClose();
   };
 
   const handleClose = () => {
     stopMediaTracks();
-    if (capturedPreview) {
-      URL.revokeObjectURL(capturedPreview);
-      setCapturedPreview(null);
-    }
+    setCapturedPreview(null);
     setCapturedBlob(null);
     onClose();
   };
@@ -451,25 +449,25 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="camera-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
     >
-      <div className="relative w-full max-w-lg overflow-hidden rounded-xl border border-neutral-800 bg-black shadow-2xl shadow-black text-white">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-2xl text-black">
         {/* Flash Effect on Capture */}
         {isFlashing && (
           <div className="pointer-events-none absolute inset-0 z-50 bg-white transition-opacity duration-200" />
         )}
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-3.5 bg-neutral-950">
+        <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-3.5 bg-white">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-white text-black">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-black text-white">
               <Camera className="h-4 w-4 stroke-[2.5]" />
             </div>
             <div>
-              <h2 id="camera-modal-title" className="text-xs font-bold tracking-wider uppercase text-white font-mono">
+              <h2 id="camera-modal-title" className="text-xs font-bold tracking-wider uppercase text-black font-mono">
                 STUDENT PHOTO CAPTURE STUDIO
               </h2>
-              <p className="text-[11px] text-neutral-400">
+              <p className="text-[11px] text-neutral-500">
                 {cameraState === "captured"
                   ? "Review portrait framing before accepting"
                   : "Align face with the oval guide and capture"}
@@ -479,7 +477,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors"
+            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-black transition-colors"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -488,12 +486,12 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
         {/* Camera Selector Bar (If devices available) */}
         {devices.length > 1 && cameraState !== "captured" && (
-          <div className="flex items-center justify-between px-5 py-2 bg-neutral-900 border-b border-neutral-800 text-xs">
-            <span className="text-neutral-400 font-mono text-[11px]">Select Camera:</span>
+          <div className="flex items-center justify-between px-5 py-2 bg-neutral-50 border-b border-neutral-200 text-xs">
+            <span className="text-neutral-600 font-mono text-[11px]">Select Camera:</span>
             <select
               value={selectedDeviceId}
               onChange={handleDeviceChange}
-              className="rounded border border-neutral-700 bg-black px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-white"
+              className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs text-black font-mono focus:outline-none focus:border-black"
             >
               <option value="">Default Camera</option>
               {devices.map((d) => (
@@ -610,13 +608,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Action Controls Footer */}
-        <div className="flex items-center justify-between border-t border-neutral-800 bg-neutral-950 px-5 py-3.5">
+        <div className="flex items-center justify-between border-t border-neutral-200 bg-neutral-50 px-5 py-3.5">
           {cameraState === "captured" ? (
             <>
               <button
                 type="button"
                 onClick={handleRetake}
-                className="inline-flex items-center gap-2 rounded border border-neutral-700 bg-neutral-900 px-4 py-2 text-xs font-mono text-white hover:bg-neutral-800 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 py-2 text-xs font-mono text-black hover:bg-neutral-100 transition-colors"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Retake
@@ -624,7 +622,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               <button
                 type="button"
                 onClick={handleConfirm}
-                className="inline-flex items-center gap-2 rounded bg-white px-5 py-2 text-xs font-mono font-bold text-black hover:bg-neutral-200 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-black px-5 py-2 text-xs font-mono font-bold text-white hover:bg-neutral-800 transition-colors shadow-xs"
               >
                 <Check className="h-4 w-4 stroke-[2.5]" />
                 Use This Photo
@@ -637,7 +635,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   type="button"
                   onClick={handleToggleCamera}
                   disabled={cameraState !== "streaming"}
-                  className="inline-flex items-center gap-1.5 rounded border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-mono text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-mono text-neutral-700 hover:text-black hover:bg-neutral-100 transition-colors disabled:opacity-40"
                   title="Switch Front/Rear"
                 >
                   <FlipHorizontal className="h-3.5 w-3.5" />
@@ -647,7 +645,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 rounded border border-neutral-800 bg-neutral-900 px-3 py-2 text-xs font-mono text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-mono text-neutral-700 hover:text-black hover:bg-neutral-100 transition-colors"
                   title="Upload image file"
                 >
                   <Upload className="h-3.5 w-3.5" />
@@ -659,7 +657,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 type="button"
                 onClick={handleCaptureFrame}
                 disabled={cameraState !== "streaming"}
-                className="inline-flex items-center gap-2 rounded bg-white px-6 py-2.5 text-xs font-mono font-bold text-black hover:bg-neutral-200 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                className="inline-flex items-center gap-2 rounded-lg bg-black px-6 py-2.5 text-xs font-mono font-bold text-white hover:bg-neutral-800 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none shadow-xs"
               >
                 <Camera className="h-4 w-4 stroke-[2.5]" />
                 Snap Photo
@@ -668,7 +666,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               <button
                 type="button"
                 onClick={handleClose}
-                className="rounded px-3 py-2 text-xs font-mono text-neutral-400 hover:text-white transition-colors"
+                className="rounded-lg px-3 py-2 text-xs font-mono text-neutral-600 hover:text-black transition-colors"
               >
                 Cancel
               </button>

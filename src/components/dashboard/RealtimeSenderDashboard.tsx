@@ -47,14 +47,33 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
       const res = await fetch("/api/dashboard/live-metrics?role=SENDER", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
+        let localCount = 0;
+        let localPhotos = 0;
+        let localStudents: any[] = [];
+        try {
+          const raw = localStorage.getItem("sb_enrolled_students");
+          if (raw) {
+            localStudents = JSON.parse(raw);
+            localCount = localStudents.length;
+            localPhotos = localStudents.filter((s: any) => Boolean(s.photoPath)).length;
+          }
+        } catch {}
+
+        const mergedStudents = [...(json.recentStudents || [])];
+        for (const ls of localStudents) {
+          if (!mergedStudents.some((ms: any) => ms.studentId === ls.studentId)) {
+            mergedStudents.unshift(ls);
+          }
+        }
+
         setData({
-          totalEnrolled: json.metrics.totalEnrolled,
-          enrolledToday: json.metrics.enrolledToday,
-          photosCaptured: json.metrics.photosCaptured,
+          totalEnrolled: Math.max(json.metrics.totalEnrolled, localCount),
+          enrolledToday: Math.max(json.metrics.enrolledToday, localCount),
+          photosCaptured: Math.max(json.metrics.photosCaptured, localPhotos),
           totalBatches: json.metrics.totalBatches,
           draftBatchesCount: json.metrics.draftBatchesCount,
           sentBatchesCount: json.metrics.sentBatchesCount,
-          recentStudents: json.recentStudents || [],
+          recentStudents: mergedStudents.slice(0, 10),
           recentBatches: json.recentBatches || [],
         });
         setLastUpdated(new Date().toLocaleTimeString());

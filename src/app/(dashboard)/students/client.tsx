@@ -6,7 +6,7 @@
 // single photo downloads, and deep profile inspection drawer.
 // ============================================================================
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Search,
@@ -80,6 +80,53 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
+  // Dual-Persistence Client State
+  const [displayStudents, setDisplayStudents] = useState<StudentExtended[]>(students);
+
+  // Sync with props when server updates and load dual-persistence localStorage students
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("sb_enrolled_students");
+      if (raw) {
+        const localList: StudentExtended[] = JSON.parse(raw);
+        const map = new Map<string, StudentExtended>();
+        localList.forEach((s) => map.set(s.studentId, s));
+        students.forEach((s) => map.set(s.studentId, s));
+        const merged = Array.from(map.values());
+        setDisplayStudents(merged);
+
+        // Sync local students to serverless container database
+        fetch("/api/students/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ students: localList }),
+        }).catch(() => {});
+        return;
+      }
+    } catch {}
+    setDisplayStudents(students);
+  }, [students]);
+
+  // Real-time synchronization across browser tabs and storage
+  useEffect(() => {
+    const handleStorage = () => {
+      try {
+        const raw = localStorage.getItem("sb_enrolled_students");
+        if (raw) {
+          const localList: StudentExtended[] = JSON.parse(raw);
+          const map = new Map<string, StudentExtended>();
+          localList.forEach((s) => map.set(s.studentId, s));
+          setDisplayStudents((prev) => {
+            prev.forEach((s) => map.set(s.studentId, s));
+            return Array.from(map.values());
+          });
+        }
+      } catch {}
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   // Search and Filter State
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [selectedGrade, setSelectedGrade] = useState(searchParams.get("grade") || "ALL");
@@ -128,10 +175,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
   // Bulk Selection
   const handleToggleSelectAll = () => {
-    if (selectedIds.size === students.length) {
+    if (selectedIds.size === displayStudents.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(students.map((s) => s.id)));
+      setSelectedIds(new Set(displayStudents.map((s) => s.id)));
     }
   };
 
@@ -202,8 +249,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   };
 
   // Single Delete
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = (id: string, name: string, studentId?: string) => {
     if (!confirm(`Are you sure you want to permanently delete student "${name}"?`)) return;
+    try {
+      const raw = localStorage.getItem("sb_enrolled_students");
+      if (raw) {
+        const localList = JSON.parse(raw);
+        const filtered = localList.filter((s: any) => s.id !== id && s.studentId !== studentId);
+        localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
+      }
+    } catch {}
+    setDisplayStudents((prev) => prev.filter((s) => s.id !== id && s.studentId !== studentId));
     startTransition(async () => {
       await deleteStudentAction(id);
       router.refresh();
@@ -217,6 +273,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         "Are you sure you want to permanently delete ALL student records? This will clear the entire credential directory so you can feed your own fresh data."
       )
     ) {
+      try {
+        localStorage.removeItem("sb_enrolled_students");
+      } catch {}
+      setDisplayStudents([]);
       startTransition(async () => {
         await clearAllStudentsAction();
         router.refresh();
@@ -224,9 +284,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }
   };
 
-  const totalPages = Math.ceil(totalCount / pageSize) || 1;
-  const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const endItem = Math.min(currentPage * pageSize, totalCount);
+  const totalEffective = Math.max(totalCount, displayStudents.length);
+  const totalPages = Math.ceil(totalEffective / pageSize) || 1;
+  const startItem = totalEffective === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalEffective);
 
   return (
     <div className="space-y-4">
@@ -361,9 +422,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <th className="w-10 px-4 py-3 text-center">
                   <input
                     type="checkbox"
-                    checked={selectedIds.size === students.length && students.length > 0}
+                    checked={selectedIds.size === displayStudents.length && displayStudents.length > 0}
                     onChange={handleToggleSelectAll}
-                    className="accent-accent rounded h-3.5 w-3.5"
+                    className="accent-black rounded h-3.5 w-3.5"
                   />
                 </th>
                 <th className="px-4 py-3">Portrait</th>
@@ -377,7 +438,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {students.length === 0 ? (
+              {displayStudents.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-16 px-6 text-center bg-white">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
@@ -410,7 +471,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   </td>
                 </tr>
               ) : (
-                students.map((student) => {
+                displayStudents.map((student) => {
                   const isSelected = selectedIds.has(student.id);
                   const hasPhoto = Boolean(student.photoPath);
                   const hasQR = Boolean(student.qrCodeData);
@@ -419,7 +480,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     <tr
                       key={student.id}
                       className={`transition-colors ${
-                        isSelected ? "bg-accent/5 hover:bg-accent/10" : "hover:bg-surface-secondary/40"
+                        isSelected ? "bg-neutral-100" : "hover:bg-neutral-50"
                       }`}
                     >
                       <td className="px-4 py-3 text-center">
@@ -427,13 +488,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleToggleSelect(student.id)}
-                          className="accent-accent rounded h-3.5 w-3.5"
+                          className="accent-black rounded h-3.5 w-3.5"
                         />
                       </td>
 
                       {/* Photo Thumbnail */}
                       <td className="px-4 py-2">
-                        <div className="h-10 w-8 rounded border border-border bg-black overflow-hidden flex items-center justify-center">
+                        <div className="h-10 w-8 rounded border border-neutral-300 bg-neutral-100 overflow-hidden flex items-center justify-center">
                           {student.photoPath ? (
                             <img
                               src={student.photoPath}
@@ -441,7 +502,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <Camera className="h-3 w-3 text-foreground-subtle" />
+                            <Camera className="h-3 w-3 text-neutral-400" />
                           )}
                         </div>
                       </td>
@@ -492,7 +553,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                           <button
                             type="button"
                             onClick={() => setActiveStudent(student)}
-                            className="rounded p-1.5 text-foreground-muted hover:bg-surface-secondary hover:text-foreground transition-colors"
+                            className="rounded p-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-black transition-colors"
                             title="Inspect Profile"
                           >
                             <Eye className="h-3.5 w-3.5" />
@@ -501,8 +562,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                           {(userRole === "RECEIVER" || userRole === "ADMIN") && (
                             <button
                               type="button"
-                              onClick={() => handleDelete(student.id, student.fullName)}
-                              className="rounded p-1.5 text-foreground-muted hover:bg-surface-secondary hover:text-rose-400 transition-colors"
+                              onClick={() => handleDelete(student.id, student.fullName, student.studentId)}
+                              className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-600 transition-colors"
                               title="Delete Record"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
