@@ -84,7 +84,7 @@ export async function GET(request: Request) {
         photosCount,
         qrCount,
         readyForPrintCount,
-        recentBatches,
+        recentStudents,
         missingPhotos,
         missingQRs,
         activeJobsCount,
@@ -97,9 +97,19 @@ export async function GET(request: Request) {
             AND: [{ photoPath: { not: null } }, { qrCodeData: { not: null } }],
           },
         }),
-        prisma.transferBatch.findMany({
-          take: 5,
+        prisma.student.findMany({
+          take: 6,
           orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            studentId: true,
+            fullName: true,
+            grade: true,
+            department: true,
+            photoPath: true,
+            qrCodeData: true,
+            createdAt: true,
+          },
         }),
         prisma.student.findMany({
           where: { photoPath: null },
@@ -133,7 +143,8 @@ export async function GET(request: Request) {
           pendingVerification,
           activeJobsCount,
         },
-        recentBatches,
+        recentStudents,
+        recentBatches: [],
         missingPhotos,
         missingQRs,
       });

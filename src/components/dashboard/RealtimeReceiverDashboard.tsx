@@ -10,7 +10,6 @@ import {
   Camera,
   QrCode,
   Download,
-  Boxes,
   Activity,
   ArrowUpRight,
   Clock,
@@ -31,7 +30,8 @@ interface ReceiverDashboardProps {
     readyForPrintCount: number;
     pendingVerification: number;
     activeJobsCount: number;
-    recentBatches: any[];
+    recentStudents?: any[];
+    recentBatches?: any[];
     missingPhotos: any[];
     missingQRs: any[];
   };
@@ -72,6 +72,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           photosCount: 0,
           qrCount: 0,
           readyForPrintCount: 0,
+          recentStudents: [],
           recentBatches: [],
           missingPhotos: [],
           missingQRs: [],
@@ -113,6 +114,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
             readyForPrintCount: ready,
             pendingVerification: json.metrics.pendingVerification,
             activeJobsCount: json.metrics.activeJobsCount,
+            recentStudents: json.recentStudents && json.recentStudents.length > 0 ? json.recentStudents : prev.recentStudents,
             recentBatches: json.recentBatches && json.recentBatches.length > 0 ? json.recentBatches : prev.recentBatches,
             missingPhotos: json.missingPhotos || [],
             missingQRs: json.missingQRs || [],
@@ -203,7 +205,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
             ID Production, Asset Matching & Print Center
           </h1>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Process inbound batches, attach external QR codes, download local photos by real name, layout on A4, and print
+            Manage student credentials, attach external QR codes, download photos, layout on A4, and print ID cards
           </p>
         </div>
 
@@ -368,17 +370,17 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                   STEP 1 • INGEST
                 </span>
               </div>
-              <h3 className="text-sm font-semibold text-white mt-2.5">Inbound Data & Excel</h3>
+              <h3 className="text-sm font-semibold text-white mt-2.5">Student Directory & Excel</h3>
               <p className="text-xs text-neutral-400 mt-1">
-                Receive batches transmitted by Senders or upload CSV/Excel files.
+                Browse verified student directory or bulk upload student lists via Excel / CSV.
               </p>
             </div>
             <div className="mt-4 flex gap-2 pt-2 border-t border-neutral-800">
               <Link
-                href="/receiver/batches"
+                href="/students"
                 className="text-xs font-mono text-white hover:underline flex items-center gap-1"
               >
-                <span>Batches</span>
+                <span>Directory</span>
                 <ArrowUpRight className="h-3 w-3" />
               </Link>
               <span className="text-neutral-600">|</span>
@@ -482,41 +484,55 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         </div>
       </div>
 
-      {/* Production Discrepancy Grids: Inbound Batches, Missing Photos, Missing QR */}
+      {/* Production Discrepancy & Activity Grids: Live Enrolled Students, Missing Photos, Missing QR */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Recent Inbound Batches */}
+        {/* Live Enrolled Students */}
         <div className="lg:col-span-6 rounded-lg border border-neutral-800 bg-neutral-950 p-5 space-y-3">
           <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
             <div className="flex items-center gap-2">
-              <Boxes className="h-4 w-4 text-white" />
+              <Users className="h-4 w-4 text-white" />
               <h2 className="text-xs font-bold uppercase tracking-wider text-white">
-                Live Inbound Batches ({data.recentBatches.length})
+                Live Enrolled Students ({(data.recentStudents || []).length})
               </h2>
             </div>
-            <Link href="/receiver/batches" className="text-xs text-neutral-400 hover:text-white font-mono">
-              View All →
+            <Link href="/students" className="text-xs text-neutral-400 hover:text-white font-mono">
+              View Directory →
             </Link>
           </div>
 
-          {data.recentBatches.length === 0 ? (
+          {!data.recentStudents || data.recentStudents.length === 0 ? (
             <div className="text-center py-8 text-xs text-neutral-500">
-              No transfer batches received yet.
+              No enrolled students found.
             </div>
           ) : (
             <div className="divide-y divide-neutral-900">
-              {data.recentBatches.map((b) => (
-                <div key={b.id} className="py-2.5 flex items-center justify-between text-xs">
-                  <div>
-                    <div className="font-mono font-bold text-white">{b.batchNumber}</div>
-                    <div className="text-[11px] text-neutral-400">
-                      {b.title} • Sender: {b.senderName}
+              {data.recentStudents.map((s) => (
+                <div key={s.id} className="py-2.5 flex items-center justify-between text-xs">
+                  <div className="truncate pr-2">
+                    <div className="font-medium text-white truncate">{s.fullName}</div>
+                    <div className="text-[11px] text-neutral-400 font-mono">
+                      {s.studentId} • {s.department || s.grade || "General"}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="font-mono text-white text-[11px]">
-                      {b.totalStudents} students
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                        s.photoPath
+                          ? "border-green-800 bg-green-950/50 text-green-400"
+                          : "border-amber-800 bg-amber-950/50 text-amber-400"
+                      }`}
+                    >
+                      {s.photoPath ? "PHOTO" : "NO PHOTO"}
                     </span>
-                    <div className="text-[10px] text-neutral-500 font-mono">{b.status}</div>
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                        s.qrCodeData
+                          ? "border-sky-800 bg-sky-950/50 text-sky-400"
+                          : "border-neutral-800 bg-neutral-900 text-neutral-400"
+                      }`}
+                    >
+                      {s.qrCodeData ? "QR" : "NO QR"}
+                    </span>
                   </div>
                 </div>
               ))}

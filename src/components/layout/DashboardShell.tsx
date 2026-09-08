@@ -18,7 +18,6 @@ import {
   Boxes,
   Download,
   Layers,
-  Inbox,
   Sparkles,
   Receipt,
   Camera,
@@ -179,18 +178,6 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 <span>Receiver Production Facility</span>
               </div>
 
-              <Link
-                href="/receiver/batches"
-                onClick={closeMobile}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-                  pathname === "/receiver/batches"
-                    ? "bg-black text-white font-semibold shadow-xs"
-                    : "text-neutral-700 hover:bg-neutral-100 hover:text-black"
-                }`}
-              >
-                <Inbox className="h-4 w-4 shrink-0" />
-                <span>Inbound Batches</span>
-              </Link>
 
               <Link
                 href="/students"

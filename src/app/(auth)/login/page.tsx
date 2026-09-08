@@ -183,7 +183,7 @@ export default function LoginPage() {
                     RECEIVER FACILITY (20,000+)
                   </div>
                   <div className="text-[11px] text-foreground-muted mt-0.5">
-                    Inbound batches, 20k directory, external QR, photo zip, designer, print engine
+                    Student directory, CSV export, external QR, photo zip, designer, print engine
                   </div>
                 </div>
                 <span className="text-[11px] font-mono text-blue-400 shrink-0">receiver →</span>
