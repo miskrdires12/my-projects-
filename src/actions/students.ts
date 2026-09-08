@@ -8,7 +8,8 @@
 
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, getSession } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { createSafeAuditLog } from "@/lib/audit";
 import {
   studentSchema,
@@ -310,7 +311,13 @@ export async function deleteStudentAction(
   optionalStudentId?: string
 ): Promise<StudentActionResult> {
   try {
-    const session = await requireAuth("student:delete");
+    const session = await getSession();
+    if (!session) {
+      return { success: false, error: "Session expired. Please log in again." };
+    }
+    if (!hasPermission(session.role, "student:delete")) {
+      return { success: false, error: "Unauthorized: You do not have permission to delete student records." };
+    }
 
     // Locate the student by database ID or studentId
     const student = await prisma.student.findFirst({
@@ -325,7 +332,7 @@ export async function deleteStudentAction(
       },
     });
 
-    const targetStudentId = student?.studentId || optionalStudentId || idOrStudentId;
+    const targetStudentId = student?.studentId || (optionalStudentId !== idOrStudentId ? optionalStudentId : undefined) || idOrStudentId;
     const targetDbId = student?.id || idOrStudentId;
 
     if (student) {
@@ -351,13 +358,19 @@ export async function deleteStudentAction(
       });
     }
 
-    // Always broadcast deletion to Cloud Sync Bus so all other devices and containers drop it
-    if (targetStudentId) {
+    // Always broadcast deletion to Cloud Sync Bus with BOTH identifiers so all devices drop it
+    await publishStudentSync("DELETE", {
+      id: targetDbId,
+      studentId: targetStudentId,
+    }).catch(() => {});
+
+    if (targetStudentId && targetStudentId !== targetDbId) {
       await publishStudentSync("DELETE", targetStudentId).catch(() => {});
     }
 
     revalidatePath("/students");
     revalidatePath("/dashboard");
+    revalidatePath("/print-engine");
     return { success: true, studentId: targetDbId };
   } catch (error: any) {
     console.error("deleteStudentAction error:", error);
@@ -549,7 +562,13 @@ export async function deleteCustomFieldAction(id: string) {
  */
 export async function clearAllStudentsAction(): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
-    const session = await requireAuth();
+    const session = await getSession();
+    if (!session) {
+      return { success: false, error: "Session expired. Please log in again." };
+    }
+    if (!hasPermission(session.role, "student:delete")) {
+      return { success: false, error: "Unauthorized: Missing delete permission." };
+    }
 
     const count = await prisma.student.count();
 
@@ -585,19 +604,31 @@ export async function clearAllStudentsAction(): Promise<{ success: boolean; coun
  * Bulk deletes multiple students safely.
  */
 export async function deleteMultipleStudentsAction(
-  ids: string[]
+  items: (string | { id?: string; studentId?: string })[]
 ): Promise<{ success: boolean; count: number; error?: string }> {
   try {
-    await requireAuth("student:delete");
+    const session = await getSession();
+    if (!session) {
+      return { success: false, count: 0, error: "Session expired. Please log in again." };
+    }
+    if (!hasPermission(session.role, "student:delete")) {
+      return { success: false, count: 0, error: "Unauthorized: Missing delete permission." };
+    }
     let count = 0;
 
-    for (const id of ids) {
-      const res = await deleteStudentAction(id);
-      if (res.success) count++;
+    for (const item of items) {
+      if (typeof item === "string") {
+        const res = await deleteStudentAction(item);
+        if (res.success) count++;
+      } else if (item && typeof item === "object") {
+        const res = await deleteStudentAction(item.id || item.studentId || "", item.studentId);
+        if (res.success) count++;
+      }
     }
 
     revalidatePath("/students");
     revalidatePath("/dashboard");
+    revalidatePath("/print-engine");
     return { success: true, count };
   } catch (error: any) {
     return { success: false, count: 0, error: error?.message || "Failed to delete selected students." };

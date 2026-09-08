@@ -116,10 +116,9 @@ export function canAccessRoute(role: UserRole | undefined | null, pathname: stri
   }
 
   // ── RECEIVER-ONLY routes ───────────────────────────────────────────────
-  // Inbound batches, 20k student directory, Excel importer, QR importer, photo download ZIP, ID designer, Bulker, Print Engine
+  // Excel importer, QR importer, photo download ZIP, ID designer, Bulker, Print Engine
   if (
     pathname.startsWith("/receiver") ||
-    pathname.startsWith("/students") ||
     pathname.startsWith("/designer") ||
     pathname.startsWith("/bulker") ||
     pathname.startsWith("/print-engine")
@@ -128,10 +127,11 @@ export function canAccessRoute(role: UserRole | undefined | null, pathname: stri
   }
 
   // ── SHARED AUTHENTICATED routes ────────────────────────────────────────
-  // Dashboard & Settings — both roles have dedicated views or profile settings
+  // Dashboard, Student Directory, & Settings — all operational roles have access
   if (
     pathname === "/" ||
     pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/students") ||
     pathname.startsWith("/settings")
   ) {
     return true;

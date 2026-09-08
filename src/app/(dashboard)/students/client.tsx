@@ -85,9 +85,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // Dual-Persistence Client State
   const [displayStudents, setDisplayStudents] = useState<StudentExtended[]>(students);
 
-  // 1. Initial Load: Merge server students, localStorage, and pull from /api/students/sync
+  // 1. Initial Load: Merge server students, localStorage, and pull from /api/students/sync with tombstone suppression
   useEffect(() => {
     const loadAndMerge = async () => {
+      let deletedIds = new Set<string>();
+      try {
+        const rawDel = localStorage.getItem("sb_deleted_student_ids");
+        if (rawDel) {
+          deletedIds = new Set(JSON.parse(rawDel));
+        }
+      } catch {}
+
       let localList: StudentExtended[] = [];
       try {
         const raw = localStorage.getItem("sb_enrolled_students");
@@ -95,8 +103,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       } catch {}
 
       const map = new Map<string, StudentExtended>();
-      localList.forEach((s) => map.set(s.studentId, s));
-      students.forEach((s) => map.set(s.studentId, s));
+      localList.forEach((s) => {
+        if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
+          map.set(s.studentId, s);
+        }
+      });
+      students.forEach((s) => {
+        if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
+          map.set(s.studentId, s);
+        }
+      });
 
       // Also pull latest from /api/students/sync (which rehydrates from Cloud Sync if container was empty)
       try {
@@ -104,7 +120,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.students)) {
-            data.students.forEach((s: any) => map.set(s.studentId, s));
+            data.students.forEach((s: any) => {
+              if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
+                map.set(s.studentId, s);
+              }
+            });
           }
         }
       } catch {}
@@ -123,6 +143,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   useEffect(() => {
     const unsubscribe = subscribeToCloudSync(
       (newStudent) => {
+        let deletedIds = new Set<string>();
+        try {
+          const rawDel = localStorage.getItem("sb_deleted_student_ids");
+          if (rawDel) deletedIds = new Set(JSON.parse(rawDel));
+        } catch {}
+
+        if (deletedIds.has(newStudent.id) || deletedIds.has(newStudent.studentId)) {
+          return;
+        }
+
         setDisplayStudents((prev) => {
           const map = new Map<string, StudentExtended>();
           prev.forEach((s) => map.set(s.studentId, s));
@@ -134,9 +164,19 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           return updated;
         });
       },
-      (studentId) => {
+      (studentIdOrId) => {
+        // Record in tombstone storage so it is never rehydrated
+        try {
+          const rawDel = localStorage.getItem("sb_deleted_student_ids") || "[]";
+          const list: string[] = JSON.parse(rawDel);
+          if (!list.includes(studentIdOrId)) {
+            list.push(studentIdOrId);
+            localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
+          }
+        } catch {}
+
         setDisplayStudents((prev) => {
-          const updated = prev.filter((s) => s.studentId !== studentId && s.id !== studentId);
+          const updated = prev.filter((s) => s.studentId !== studentIdOrId && s.id !== studentIdOrId);
           try {
             localStorage.setItem("sb_enrolled_students", JSON.stringify(updated));
           } catch {}
@@ -153,13 +193,27 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
     const handleStorage = () => {
       try {
+        let deletedIds = new Set<string>();
+        try {
+          const rawDel = localStorage.getItem("sb_deleted_student_ids");
+          if (rawDel) deletedIds = new Set(JSON.parse(rawDel));
+        } catch {}
+
         const raw = localStorage.getItem("sb_enrolled_students");
         if (raw) {
           const localList: StudentExtended[] = JSON.parse(raw);
           const map = new Map<string, StudentExtended>();
-          localList.forEach((s) => map.set(s.studentId, s));
+          localList.forEach((s) => {
+            if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
+              map.set(s.studentId, s);
+            }
+          });
           setDisplayStudents((prev) => {
-            prev.forEach((s) => map.set(s.studentId, s));
+            prev.forEach((s) => {
+              if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
+                map.set(s.studentId, s);
+              }
+            });
             return Array.from(map.values());
           });
         }
@@ -297,7 +351,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // Single Delete
   const handleDelete = (id: string, name: string, studentId?: string) => {
     if (!confirm(`Are you sure you want to permanently delete student "${name}"?`)) return;
+
+    // 1. Tombstone in localStorage so it never re-appears
     try {
+      const rawDel = localStorage.getItem("sb_deleted_student_ids") || "[]";
+      const list: string[] = JSON.parse(rawDel);
+      if (id && !list.includes(id)) list.push(id);
+      if (studentId && !list.includes(studentId)) list.push(studentId);
+      localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
+
       const raw = localStorage.getItem("sb_enrolled_students");
       if (raw) {
         const localList = JSON.parse(raw);
@@ -307,17 +369,25 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
       }
     } catch {}
+
+    // 2. Immediate UI update
     setDisplayStudents((prev) =>
       prev.filter((s) => s.id !== id && s.studentId !== studentId && s.id !== studentId)
     );
+    if (activeStudent && (activeStudent.id === id || activeStudent.studentId === studentId)) {
+      setActiveStudent(null);
+    }
+
+    // 3. Server action
     startTransition(async () => {
       try {
         const res = await deleteStudentAction(id, studentId);
-        if (!res.success && res.error) {
-          console.warn("Delete warning:", res.error);
+        if (!res.success) {
+          alert(res.error || "Failed to delete student record.");
         }
-      } catch (err) {
-        console.warn("Delete communication error:", err);
+      } catch (err: any) {
+        console.error("Delete communication error:", err);
+        alert("Failed to communicate with server to delete record.");
       }
       router.refresh();
     });
@@ -334,7 +404,25 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       return;
 
     const idsToDelete = Array.from(selectedIds);
+    const selectedItems: { id: string; studentId: string }[] = [];
+    displayStudents.forEach((s) => {
+      if (selectedIds.has(s.id) || selectedIds.has(s.studentId)) {
+        selectedItems.push({ id: s.id, studentId: s.studentId });
+      }
+    });
+
     try {
+      const rawDel = localStorage.getItem("sb_deleted_student_ids") || "[]";
+      const list: string[] = JSON.parse(rawDel);
+      idsToDelete.forEach((id) => {
+        if (!list.includes(id)) list.push(id);
+      });
+      selectedItems.forEach((item) => {
+        if (item.id && !list.includes(item.id)) list.push(item.id);
+        if (item.studentId && !list.includes(item.studentId)) list.push(item.studentId);
+      });
+      localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
+
       const raw = localStorage.getItem("sb_enrolled_students");
       if (raw) {
         const localList = JSON.parse(raw);
@@ -349,12 +437,19 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       prev.filter((s) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId))
     );
     setSelectedIds(new Set());
+    if (activeStudent && (selectedIds.has(activeStudent.id) || selectedIds.has(activeStudent.studentId))) {
+      setActiveStudent(null);
+    }
 
     startTransition(async () => {
       try {
-        await deleteMultipleStudentsAction(idsToDelete);
-      } catch (err) {
-        console.warn("Bulk delete error:", err);
+        const res = await deleteMultipleStudentsAction(selectedItems.length > 0 ? selectedItems : idsToDelete);
+        if (!res.success) {
+          alert(res.error || "Failed to delete selected student records.");
+        }
+      } catch (err: any) {
+        console.error("Bulk delete error:", err);
+        alert("Failed to communicate with server for bulk deletion.");
       }
       router.refresh();
     });
@@ -368,14 +463,23 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       )
     ) {
       try {
+        const allIds = displayStudents.flatMap((s) => [s.id, s.studentId]).filter(Boolean);
+        localStorage.setItem("sb_deleted_student_ids", JSON.stringify(allIds));
         localStorage.removeItem("sb_enrolled_students");
       } catch {}
       setDisplayStudents([]);
+      setSelectedIds(new Set());
+      setActiveStudent(null);
+
       startTransition(async () => {
         try {
-          await clearAllStudentsAction();
-        } catch (err) {
-          console.warn("Clear all action error:", err);
+          const res = await clearAllStudentsAction();
+          if (!res.success) {
+            alert(res.error || "Failed to clear all student records.");
+          }
+        } catch (err: any) {
+          console.error("Clear all action error:", err);
+          alert("Failed to clear records on server.");
         }
         router.refresh();
       });
@@ -779,7 +883,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             <Eye className="h-3.5 w-3.5" />
                           </button>
 
-                          {(userRole === "RECEIVER" || userRole === "ADMIN") && (
+                          {(userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
                             <button
                               type="button"
                               onClick={() => handleDelete(student.id, student.fullName, student.studentId)}
@@ -985,6 +1089,20 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     <strong className="text-foreground">{cv.value}</strong>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Quick Actions in Drawer */}
+            {(userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
+              <div className="pt-4 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => handleDelete(activeStudent.id, activeStudent.fullName, activeStudent.studentId)}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-600 hover:text-white transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Delete Student Record</span>
+                </button>
               </div>
             )}
           </div>

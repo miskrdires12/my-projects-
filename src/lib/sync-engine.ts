@@ -25,15 +25,20 @@ export async function publishStudentSync(
   studentOrId?: any
 ): Promise<boolean> {
   try {
+    let studentId = "";
+    let id = "";
+    if (typeof studentOrId === "string") {
+      studentId = studentOrId;
+      id = studentOrId;
+    } else if (studentOrId) {
+      studentId = studentOrId.studentId || "";
+      id = studentOrId.id || "";
+    }
+
     const payload: SyncPayload = {
       action,
-      student: action === "UPSERT" ? studentOrId : undefined,
-      studentId:
-        action === "DELETE"
-          ? typeof studentOrId === "string"
-            ? studentOrId
-            : studentOrId?.studentId
-          : studentOrId?.studentId,
+      student: action === "UPSERT" ? studentOrId : (action === "DELETE" ? { id, studentId } : undefined),
+      studentId: studentId || id,
       timestamp: Date.now(),
     };
 
@@ -72,6 +77,7 @@ export async function fetchCloudStudents(): Promise<any[]> {
 
     const lines = rawText.trim().split("\n").filter(Boolean);
     const studentsMap = new Map<string, any>();
+    const deletedSet = new Set<string>();
 
     for (const line of lines) {
       try {
@@ -97,10 +103,39 @@ export async function fetchCloudStudents(): Promise<any[]> {
 
         if (payload.action === "CLEAR") {
           studentsMap.clear();
-        } else if (payload.action === "DELETE" && payload.studentId) {
-          studentsMap.delete(payload.studentId);
+          deletedSet.clear();
+        } else if (payload.action === "DELETE") {
+          const idToDelete = payload.studentId;
+          if (idToDelete) {
+            deletedSet.add(idToDelete);
+            studentsMap.delete(idToDelete);
+          }
+          if (payload.student?.id) {
+            deletedSet.add(payload.student.id);
+            studentsMap.delete(payload.student.id);
+          }
+          if (payload.student?.studentId) {
+            deletedSet.add(payload.student.studentId);
+            studentsMap.delete(payload.student.studentId);
+          }
+          // Scan and purge all entries matching either id or studentId
+          for (const [key, s] of Array.from(studentsMap.entries())) {
+            if (
+              deletedSet.has(key) ||
+              deletedSet.has(s.studentId) ||
+              deletedSet.has(s.id)
+            ) {
+              studentsMap.delete(key);
+            }
+          }
         } else if (payload.action === "UPSERT" && payload.student && payload.student.studentId) {
-          studentsMap.set(payload.student.studentId, payload.student);
+          const s = payload.student;
+          if (
+            !deletedSet.has(s.studentId) &&
+            (!s.id || !deletedSet.has(s.id))
+          ) {
+            studentsMap.set(s.studentId, s);
+          }
         }
       } catch {}
     }
@@ -208,8 +243,15 @@ export function subscribeToCloudSync(
 
         if (payload.action === "UPSERT" && payload.student) {
           onStudentUpsert(payload.student);
-        } else if (payload.action === "DELETE" && payload.studentId && onStudentDelete) {
-          onStudentDelete(payload.studentId);
+        } else if (payload.action === "DELETE" && onStudentDelete) {
+          const id = payload.studentId || payload.student?.studentId || payload.student?.id;
+          if (id) onStudentDelete(id);
+          if (payload.student?.studentId && payload.student.studentId !== id) {
+            onStudentDelete(payload.student.studentId);
+          }
+          if (payload.student?.id && payload.student.id !== id) {
+            onStudentDelete(payload.student.id);
+          }
         } else if (payload.action === "CLEAR" && onClearAll) {
           onClearAll();
         }

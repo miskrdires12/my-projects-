@@ -105,3 +105,57 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+/**
+ * DELETE: Deletes student by ID or studentId and broadcasts deletion.
+ */
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    const studentId = searchParams.get("studentId");
+    const clearAll = searchParams.get("clearAll") === "true";
+
+    if (clearAll) {
+      await prisma.customFieldValue.deleteMany().catch(() => {});
+      await prisma.studentPhoto.deleteMany().catch(() => {});
+      await prisma.studentQR.deleteMany().catch(() => {});
+      await prisma.transferRecord.deleteMany().catch(() => {});
+      await prisma.student.deleteMany().catch(() => {});
+      await prisma.transferBatch.deleteMany().catch(() => {});
+      await publishStudentSync("CLEAR").catch(() => {});
+      return NextResponse.json({ success: true, cleared: true });
+    }
+
+    const target = studentId || id;
+    if (!target) {
+      return NextResponse.json({ error: "Missing id or studentId" }, { status: 400 });
+    }
+
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: [
+          ...(id ? [{ id }] : []),
+          ...(studentId ? [{ studentId }] : []),
+        ],
+      },
+    });
+
+    if (student) {
+      await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+      await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+      await prisma.studentQR.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+      await prisma.transferRecord.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+      await prisma.student.delete({ where: { id: student.id } }).catch(() => {});
+    }
+
+    await publishStudentSync("DELETE", {
+      id: student?.id || id || "",
+      studentId: student?.studentId || studentId || target,
+    }).catch(() => {});
+
+    return NextResponse.json({ success: true, deleted: target });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

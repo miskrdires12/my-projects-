@@ -130,6 +130,19 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               </Link>
 
               <Link
+                href="/students"
+                onClick={closeMobile}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+                  pathname === "/students"
+                    ? "bg-black text-white font-semibold shadow-xs"
+                    : "text-neutral-700 hover:bg-neutral-100 hover:text-black"
+                }`}
+              >
+                <Users className="h-4 w-4 shrink-0" />
+                <span>Student Directory</span>
+              </Link>
+
+              <Link
                 href="/sender/photo-import"
                 onClick={closeMobile}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
