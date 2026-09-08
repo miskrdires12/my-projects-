@@ -61,13 +61,6 @@ export async function processAndSaveStudentPhoto(
   const randomId = crypto.randomBytes(12).toString("hex");
   const fileName = `${subfolder}_${Date.now()}_${randomId}.jpg`;
 
-  const publicDir = path.join(process.cwd(), "public");
-  const targetDir = path.join(publicDir, UPLOAD_SUBDIR, subfolder);
-  await fs.mkdir(targetDir, { recursive: true });
-
-  const absoluteTarget = path.join(targetDir, fileName);
-  const relativePath = `/${UPLOAD_SUBDIR}/${subfolder}/${fileName}`;
-
   // 5. Transform: auto-orient, resize to max 600x800 portrait, 85 quality JPEG
   const processedBuffer = await sharp(fileBuffer)
     .rotate()
@@ -81,9 +74,32 @@ export async function processAndSaveStudentPhoto(
     })
     .toBuffer();
 
-  await fs.writeFile(absoluteTarget, processedBuffer);
-
   const finalMetadata = await sharp(processedBuffer).metadata();
+
+  // 6. Resilient storage:
+  // In serverless environments (e.g. Vercel, AWS Lambda) the root filesystem is read-only.
+  // We prioritize high-efficiency Base64 Data URI or write to disk if writable.
+  const isServerless = Boolean(
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT
+  );
+
+  let relativePath = `data:image/jpeg;base64,${processedBuffer.toString("base64")}`;
+  let targetDir = "";
+
+  if (!isServerless) {
+    try {
+      const publicDir = path.join(process.cwd(), "public");
+      targetDir = path.join(publicDir, UPLOAD_SUBDIR, subfolder);
+      await fs.mkdir(targetDir, { recursive: true });
+      const absoluteTarget = path.join(targetDir, fileName);
+      await fs.writeFile(absoluteTarget, processedBuffer);
+      relativePath = `/${UPLOAD_SUBDIR}/${subfolder}/${fileName}`;
+    } catch (writeErr) {
+      console.warn("Notice: Local disk write failed, retaining Base64 data URL:", writeErr);
+    }
+  }
 
   return {
     fileName,

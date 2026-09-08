@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { requireAuth, hashPassword } from "@/lib/auth";
+import { createSafeAuditLog } from "@/lib/audit";
 import { createUserSchema, type CreateUserInput } from "@/lib/validations";
 import type { UserRole } from "@/types/auth";
 
@@ -48,14 +49,12 @@ export async function createUserAction(input: CreateUserInput) {
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "USER_CREATE",
-      entityType: "USER",
-      entityId: user.id,
-      metadata: JSON.stringify({ username: user.username, role: user.role }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "USER_CREATE",
+    entityType: "USER",
+    entityId: user.id,
+    metadata: { username: user.username, role: user.role },
   });
 
   revalidatePath("/admin/users");
@@ -71,13 +70,11 @@ export async function deleteUserAction(id: string) {
 
   await prisma.user.delete({ where: { id } });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "USER_DELETE",
-      entityType: "USER",
-      entityId: id,
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "USER_DELETE",
+    entityType: "USER",
+    entityId: id,
   });
 
   revalidatePath("/admin/users");

@@ -50,30 +50,32 @@ export async function POST(request: NextRequest) {
 
     let photoRecord = null;
     if (studentId) {
-      // Find student
-      const student = await prisma.student.findUnique({
-        where: { studentId },
-      });
-
-      if (student) {
-        photoRecord = await prisma.studentPhoto.create({
-          data: {
-            studentId: student.id,
-            originalPath: originalResult.relativePath,
-            editedPath: editedResult.relativePath,
-            width: editedResult.width,
-            height: editedResult.height,
-            cropData: cropData || null,
-            filterData: filterData || null,
-            status: "EDITED",
-          },
+      try {
+        const student = await prisma.student.findUnique({
+          where: { studentId },
         });
 
-        // Update student's primary photo pointer
-        await prisma.student.update({
-          where: { id: student.id },
-          data: { photoPath: editedResult.relativePath },
-        });
+        if (student) {
+          photoRecord = await prisma.studentPhoto.create({
+            data: {
+              studentId: student.id,
+              originalPath: originalResult.relativePath,
+              editedPath: editedResult.relativePath,
+              width: editedResult.width,
+              height: editedResult.height,
+              cropData: cropData || null,
+              filterData: filterData || null,
+              status: "EDITED",
+            },
+          });
+
+          await prisma.student.update({
+            where: { id: student.id },
+            data: { photoPath: editedResult.relativePath },
+          });
+        }
+      } catch (dbErr) {
+        console.warn("Notice: Non-fatal student photo association warning:", dbErr);
       }
     }
 
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (err: unknown) {
+    console.error("Critical upload route failure:", err);
     const message = err instanceof Error ? err.message : "Failed to process photo.";
     return NextResponse.json({ error: message }, { status: 400 });
   }

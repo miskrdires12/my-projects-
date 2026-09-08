@@ -8,6 +8,7 @@
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
+import { createSafeAuditLog } from "@/lib/audit";
 
 export interface BatchActionResult {
   success: boolean;
@@ -76,14 +77,12 @@ export async function createBatchAction(
     });
   }
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "BATCH_CREATE",
-      entityType: "TRANSFER_BATCH",
-      entityId: batch.id,
-      metadata: JSON.stringify({ batchNumber, students: studentIds.length }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "BATCH_CREATE",
+    entityType: "TRANSFER_BATCH",
+    entityId: batch.id,
+    metadata: { batchNumber, students: studentIds.length },
   });
 
   revalidatePath("/sender/batches");
@@ -150,14 +149,12 @@ export async function validateBatchAction(batchId: string): Promise<BatchActionR
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "BATCH_VALIDATE",
-      entityType: "TRANSFER_BATCH",
-      entityId: batch.id,
-      metadata: JSON.stringify({ total: batch.students.length, valid: validStudentsCount, errorCount: errors.length }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "BATCH_VALIDATE",
+    entityType: "TRANSFER_BATCH",
+    entityId: batch.id,
+    metadata: { total: batch.students.length, valid: validStudentsCount, errorCount: errors.length },
   });
 
   revalidatePath("/sender/batches");
@@ -181,14 +178,12 @@ export async function sendBatchAction(batchId: string): Promise<BatchActionResul
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "BATCH_SEND",
-      entityType: "TRANSFER_BATCH",
-      entityId: batchId,
-      metadata: JSON.stringify({ batchNumber: batch.batchNumber }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "BATCH_SEND",
+    entityType: "TRANSFER_BATCH",
+    entityId: batchId,
+    metadata: { batchNumber: batch.batchNumber },
   });
 
   revalidatePath("/sender/batches");
@@ -210,13 +205,11 @@ export async function acceptBatchAction(batchId: string): Promise<BatchActionRes
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "BATCH_ACCEPT",
-      entityType: "TRANSFER_BATCH",
-      entityId: batchId,
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "BATCH_ACCEPT",
+    entityType: "TRANSFER_BATCH",
+    entityId: batchId,
   });
 
   revalidatePath("/receiver/batches");
@@ -237,14 +230,12 @@ export async function rejectBatchAction(batchId: string, reason: string): Promis
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "BATCH_REJECT",
-      entityType: "TRANSFER_BATCH",
-      entityId: batchId,
-      metadata: JSON.stringify({ reason }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "BATCH_REJECT",
+    entityType: "TRANSFER_BATCH",
+    entityId: batchId,
+    metadata: { reason },
   });
 
   revalidatePath("/receiver/batches");
@@ -270,13 +261,11 @@ export async function processBatchAction(batchId: string): Promise<BatchActionRe
     data: { status: "PROCESSED" },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "BATCH_PROCESS",
-      entityType: "TRANSFER_BATCH",
-      entityId: batchId,
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "BATCH_PROCESS",
+    entityType: "TRANSFER_BATCH",
+    entityId: batchId,
   });
 
   revalidatePath("/receiver/batches");

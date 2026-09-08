@@ -83,6 +83,14 @@ async function loadStudentPhoto(pdfDoc: PDFDocument, photoPath?: string | null):
   if (!photoPath) return null;
 
   try {
+    if (photoPath.startsWith("data:")) {
+      const base64Data = photoPath.split(",")[1];
+      if (!base64Data) return null;
+      const imageBuffer = Buffer.from(base64Data, "base64");
+      const isPng = photoPath.includes("image/png");
+      return isPng ? await pdfDoc.embedPng(imageBuffer) : await pdfDoc.embedJpg(imageBuffer);
+    }
+
     let cleanPath = photoPath.startsWith("/") ? photoPath.slice(1) : photoPath;
     cleanPath = cleanPath.split("?")[0];
     const fullPath = path.join(process.cwd(), "public", cleanPath);
@@ -105,6 +113,19 @@ async function loadStudentPhoto(pdfDoc: PDFDocument, photoPath?: string | null):
  */
 async function loadStudentQRImage(pdfDoc: PDFDocument, qrData?: string | null): Promise<PDFImage | null> {
   if (!qrData) return null;
+
+  if (qrData.startsWith("data:")) {
+    try {
+      const base64Data = qrData.split(",")[1];
+      if (base64Data) {
+        const imageBuffer = Buffer.from(base64Data, "base64");
+        const isPng = qrData.includes("image/png");
+        return isPng ? await pdfDoc.embedPng(imageBuffer) : await pdfDoc.embedJpg(imageBuffer);
+      }
+    } catch {
+      // Fallback to QR generation below
+    }
+  }
 
   if (qrData.startsWith("/") || qrData.startsWith("uploads/")) {
     try {

@@ -9,6 +9,7 @@
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
+import { createSafeAuditLog } from "@/lib/audit";
 import {
   studentSchema,
   customFieldSchema,
@@ -70,106 +71,116 @@ export async function checkStudentIdAvailabilityAction(
  * Enforces `student:create` permission (SENDER, RECEIVER, or ADMIN).
  */
 export async function createStudentAction(input: StudentFormInput): Promise<StudentActionResult> {
-  const session = await requireAuth("student:create");
+  try {
+    const session = await requireAuth("student:create");
 
-  const validated = studentSchema.safeParse(input);
-  if (!validated.success) {
-    return {
-      success: false,
-      error: validated.error.issues[0]?.message ?? "Invalid student data provided.",
-    };
-  }
+    const validated = studentSchema.safeParse(input);
+    if (!validated.success) {
+      return {
+        success: false,
+        error: validated.error.issues[0]?.message ?? "Invalid student data provided.",
+      };
+    }
 
-  const data = validated.data;
+    const data = validated.data;
 
-  // 1. Check duplicate student ID
-  const existingId = await prisma.student.findUnique({
-    where: { studentId: data.studentId },
-  });
-  if (existingId) {
-    return {
-      success: false,
-      error: `A student with ID "${data.studentId}" already exists.`,
-    };
-  }
+    // 1. Check duplicate student ID
+    const existingId = await prisma.student.findUnique({
+      where: { studentId: data.studentId },
+    });
+    if (existingId) {
+      return {
+        success: false,
+        error: `A student with ID "${data.studentId}" already exists.`,
+      };
+    }
 
-  // Gracefully fallback all non-essential fields to sensible defaults
-  const nationalId = data.nationalId?.trim() || null;
-  const rollNumber = data.rollNumber?.trim() || data.studentId;
-  const contactName = data.contactName?.trim() || data.fullName;
-  const cityRegion = data.cityRegion?.trim() || "General";
-  const emergencyContactName = data.emergencyContactName?.trim() || data.fullName;
-  const emergencyContactPhone = data.emergencyContactPhone?.trim() || data.phone;
-  const guardianFullName = data.guardianFullName?.trim() || data.fullName;
-  const nationality = data.nationality?.trim() || "Citizen";
+    // Gracefully fallback all non-essential fields to sensible defaults
+    const nationalId = data.nationalId?.trim() || null;
+    const rollNumber = data.rollNumber?.trim() || data.studentId;
+    const contactName = data.contactName?.trim() || data.fullName;
+    const cityRegion = data.cityRegion?.trim() || "General";
+    const emergencyContactName = data.emergencyContactName?.trim() || data.fullName;
+    const emergencyContactPhone = data.emergencyContactPhone?.trim() || data.phone;
+    const guardianFullName = data.guardianFullName?.trim() || data.fullName;
+    const nationality = data.nationality?.trim() || "Citizen";
 
-  // Strict Requirement: QR codes are NEVER generated internally.
-  // QR codes are imported as external image assets exclusively by the Receiver.
-  const student = await prisma.student.create({
-    data: {
-      studentId: data.studentId,
-      fullName: data.fullName,
-      contactName,
-      grade: data.grade,
-      sex: data.sex,
-      phone: data.phone,
-      cityRegion,
-      emergencyContactName,
-      emergencyContactPhone,
-      bloodType: data.bloodType || null,
-      emailAddress: data.emailAddress || null,
-      address: data.address || null,
-      school: data.school || null,
-      department: data.department || null,
-      academicYear: data.academicYear || null,
-      guardianFullName,
-      rollNumber,
-      nationality,
-      nationalId,
-      dateOfBirth: data.dateOfBirth || null,
-      photoPath: data.photoPath || null,
-      qrCodeData: null, // Populated exclusively when Receiver imports external QR images
-      status: data.status,
-      batchId: data.batchId || null,
-    },
-  });
-
-  // Save custom field values if provided
-  if (data.customFields && Object.keys(data.customFields).length > 0) {
-    const customFields = await prisma.customField.findMany({
-      where: { fieldKey: { in: Object.keys(data.customFields) } },
+    // Strict Requirement: QR codes are NEVER generated internally.
+    // QR codes are imported as external image assets exclusively by the Receiver.
+    const student = await prisma.student.create({
+      data: {
+        studentId: data.studentId,
+        fullName: data.fullName,
+        contactName,
+        grade: data.grade,
+        sex: data.sex,
+        phone: data.phone,
+        cityRegion,
+        emergencyContactName,
+        emergencyContactPhone,
+        bloodType: data.bloodType || null,
+        emailAddress: data.emailAddress || null,
+        address: data.address || null,
+        school: data.school || null,
+        department: data.department || null,
+        academicYear: data.academicYear || null,
+        guardianFullName,
+        rollNumber,
+        nationality,
+        nationalId,
+        dateOfBirth: data.dateOfBirth || null,
+        photoPath: data.photoPath || null,
+        qrCodeData: null, // Populated exclusively when Receiver imports external QR images
+        status: data.status,
+        batchId: data.batchId || null,
+      },
     });
 
-    const entries = customFields
-      .filter((cf) => data.customFields![cf.fieldKey] !== undefined && data.customFields![cf.fieldKey] !== "")
-      .map((cf) => ({
-        customFieldId: cf.id,
-        studentId: student.id,
-        value: String(data.customFields![cf.fieldKey]),
-      }));
+    // Save custom field values if provided
+    if (data.customFields && Object.keys(data.customFields).length > 0) {
+      try {
+        const customFields = await prisma.customField.findMany({
+          where: { fieldKey: { in: Object.keys(data.customFields) } },
+        });
 
-    if (entries.length > 0) {
-      await prisma.customFieldValue.createMany({
-        data: entries,
-      });
+        const entries = customFields
+          .filter((cf) => data.customFields![cf.fieldKey] !== undefined && data.customFields![cf.fieldKey] !== "")
+          .map((cf) => ({
+            customFieldId: cf.id,
+            studentId: student.id,
+            value: String(data.customFields![cf.fieldKey]),
+          }));
+
+        if (entries.length > 0) {
+          await prisma.customFieldValue.createMany({
+            data: entries,
+          });
+        }
+      } catch (cfErr) {
+        console.warn("Notice: Custom fields non-fatal error:", cfErr);
+      }
     }
-  }
 
-  // Record audit log
-  await prisma.auditLog.create({
-    data: {
+    // Record audit log safely
+    await createSafeAuditLog({
       userId: session.userId,
       action: "STUDENT_CREATE",
       entityType: "STUDENT",
       entityId: student.id,
-      metadata: JSON.stringify({ studentId: student.studentId, fullName: student.fullName }),
-    },
-  });
+      metadata: { studentId: student.studentId, fullName: student.fullName },
+    });
 
-  revalidatePath("/students");
-  revalidatePath("/dashboard");
-  revalidatePath("/sender/batches");
-  return { success: true, studentId: student.id };
+    revalidatePath("/students");
+    revalidatePath("/dashboard");
+    revalidatePath("/sender/batches");
+    return { success: true, studentId: student.id };
+  } catch (error: any) {
+    console.error("createStudentAction fatal error caught:", error);
+    return {
+      success: false,
+      error: error?.message || "Failed to create student record. Please try again.",
+    };
+  }
 }
 
 /**
@@ -252,14 +263,12 @@ export async function updateStudentAction(
     }
   }
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "STUDENT_UPDATE",
-      entityType: "STUDENT",
-      entityId: updated.id,
-      metadata: JSON.stringify({ changedFields: Object.keys(input) }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "STUDENT_UPDATE",
+    entityType: "STUDENT",
+    entityId: updated.id,
+    metadata: { changedFields: Object.keys(input) },
   });
 
   revalidatePath("/students");
@@ -278,14 +287,12 @@ export async function deleteStudentAction(id: string): Promise<StudentActionResu
     where: { id },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "STUDENT_DELETE",
-      entityType: "STUDENT",
-      entityId: student.id,
-      metadata: JSON.stringify({ studentId: student.studentId, name: student.fullName }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "STUDENT_DELETE",
+    entityType: "STUDENT",
+    entityId: student.id,
+    metadata: { studentId: student.studentId, name: student.fullName },
   });
 
   revalidatePath("/students");
@@ -414,14 +421,12 @@ export async function createCustomFieldAction(input: CustomFieldInput) {
     data: validated.data,
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "CUSTOM_FIELD_CREATE",
-      entityType: "CUSTOM_FIELD",
-      entityId: field.id,
-      metadata: JSON.stringify(validated.data),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "CUSTOM_FIELD_CREATE",
+    entityType: "CUSTOM_FIELD",
+    entityId: field.id,
+    metadata: validated.data,
   });
 
   revalidatePath("/register");
@@ -435,13 +440,11 @@ export async function deleteCustomFieldAction(id: string) {
 
   await prisma.customField.delete({ where: { id } });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "CUSTOM_FIELD_DELETE",
-      entityType: "CUSTOM_FIELD",
-      entityId: id,
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "CUSTOM_FIELD_DELETE",
+    entityType: "CUSTOM_FIELD",
+    entityId: id,
   });
 
   revalidatePath("/register");
@@ -459,13 +462,11 @@ export async function clearAllStudentsAction() {
   await prisma.student.deleteMany();
   await prisma.transferBatch.deleteMany();
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "PURGE_ALL_STUDENTS",
-      entityType: "STUDENT",
-      metadata: JSON.stringify({ deletedCount: count }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "PURGE_ALL_STUDENTS",
+    entityType: "STUDENT",
+    metadata: { deletedCount: count },
   });
 
   revalidatePath("/students");

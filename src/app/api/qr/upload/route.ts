@@ -45,13 +45,25 @@ export async function POST(request: NextRequest) {
     const uniqueId = crypto.randomBytes(8).toString("hex");
     const safeFileName = `qr_${studentId}_${Date.now()}_${uniqueId}${ext}`;
 
-    const targetDir = path.join(process.cwd(), "public", "uploads", "qr");
-    await fs.mkdir(targetDir, { recursive: true });
+    const isServerless = Boolean(
+      process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.LAMBDA_TASK_ROOT
+    );
 
-    const absolutePath = path.join(targetDir, safeFileName);
-    await fs.writeFile(absolutePath, buffer);
+    let relativePath = `data:${file.type || "image/png"};base64,${buffer.toString("base64")}`;
 
-    const relativePath = `/uploads/qr/${safeFileName}`;
+    if (!isServerless) {
+      try {
+        const targetDir = path.join(process.cwd(), "public", "uploads", "qr");
+        await fs.mkdir(targetDir, { recursive: true });
+        const absolutePath = path.join(targetDir, safeFileName);
+        await fs.writeFile(absolutePath, buffer);
+        relativePath = `/uploads/qr/${safeFileName}`;
+      } catch (writeErr) {
+        console.warn("Notice: Local QR disk write failed, retaining Base64 data URL:", writeErr);
+      }
+    }
 
     // Create StudentQR record
     const qrRecord = await prisma.studentQR.create({
@@ -69,7 +81,7 @@ export async function POST(request: NextRequest) {
     await prisma.student.update({
       where: { id: student.id },
       data: {
-        qrCodeData: relativePath, // Points to external QR image file path!
+        qrCodeData: relativePath, // Points to external QR image (relative path or base64 URI)
       },
     });
 

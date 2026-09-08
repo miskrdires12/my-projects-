@@ -9,6 +9,7 @@
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
+import { createSafeAuditLog } from "@/lib/audit";
 import {
   inspectExcelWorkbook,
   parseExcelWithCustomMapping,
@@ -162,17 +163,15 @@ export async function importExcelStudentsAction(
 
     importedCount = studentsToInsert.length;
 
-    // Record audit event
-    await prisma.auditLog.create({
-      data: {
-        userId: session.userId,
-        action: "STUDENT_BULK_IMPORT",
-        entityType: "STUDENT_BATCH",
-        metadata: JSON.stringify({
-          totalRows: analysis.totalRows,
-          importedCount,
-          skippedDuplicates: databaseDuplicates.length,
-        }),
+    // Record audit event safely
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "STUDENT_BULK_IMPORT",
+      entityType: "STUDENT_BATCH",
+      metadata: {
+        totalRows: analysis.totalRows,
+        importedCount,
+        skippedDuplicates: databaseDuplicates.length,
       },
     });
   }
@@ -220,14 +219,12 @@ export async function saveCardTemplateAction(data: {
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "TEMPLATE_SAVE",
-      entityType: "CARD_TEMPLATE",
-      entityId: template.id,
-      metadata: JSON.stringify({ name: template.name }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "TEMPLATE_SAVE",
+    entityType: "CARD_TEMPLATE",
+    entityId: template.id,
+    metadata: { name: template.name },
   });
 
   revalidatePath("/print-engine");
@@ -256,13 +253,11 @@ export async function matchAndLinkQRCodesAction(
     }
   }
 
-  await prisma.auditLog.create({
-    data: {
-      userId: session.userId,
-      action: "QR_BATCH_LINK",
-      entityType: "STUDENT_QR",
-      metadata: JSON.stringify({ matchedCount: updatedCount }),
-    },
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "QR_BATCH_LINK",
+    entityType: "STUDENT_QR",
+    metadata: { matchedCount: updatedCount },
   });
 
   revalidatePath("/students");

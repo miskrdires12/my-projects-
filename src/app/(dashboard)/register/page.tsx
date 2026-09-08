@@ -181,10 +181,19 @@ export default function RegisterPage() {
         const result = await res.json();
         setOfficialPhotoPath(result.relativePath);
       } else {
-        setOfficialPhotoPath(previewUrl);
+        // Fallback: convert file to Base64 data URL on client so portrait is always attached
+        const reader = new FileReader();
+        reader.onload = () => {
+          setOfficialPhotoPath(reader.result as string);
+        };
+        reader.readAsDataURL(file);
       }
     } catch {
-      setOfficialPhotoPath(previewUrl);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setOfficialPhotoPath(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -245,36 +254,40 @@ export default function RegisterPage() {
     }
 
     startTransition(async () => {
-      const payload: StudentFormInput = {
-        studentId: formData.studentId!,
-        fullName: formData.fullName!,
-        grade: formData.grade!,
-        sex: formData.sex!,
-        phone: formData.phone!,
-        dateOfBirth: formData.dateOfBirth,
-        emailAddress: formData.emailAddress,
-        address: formData.address,
-        school: formData.school,
-        department: formData.department,
-        academicYear: formData.academicYear,
-        guardianFullName: formData.guardianFullName,
-        emergencyContactName: formData.emergencyContactName,
-        emergencyContactPhone: formData.emergencyContactPhone,
-        nationality: formData.nationality,
-        bloodType: formData.bloodType,
-        photoPath: officialPhotoPath,
-        status: formData.status as any,
-        customFields: customFieldValues,
-      };
+      try {
+        const payload: StudentFormInput = {
+          studentId: formData.studentId!,
+          fullName: formData.fullName!,
+          grade: formData.grade!,
+          sex: formData.sex!,
+          phone: formData.phone!,
+          dateOfBirth: formData.dateOfBirth,
+          emailAddress: formData.emailAddress,
+          address: formData.address,
+          school: formData.school,
+          department: formData.department,
+          academicYear: formData.academicYear,
+          guardianFullName: formData.guardianFullName,
+          emergencyContactName: formData.emergencyContactName,
+          emergencyContactPhone: formData.emergencyContactPhone,
+          nationality: formData.nationality,
+          bloodType: formData.bloodType,
+          photoPath: officialPhotoPath,
+          status: formData.status as any,
+          customFields: customFieldValues,
+        };
 
-      const result = await createStudentAction(payload);
-      if (result.success && result.studentId) {
-        setSuccessId(result.studentId);
-        try {
-          localStorage.removeItem("sb_student_draft");
-        } catch {}
-      } else {
-        setErrorMessage(result.error || "Failed to register student.");
+        const result = await createStudentAction(payload);
+        if (result.success && result.studentId) {
+          setSuccessId(result.studentId);
+          try {
+            localStorage.removeItem("sb_student_draft");
+          } catch {}
+        } else {
+          setErrorMessage(result.error || "Failed to register student.");
+        }
+      } catch (err: any) {
+        setErrorMessage(err?.message || "Communication failure while registering student.");
       }
     });
   };
