@@ -1,0 +1,145 @@
+// ============================================================================
+// STUDENT BRIDGE — SECURE SERVER-SIDE IMAGE PROCESSING PIPELINE
+// Uses sharp to validate magic numbers, prevent path traversal, strip metadata,
+// resize to standardized ID card dimensions (max 600x800), and save securely.
+// Also provides real-name sanitization and duplicate disambiguation.
+// ============================================================================
+
+import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
+import crypto from "crypto";
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+const UPLOAD_SUBDIR = "uploads/photos";
+
+export interface ProcessedImageResult {
+  fileName: string;
+  relativePath: string;
+  absolutePath: string;
+  width: number;
+  height: number;
+  format: string;
+  sizeBytes: number;
+}
+
+/**
+ * Validates, strips EXIF, normalizes dimensions to max 600×800 (portrait),
+ * converts to high-efficiency JPEG (quality 85), and stores securely in /public/uploads/photos.
+ */
+export async function processAndSaveStudentPhoto(
+  fileBuffer: Buffer,
+  mimeType: string,
+  subfolder: "edited" | "original" = "edited"
+): Promise<ProcessedImageResult> {
+  // 1. Enforce payload size limit
+  if (fileBuffer.length > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`Uploaded file exceeds maximum allowed size of 10 MB.`);
+  }
+
+  // 2. Validate MIME type parameter
+  const normalizedMime = mimeType.toLowerCase();
+  if (!ALLOWED_MIME_TYPES.includes(normalizedMime) && !normalizedMime.includes("image/")) {
+    throw new Error(`Unsupported image type: ${mimeType}. Allowed formats: JPEG, PNG, WEBP.`);
+  }
+
+  // 3. Inspect image buffer with Sharp to verify real magic numbers and dimensions
+  let metadata: sharp.Metadata;
+  try {
+    const probe = sharp(fileBuffer);
+    metadata = await probe.metadata();
+  } catch {
+    throw new Error("Invalid or corrupted image file structure.");
+  }
+
+  if (!metadata.format || !["jpeg", "png", "webp"].includes(metadata.format)) {
+    throw new Error(`Image payload does not match genuine JPEG, PNG, or WEBP binary signature.`);
+  }
+
+  // 4. Generate cryptographically safe unique filename
+  const randomId = crypto.randomBytes(12).toString("hex");
+  const fileName = `${subfolder}_${Date.now()}_${randomId}.jpg`;
+
+  const publicDir = path.join(process.cwd(), "public");
+  const targetDir = path.join(publicDir, UPLOAD_SUBDIR, subfolder);
+  await fs.mkdir(targetDir, { recursive: true });
+
+  const absoluteTarget = path.join(targetDir, fileName);
+  const relativePath = `/${UPLOAD_SUBDIR}/${subfolder}/${fileName}`;
+
+  // 5. Transform: auto-orient, resize to max 600x800 portrait, 85 quality JPEG
+  const processedBuffer = await sharp(fileBuffer)
+    .rotate()
+    .resize(600, 800, {
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .jpeg({
+      quality: 85,
+      mozjpeg: true,
+    })
+    .toBuffer();
+
+  await fs.writeFile(absoluteTarget, processedBuffer);
+
+  const finalMetadata = await sharp(processedBuffer).metadata();
+
+  return {
+    fileName,
+    relativePath,
+    absolutePath: targetDir,
+    width: finalMetadata.width ?? 600,
+    height: finalMetadata.height ?? 800,
+    format: "jpeg",
+    sizeBytes: processedBuffer.length,
+  };
+}
+
+/**
+ * Sanitizes a student's real name for safe filesystem usage without
+ * modifying the database record. Handles illegal characters like / \ : * ? " < > |
+ * and provides duplicate disambiguation with studentId.
+ *
+ * Example: "Abebe / K" -> "Abebe - K.jpg"
+ * If duplicate: "Miskr Dires - STU001.jpg"
+ */
+export function generateSafePhotoFilename(
+  realName: string,
+  studentId: string,
+  isDuplicateOrAllNames: boolean | string[] = false,
+  extension: string = "jpg"
+): string {
+  if (!realName || !realName.trim()) {
+    return `${studentId}.${extension}`;
+  }
+
+  const isDuplicate = Array.isArray(isDuplicateOrAllNames)
+    ? isDuplicateOrAllNames.filter((n) => n.trim().toLowerCase() === realName.trim().toLowerCase()).length > 1
+    : Boolean(isDuplicateOrAllNames);
+
+  // Replace illegal filesystem characters: / \ : * ? " < > | and control chars
+  let safeName = realName
+    .replace(/[/\\]/g, " - ")
+    .replace(/[:*?"<>|]/g, " - ")
+    .replace(/[\x00-\x1F\x7F]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*-\s*/g, " - ")
+    .replace(/(?: - )+/g, " - ")
+    .trim();
+
+  // Remove leading / trailing periods, dashes, or underscores
+  safeName = safeName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "");
+
+  if (!safeName) {
+    safeName = studentId;
+  }
+
+  const cleanExt = extension.replace(/^\./, "");
+
+  if (isDuplicate) {
+    return `${safeName} - ${studentId}.${cleanExt}`;
+  }
+
+  return `${safeName}.${cleanExt}`;
+}
