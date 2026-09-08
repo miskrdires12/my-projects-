@@ -69,20 +69,20 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState<Partial<StudentFormInput>>({
     studentId: `SB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
     fullName: "",
-    grade: "Grade 10-A",
+    grade: "",
     sex: "Male",
     phone: "",
     emailAddress: "",
     address: "",
-    school: "Central High School",
-    department: "General Studies",
-    academicYear: "2026-2027",
+    school: "",
+    department: "",
+    academicYear: "",
     guardianFullName: "",
     emergencyContactPhone: "",
     emergencyContactName: "",
-    nationality: "United States",
-    bloodType: "O+",
-    dateOfBirth: new Date("2008-01-01"),
+    nationality: "",
+    bloodType: "",
+    dateOfBirth: undefined,
     status: "ACTIVE",
   });
 
@@ -125,7 +125,12 @@ export default function RegisterPage() {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "dateOfBirth" ? new Date(value) : value,
+      [name]:
+        name === "dateOfBirth"
+          ? value
+            ? new Date(value)
+            : undefined
+          : value,
     }));
   };
 
@@ -342,20 +347,20 @@ export default function RegisterPage() {
     setFormData({
       studentId: `SB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
       fullName: "",
-      grade: "Grade 10-A",
+      grade: "",
       sex: "Male",
       phone: "",
       emailAddress: "",
       address: "",
-      school: "Central High School",
-      department: "General Studies",
-      academicYear: "2026-2027",
+      school: "",
+      department: "",
+      academicYear: "",
       guardianFullName: "",
       emergencyContactPhone: "",
       emergencyContactName: "",
-      nationality: "United States",
-      bloodType: "O+",
-      dateOfBirth: new Date("2008-01-01"),
+      nationality: "",
+      bloodType: "",
+      dateOfBirth: undefined,
       status: "ACTIVE",
     });
     setCustomFieldValues({});
@@ -591,49 +596,49 @@ export default function RegisterPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  School / Institution
+                  School / Institution (Optional)
                 </label>
                 <input
                   type="text"
                   name="school"
                   value={formData.school || ""}
                   onChange={handleChange}
-                  placeholder="e.g. Lincoln High School"
+                  placeholder="e.g. Lincoln High School (Optional)"
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Department / Track
+                  Department / Track (Optional)
                 </label>
                 <input
                   type="text"
                   name="department"
                   value={formData.department || ""}
                   onChange={handleChange}
-                  placeholder="e.g. Natural Sciences"
+                  placeholder="e.g. Natural Sciences (Optional)"
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Academic Year
+                  Academic Year (Optional)
                 </label>
                 <input
                   type="text"
                   name="academicYear"
                   value={formData.academicYear || ""}
                   onChange={handleChange}
-                  placeholder="e.g. 2026-2027"
+                  placeholder="e.g. 2026-2027 (Optional)"
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Date of Birth
+                  Date of Birth (Optional)
                 </label>
                 <input
                   type="date"
@@ -650,28 +655,29 @@ export default function RegisterPage() {
 
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Email Address
+                  Email Address (Optional)
                 </label>
                 <input
                   type="email"
                   name="emailAddress"
                   value={formData.emailAddress || ""}
                   onChange={handleChange}
-                  placeholder="student@school.edu"
+                  placeholder="student@school.edu (Optional)"
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Blood Group
+                  Blood Group (Optional)
                 </label>
                 <select
                   name="bloodType"
-                  value={formData.bloodType || "O+"}
+                  value={formData.bloodType || ""}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
                 >
+                  <option value="">Select Blood Group (Optional)</option>
                   <option value="A+">A+</option>
                   <option value="A-">A-</option>
                   <option value="B+">B+</option>
@@ -685,42 +691,70 @@ export default function RegisterPage() {
 
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Parent / Guardian Legal Name
+                  Parent / Guardian Legal Name (Optional)
                 </label>
                 <input
                   type="text"
                   name="guardianFullName"
                   value={formData.guardianFullName || ""}
                   onChange={handleChange}
-                  placeholder="Guardian's Name"
+                  placeholder="Guardian's Name (Optional)"
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Emergency Phone Contact
+                  Emergency Phone Contact (Optional)
                 </label>
                 <input
                   type="text"
                   name="emergencyContactPhone"
                   value={formData.emergencyContactPhone || ""}
                   onChange={handleChange}
-                  placeholder="+1 (555) 999-8888"
+                  placeholder="+1 (555) 999-8888 (Optional)"
+                  className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1">
+                  Emergency Contact Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  name="emergencyContactName"
+                  value={formData.emergencyContactName || ""}
+                  onChange={handleChange}
+                  placeholder="e.g. Jane Doe (Optional)"
+                  className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-1">
+                  Nationality (Optional)
+                </label>
+                <input
+                  type="text"
+                  name="nationality"
+                  value={formData.nationality || ""}
+                  onChange={handleChange}
+                  placeholder="e.g. Citizen / Nationality (Optional)"
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
                 />
               </div>
 
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Residential Street Address
+                  Residential Street Address (Optional)
                 </label>
                 <input
                   type="text"
                   name="address"
                   value={formData.address || ""}
                   onChange={handleChange}
-                  placeholder="e.g. 742 Evergreen Terrace"
+                  placeholder="e.g. 742 Evergreen Terrace (Optional)"
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
                 />
               </div>

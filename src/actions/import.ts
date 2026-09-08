@@ -113,15 +113,15 @@ export async function importExcelStudentsAction(
 
       await prisma.$transaction(
         chunk.map((student) => {
-          const rollNumber = student.rollNumber || student.studentId;
-          const nationalId = student.nationalId || `NID-${student.studentId}`;
-          const contactName = student.contactName || student.fullName;
-          const cityRegion = student.cityRegion || "General";
-          const emergencyContactName = student.emergencyContactName || student.fullName;
-          const emergencyContactPhone = student.emergencyContactPhone || student.phone;
-          const guardianFullName = student.guardianFullName || student.fullName;
-          const nationality = student.nationality || "Citizen";
-          const dateOfBirth = student.dateOfBirth || new Date("2008-01-01");
+          const rollNumber = student.rollNumber || "";
+          const nationalId = student.nationalId || null;
+          const contactName = student.contactName || "";
+          const cityRegion = student.cityRegion || "";
+          const emergencyContactName = student.emergencyContactName || "";
+          const emergencyContactPhone = student.emergencyContactPhone || "";
+          const guardianFullName = student.guardianFullName || "";
+          const nationality = student.nationality || "";
+          const dateOfBirth = student.dateOfBirth || null;
 
           const qrCodeData = createStudentQRPayload({
             studentId: student.studentId,

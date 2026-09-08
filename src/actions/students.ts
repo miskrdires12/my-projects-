@@ -96,40 +96,47 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
       };
     }
 
-    // Gracefully fallback all non-essential fields to sensible defaults
+    // Unprovided optional fields remain null or empty strings without injecting fake defaults
     const nationalId = data.nationalId?.trim() || null;
-    const rollNumber = data.rollNumber?.trim() || data.studentId;
-    const contactName = data.contactName?.trim() || data.fullName;
-    const cityRegion = data.cityRegion?.trim() || "General";
-    const emergencyContactName = data.emergencyContactName?.trim() || data.fullName;
-    const emergencyContactPhone = data.emergencyContactPhone?.trim() || data.phone;
-    const guardianFullName = data.guardianFullName?.trim() || data.fullName;
-    const nationality = data.nationality?.trim() || "Citizen";
+    const rollNumber = data.rollNumber?.trim() || "";
+    const contactName = data.contactName?.trim() || "";
+    const cityRegion = data.cityRegion?.trim() || "";
+    const emergencyContactName = data.emergencyContactName?.trim() || "";
+    const emergencyContactPhone = data.emergencyContactPhone?.trim() || "";
+    const guardianFullName = data.guardianFullName?.trim() || "";
+    const nationality = data.nationality?.trim() || "";
+    const bloodType = data.bloodType?.trim() || null;
+    const emailAddress = data.emailAddress?.trim() || null;
+    const address = data.address?.trim() || null;
+    const school = data.school?.trim() || null;
+    const department = data.department?.trim() || null;
+    const academicYear = data.academicYear?.trim() || null;
+    const dateOfBirth = data.dateOfBirth || null;
 
     // Strict Requirement: QR codes are NEVER generated internally.
     // QR codes are imported as external image assets exclusively by the Receiver.
     const student = await prisma.student.create({
       data: {
-        studentId: data.studentId,
-        fullName: data.fullName,
+        studentId: data.studentId.trim(),
+        fullName: data.fullName.trim(),
         contactName,
-        grade: data.grade,
+        grade: data.grade.trim(),
         sex: data.sex,
-        phone: data.phone,
+        phone: data.phone.trim(),
         cityRegion,
         emergencyContactName,
         emergencyContactPhone,
-        bloodType: data.bloodType || null,
-        emailAddress: data.emailAddress || null,
-        address: data.address || null,
-        school: data.school || null,
-        department: data.department || null,
-        academicYear: data.academicYear || null,
+        bloodType,
+        emailAddress,
+        address,
+        school,
+        department,
+        academicYear,
         guardianFullName,
         rollNumber,
         nationality,
         nationalId,
-        dateOfBirth: data.dateOfBirth || null,
+        dateOfBirth,
         photoPath: data.photoPath || null,
         qrCodeData: null, // Populated exclusively when Receiver imports external QR images
         status: data.status,
