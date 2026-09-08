@@ -20,36 +20,44 @@ export async function loginAction(
   _prevState: ActionResult | null,
   formData: FormData
 ): Promise<ActionResult<SessionPayload>> {
-  const rawData = {
-    emailOrUsername: formData.get("emailOrUsername"),
-    password: formData.get("password"),
-  };
+  try {
+    const rawData = {
+      emailOrUsername: formData.get("emailOrUsername"),
+      password: formData.get("password"),
+    };
 
-  const parsed = loginSchema.safeParse(rawData);
-  if (!parsed.success) {
+    const parsed = loginSchema.safeParse(rawData);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid input parameters",
+      };
+    }
+
+    const result = await login({
+      emailOrUsername: parsed.data.emailOrUsername,
+      passwordPlain: parsed.data.password,
+    });
+
+    if (!result.success || !result.user) {
+      return {
+        success: false,
+        error: result.error ?? "Invalid username or password",
+      };
+    }
+
+    revalidatePath("/", "layout");
+    return {
+      success: true,
+      data: result.user,
+    };
+  } catch (error: any) {
+    console.error("Login action critical error:", error);
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid input parameters",
+      error: error?.message || "Authentication service temporarily unavailable. Please try again.",
     };
   }
-
-  const result = await login({
-    emailOrUsername: parsed.data.emailOrUsername,
-    passwordPlain: parsed.data.password,
-  });
-
-  if (!result.success || !result.user) {
-    return {
-      success: false,
-      error: result.error ?? "Invalid username or password",
-    };
-  }
-
-  revalidatePath("/", "layout");
-  return {
-    success: true,
-    data: result.user,
-  };
 }
 
 export async function logoutAction(): Promise<void> {

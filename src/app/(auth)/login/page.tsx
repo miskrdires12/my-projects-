@@ -33,12 +33,16 @@ export default function LoginPage() {
     formData.set("password", password);
 
     startTransition(async () => {
-      const result = await loginAction(null, formData);
-      if (!result.success || !result.data) {
-        setErrorMessage(result.error ?? "Authentication failed");
-      } else {
-        setSuccessRole(result.data.role);
-        router.push("/dashboard");
+      try {
+        const result = await loginAction(null, formData);
+        if (!result.success || !result.data) {
+          setErrorMessage(result.error ?? "Authentication failed");
+        } else {
+          setSuccessRole(result.data.role);
+          router.push("/dashboard");
+        }
+      } catch (err: any) {
+        setErrorMessage(err?.message || "Failed to communicate with authentication service.");
       }
     });
   };

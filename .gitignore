@@ -33,8 +33,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Prisma & SQLite local databases (user will feed fresh data)
-prisma/*.db
+# Prisma journals
 prisma/*.db-journal
 
 # Temporary scratch tests (keep repo clean)
