@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { StudentDirectoryClient } from "./client";
+import { rehydrateDatabaseFromCloud } from "@/lib/sync-engine";
 
 export default async function StudentsPage({
   searchParams,
@@ -36,6 +37,12 @@ export default async function StudentsPage({
 
   const page = Math.max(1, parseInt(searchParams.page || "1", 10));
   const pageSize = Math.min(100, Math.max(10, parseInt(searchParams.pageSize || "25", 10)));
+
+  // If local database is empty on this serverless container, auto-rehydrate from Cloud Sync
+  const preCount = await prisma.student.count();
+  if (preCount === 0) {
+    await rehydrateDatabaseFromCloud();
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};

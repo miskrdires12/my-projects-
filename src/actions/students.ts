@@ -16,6 +16,7 @@ import {
   type StudentFormInput,
   type CustomFieldInput,
 } from "@/lib/validations";
+import { publishStudentSync, rehydrateDatabaseFromCloud } from "@/lib/sync-engine";
 
 export interface StudentFilterParams {
   query?: string;
@@ -170,6 +171,23 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
       metadata: { studentId: student.studentId, fullName: student.fullName },
     });
 
+    // Broadcast to Global Cloud Sync Bus so all lambdas and devices stay in sync
+    publishStudentSync("UPSERT", {
+      id: student.id,
+      studentId: student.studentId,
+      fullName: student.fullName,
+      grade: student.grade,
+      sex: student.sex,
+      phone: student.phone,
+      school: student.school,
+      department: student.department,
+      academicYear: student.academicYear,
+      photoPath: student.photoPath,
+      qrCodeData: student.qrCodeData || `STUDENT:${student.studentId}`,
+      status: student.status,
+      createdAt: student.createdAt.toISOString(),
+    }).catch(() => {});
+
     revalidatePath("/students");
     revalidatePath("/dashboard");
     revalidatePath("/sender/batches");
@@ -295,6 +313,9 @@ export async function deleteStudentAction(id: string): Promise<StudentActionResu
     metadata: { studentId: student.studentId, name: student.fullName },
   });
 
+  // Broadcast deletion to Cloud Sync Bus
+  publishStudentSync("DELETE", student.studentId).catch(() => {});
+
   revalidatePath("/students");
   revalidatePath("/dashboard");
   return { success: true };
@@ -363,7 +384,7 @@ export async function getStudentsAction(params: StudentFilterParams = {}) {
     where.qrCodes = { none: {} };
   }
 
-  const [totalCount, students] = await Promise.all([
+  let [totalCount, students] = await Promise.all([
     prisma.student.count({ where }),
     prisma.student.findMany({
       where,
@@ -379,6 +400,29 @@ export async function getStudentsAction(params: StudentFilterParams = {}) {
       take: pageSize,
     }),
   ]);
+
+  // Cold Lambda Auto-Rehydration from Cloud Sync Bus
+  if (totalCount === 0 && (!query || !query.trim())) {
+    const rehydrated = await rehydrateDatabaseFromCloud();
+    if (rehydrated > 0) {
+      [totalCount, students] = await Promise.all([
+        prisma.student.count({ where }),
+        prisma.student.findMany({
+          where,
+          include: {
+            photos: { take: 1, orderBy: { createdAt: "desc" } },
+            qrCodes: { take: 1, orderBy: { createdAt: "desc" } },
+            customValues: {
+              include: { customField: true },
+            },
+          },
+          orderBy: { [sortBy]: sortOrder },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+    }
+  }
 
   return {
     students,
@@ -468,6 +512,9 @@ export async function clearAllStudentsAction() {
     entityType: "STUDENT",
     metadata: { deletedCount: count },
   });
+
+  // Broadcast deletion across all connected devices and lambdas
+  publishStudentSync("CLEAR").catch(() => {});
 
   revalidatePath("/students");
   revalidatePath("/dashboard");

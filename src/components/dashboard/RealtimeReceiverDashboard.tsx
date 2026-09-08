@@ -21,6 +21,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 
+import { subscribeToCloudSync } from "@/lib/sync-client";
+
 interface ReceiverDashboardProps {
   initialData: {
     totalStudents: number;
@@ -47,6 +49,39 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     setLastUpdated(new Date().toLocaleTimeString());
   }, []);
 
+  // Listen to Global Cloud Sync Bus in real-time
+  useEffect(() => {
+    const unsubscribe = subscribeToCloudSync(
+      (newStudent) => {
+        setData((prev) => ({
+          ...prev,
+          totalStudents: prev.totalStudents + 1,
+          photosCount: newStudent.photoPath ? prev.photosCount + 1 : prev.photosCount,
+          qrCount: newStudent.qrCodeData ? prev.qrCount + 1 : prev.qrCount,
+          readyForPrintCount: prev.readyForPrintCount + 1,
+        }));
+        setLastUpdated(new Date().toLocaleTimeString());
+      },
+      () => {
+        fetchMetrics();
+      },
+      () => {
+        setData((prev) => ({
+          ...prev,
+          totalStudents: 0,
+          photosCount: 0,
+          qrCount: 0,
+          readyForPrintCount: 0,
+          recentBatches: [],
+          missingPhotos: [],
+          missingQRs: [],
+        }));
+        setLastUpdated(new Date().toLocaleTimeString());
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
   const fetchMetrics = useCallback(async () => {
     try {
       setIsRefreshing(true);
@@ -64,16 +99,24 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           }
         } catch {}
 
-        setData({
-          totalStudents: Math.max(json.metrics.totalStudents, localCount),
-          photosCount: Math.max(json.metrics.photosCount, localPhotos),
-          qrCount: Math.max(json.metrics.qrCount, localCount),
-          readyForPrintCount: Math.max(json.metrics.readyForPrintCount, localCount),
-          pendingVerification: json.metrics.pendingVerification,
-          activeJobsCount: json.metrics.activeJobsCount,
-          recentBatches: json.recentBatches || [],
-          missingPhotos: json.missingPhotos || [],
-          missingQRs: json.missingQRs || [],
+        setData((prev) => {
+          // Never drop student counts to 0 if we previously had students
+          const total = Math.max(json.metrics.totalStudents, localCount, prev.totalStudents);
+          const photos = Math.max(json.metrics.photosCount, localPhotos, prev.photosCount);
+          const qr = Math.max(json.metrics.qrCount, localCount, prev.qrCount);
+          const ready = Math.max(json.metrics.readyForPrintCount, localCount, prev.readyForPrintCount);
+
+          return {
+            totalStudents: total,
+            photosCount: photos,
+            qrCount: qr,
+            readyForPrintCount: ready,
+            pendingVerification: json.metrics.pendingVerification,
+            activeJobsCount: json.metrics.activeJobsCount,
+            recentBatches: json.recentBatches && json.recentBatches.length > 0 ? json.recentBatches : prev.recentBatches,
+            missingPhotos: json.missingPhotos || [],
+            missingQRs: json.missingQRs || [],
+          };
         });
         setLastUpdated(new Date().toLocaleTimeString());
       }

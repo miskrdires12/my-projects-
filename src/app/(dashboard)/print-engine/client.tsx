@@ -31,6 +31,7 @@ import {
   DEFAULT_FIELD_CONFIG,
 } from "@/components/print-engine/VisualCardDesigner";
 import type { CardFieldConfig } from "@/types/print";
+import { subscribeToCloudSync } from "@/lib/sync-client";
 
 export interface StudentProjection {
   id: string;
@@ -78,27 +79,53 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Synchronize with local storage enrolled students so they persist across lambda container cycles
+  // Synchronize with local storage and cloud sync bus so they persist across lambda container cycles
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("sb_enrolled_students");
-      if (raw) {
-        const localList: StudentProjection[] = JSON.parse(raw);
-        const map = new Map<string, StudentProjection>();
-        localList.forEach((s) => map.set(s.studentId, s));
-        students.forEach((s) => map.set(s.studentId, s));
-        const merged = Array.from(map.values());
-        setDisplayStudents(merged);
-        setSelectedIds(new Set(merged.map((s) => s.id)));
-        setImpositionSlots((prev) => {
-          if (prev.some(Boolean)) return prev;
-          return Array.from({ length: 8 }).map((_, idx) => merged[idx] || null);
-        });
-        return;
-      }
-    } catch {}
-    setDisplayStudents(students);
+    const loadStudents = async () => {
+      let localList: StudentProjection[] = [];
+      try {
+        const raw = localStorage.getItem("sb_enrolled_students");
+        if (raw) localList = JSON.parse(raw);
+      } catch {}
+
+      const map = new Map<string, StudentProjection>();
+      localList.forEach((s) => map.set(s.studentId, s));
+      students.forEach((s) => map.set(s.studentId, s));
+
+      try {
+        const res = await fetch("/api/students/sync");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.students)) {
+            data.students.forEach((s: any) => map.set(s.studentId, s));
+          }
+        }
+      } catch {}
+
+      const merged = Array.from(map.values());
+      setDisplayStudents(merged);
+      setSelectedIds(new Set(merged.map((s) => s.id)));
+      setImpositionSlots((prev) => {
+        if (prev.some(Boolean)) return prev;
+        return Array.from({ length: 8 }).map((_, idx) => merged[idx] || null);
+      });
+    };
+
+    loadStudents();
   }, [students]);
+
+  // Real-time Cloud Sync Listener
+  useEffect(() => {
+    const unsubscribe = subscribeToCloudSync((newStudent) => {
+      setDisplayStudents((prev) => {
+        const map = new Map<string, StudentProjection>();
+        prev.forEach((s) => map.set(s.studentId, s));
+        map.set(newStudent.studentId, newStudent);
+        return Array.from(map.values());
+      });
+    });
+    return () => unsubscribe();
+  }, []);
 
   const selectedCount = selectedIds.size;
   const cardsPerPage = 8;

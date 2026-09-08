@@ -30,6 +30,7 @@ import {
   getCustomFieldsAction,
 } from "@/actions/students";
 import type { StudentFormInput } from "@/lib/validations";
+import { publishStudentSync } from "@/lib/sync-client";
 
 interface CustomFieldMeta {
   id: string;
@@ -322,6 +323,9 @@ export default function RegisterPage() {
             const updated = [newRecord, ...existing.filter((s: any) => s.studentId !== payload.studentId)];
             localStorage.setItem("sb_enrolled_students", JSON.stringify(updated));
             window.dispatchEvent(new Event("storage"));
+
+            // Broadcast immediately to Global Cloud Sync Bus (cross-device real-time sync)
+            publishStudentSync("UPSERT", newRecord).catch(() => {});
           } catch (e) {
             console.warn("Dual persistence save warning:", e);
           }

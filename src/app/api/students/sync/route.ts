@@ -1,8 +1,52 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import {
+  fetchCloudStudents,
+  publishStudentSync,
+  rehydrateDatabaseFromCloud,
+} from "@/lib/sync-engine";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * GET: Rehydrates cold Lambda container and returns all active synchronized students.
+ */
+export async function GET() {
+  try {
+    // 1. Check local database
+    let dbStudents = await prisma.student.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+
+    // 2. If container has 0 students, pull from Cloud Sync
+    if (dbStudents.length === 0) {
+      await rehydrateDatabaseFromCloud();
+      dbStudents = await prisma.student.findMany({
+        orderBy: { createdAt: "desc" },
+      });
+    }
+
+    // 3. Merge with any fresh cloud students
+    const cloudStudents = await fetchCloudStudents();
+    const map = new Map<string, any>();
+    cloudStudents.forEach((s) => map.set(s.studentId, s));
+    dbStudents.forEach((s) => map.set(s.studentId, s));
+
+    const finalStudents = Array.from(map.values());
+    return NextResponse.json({
+      success: true,
+      students: finalStudents,
+      totalCount: finalStudents.length,
+    });
+  } catch (err: any) {
+    console.error("Student sync GET error:", err);
+    return NextResponse.json({ error: err.message, students: [] }, { status: 500 });
+  }
+}
+
+/**
+ * POST: Ingests students from client, upserts to SQLite, and broadcasts to Cloud Sync.
+ */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -46,6 +90,9 @@ export async function POST(request: Request) {
             status: s.status || "ACTIVE",
           },
         });
+
+        // Broadcast to Global Cloud Sync Bus
+        publishStudentSync("UPSERT", s).catch(() => {});
         syncedCount++;
       } catch (upsertErr) {
         console.warn(`Sync upsert failed for student ${s.studentId}:`, upsertErr);

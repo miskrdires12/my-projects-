@@ -16,6 +16,8 @@ import {
   Clock,
 } from "lucide-react";
 
+import { subscribeToCloudSync } from "@/lib/sync-client";
+
 interface SenderDashboardProps {
   initialData: {
     totalEnrolled: number;
@@ -41,6 +43,36 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
     setLastUpdated(new Date().toLocaleTimeString());
   }, []);
 
+  // Listen to Global Cloud Sync Bus in real-time
+  useEffect(() => {
+    const unsubscribe = subscribeToCloudSync(
+      (newStudent) => {
+        setData((prev) => ({
+          ...prev,
+          totalEnrolled: prev.totalEnrolled + 1,
+          enrolledToday: prev.enrolledToday + 1,
+          photosCaptured: newStudent.photoPath ? prev.photosCaptured + 1 : prev.photosCaptured,
+          recentStudents: [newStudent, ...prev.recentStudents.filter((s) => s.studentId !== newStudent.studentId)].slice(0, 10),
+        }));
+        setLastUpdated(new Date().toLocaleTimeString());
+      },
+      () => {
+        fetchMetrics();
+      },
+      () => {
+        setData((prev) => ({
+          ...prev,
+          totalEnrolled: 0,
+          enrolledToday: 0,
+          photosCaptured: 0,
+          recentStudents: [],
+        }));
+        setLastUpdated(new Date().toLocaleTimeString());
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
   const fetchMetrics = useCallback(async () => {
     try {
       setIsRefreshing(true);
@@ -59,22 +91,33 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
           }
         } catch {}
 
-        const mergedStudents = [...(json.recentStudents || [])];
-        for (const ls of localStudents) {
-          if (!mergedStudents.some((ms: any) => ms.studentId === ls.studentId)) {
-            mergedStudents.unshift(ls);
-          }
-        }
+        setData((prev) => {
+          const total = Math.max(json.metrics.totalEnrolled, localCount, prev.totalEnrolled);
+          const today = Math.max(json.metrics.enrolledToday, localCount, prev.enrolledToday);
+          const photos = Math.max(json.metrics.photosCaptured, localPhotos, prev.photosCaptured);
 
-        setData({
-          totalEnrolled: Math.max(json.metrics.totalEnrolled, localCount),
-          enrolledToday: Math.max(json.metrics.enrolledToday, localCount),
-          photosCaptured: Math.max(json.metrics.photosCaptured, localPhotos),
-          totalBatches: json.metrics.totalBatches,
-          draftBatchesCount: json.metrics.draftBatchesCount,
-          sentBatchesCount: json.metrics.sentBatchesCount,
-          recentStudents: mergedStudents.slice(0, 10),
-          recentBatches: json.recentBatches || [],
+          const mergedStudents = [...(json.recentStudents || [])];
+          for (const ls of localStudents) {
+            if (!mergedStudents.some((ms: any) => ms.studentId === ls.studentId)) {
+              mergedStudents.unshift(ls);
+            }
+          }
+          for (const ps of prev.recentStudents) {
+            if (!mergedStudents.some((ms: any) => ms.studentId === ps.studentId)) {
+              mergedStudents.push(ps);
+            }
+          }
+
+          return {
+            totalEnrolled: total,
+            enrolledToday: today,
+            photosCaptured: photos,
+            totalBatches: json.metrics.totalBatches,
+            draftBatchesCount: json.metrics.draftBatchesCount,
+            sentBatchesCount: json.metrics.sentBatchesCount,
+            recentStudents: mergedStudents.slice(0, 10),
+            recentBatches: json.recentBatches || prev.recentBatches,
+          };
         });
         setLastUpdated(new Date().toLocaleTimeString());
       }

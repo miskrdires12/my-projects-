@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { rehydrateDatabaseFromCloud } from "@/lib/sync-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,12 @@ export async function GET(request: Request) {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    // If local database is empty on this lambda container, attempt cloud rehydration
+    const preCount = await prisma.student.count();
+    if (preCount === 0) {
+      await rehydrateDatabaseFromCloud();
+    }
 
     if (isSender) {
       const [

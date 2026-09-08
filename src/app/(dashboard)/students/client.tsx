@@ -28,6 +28,7 @@ import {
 import Link from "next/link";
 import { deleteStudentAction, clearAllStudentsAction } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
+import { subscribeToCloudSync } from "@/lib/sync-client";
 
 interface StudentExtended {
   id: string;
@@ -83,32 +84,72 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // Dual-Persistence Client State
   const [displayStudents, setDisplayStudents] = useState<StudentExtended[]>(students);
 
-  // Sync with props when server updates and load dual-persistence localStorage students
+  // 1. Initial Load: Merge server students, localStorage, and pull from /api/students/sync
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("sb_enrolled_students");
-      if (raw) {
-        const localList: StudentExtended[] = JSON.parse(raw);
-        const map = new Map<string, StudentExtended>();
-        localList.forEach((s) => map.set(s.studentId, s));
-        students.forEach((s) => map.set(s.studentId, s));
-        const merged = Array.from(map.values());
-        setDisplayStudents(merged);
+    const loadAndMerge = async () => {
+      let localList: StudentExtended[] = [];
+      try {
+        const raw = localStorage.getItem("sb_enrolled_students");
+        if (raw) localList = JSON.parse(raw);
+      } catch {}
 
-        // Sync local students to serverless container database
-        fetch("/api/students/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ students: localList }),
-        }).catch(() => {});
-        return;
-      }
-    } catch {}
-    setDisplayStudents(students);
+      const map = new Map<string, StudentExtended>();
+      localList.forEach((s) => map.set(s.studentId, s));
+      students.forEach((s) => map.set(s.studentId, s));
+
+      // Also pull latest from /api/students/sync (which rehydrates from Cloud Sync if container was empty)
+      try {
+        const res = await fetch("/api/students/sync");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.students)) {
+            data.students.forEach((s: any) => map.set(s.studentId, s));
+          }
+        }
+      } catch {}
+
+      const merged = Array.from(map.values());
+      setDisplayStudents(merged);
+      try {
+        localStorage.setItem("sb_enrolled_students", JSON.stringify(merged));
+      } catch {}
+    };
+
+    loadAndMerge();
   }, [students]);
 
-  // Real-time synchronization across browser tabs and storage
+  // 2. Real-time Live Sync across devices (Mobile Phone to Receiver Desktop)
   useEffect(() => {
+    const unsubscribe = subscribeToCloudSync(
+      (newStudent) => {
+        setDisplayStudents((prev) => {
+          const map = new Map<string, StudentExtended>();
+          prev.forEach((s) => map.set(s.studentId, s));
+          map.set(newStudent.studentId, newStudent);
+          const updated = Array.from(map.values());
+          try {
+            localStorage.setItem("sb_enrolled_students", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      },
+      (studentId) => {
+        setDisplayStudents((prev) => {
+          const updated = prev.filter((s) => s.studentId !== studentId && s.id !== studentId);
+          try {
+            localStorage.setItem("sb_enrolled_students", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      },
+      () => {
+        setDisplayStudents([]);
+        try {
+          localStorage.removeItem("sb_enrolled_students");
+        } catch {}
+      }
+    );
+
     const handleStorage = () => {
       try {
         const raw = localStorage.getItem("sb_enrolled_students");
@@ -124,7 +165,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       } catch {}
     };
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
 
   // Search and Filter State
