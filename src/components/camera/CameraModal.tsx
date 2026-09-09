@@ -59,6 +59,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [capturedPreview, setCapturedPreview] = useState<string | null>(null);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
+  const [isFlashlightOn, setIsFlashlightOn] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -71,6 +72,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
    * Safely stops and cleans up all active camera hardware tracks.
    */
   const stopMediaTracks = useCallback(() => {
+    setIsFlashlightOn(false);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
         try {
@@ -85,6 +87,32 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       videoRef.current.srcObject = null;
     }
   }, []);
+
+  /**
+   * Toggles flashlight mode:
+   * 1. Applies hardware torch constraint via WebRTC if supported (e.g. mobile rear cams, USB cams)
+   * 2. Synchronously toggles high-intensity screen studio fill-light ring (for laptops, front cams)
+   */
+  const handleToggleFlashlight = async () => {
+    const nextState = !isFlashlightOn;
+    setIsFlashlightOn(nextState);
+
+    if (streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track) {
+        try {
+          const capabilities: any = track.getCapabilities?.() || {};
+          if ("torch" in capabilities) {
+            await track.applyConstraints({
+              advanced: [{ torch: nextState } as any],
+            });
+          }
+        } catch (err) {
+          console.warn("Hardware torch not supported or error applying:", err);
+        }
+      }
+    }
+  };
 
   /**
    * Clears any active auto capture countdown timer
@@ -552,14 +580,31 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-black transition-colors"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {cameraState === "streaming" && (
+              <button
+                type="button"
+                onClick={handleToggleFlashlight}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono transition-all ${
+                  isFlashlightOn
+                    ? "bg-amber-400/20 border border-amber-400 text-black font-bold shadow-xs"
+                    : "border border-neutral-200 bg-neutral-50 text-neutral-600 hover:text-black hover:bg-neutral-100"
+                }`}
+                title="Toggle Flashlight / Studio Illumination"
+              >
+                <Zap className={`h-3.5 w-3.5 ${isFlashlightOn ? "fill-amber-400 text-amber-500 animate-pulse" : "text-neutral-500"}`} />
+                <span className="text-[11px]">{isFlashlightOn ? "Flash ON" : "Flash"}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-black transition-colors"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Camera Selector Bar (If multiple devices available) */}
@@ -636,8 +681,19 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                   <span>3:4 RECTANGULAR • 300 DPI AUTO</span>
                 </div>
+                {isFlashlightOn && (
+                  <div className="rounded-full border border-amber-400/90 bg-amber-400/25 backdrop-blur-xs px-2.5 py-1 text-[10px] font-mono font-bold text-amber-300 flex items-center gap-1 shadow-lg animate-pulse">
+                    <Zap className="h-3 w-3 fill-amber-300 text-amber-300" />
+                    <span>FLASH ON</span>
+                  </div>
+                )}
               </div>
             </div>
+          )}
+
+          {/* Flashlight Studio Fill-Light / Ring Light (High-intensity illumination on subject's face) */}
+          {isFlashlightOn && cameraState === "streaming" && (
+            <div className="pointer-events-none absolute inset-0 z-20 ring-8 ring-white ring-inset shadow-[inset_0_0_90px_30px_rgba(255,255,255,0.75)] transition-all duration-200" />
           )}
 
           {/* Auto Capture Countdown Overlay */}
@@ -771,6 +827,21 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 >
                   <FlipHorizontal className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{facingMode === "user" ? "Front" : "Rear"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleFlashlight}
+                  disabled={cameraState !== "streaming" || countdown !== null}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-mono transition-all disabled:opacity-40 ${
+                    isFlashlightOn
+                      ? "border-amber-400 bg-amber-400/20 text-black font-bold shadow-xs ring-1 ring-amber-400"
+                      : "border-neutral-300 bg-white text-neutral-700 hover:text-black hover:bg-neutral-100"
+                  }`}
+                  title="Toggle Flashlight (Hardware Torch + Screen Fill-Light)"
+                >
+                  <Zap className={`h-3.5 w-3.5 ${isFlashlightOn ? "fill-amber-400 text-amber-500 animate-pulse" : "text-neutral-500"}`} />
+                  <span className="hidden sm:inline">{isFlashlightOn ? "Flash ON" : "Flash"}</span>
                 </button>
 
                 <button

@@ -297,10 +297,84 @@ export async function updateStudentAction(
     metadata: { changedFields: Object.keys(input) },
   });
 
+  // Broadcast to Global Cloud Sync Bus (cross-device real-time sync to receiver)
+  publishStudentSync("UPSERT", {
+    id: updated.id,
+    studentId: updated.studentId,
+    fullName: updated.fullName,
+    phone: updated.phone,
+    sex: updated.sex,
+    grade: updated.grade,
+    school: updated.school,
+    department: updated.department,
+    academicYear: updated.academicYear,
+    photoPath: updated.photoPath,
+    qrCodeData: updated.qrCodeData || `STUDENT:${updated.studentId}`,
+    status: updated.status,
+    createdAt: updated.createdAt.toISOString(),
+  }).catch(() => {});
+
   revalidatePath("/students");
   revalidatePath(`/students/${id}`);
   revalidatePath("/dashboard");
   return { success: true, studentId: updated.id };
+}
+
+/**
+ * Updates a student's photo (e.g. after cropping/editing in the studio)
+ * and immediately broadcasts to receiver.
+ */
+export async function updateStudentPhotoAction(
+  studentIdOrId: string,
+  photoPath: string
+): Promise<StudentActionResult> {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return { success: false, error: "Session expired. Please log in again." };
+    }
+
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: [{ id: studentIdOrId }, { studentId: studentIdOrId }],
+      },
+    });
+
+    if (!student) {
+      return { success: false, error: "Student not found." };
+    }
+
+    const updated = await prisma.student.update({
+      where: { id: student.id },
+      data: { photoPath },
+    });
+
+    // Broadcast updated photo to Global Cloud Sync Bus immediately
+    publishStudentSync("UPSERT", {
+      id: updated.id,
+      studentId: updated.studentId,
+      fullName: updated.fullName,
+      phone: updated.phone,
+      sex: updated.sex,
+      grade: updated.grade,
+      school: updated.school,
+      department: updated.department,
+      academicYear: updated.academicYear,
+      photoPath: updated.photoPath,
+      qrCodeData: updated.qrCodeData || `STUDENT:${updated.studentId}`,
+      status: updated.status,
+      createdAt: updated.createdAt.toISOString(),
+    }).catch(() => {});
+
+    revalidatePath("/students");
+    revalidatePath(`/students/${updated.id}`);
+    revalidatePath("/dashboard");
+
+    return { success: true, studentId: updated.id };
+  } catch (err: any) {
+    console.error("updateStudentPhotoAction error:", err);
+    return { success: false, error: err.message || "Failed to update photo." };
+  }
 }
 
 /**

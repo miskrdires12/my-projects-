@@ -25,13 +25,20 @@ import {
   Users,
   Upload,
   FileSpreadsheet,
+  Crop,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
-import { deleteStudentAction, clearAllStudentsAction, deleteMultipleStudentsAction } from "@/actions/students";
+import {
+  deleteStudentAction,
+  clearAllStudentsAction,
+  deleteMultipleStudentsAction,
+  updateStudentPhotoAction,
+} from "@/actions/students";
 import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync } from "@/lib/sync-client";
 import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver } from "@/lib/export-utils";
+import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 
 interface StudentExtended {
   id: string;
@@ -67,6 +74,7 @@ interface StudentDirectoryClientProps {
   departments: string[];
   batches: { id: string; batchNumber: string; title: string }[];
   userRole: UserRole;
+  gradeCounts?: Record<string, number>;
 }
 
 export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
@@ -78,6 +86,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   departments,
   batches: _batches,
   userRole,
+  gradeCounts,
 }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -86,6 +95,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
   // Dual-Persistence Client State
   const [displayStudents, setDisplayStudents] = useState<StudentExtended[]>(students);
+  const [editingStudent, setEditingStudent] = useState<StudentExtended | null>(null);
+  const [isGradeExportModalOpen, setIsGradeExportModalOpen] = useState<boolean>(false);
+
+  // Safe localStorage helper to prevent QuotaExceededError on 5,000–6,000 records
+  const safeSaveLocalEnrolledStudents = (list: StudentExtended[]) => {
+    try {
+      const capped = list.slice(0, 250);
+      localStorage.setItem("sb_enrolled_students", JSON.stringify(capped));
+    } catch (err) {
+      console.warn("localStorage quota protection engaged:", err);
+    }
+  };
 
   // 1. Initial Load: Merge server students, localStorage, and pull from /api/students/sync with tombstone suppression
   useEffect(() => {
@@ -133,9 +154,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       const merged = Array.from(map.values());
       setDisplayStudents(merged);
-      try {
-        localStorage.setItem("sb_enrolled_students", JSON.stringify(merged));
-      } catch {}
+      safeSaveLocalEnrolledStudents(merged);
     };
 
     loadAndMerge();
@@ -160,9 +179,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           prev.forEach((s) => map.set(s.studentId, s));
           map.set(newStudent.studentId, newStudent);
           const updated = Array.from(map.values());
-          try {
-            localStorage.setItem("sb_enrolled_students", JSON.stringify(updated));
-          } catch {}
+          safeSaveLocalEnrolledStudents(updated);
           return updated;
         });
       },
@@ -179,9 +196,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
         setDisplayStudents((prev) => {
           const updated = prev.filter((s) => s.studentId !== studentIdOrId && s.id !== studentIdOrId);
-          try {
-            localStorage.setItem("sb_enrolled_students", JSON.stringify(updated));
-          } catch {}
+          safeSaveLocalEnrolledStudents(updated);
           return updated;
         });
       },
@@ -489,16 +504,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   };
 
   // Export Feeded Data to Excel / CSV with strict 5 columns & local desktop path:
-  // [Student ID, Name, Grade, Phone, Photo (C:\Users\athede\Desktop\students project for 17000\<photo>)]
-  const handleExportExcel = (selectedOnly: boolean = false) => {
-    const listToExport = selectedOnly
-      ? displayStudents.filter(
-          (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
-        )
-      : displayStudents;
+  // [StudentID, Name, Grade, Phone, @photo (C:\Users\athede\Desktop\students project for 17000\<photo>)]
+  // Smoothly handles 5,000 to 6,000+ records via server-side chunked query
+  const handleExportExcel = (selectedOnly: boolean = false, overrideGrade?: string) => {
+    if (!selectedOnly) {
+      const targetGrade = overrideGrade !== undefined ? overrideGrade : (selectedGrade !== "ALL" ? selectedGrade : "");
+      const gradeQuery = targetGrade ? `&grade=${encodeURIComponent(targetGrade)}` : "";
+      window.location.href = `/api/students/export-csv?format=xlsx${gradeQuery}`;
+      return;
+    }
+
+    const listToExport = displayStudents.filter(
+      (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+    );
 
     if (listToExport.length === 0) {
-      alert("No student records available to export.");
+      alert("No student records selected to export.");
       return;
     }
 
@@ -515,30 +536,33 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
     ws["!cols"] = [
       { wch: 18 },
-      { wch: 26 },
-      { wch: 12 },
+      { wch: 28 },
+      { wch: 14 },
       { wch: 18 },
-      { wch: 65 },
+      { wch: 70 },
     ];
     XLSX.utils.book_append_sheet(wb, ws, "Students");
 
     const dateTag = new Date().toISOString().split("T")[0];
-    const fileName = selectedOnly
-      ? `Student_Credentials_Selected_${listToExport.length}_${dateTag}.xlsx`
-      : `Student_Credential_Directory_${listToExport.length}_Records_${dateTag}.xlsx`;
+    const fileName = `Student_Credentials_Selected_${listToExport.length}_${dateTag}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
   };
 
-  const handleExportCSV = (selectedOnly: boolean = false) => {
-    const listToExport = selectedOnly
-      ? displayStudents.filter(
-          (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
-        )
-      : displayStudents;
+  const handleExportCSV = (selectedOnly: boolean = false, overrideGrade?: string) => {
+    if (!selectedOnly) {
+      const targetGrade = overrideGrade !== undefined ? overrideGrade : (selectedGrade !== "ALL" ? selectedGrade : "");
+      const gradeQuery = targetGrade ? `&grade=${encodeURIComponent(targetGrade)}` : "";
+      window.location.href = `/api/students/export-csv?format=csv${gradeQuery}`;
+      return;
+    }
+
+    const listToExport = displayStudents.filter(
+      (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+    );
 
     if (listToExport.length === 0) {
-      alert("No student records available to export.");
+      alert("No student records selected to export.");
       return;
     }
 
@@ -566,13 +590,77 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     const a = document.createElement("a");
     a.href = url;
     const dateTag = new Date().toISOString().split("T")[0];
-    a.download = selectedOnly
-      ? `Student_Credentials_Selected_${listToExport.length}_${dateTag}.csv`
-      : `Student_Credential_Directory_${listToExport.length}_Records_${dateTag}.csv`;
+    a.download = `Student_Credentials_Selected_${listToExport.length}_${dateTag}.csv`;
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+  };
+
+  // Save edited/cropped photo from PhotoEditorModal studio & sync to receiver
+  const handleSaveEditedPhoto = async (editedBlob: Blob, _originalBlob?: Blob | null, _metadata?: any) => {
+    if (!editingStudent) return;
+    const studentToUpdate = editingStudent;
+    setEditingStudent(null);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUri = reader.result as string;
+
+      let cleanName = (studentToUpdate.fullName || studentToUpdate.studentId || "student")
+        .replace(/[/\\]/g, " - ")
+        .replace(/[:*?"<>|]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
+      const safePhotoName = `${cleanName}.jpg`;
+
+      const form = new FormData();
+      form.append("file", editedBlob, safePhotoName);
+      form.append("studentId", studentToUpdate.studentId);
+
+      let finalPath = dataUri;
+      try {
+        const res = await fetch("/api/uploads", {
+          method: "POST",
+          body: form,
+        });
+        if (res.ok) {
+          const uploadRes = await res.json();
+          if (uploadRes.relativePath) {
+            finalPath = uploadRes.relativePath;
+          }
+        }
+      } catch (uploadErr) {
+        console.warn("Upload fallback to dataUri:", uploadErr);
+      }
+
+      // Update database and broadcast to receiver via server action
+      try {
+        await updateStudentPhotoAction(studentToUpdate.id, finalPath);
+      } catch (actionErr) {
+        console.warn("Server action photo update warning:", actionErr);
+      }
+
+      // Update local state immediately
+      setDisplayStudents((prev) => {
+        const next = prev.map((s) =>
+          s.id === studentToUpdate.id || s.studentId === studentToUpdate.studentId
+            ? { ...s, photoPath: finalPath }
+            : s
+        );
+        safeSaveLocalEnrolledStudents(next);
+        return next;
+      });
+
+      if (
+        activeStudent &&
+        (activeStudent.id === studentToUpdate.id || activeStudent.studentId === studentToUpdate.studentId)
+      ) {
+        setActiveStudent((prev) => (prev ? { ...prev, photoPath: finalPath } : null));
+      }
+    };
+    reader.readAsDataURL(editedBlob);
   };
 
   const totalEffective = Math.max(totalCount, displayStudents.length);
@@ -582,6 +670,99 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Grade Separation Bar (First separate by grade, then download CSV) */}
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black text-white text-xs font-mono font-bold">
+              #
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-black font-mono">
+                GRADE SEPARATION & CSV QUICK-DOWNLOAD
+              </h3>
+              <p className="text-[11px] text-neutral-500">
+                Separate student records by grade cohort and download grade-specific CSV/Excel files (handles 5,000–6,000+ records)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {selectedGrade !== "ALL" && (
+              <button
+                type="button"
+                onClick={() => handleExportCSV(false, selectedGrade)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-black px-3.5 py-1.5 text-xs font-mono font-bold text-white hover:bg-neutral-800 transition-colors shadow-xs"
+                title={`Download ${selectedGrade} CSV file with strict 5 columns`}
+              >
+                <Download className="h-3.5 w-3.5 text-amber-300" />
+                <span>Download {selectedGrade} CSV</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsGradeExportModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-1.5 text-xs font-mono font-semibold text-neutral-800 hover:bg-neutral-100 transition-colors"
+              title="Download CSV for any specific grade"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+              <span>All Grades CSV Hub</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Grade Pills / Tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedGrade("ALL");
+              applyFilters({ grade: "ALL" });
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold whitespace-nowrap transition-all ${
+              selectedGrade === "ALL"
+                ? "bg-black text-white shadow-xs"
+                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+            }`}
+          >
+            All Students ({totalCount.toLocaleString()})
+          </button>
+          {grades.map((g) => {
+            const count = gradeCounts?.[g];
+            const isSelected = selectedGrade === g;
+            return (
+              <div key={g} className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedGrade(g);
+                    applyFilters({ grade: g });
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold whitespace-nowrap transition-all ${
+                    isSelected
+                      ? "bg-black text-white shadow-xs"
+                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                  }`}
+                >
+                  {g} {count !== undefined ? `(${count.toLocaleString()})` : ""}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleExportCSV(false, g);
+                  }}
+                  title={`Direct Download ${g} CSV`}
+                  className="rounded-lg p-1 text-neutral-400 hover:text-black hover:bg-neutral-200 transition-colors"
+                >
+                  <Download className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Search & Multi-Filter Controls Bar */}
       <div className="rounded-2xl border border-border bg-surface p-4 space-y-3">
         <form onSubmit={handleSearchSubmit} className="flex gap-2">
@@ -876,14 +1057,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {student.photoPath && (
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadSinglePhoto(student.photoPath!, student.fullName)}
-                              className="rounded p-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-black transition-colors"
-                              title={`Download Photo (${student.fullName}.jpg)`}
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadSinglePhoto(student.photoPath!, student.fullName)}
+                                className="rounded p-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-black transition-colors"
+                                title={`Download Photo (${student.fullName}.jpg)`}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingStudent(student)}
+                                className="rounded p-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-black transition-colors"
+                                title={`Crop & Edit Photo (${student.fullName})`}
+                              >
+                                <Crop className="h-3.5 w-3.5 text-neutral-800" />
+                              </button>
+                            </>
                           )}
 
                           <button
@@ -997,13 +1188,20 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   )}
                 </div>
                 {activeStudent.photoPath && (
-                  <div className="pt-1 space-y-1">
+                  <div className="pt-1 space-y-1.5">
                     <button
                       type="button"
                       onClick={() => handleDownloadSinglePhoto(activeStudent.photoPath!, activeStudent.fullName)}
                       className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold text-black hover:underline"
                     >
                       <Download className="h-3 w-3" /> Download Photo ({activeStudent.fullName}.jpg)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingStudent(activeStudent)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold text-black bg-neutral-100 border border-neutral-300 rounded-lg px-2.5 py-1 hover:bg-neutral-200 transition-colors w-full justify-center shadow-xs"
+                    >
+                      <Crop className="h-3.5 w-3.5 text-black" /> Crop & Edit Photo
                     </button>
                     <div className="text-[10px] font-mono text-neutral-500 truncate" title={`/photos/${activeStudent.fullName}.jpg`}>
                       Path: /photos/{activeStudent.fullName}.jpg
@@ -1117,6 +1315,109 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Student Photo Crop & Edit Studio Modal */}
+      {editingStudent && editingStudent.photoPath && (
+        <PhotoEditorModal
+          isOpen={Boolean(editingStudent)}
+          originalImageSrc={editingStudent.photoPath}
+          onClose={() => setEditingStudent(null)}
+          onSave={handleSaveEditedPhoto}
+        />
+      )}
+
+      {/* Grade-Separated CSV & Excel Export Hub Modal (Handles 5,000–6,000+ records) */}
+      {isGradeExportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg rounded-2xl border border-neutral-300 bg-white shadow-2xl p-6 text-black">
+            <div className="flex items-center justify-between border-b border-neutral-200 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+                <h3 className="text-sm font-bold uppercase tracking-wider font-mono">
+                  Grade-Separated CSV & Excel Export Hub
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGradeExportModalOpen(false)}
+                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-black transition-colors"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-600 mb-4">
+              Download CSV or Excel files separated by grade cohorts. All exports follow the strict 5-column receiver format (StudentID, Name, Grade, Phone, @photo) and handle large cohorts (5,000–6,000+ records) smoothly.
+            </p>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              <div className="flex items-center justify-between p-3 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 transition-colors">
+                <div>
+                  <div className="text-xs font-bold font-mono text-black">All Grades (Full Directory)</div>
+                  <div className="text-[11px] text-neutral-500 font-mono">{totalCount.toLocaleString()} total students</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleExportCSV(false, "");
+                      setIsGradeExportModalOpen(false);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-black text-white text-xs font-mono font-bold rounded-lg hover:bg-neutral-800 transition-colors shadow-xs"
+                  >
+                    <Download className="h-3 w-3 text-amber-300" /> CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleExportExcel(false, "");
+                      setIsGradeExportModalOpen(false);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 text-xs font-mono font-bold rounded-lg hover:bg-emerald-500/20 transition-colors"
+                  >
+                    <FileSpreadsheet className="h-3 w-3" /> Excel
+                  </button>
+                </div>
+              </div>
+
+              {grades.map((g) => {
+                const count = gradeCounts?.[g] ?? 0;
+                return (
+                  <div key={g} className="flex items-center justify-between p-3 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 transition-colors">
+                    <div>
+                      <div className="text-xs font-bold font-mono text-black">{g}</div>
+                      <div className="text-[11px] text-neutral-500 font-mono">{count.toLocaleString()} students</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleExportCSV(false, g);
+                          setIsGradeExportModalOpen(false);
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-black text-white text-xs font-mono font-bold rounded-lg hover:bg-neutral-800 transition-colors shadow-xs"
+                      >
+                        <Download className="h-3 w-3 text-amber-300" /> CSV
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleExportExcel(false, g);
+                          setIsGradeExportModalOpen(false);
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 text-xs font-mono font-bold rounded-lg hover:bg-emerald-500/20 transition-colors"
+                      >
+                        <FileSpreadsheet className="h-3 w-3" /> Excel
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

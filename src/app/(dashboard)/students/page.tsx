@@ -77,7 +77,7 @@ export default async function StudentsPage({
   }
 
   // Optimized parallel queries for high performance (20,000+ students)
-  const [totalCount, students, grades, departments, batches] = await Promise.all([
+  const [totalCount, students, grades, departments, batches, gradeGroups] = await Promise.all([
     prisma.student.count({ where }),
     prisma.student.findMany({
       where,
@@ -104,10 +104,18 @@ export default async function StudentsPage({
       select: { id: true, batchNumber: true, title: true },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.student.groupBy({
+      by: ["grade"],
+      _count: { id: true },
+    }),
   ]);
 
   const uniqueGrades = grades.map((g) => g.grade).filter(Boolean);
   const uniqueDepartments = departments.map((d) => d.department!).filter(Boolean);
+  const gradeCountMap: Record<string, number> = {};
+  gradeGroups.forEach((g) => {
+    if (g.grade) gradeCountMap[g.grade] = g._count.id;
+  });
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -139,23 +147,23 @@ export default async function StudentsPage({
 
         <div className="flex items-center gap-3">
           <a
-            href="/api/students/export-csv?format=xlsx"
+            href={`/api/students/export-csv?format=xlsx${grade !== "ALL" ? `&grade=${encodeURIComponent(grade)}` : ""}`}
             download
             className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-            title="Download full database student directory as Excel (.xlsx)"
+            title={grade !== "ALL" ? `Download ${grade} directory as Excel (.xlsx)` : "Download full database student directory as Excel (.xlsx)"}
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
-            <span>Export Excel</span>
+            <span>{grade !== "ALL" ? `Export ${grade} Excel` : "Export Excel"}</span>
           </a>
 
           <a
-            href="/api/students/export-csv?format=csv"
+            href={`/api/students/export-csv?format=csv${grade !== "ALL" ? `&grade=${encodeURIComponent(grade)}` : ""}`}
             download
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground hover:bg-surface-secondary transition-colors"
-            title="Download full database student directory as CSV"
+            title={grade !== "ALL" ? `Download ${grade} directory as CSV` : "Download full database student directory as CSV"}
           >
             <Download className="h-3.5 w-3.5 text-foreground-muted" />
-            <span>CSV</span>
+            <span>{grade !== "ALL" ? `CSV (${grade})` : "CSV"}</span>
           </a>
 
           <Link
@@ -204,6 +212,7 @@ export default async function StudentsPage({
         departments={uniqueDepartments}
         batches={batches}
         userRole={session.role as any}
+        gradeCounts={gradeCountMap}
       />
     </div>
   );

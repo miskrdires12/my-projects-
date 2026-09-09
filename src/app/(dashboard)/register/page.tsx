@@ -250,8 +250,13 @@ export default function RegisterPage() {
   const handleWebcamCaptured = (file: File, previewUrl: string) => {
     setIsCameraOpen(false);
     setEditedPhotoPreview(previewUrl);
-    setOfficialPhotoPath(previewUrl);
-    handleDirectPhotoUpload(file, previewUrl);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = reader.result as string;
+      setOfficialPhotoPath(dataUri);
+      handleDirectPhotoUpload(file, previewUrl);
+    };
+    reader.readAsDataURL(file);
   };
 
   /**
@@ -266,6 +271,7 @@ export default function RegisterPage() {
 
   /**
    * Called when user saves cropped/refined photo from PhotoEditorModal studio.
+   * Guarantees the edited photo is stored indelibly and transferred to receiver.
    */
   const handlePhotoEditorSave = (editedBlob: Blob) => {
     setIsEditorOpen(false);
@@ -279,8 +285,15 @@ export default function RegisterPage() {
     const editedFile = new File([editedBlob], safePhotoName, { type: "image/jpeg" });
     const previewUrl = URL.createObjectURL(editedBlob);
     setEditedPhotoPreview(previewUrl);
-    setOfficialPhotoPath(previewUrl);
-    handleDirectPhotoUpload(editedFile, previewUrl);
+
+    // Convert editedBlob to Base64 data URL immediately so portrait is never lost
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = reader.result as string;
+      setOfficialPhotoPath(dataUri);
+      handleDirectPhotoUpload(editedFile, previewUrl);
+    };
+    reader.readAsDataURL(editedBlob);
   };
 
   /**
@@ -333,6 +346,11 @@ export default function RegisterPage() {
 
     if (idAvailability.available === false) {
       setErrorMessage(idAvailability.message || "Student ID is already taken.");
+      return;
+    }
+
+    if (isUploadingPhoto) {
+      setErrorMessage("Photo is currently finalizing upload. Please wait 2 seconds and click Register Student again.");
       return;
     }
 
