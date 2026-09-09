@@ -2,12 +2,11 @@
 
 // ============================================================================
 // STUDENT BRIDGE — HIGH-RES WEBRTC CAMERA CAPTURE STUDIO
-// - Strict 3:4 Aspect Ratio Auto-Framing & Cropping
-// - Auto 300 DPI Resolution JFIF Metadata Injection
-// - Auto Capture Mode (3-second animated countdown timer with instant attach)
+// - Ultra-Pure High-Resolution 300 DPI JFIF Metadata Injection
+// - Instant One-Tap Capture & Auto-Attach with Flash Animation
 // - Multi-tier hardware fallback: exact deviceId -> ideal constraints -> generic video:true
-// - Camera device enumeration dropdown (switch between internal, USB, virtual cams)
-// - Strict White and Black high-contrast professional design
+// - Device enumeration (front/rear, USB, webcam)
+// - Preserves full frame for precision on-demand 3:4 and free-edge studio cropping
 // ============================================================================
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
@@ -31,9 +30,8 @@ export interface CameraModalProps {
   onCapture: (file: File, previewUrl: string) => void;
   onEditPhoto?: (file: File, previewUrl: string) => void;
   initialFacingMode?: "user" | "environment";
-  maxDimensions?: { width: number; height: number }; // Default 1200 × 1600 (exact 3:4 @ 300 DPI)
+  maxDimensions?: { width: number; height: number };
   compressionQuality?: number; // Default 0.96
-  autoStart3sCountdown?: boolean;
 }
 
 type CameraState = "idle" | "requesting" | "streaming" | "captured" | "error";
@@ -49,9 +47,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   onCapture,
   onEditPhoto,
   initialFacingMode = "user",
-  maxDimensions = { width: 1200, height: 1600 },
+  maxDimensions = { width: 1600, height: 1600 },
   compressionQuality = 0.96,
-  autoStart3sCountdown = false,
 }) => {
   const [cameraState, setCameraState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -62,14 +59,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isFlashlightOn, setIsFlashlightOn] = useState<boolean>(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const hasAutoStartedRef = useRef<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
    * Safely stops and cleans up all active camera hardware tracks.
@@ -117,16 +111,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     }
   };
 
-  /**
-   * Clears any active auto capture countdown timer
-   */
-  const clearCountdownTimer = useCallback(() => {
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
-    setCountdown(null);
-  }, []);
 
   /**
    * Enumerate available video devices
@@ -162,7 +146,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     }
 
     stopMediaTracks();
-    clearCountdownTimer();
     setCameraState("requesting");
     setErrorMessage(null);
 
@@ -238,39 +221,23 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         setErrorMessage("Unable to initialize video hardware. Use file upload or test capture below.");
       }
     }
-  }, [facingMode, selectedDeviceId, stopMediaTracks, clearCountdownTimer, loadDevices]);
+  }, [facingMode, selectedDeviceId, stopMediaTracks, loadDevices]);
 
   // Handle open/close transitions
   useEffect(() => {
     if (isOpen) {
       setCapturedPreview(null);
       setCapturedBlob(null);
-      clearCountdownTimer();
-      hasAutoStartedRef.current = false;
       startCamera();
     } else {
-      clearCountdownTimer();
       stopMediaTracks();
       setCameraState("idle");
-      hasAutoStartedRef.current = false;
     }
 
     return () => {
-      clearCountdownTimer();
       stopMediaTracks();
     };
-  }, [isOpen, startCamera, stopMediaTracks, clearCountdownTimer]);
-
-  // Auto-trigger 3-second auto-capture when streaming starts if autoStart3sCountdown is enabled
-  useEffect(() => {
-    if (isOpen && cameraState === "streaming" && autoStart3sCountdown && !hasAutoStartedRef.current) {
-      hasAutoStartedRef.current = true;
-      const timeout = setTimeout(() => {
-        handleStartAutoCapture();
-      }, 500);
-      return () => clearTimeout(timeout);
-    }
-  }, [isOpen, cameraState, autoStart3sCountdown]);
+  }, [isOpen, startCamera, stopMediaTracks]);
 
   /**
    * Toggle between front and rear cameras
@@ -288,12 +255,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   };
 
   /**
-   * Captures the current video frame, strictly crops to 3:4 portrait ID aspect ratio,
-   * normalizes to 900×1200 bounds, injects 300 DPI JFIF metadata, and compresses to JPEG.
-   * If autoConfirm is true, automatically completes onCapture without extra clicks.
+   * Captures the current video frame at ultra-pure high-resolution with 300 DPI JFIF metadata.
+   * Full frame is preserved so user can crop/slide sides freely or apply 3:4 on demand.
+   * When autoConfirm is true, immediately attaches photo to student form like auto-snap!
    */
-  const handleCaptureFrame = (autoConfirm: boolean = false) => {
-    clearCountdownTimer();
+  const handleCaptureFrame = (autoConfirm: boolean = true) => {
     const video = videoRef.current;
     if (!video || cameraState !== "streaming") {
       return;
@@ -306,31 +272,23 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       return;
     }
 
-    // Flash trigger
+    // High-speed shutter flash trigger
     setIsFlashing(true);
     setTimeout(() => setIsFlashing(false), 200);
 
-    // Strict 3:4 Aspect Ratio Center-Crop
-    const targetAspect = 3 / 4;
-    let sourceW: number;
-    let sourceH: number;
-    let sourceX = 0;
-    let sourceY = 0;
-
-    const currentAspect = videoW / videoH;
-    if (currentAspect > targetAspect) {
-      sourceH = videoH;
-      sourceW = Math.round(videoH * targetAspect);
-      sourceX = Math.round((videoW - sourceW) / 2);
-    } else {
-      sourceW = videoW;
-      sourceH = Math.round(videoW / targetAspect);
-      sourceY = Math.round((videoH - sourceH) / 2);
+    // Full unconstrained frame preserved (up to max dimensions)
+    let destW = videoW;
+    let destH = videoH;
+    const maxDim = maxDimensions.width || 1600;
+    if (destW > maxDim || destH > maxDim) {
+      if (destW >= destH) {
+        destH = Math.round((destH * maxDim) / destW);
+        destW = maxDim;
+      } else {
+        destW = Math.round((destW * maxDim) / destH);
+        destH = maxDim;
+      }
     }
-
-    // High-Resolution 3:4 standard ID bounds (e.g. 900 × 1200 px at 300 DPI)
-    const destW = maxDimensions.width || 900;
-    const destH = maxDimensions.height || 1200;
 
     const canvas = canvasRef.current || document.createElement("canvas");
     canvas.width = destW;
@@ -345,7 +303,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       ctx.scale(-1, 1);
     }
 
-    ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, destW, destH);
+    ctx.drawImage(video, 0, 0, destW, destH);
 
     canvas.toBlob(
       async (rawBlob) => {
@@ -373,28 +331,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       "image/jpeg",
       compressionQuality
     );
-  };
-
-  /**
-   * Starts Auto Capture 3-second countdown mode.
-   * Gives the student time to look at the lens, then automatically captures and attaches.
-   */
-  const handleStartAutoCapture = () => {
-    if (cameraState !== "streaming") return;
-
-    clearCountdownTimer();
-    setCountdown(3);
-
-    let currentSec = 3;
-    countdownIntervalRef.current = setInterval(() => {
-      currentSec -= 1;
-      if (currentSec > 0) {
-        setCountdown(currentSec);
-      } else {
-        clearCountdownTimer();
-        handleCaptureFrame(true); // Automatically capture & attach!
-      }
-    }, 1000);
   };
 
   /**
@@ -519,7 +455,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const handleRetake = () => {
     setCapturedPreview(null);
     setCapturedBlob(null);
-    clearCountdownTimer();
     startCamera();
   };
 
@@ -550,7 +485,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   };
 
   const handleClose = () => {
-    clearCountdownTimer();
     stopMediaTracks();
     setCapturedPreview(null);
     setCapturedBlob(null);
@@ -589,10 +523,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               </div>
               <p className="text-[11px] text-neutral-500 mt-0.5">
                 {cameraState === "captured"
-                  ? "Standardized 3:4 portrait generated at 300 DPI"
-                  : countdown !== null
-                  ? "Auto-capture active • Look at camera"
-                  : "Auto-frames 3:4 ratio with 300 DPI resolution"}
+                  ? "Portrait captured at 300 DPI"
+                  : "Position face in frame • Tap snap to capture & attach"}
               </p>
             </div>
           </div>
@@ -664,10 +596,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             />
           )}
 
-          {/* ID Framing Overlay (Active during streaming) */}
+          {/* Framing Overlay (Active during streaming) */}
           {cameraState === "streaming" && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              {/* Strict Rectangular 3:4 ID Framing Guide (Redmi Note 13 Pro Style) */}
+              {/* Portrait Centering Guide */}
               <div className="relative aspect-[3/4] h-[78%] max-h-[460px] border-2 border-[#02f52b] shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] rounded-xs">
                 {/* Corner bracket highlight marks */}
                 <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 border-[#02f52b]" />
@@ -682,7 +614,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 {/* Upper third eye level guide line */}
                 <div className="absolute top-[38%] left-3 right-3 border-b border-dashed border-[#02f52b]/60 flex justify-between px-1">
                   <span className="text-[9px] font-mono text-[#02f52b] -mt-3.5 select-none uppercase tracking-wider font-semibold">Eye Level</span>
-                  <span className="text-[9px] font-mono text-[#02f52b] -mt-3.5 select-none font-bold">3:4 RECT</span>
+                  <span className="text-[9px] font-mono text-[#02f52b] -mt-3.5 select-none font-bold">PORTRAIT</span>
                 </div>
 
                 {/* Chin level guide */}
@@ -695,7 +627,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               <div className="absolute top-4 flex items-center gap-2">
                 <div className="rounded-full border border-neutral-800 bg-black/85 backdrop-blur-xs px-3 py-1 text-[10px] font-mono text-white flex items-center gap-1.5 shadow-md">
                   <span className="h-2 w-2 rounded-full bg-[#02f52b] animate-pulse" />
-                  <span className="text-white font-semibold">3:4 RECTANGULAR</span>
+                  <span className="text-white font-semibold">ULTRA HD</span>
                   <span className="text-[#02f52b] font-bold">• 300 DPI AUTO</span>
                 </div>
                 {isFlashlightOn && (
@@ -711,26 +643,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           {/* Flashlight Studio Fill-Light / Ring Light (High-intensity illumination on subject's face) */}
           {isFlashlightOn && cameraState === "streaming" && (
             <div className="pointer-events-none absolute inset-0 z-20 ring-8 ring-white ring-inset shadow-[inset_0_0_90px_30px_rgba(255,255,255,0.75)] transition-all duration-200" />
-          )}
-
-          {/* Auto Capture Countdown Overlay */}
-          {countdown !== null && (
-            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-[#02f52b] bg-black/90 shadow-[0_0_30px_rgba(2,245,43,0.5)] animate-bounce">
-                <span className="font-mono text-5xl font-black text-[#02f52b]">{countdown}</span>
-              </div>
-              <p className="mt-4 font-mono text-xs font-bold uppercase tracking-widest text-white drop-shadow-md flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-[#02f52b] animate-ping" />
-                <span>Auto-Capturing 3:4 @ 300 DPI</span>
-              </p>
-              <button
-                type="button"
-                onClick={clearCountdownTimer}
-                className="mt-3 rounded-full border border-white/60 bg-black/70 px-4 py-1 text-[11px] font-mono text-white hover:bg-white hover:text-black transition-colors"
-              >
-                Cancel Timer
-              </button>
-            </div>
           )}
 
           {/* Requesting / Loading State */}
@@ -839,7 +751,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <button
                   type="button"
                   onClick={handleToggleCamera}
-                  disabled={cameraState !== "streaming" || countdown !== null}
+                  disabled={cameraState !== "streaming"}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-mono text-neutral-700 hover:text-black hover:bg-neutral-100 transition-colors disabled:opacity-40"
                   title="Switch Front/Rear"
                 >
@@ -850,7 +762,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <button
                   type="button"
                   onClick={handleToggleFlashlight}
-                  disabled={cameraState !== "streaming" || countdown !== null}
+                  disabled={cameraState !== "streaming"}
                   className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-mono transition-all disabled:opacity-40 ${
                     isFlashlightOn
                       ? "border-amber-400 bg-amber-400/20 text-black font-bold shadow-xs ring-1 ring-amber-400"
@@ -865,7 +777,6 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={countdown !== null}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-mono text-neutral-700 hover:text-black hover:bg-neutral-100 transition-colors disabled:opacity-40"
                   title="Upload image file"
                 >
@@ -874,28 +785,27 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 </button>
               </div>
 
-              {/* Central Capture Actions: Auto Capture (3s) vs Instant Snap */}
+              {/* Central Capture Actions: Primary Snap (instant capture & auto-attach) + Snap & Review */}
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleStartAutoCapture}
-                  disabled={cameraState !== "streaming" || countdown !== null}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#02f52b] px-4 py-2.5 text-xs font-mono font-extrabold text-[#080808] hover:bg-[#00dc25] active:scale-95 transition-all shadow-[0_0_12px_rgba(2,245,43,0.35)] disabled:opacity-40 disabled:pointer-events-none"
-                  title="Auto-Capture 3s Countdown & Auto-Attach"
+                  onClick={() => handleCaptureFrame(true)}
+                  disabled={cameraState !== "streaming"}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#02f52b] px-5 py-2.5 text-xs font-mono font-black text-[#080808] hover:bg-[#00dc25] active:scale-95 transition-all shadow-[0_0_15px_rgba(2,245,43,0.4)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                  title="Instant Snap, 300 DPI conversion, and direct attach to student record"
                 >
-                  <Zap className="h-3.5 w-3.5 text-[#080808] fill-[#080808]" />
-                  <span>Auto Capture (3s)</span>
+                  <Camera className="h-4 w-4 stroke-[2.5]" />
+                  <span>Snap Photo</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleCaptureFrame(false)}
-                  disabled={cameraState !== "streaming" || countdown !== null}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-xs font-mono font-semibold text-black hover:bg-neutral-100 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none"
-                  title="Take manual snapshot"
+                  disabled={cameraState !== "streaming"}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-mono font-semibold text-neutral-800 hover:text-black hover:bg-neutral-100 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none"
+                  title="Snap and review/crop before attaching"
                 >
-                  <Camera className="h-3.5 w-3.5 stroke-[2.5]" />
-                  <span className="hidden sm:inline">Snap Photo</span>
+                  <span className="hidden sm:inline">Snap & Review</span>
                 </button>
               </div>
 

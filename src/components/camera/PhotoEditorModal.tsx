@@ -1,16 +1,17 @@
 "use client";
 
 // ============================================================================
-// STUDENT BRIDGE — REDMI NOTE 13 PRO ID PHOTO STUDIO & CROPPER
+// STUDENT BRIDGE — HIGH-PRECISION STUDIO ID PHOTO CROPPER
 //
-// Modeled specifically after the Redmi Note 13 Pro (Xiaomi HyperOS Gallery):
-// - Ultra-pure, crystal-clear 3:4 portrait extraction at full sensor resolution
-// - High-DPI output: 1200×1600 (exact 3:4 @ 300 DPI) with zero downsampling blur
-// - Signature neon electric green (#02f52b) crop framing with heavy corner brackets
+// Features:
+// - Independent Side-by-Side Edge Sliding (Left, Right, Top, Bottom)
+// - On-demand 3:4 Aspect Ratio apply by user (defaults to Free Crop)
+// - Ultra-pure high-resolution 300 DPI export (1200×1600 for 3:4 or native crop)
+// - Signature neon electric green (#02f52b) framing and edge slide handles
 // - Rule-of-thirds grid alignment
-// - One-tap "✨ Auto Enhance" (clarity, skin-tone brightness, contrast boost)
-// - 90° instant rotation & mirror flip
-// - Pure JPEG JFIF 300 DPI output
+// - One-tap Auto Enhance (clarity & skin-tone optimization)
+// - 90° rotation & horizontal flip
+// - Pure JPEG JFIF 300 DPI output with zero blur
 // ============================================================================
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
@@ -25,6 +26,10 @@ import {
   X,
   RotateCcw,
   Sparkles,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { convertBlobTo300Dpi } from "@/lib/jpeg-dpi";
 
@@ -49,7 +54,7 @@ export interface PhotoMetadata {
   backgroundColor: string;
 }
 
-type AspectRatioMode = "3:4" | "1:1" | "free";
+type AspectRatioMode = "free" | "3:4" | "1:1";
 type ActiveTab = "crop" | "rotate" | "enhance" | "light";
 type DragHandle = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w" | "move" | null;
 
@@ -80,7 +85,8 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
   const [rotation, setRotation] = useState<number>(0); // 0, 90, 180, 270
   const [fineAngle, setFineAngle] = useState<number>(0); // -45 to +45
   const [isFlippedH, setIsFlippedH] = useState<boolean>(false);
-  const [aspectRatio, setAspectRatio] = useState<AspectRatioMode>("3:4");
+  // Default to FREE CROP so user applies 3:4 on demand without being forced
+  const [aspectRatio, setAspectRatio] = useState<AspectRatioMode>("free");
 
   // Lighting & Detail Filters
   const [brightness, setBrightness] = useState<number>(0); // -50 to +50
@@ -89,7 +95,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
   const [isEnhanced, setIsEnhanced] = useState<boolean>(false);
 
   // Interactive Crop Box in Container Display Pixels
-  const [cropBox, setCropBox] = useState<CropRect>({ x: 40, y: 30, width: 270, height: 360 });
+  const [cropBox, setCropBox] = useState<CropRect>({ x: 30, y: 25, width: 280, height: 370 });
   const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({
     width: 360,
     height: 480,
@@ -118,7 +124,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     };
   }, [originalImageSrc]);
 
-  // Measure container and set initial 3:4 crop box
+  // Measure container and set initial comfortable free crop box
   const resetToDefaultCrop = useCallback(
     (_img?: HTMLImageElement) => {
       if (!containerRef.current) return;
@@ -127,25 +133,20 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
       const cH = Math.max(rect.height, 320);
       setContainerSize({ width: cW, height: cH });
 
-      // Calculate a centered 3:4 crop box that takes up ~78% of view
-      let boxH = cH * 0.78;
-      let boxW = boxH * (3 / 4);
-
-      if (boxW > cW * 0.88) {
-        boxW = cW * 0.88;
-        boxH = boxW * (4 / 3);
-      }
-
-      const boxX = (cW - boxW) / 2;
-      const boxY = (cH - boxH) / 2;
+      // Default comfortable box taking 85% of view in free crop mode
+      const boxW = Math.round(cW * 0.85);
+      const boxH = Math.round(cH * 0.85);
+      const boxX = Math.round((cW - boxW) / 2);
+      const boxY = Math.round((cH - boxH) / 2);
 
       setCropBox({
-        x: Math.round(boxX),
-        y: Math.round(boxY),
-        width: Math.round(boxW),
-        height: Math.round(boxH),
+        x: boxX,
+        y: boxY,
+        width: boxW,
+        height: boxH,
       });
 
+      setAspectRatio("free");
       setZoom(1);
       setRotation(0);
       setFineAngle(0);
@@ -170,45 +171,114 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Set Aspect Ratio preset
-  const handleSetAspectRatio = (mode: AspectRatioMode) => {
-    setAspectRatio(mode);
+  /**
+   * Applies 3:4 Aspect Ratio on demand when the user clicks the 3:4 button.
+   * Adjusts current crop box to exact 3:4 proportion centered in current view.
+   */
+  const handleApply34Ratio = () => {
+    setAspectRatio("3:4");
     const cW = containerSize.width;
     const cH = containerSize.height;
 
-    let targetRatio = 3 / 4;
-    if (mode === "1:1") targetRatio = 1;
-    if (mode === "free") return;
+    let targetH = cropBox.height;
+    let targetW = Math.round(targetH * (3 / 4));
 
-    let newW = cropBox.width;
-    let newH = newW / targetRatio;
-
-    if (newH > cH * 0.9) {
-      newH = cH * 0.9;
-      newW = newH * targetRatio;
+    if (targetW > cW * 0.95) {
+      targetW = Math.round(cW * 0.92);
+      targetH = Math.round(targetW * (4 / 3));
     }
-    if (newW > cW * 0.9) {
-      newW = cW * 0.9;
-      newH = newW / targetRatio;
+    if (targetH > cH * 0.95) {
+      targetH = Math.round(cH * 0.92);
+      targetW = Math.round(targetH * (3 / 4));
     }
 
-    const newX = Math.max(0, Math.min(cW - newW, cropBox.x));
-    const newY = Math.max(0, Math.min(cH - newH, cropBox.y));
+    const centerX = cropBox.x + cropBox.width / 2;
+    const centerY = cropBox.y + cropBox.height / 2;
+
+    let newX = Math.round(centerX - targetW / 2);
+    let newY = Math.round(centerY - targetH / 2);
+
+    if (newX < 0) newX = 0;
+    if (newX + targetW > cW) newX = cW - targetW;
+    if (newY < 0) newY = 0;
+    if (newY + targetH > cH) newY = cH - targetH;
 
     setCropBox({
-      x: Math.round(newX),
-      y: Math.round(newY),
-      width: Math.round(newW),
-      height: Math.round(newH),
+      x: newX,
+      y: newY,
+      width: targetW,
+      height: targetH,
     });
   };
 
-  // Rotate 90 degrees clockwise
+  /**
+   * Applies 1:1 Aspect Ratio on demand.
+   */
+  const handleApply11Ratio = () => {
+    setAspectRatio("1:1");
+    const cW = containerSize.width;
+    const cH = containerSize.height;
+
+    const size = Math.min(cropBox.width, cropBox.height, cW * 0.9, cH * 0.9);
+    const centerX = cropBox.x + cropBox.width / 2;
+    const centerY = cropBox.y + cropBox.height / 2;
+
+    let newX = Math.round(centerX - size / 2);
+    let newY = Math.round(centerY - size / 2);
+
+    if (newX < 0) newX = 0;
+    if (newX + size > cW) newX = cW - size;
+    if (newY < 0) newY = 0;
+    if (newY + size > cH) newY = cH - size;
+
+    setCropBox({
+      x: newX,
+      y: newY,
+      width: Math.round(size),
+      height: Math.round(size),
+    });
+  };
+
+  /**
+   * Sets Free Crop mode allowing unconstrained side-by-side sliding.
+   */
+  const handleApplyFreeRatio = () => {
+    setAspectRatio("free");
+  };
+
+  /**
+   * Discrete step adjustment for sliding one side independently (e.g. from toolbar buttons).
+   */
+  const handleSlideEdge = (edge: "top" | "bottom" | "left" | "right", delta: number) => {
+    const cW = containerSize.width;
+    const cH = containerSize.height;
+    const minSize = 40;
+
+    setCropBox((prev) => {
+      let { x, y, width, height } = prev;
+      if (edge === "top") {
+        const newY = Math.max(0, Math.min(y + height - minSize, y + delta));
+        height = (y + height) - newY;
+        y = newY;
+      } else if (edge === "bottom") {
+        height = Math.max(minSize, Math.min(cH - y, height + delta));
+      } else if (edge === "left") {
+        const newX = Math.max(0, Math.min(x + width - minSize, x + delta));
+        width = (x + width) - newX;
+        x = newX;
+      } else if (edge === "right") {
+        width = Math.max(minSize, Math.min(cW - x, width + delta));
+      }
+      return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
+    });
+  };
+
+  // 90° Clockwise Rotation
   const handleRotate90 = () => {
     setRotation((prev) => (prev + 90) % 360);
   };
 
-  // Toggle Redmi Note 13 Pro Auto-Enhance preset
+  // Toggle Auto-Enhance preset
   const handleToggleAutoEnhance = () => {
     if (isEnhanced) {
       setBrightness(0);
@@ -216,26 +286,19 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
       setSaturation(0);
       setIsEnhanced(false);
     } else {
-      // Redmi Note 13 Pro portrait AI tuning: gentle exposure lift + crisp contrast + vibrance
-      setBrightness(7);
+      setBrightness(8);
       setContrast(12);
-      setSaturation(10);
+      setSaturation(6);
       setIsEnhanced(true);
     }
   };
 
   // --------------------------------------------------------------------------
-  // POINTER DRAG & RESIZE SYSTEM (Corner handles, Edge handles, Pan)
+  // POINTER EVENT HANDLERS FOR INDEPENDENT SIDE-BY-SIDE SLIDING
   // --------------------------------------------------------------------------
   const startDrag = (handle: DragHandle, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-
     setIsInteracting(true);
     dragRef.current = {
       handle,
@@ -254,304 +317,188 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
 
     const cW = containerSize.width;
     const cH = containerSize.height;
-    const minSize = 60;
+    const minSize = 40;
 
-    let newBox: CropRect = { ...startCrop };
+    const newBox: CropRect = { ...startCrop };
 
+    // Move whole box
     if (handle === "move") {
       newBox.x = Math.max(0, Math.min(cW - startCrop.width, startCrop.x + deltaX));
       newBox.y = Math.max(0, Math.min(cH - startCrop.height, startCrop.y + deltaY));
-    } else if (handle === "se") {
-      let newW = Math.max(minSize, Math.min(cW - startCrop.x, startCrop.width + deltaX));
-      let newH = startCrop.height + deltaY;
-
-      if (aspectRatio === "3:4") {
-        newH = newW * (4 / 3);
-        if (startCrop.y + newH > cH) {
-          newH = cH - startCrop.y;
-          newW = newH * (3 / 4);
-        }
-      } else if (aspectRatio === "1:1") {
-        newH = newW;
-        if (startCrop.y + newH > cH) {
-          newH = cH - startCrop.y;
-          newW = newH;
-        }
-      } else {
-        newH = Math.max(minSize, Math.min(cH - startCrop.y, newH));
-      }
-
-      newBox.width = Math.round(newW);
-      newBox.height = Math.round(newH);
-    } else if (handle === "sw") {
-      let newW = Math.max(minSize, startCrop.width - deltaX);
-      let newX = startCrop.x + (startCrop.width - newW);
-
-      if (newX < 0) {
-        newW += newX;
-        newX = 0;
-      }
-
-      let newH = startCrop.height + deltaY;
-      if (aspectRatio === "3:4") {
-        newH = newW * (4 / 3);
-        if (startCrop.y + newH > cH) {
-          newH = cH - startCrop.y;
-          newW = newH * (3 / 4);
-          newX = startCrop.x + (startCrop.width - newW);
-        }
-      } else if (aspectRatio === "1:1") {
-        newH = newW;
-        if (startCrop.y + newH > cH) {
-          newH = cH - startCrop.y;
-          newW = newH;
-          newX = startCrop.x + (startCrop.width - newW);
-        }
-      } else {
-        newH = Math.max(minSize, Math.min(cH - startCrop.y, newH));
-      }
-
+    }
+    // TOP EDGE ONLY: slides top edge up or down. Left, Right, Bottom do NOT move!
+    else if (handle === "n") {
+      const newY = Math.max(0, Math.min(startCrop.y + startCrop.height - minSize, startCrop.y + deltaY));
+      newBox.y = Math.round(newY);
+      newBox.height = Math.round(startCrop.y + startCrop.height - newY);
+    }
+    // BOTTOM EDGE ONLY: slides bottom edge up or down. Top, Left, Right do NOT move!
+    else if (handle === "s") {
+      newBox.height = Math.round(Math.max(minSize, Math.min(cH - startCrop.y, startCrop.height + deltaY)));
+    }
+    // LEFT EDGE ONLY: slides left edge left or right. Top, Bottom, Right do NOT move!
+    else if (handle === "w") {
+      const newX = Math.max(0, Math.min(startCrop.x + startCrop.width - minSize, startCrop.x + deltaX));
       newBox.x = Math.round(newX);
-      newBox.width = Math.round(newW);
-      newBox.height = Math.round(newH);
-    } else if (handle === "ne") {
+      newBox.width = Math.round(startCrop.x + startCrop.width - newX);
+    }
+    // RIGHT EDGE ONLY: slides right edge left or right. Top, Bottom, Left do NOT move!
+    else if (handle === "e") {
+      newBox.width = Math.round(Math.max(minSize, Math.min(cW - startCrop.x, startCrop.width + deltaX)));
+    }
+    // CORNER SOUTHEAST (Bottom-Right)
+    else if (handle === "se") {
       let newW = Math.max(minSize, Math.min(cW - startCrop.x, startCrop.width + deltaX));
-      let newH = startCrop.height - deltaY;
-      let newY = startCrop.y + (startCrop.height - newH);
-
-      if (newY < 0) {
-        newH += newY;
-        newY = 0;
-      }
-
-      if (aspectRatio === "3:4") {
-        newH = newW * (4 / 3);
-        newY = startCrop.y + (startCrop.height - newH);
-        if (newY < 0) {
-          newH = startCrop.y + startCrop.height;
-          newW = newH * (3 / 4);
-          newY = 0;
-        }
-      } else if (aspectRatio === "1:1") {
-        newH = newW;
-        newY = startCrop.y + (startCrop.height - newH);
-        if (newY < 0) {
-          newH = startCrop.y + startCrop.height;
-          newW = newH;
-          newY = 0;
-        }
-      } else {
-        if (newH < minSize) {
-          newY = startCrop.y + startCrop.height - minSize;
-          newH = minSize;
-        }
-      }
-
-      newBox.y = Math.round(newY);
-      newBox.width = Math.round(newW);
-      newBox.height = Math.round(newH);
-    } else if (handle === "nw") {
-      let newW = Math.max(minSize, startCrop.width - deltaX);
-      let newX = startCrop.x + (startCrop.width - newW);
-      if (newX < 0) {
-        newW += newX;
-        newX = 0;
-      }
-
-      let newH = startCrop.height - deltaY;
-      let newY = startCrop.y + (startCrop.height - newH);
-      if (newY < 0) {
-        newH += newY;
-        newY = 0;
-      }
-
-      if (aspectRatio === "3:4") {
-        newH = newW * (4 / 3);
-        newY = startCrop.y + (startCrop.height - newH);
-        if (newY < 0) {
-          newH = startCrop.y + startCrop.height;
-          newW = newH * (3 / 4);
-          newX = startCrop.x + (startCrop.width - newW);
-          newY = 0;
-        }
-      } else if (aspectRatio === "1:1") {
-        newH = newW;
-        newY = startCrop.y + (startCrop.height - newH);
-        if (newY < 0) {
-          newH = startCrop.y + startCrop.height;
-          newW = newH;
-          newX = startCrop.x + (startCrop.width - newW);
-          newY = 0;
-        }
-      } else {
-        if (newH < minSize) {
-          newY = startCrop.y + startCrop.height - minSize;
-          newH = minSize;
-        }
-      }
-
-      newBox.x = Math.round(newX);
-      newBox.y = Math.round(newY);
-      newBox.width = Math.round(newW);
-      newBox.height = Math.round(newH);
-    } else if (handle === "n") {
-      let newH = startCrop.height - deltaY;
-      let newY = startCrop.y + deltaY;
-      if (newY < 0) {
-        newH += newY;
-        newY = 0;
-      }
-      if (newH < minSize) {
-        newY = startCrop.y + startCrop.height - minSize;
-        newH = minSize;
-      }
-      if (aspectRatio === "3:4") {
-        let newW = newH * (3 / 4);
-        if (newW > cW) {
-          newW = cW;
-          newH = newW * (4 / 3);
-          newY = startCrop.y + startCrop.height - newH;
-        }
-        const centerX = startCrop.x + startCrop.width / 2;
-        let newX = centerX - newW / 2;
-        if (newX < 0) newX = 0;
-        if (newX + newW > cW) newX = cW - newW;
-        newBox.x = Math.round(newX);
-        newBox.width = Math.round(newW);
-      } else if (aspectRatio === "1:1") {
-        let newW = newH;
-        if (newW > cW) {
-          newW = cW;
-          newH = newW;
-          newY = startCrop.y + startCrop.height - newH;
-        }
-        const centerX = startCrop.x + startCrop.width / 2;
-        let newX = centerX - newW / 2;
-        if (newX < 0) newX = 0;
-        if (newX + newW > cW) newX = cW - newW;
-        newBox.x = Math.round(newX);
-        newBox.width = Math.round(newW);
-      }
-      newBox.y = Math.round(newY);
-      newBox.height = Math.round(newH);
-    } else if (handle === "s") {
       let newH = Math.max(minSize, Math.min(cH - startCrop.y, startCrop.height + deltaY));
       if (aspectRatio === "3:4") {
-        let newW = newH * (3 / 4);
-        if (newW > cW) {
-          newW = cW;
-          newH = newW * (4 / 3);
+        newH = newW * (4 / 3);
+        if (startCrop.y + newH > cH) {
+          newH = cH - startCrop.y;
+          newW = newH * (3 / 4);
         }
-        const centerX = startCrop.x + startCrop.width / 2;
-        let newX = centerX - newW / 2;
-        if (newX < 0) newX = 0;
-        if (newX + newW > cW) newX = cW - newW;
-        newBox.x = Math.round(newX);
-        newBox.width = Math.round(newW);
       } else if (aspectRatio === "1:1") {
-        let newW = newH;
-        if (newW > cW) {
-          newW = cW;
-          newH = newW;
-        }
-        const centerX = startCrop.x + startCrop.width / 2;
-        let newX = centerX - newW / 2;
-        if (newX < 0) newX = 0;
-        if (newX + newW > cW) newX = cW - newW;
-        newBox.x = Math.round(newX);
-        newBox.width = Math.round(newW);
+        const s = Math.min(newW, newH);
+        newW = s;
+        newH = s;
       }
+      newBox.width = Math.round(newW);
       newBox.height = Math.round(newH);
-    } else if (handle === "w") {
-      let newW = startCrop.width - deltaX;
-      let newX = startCrop.x + deltaX;
+    }
+    // CORNER SOUTHWEST (Bottom-Left)
+    else if (handle === "sw") {
+      let newW = Math.max(minSize, startCrop.width - deltaX);
+      let newX = startCrop.x + (startCrop.width - newW);
       if (newX < 0) {
         newW += newX;
         newX = 0;
       }
-      if (newW < minSize) {
-        newX = startCrop.x + startCrop.width - minSize;
-        newW = minSize;
-      }
+      let newH = Math.max(minSize, Math.min(cH - startCrop.y, startCrop.height + deltaY));
       if (aspectRatio === "3:4") {
-        let newH = newW * (4 / 3);
-        if (newH > cH) {
-          newH = cH;
+        newH = newW * (4 / 3);
+        if (startCrop.y + newH > cH) {
+          newH = cH - startCrop.y;
           newW = newH * (3 / 4);
-          newX = startCrop.x + startCrop.width - newW;
+          newX = startCrop.x + (startCrop.width - newW);
         }
-        const centerY = startCrop.y + startCrop.height / 2;
-        let newY = centerY - newH / 2;
-        if (newY < 0) newY = 0;
-        if (newY + newH > cH) newY = cH - newH;
-        newBox.y = Math.round(newY);
-        newBox.height = Math.round(newH);
       } else if (aspectRatio === "1:1") {
-        let newH = newW;
-        if (newH > cH) {
-          newH = cH;
-          newW = newH;
-          newX = startCrop.x + startCrop.width - newW;
-        }
-        const centerY = startCrop.y + startCrop.height / 2;
-        let newY = centerY - newH / 2;
-        if (newY < 0) newY = 0;
-        if (newY + newH > cH) newY = cH - newH;
-        newBox.y = Math.round(newY);
-        newBox.height = Math.round(newH);
+        const s = Math.min(newW, newH);
+        newW = s;
+        newH = s;
+        newX = startCrop.x + (startCrop.width - newW);
       }
       newBox.x = Math.round(newX);
       newBox.width = Math.round(newW);
-    } else if (handle === "e") {
+      newBox.height = Math.round(newH);
+    }
+    // CORNER NORTHEAST (Top-Right)
+    else if (handle === "ne") {
       let newW = Math.max(minSize, Math.min(cW - startCrop.x, startCrop.width + deltaX));
-      if (aspectRatio === "3:4") {
-        let newH = newW * (4 / 3);
-        if (newH > cH) {
-          newH = cH;
-          newW = newH * (3 / 4);
-        }
-        const centerY = startCrop.y + startCrop.height / 2;
-        let newY = centerY - newH / 2;
-        if (newY < 0) newY = 0;
-        if (newY + newH > cH) newY = cH - newH;
-        newBox.y = Math.round(newY);
-        newBox.height = Math.round(newH);
-      } else if (aspectRatio === "1:1") {
-        let newH = newW;
-        if (newH > cH) {
-          newH = cH;
-          newW = newH;
-        }
-        const centerY = startCrop.y + startCrop.height / 2;
-        let newY = centerY - newH / 2;
-        if (newY < 0) newY = 0;
-        if (newY + newH > cH) newY = cH - newH;
-        newBox.y = Math.round(newY);
-        newBox.height = Math.round(newH);
+      let newH = startCrop.height - deltaY;
+      let newY = startCrop.y + (startCrop.height - newH);
+      if (newY < 0) {
+        newH += newY;
+        newY = 0;
       }
+      if (aspectRatio === "3:4") {
+        newH = newW * (4 / 3);
+        newY = startCrop.y + (startCrop.height - newH);
+        if (newY < 0) {
+          newH = startCrop.y + startCrop.height;
+          newW = newH * (3 / 4);
+          newY = 0;
+        }
+      } else if (aspectRatio === "1:1") {
+        const s = Math.min(newW, newH);
+        newW = s;
+        newH = s;
+        newY = startCrop.y + (startCrop.height - newH);
+      } else {
+        if (newH < minSize) {
+          newY = startCrop.y + startCrop.height - minSize;
+          newH = minSize;
+        }
+      }
+      newBox.x = Math.round(newBox.x);
+      newBox.y = Math.round(newY);
       newBox.width = Math.round(newW);
+      newBox.height = Math.round(newH);
+    }
+    // CORNER NORTHWEST (Top-Left)
+    else if (handle === "nw") {
+      let newW = Math.max(minSize, startCrop.width - deltaX);
+      let newX = startCrop.x + (startCrop.width - newW);
+      if (newX < 0) {
+        newW += newX;
+        newX = 0;
+      }
+      let newH = startCrop.height - deltaY;
+      let newY = startCrop.y + (startCrop.height - newH);
+      if (newY < 0) {
+        newH += newY;
+        newY = 0;
+      }
+      if (aspectRatio === "3:4") {
+        newH = newW * (4 / 3);
+        newY = startCrop.y + (startCrop.height - newH);
+        if (newY < 0) {
+          newH = startCrop.y + startCrop.height;
+          newW = newH * (3 / 4);
+          newX = startCrop.x + (startCrop.width - newW);
+          newY = 0;
+        }
+      } else if (aspectRatio === "1:1") {
+        const s = Math.min(newW, newH);
+        newW = s;
+        newH = s;
+        newX = startCrop.x + (startCrop.width - newW);
+        newY = startCrop.y + (startCrop.height - newH);
+      } else {
+        if (newH < minSize) {
+          newY = startCrop.y + startCrop.height - minSize;
+          newH = minSize;
+        }
+      }
+      newBox.x = Math.round(newX);
+      newBox.y = Math.round(newY);
+      newBox.width = Math.round(newW);
+      newBox.height = Math.round(newH);
     }
 
     setCropBox(newBox);
   };
 
   const stopDrag = () => {
-    dragRef.current = null;
     setIsInteracting(false);
+    dragRef.current = null;
   };
 
   // --------------------------------------------------------------------------
-  // HIGH-DEFINITION "PURE" 3:4 IMAGE EXPORT (Redmi Note 13 Pro 300 DPI Engine)
-  // Preserves 100% native camera sensor resolution with bicubic high-quality filter
+  // EXPORT ENGINE (Ultra-Clear 300 DPI Output — Works for 3:4, 1:1, or Free Crop)
   // --------------------------------------------------------------------------
   const handleSave = async () => {
     const img = imageRef.current;
     const container = containerRef.current;
     if (!img || !container) return;
 
-    // Ultra-Pure Redmi Note 13 Pro 3:4 ID Portrait Standard (1200 × 1600 px @ 300 DPI)
-    const exportWidth = 1200;
-    const exportHeight = 1600;
+    let exportWidth = 1200;
+    let exportHeight = 1600;
+
+    if (aspectRatio === "1:1") {
+      exportWidth = 1200;
+      exportHeight = 1200;
+    } else if (aspectRatio === "free") {
+      const cropRatio = cropBox.width / cropBox.height;
+      if (cropRatio >= 1) {
+        exportWidth = 1600;
+        exportHeight = Math.max(300, Math.round(1600 / cropRatio));
+      } else {
+        exportHeight = 1600;
+        exportWidth = Math.max(300, Math.round(1600 * cropRatio));
+      }
+    } else {
+      exportWidth = 1200;
+      exportHeight = 1600;
+    }
 
     const exportCanvas = document.createElement("canvas");
     exportCanvas.width = exportWidth;
@@ -559,19 +506,17 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     const ctx = exportCanvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
-    // Ultra-sharp smoothing
+    // High smoothing quality for crisp output
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    // Fill pure white background
+    // White background
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, exportWidth, exportHeight);
 
-    // Compute transformation matrix
     const scaleFactor = exportWidth / cropBox.width;
 
     ctx.save();
-    // Move origin to match crop box position
     ctx.translate(-cropBox.x * scaleFactor, -cropBox.y * scaleFactor);
 
     // Apply color filters
@@ -580,11 +525,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     const s = 100 + saturation;
     ctx.filter = `brightness(${b}%) contrast(${c}%) saturate(${s}%)`;
 
-    // Calculate where image is drawn inside container
     const cW = containerSize.width;
     const cH = containerSize.height;
 
-    // Image center in container space
     const imgCenterX = cW / 2;
     const imgCenterY = cH / 2;
 
@@ -593,7 +536,6 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     if (isFlippedH) ctx.scale(-1, 1);
     ctx.scale(zoom, zoom);
 
-    // Draw image centered
     const imgRatio = img.width / img.height;
     const cRatio = cW / cH;
     let drawW: number;
@@ -620,7 +562,6 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     exportCanvas.toBlob(
       async (blob) => {
         if (!blob) return;
-        // Inject authentic 300 DPI JFIF APP0 marker for crisp printing
         const blob300Dpi = await convertBlobTo300Dpi(blob);
         const originalBlob = originalFile
           ? new Blob([originalFile], { type: originalFile.type })
@@ -640,7 +581,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         onClose();
       },
       "image/jpeg",
-      0.96 // Ultra-high JPEG quality: pure and pristine
+      0.96
     );
   };
 
@@ -656,13 +597,13 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
       onPointerCancel={stopDrag}
     >
       {/* ────────────────────────────────────────────────────────────────────
-          REDMI NOTE 13 PRO TOP BAR (Xiaomi HyperOS Studio Style)
+          TOP STUDIO BAR
          ──────────────────────────────────────────────────────────────────── */}
       <div className="flex h-14 items-center justify-between px-4 border-b border-neutral-800 bg-[#080808] shrink-0">
         <button
           type="button"
           onClick={onClose}
-          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-mono font-medium text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors"
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-mono font-medium text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors cursor-pointer"
         >
           <X className="h-4 w-4" />
           <span>Cancel</span>
@@ -670,9 +611,11 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
 
         <div className="flex items-center gap-2 rounded-full bg-neutral-900 border border-neutral-800 px-3.5 py-1 text-[11px] font-mono font-semibold tracking-wider text-neutral-200 shadow-inner">
           <span className="h-2 w-2 rounded-full bg-[#02f52b] shadow-[0_0_8px_#02f52b]" />
-          <span className="text-white font-bold">REDMI NOTE 13 PRO</span>
+          <span className="text-white font-bold">STUDIO PHOTO CROPPER</span>
           <span className="text-neutral-500">•</span>
-          <span className="text-[#02f52b]">3:4 ID PURE</span>
+          <span className="text-[#02f52b] font-mono uppercase font-bold">
+            {aspectRatio === "3:4" ? "3:4 Portrait" : aspectRatio === "1:1" ? "1:1 Square" : "Free Crop"}
+          </span>
         </div>
 
         <button
@@ -686,7 +629,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
       </div>
 
       {/* ────────────────────────────────────────────────────────────────────
-          MAIN VIEWPORT & INTERACTIVE PHONE CROP CANVAS
+          MAIN VIEWPORT & INTERACTIVE CROP CANVAS
          ──────────────────────────────────────────────────────────────────── */}
       <div className="relative flex-1 flex items-center justify-center p-4 overflow-hidden bg-[#000000]">
         <div
@@ -713,7 +656,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             />
           )}
 
-          {/* Interactive Redmi Note 13 Pro Crop Box */}
+          {/* Interactive Crop Box */}
           <div
             className="absolute border-2 border-[#02f52b] pointer-events-auto select-none"
             style={{
@@ -729,23 +672,20 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               className="absolute inset-0 cursor-move flex items-center justify-center"
               onPointerDown={(e) => startDrag("move", e)}
             >
-              {/* Rule of Thirds Grid (Active during interaction or crop mode) */}
+              {/* Rule of Thirds Grid */}
               <div
                 className={`absolute inset-0 pointer-events-none transition-opacity duration-150 ${
                   isInteracting || activeTab === "crop" ? "opacity-85" : "opacity-35"
                 }`}
               >
-                {/* Horizontal grid lines */}
                 <div className="absolute top-1/3 left-0 right-0 border-b border-[#02f52b]/50 border-dashed" />
                 <div className="absolute top-2/3 left-0 right-0 border-b border-[#02f52b]/50 border-dashed" />
-                {/* Vertical grid lines */}
                 <div className="absolute left-1/3 top-0 bottom-0 border-r border-[#02f52b]/50 border-dashed" />
                 <div className="absolute left-2/3 top-0 bottom-0 border-r border-[#02f52b]/50 border-dashed" />
               </div>
             </div>
 
-            {/* 4 Heavy L-Shaped Corner Brackets (Redmi Note 13 Pro Signature Style) */}
-            {/* Top-Left Corner Handle */}
+            {/* Corner Handles */}
             <div
               className="absolute -top-1.5 -left-1.5 w-7 h-7 border-t-4 border-l-4 border-[#02f52b] cursor-nwse-resize rounded-tl-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(2,245,43,0.8)]"
               onPointerDown={(e) => startDrag("nw", e)}
@@ -753,7 +693,6 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               <div className="absolute w-12 h-12" />
             </div>
 
-            {/* Top-Right Corner Handle */}
             <div
               className="absolute -top-1.5 -right-1.5 w-7 h-7 border-t-4 border-r-4 border-[#02f52b] cursor-nesw-resize rounded-tr-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(2,245,43,0.8)]"
               onPointerDown={(e) => startDrag("ne", e)}
@@ -761,7 +700,6 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               <div className="absolute w-12 h-12" />
             </div>
 
-            {/* Bottom-Left Corner Handle */}
             <div
               className="absolute -bottom-1.5 -left-1.5 w-7 h-7 border-b-4 border-l-4 border-[#02f52b] cursor-nesw-resize rounded-bl-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(2,245,43,0.8)]"
               onPointerDown={(e) => startDrag("sw", e)}
@@ -769,7 +707,6 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               <div className="absolute w-12 h-12" />
             </div>
 
-            {/* Bottom-Right Corner Handle */}
             <div
               className="absolute -bottom-1.5 -right-1.5 w-7 h-7 border-b-4 border-r-4 border-[#02f52b] cursor-nwse-resize rounded-br-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(2,245,43,0.8)]"
               onPointerDown={(e) => startDrag("se", e)}
@@ -777,97 +714,206 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               <div className="absolute w-12 h-12" />
             </div>
 
-            {/* 4 Phone-Style Side Edge Handles (Crop from all sides) */}
-            {/* Top Edge Handle */}
+            {/* ────────────────────────────────────────────────────────────
+                INDEPENDENT SIDE-BY-SIDE SLIDING HANDLES
+               ──────────────────────────────────────────────────────────── */}
+            {/* Top Edge Handle (slides Top side only) */}
             <div
               className="absolute top-0 left-1/4 right-1/4 -translate-y-1/2 h-8 z-20 cursor-ns-resize touch-none flex items-center justify-center group"
               onPointerDown={(e) => startDrag("n", e)}
-              title="Drag down or up to crop top"
+              title="Slide top side up or down"
             >
-              <div className="w-12 h-1.5 bg-[#02f52b] rounded-full shadow-[0_0_8px_rgba(2,245,43,0.9)] group-hover:scale-110 group-active:scale-125 transition-transform" />
+              <div className="w-14 h-2 bg-[#02f52b] rounded-full shadow-[0_0_10px_rgba(2,245,43,0.9)] flex items-center justify-center gap-1 group-hover:scale-110 transition-transform">
+                <ArrowUp className="h-2.5 w-2.5 text-[#080808]" />
+                <ArrowDown className="h-2.5 w-2.5 text-[#080808]" />
+              </div>
             </div>
 
-            {/* Bottom Edge Handle */}
+            {/* Bottom Edge Handle (slides Bottom side only) */}
             <div
               className="absolute bottom-0 left-1/4 right-1/4 translate-y-1/2 h-8 z-20 cursor-ns-resize touch-none flex items-center justify-center group"
               onPointerDown={(e) => startDrag("s", e)}
-              title="Drag up or down to crop bottom"
+              title="Slide bottom side up or down"
             >
-              <div className="w-12 h-1.5 bg-[#02f52b] rounded-full shadow-[0_0_8px_rgba(2,245,43,0.9)] group-hover:scale-110 group-active:scale-125 transition-transform" />
+              <div className="w-14 h-2 bg-[#02f52b] rounded-full shadow-[0_0_10px_rgba(2,245,43,0.9)] flex items-center justify-center gap-1 group-hover:scale-110 transition-transform">
+                <ArrowUp className="h-2.5 w-2.5 text-[#080808]" />
+                <ArrowDown className="h-2.5 w-2.5 text-[#080808]" />
+              </div>
             </div>
 
-            {/* Left Edge Handle */}
+            {/* Left Edge Handle (slides Left side only) */}
             <div
               className="absolute left-0 top-1/4 bottom-1/4 -translate-x-1/2 w-8 z-20 cursor-ew-resize touch-none flex items-center justify-center group"
               onPointerDown={(e) => startDrag("w", e)}
-              title="Drag right or left to crop left side"
+              title="Slide left side left or right"
             >
-              <div className="h-12 w-1.5 bg-[#02f52b] rounded-full shadow-[0_0_8px_rgba(2,245,43,0.9)] group-hover:scale-110 group-active:scale-125 transition-transform" />
+              <div className="h-14 w-2 bg-[#02f52b] rounded-full shadow-[0_0_10px_rgba(2,245,43,0.9)] flex flex-col items-center justify-center gap-1 group-hover:scale-110 transition-transform">
+                <ArrowLeft className="h-2.5 w-2.5 text-[#080808]" />
+                <ArrowRight className="h-2.5 w-2.5 text-[#080808]" />
+              </div>
             </div>
 
-            {/* Right Edge Handle */}
+            {/* Right Edge Handle (slides Right side only) */}
             <div
               className="absolute right-0 top-1/4 bottom-1/4 translate-x-1/2 w-8 z-20 cursor-ew-resize touch-none flex items-center justify-center group"
               onPointerDown={(e) => startDrag("e", e)}
-              title="Drag left or right to crop right side"
+              title="Slide right side left or right"
             >
-              <div className="h-12 w-1.5 bg-[#02f52b] rounded-full shadow-[0_0_8px_rgba(2,245,43,0.9)] group-hover:scale-110 group-active:scale-125 transition-transform" />
+              <div className="h-14 w-2 bg-[#02f52b] rounded-full shadow-[0_0_10px_rgba(2,245,43,0.9)] flex flex-col items-center justify-center gap-1 group-hover:scale-110 transition-transform">
+                <ArrowLeft className="h-2.5 w-2.5 text-[#080808]" />
+                <ArrowRight className="h-2.5 w-2.5 text-[#080808]" />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ────────────────────────────────────────────────────────────────────
-          PHONE BOTTOM DOCK / CONTROLS TOOLBAR (Redmi Note 13 Pro Style)
+          BOTTOM DOCK & TOOLBAR
          ──────────────────────────────────────────────────────────────────── */}
-      <div className="border-t border-neutral-800 bg-[#080808] p-3 space-y-3 shrink-0">
+      <div className="border-t border-neutral-800 bg-[#080808] px-4 py-3 shrink-0 space-y-3">
+        {/* TAB SPECIFIC CONTROLS */}
         <div className="max-w-md mx-auto">
-          {/* TAB 1: CROP & ASPECT RATIO */}
+          {/* TAB 1: CROP CONTROLS & SIDE-BY-SIDE SLIDERS */}
           {activeTab === "crop" && (
-            <div className="space-y-2.5">
-              {/* Aspect Ratio Preset Selector */}
+            <div className="space-y-3">
+              {/* Aspect Ratio Buttons (Free by default; 3:4 applied on demand) */}
               <div className="flex items-center justify-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleSetAspectRatio("3:4")}
-                  className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all ${
-                    aspectRatio === "3:4"
-                      ? "bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.4)]"
-                      : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
-                  }`}
-                >
-                  3:4 ID Standard
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetAspectRatio("1:1")}
-                  className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all ${
-                    aspectRatio === "1:1"
-                      ? "bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.4)]"
-                      : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
-                  }`}
-                >
-                  1:1 Square
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetAspectRatio("free")}
-                  className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all ${
+                  onClick={handleApplyFreeRatio}
+                  className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all cursor-pointer ${
                     aspectRatio === "free"
                       ? "bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.4)]"
                       : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
                   }`}
                 >
-                  Free Crop
+                  Free Crop (Slide Sides)
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleApply34Ratio}
+                  className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all cursor-pointer ${
+                    aspectRatio === "3:4"
+                      ? "bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.4)]"
+                      : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
+                  }`}
+                >
+                  Apply 3:4 Aspect Ratio
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleApply11Ratio}
+                  className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all cursor-pointer ${
+                    aspectRatio === "1:1"
+                      ? "bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.4)]"
+                      : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
+                  }`}
+                >
+                  1:1
+                </button>
+
                 <button
                   type="button"
                   onClick={() => resetToDefaultCrop()}
-                  className="rounded-full p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors ml-1"
-                  title="Reset to initial framing"
+                  className="rounded-full p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors ml-1 cursor-pointer"
+                  title="Reset to full view"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                 </button>
+              </div>
+
+              {/* Precise Side-by-Side Step Trimmers (Top, Bottom, Left, Right) */}
+              <div className="grid grid-cols-4 gap-1.5 text-[11px] font-mono">
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-1.5 text-center">
+                  <div className="text-[10px] text-neutral-400 font-bold mb-1">TOP SIDE</div>
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSlideEdge("top", -10)}
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      title="Expand Top"
+                    >
+                      <ArrowUp className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSlideEdge("top", 10)}
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      title="Trim Top"
+                    >
+                      <ArrowDown className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-1.5 text-center">
+                  <div className="text-[10px] text-neutral-400 font-bold mb-1">BOTTOM SIDE</div>
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSlideEdge("bottom", -10)}
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      title="Trim Bottom"
+                    >
+                      <ArrowUp className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSlideEdge("bottom", 10)}
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      title="Expand Bottom"
+                    >
+                      <ArrowDown className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-1.5 text-center">
+                  <div className="text-[10px] text-neutral-400 font-bold mb-1">LEFT SIDE</div>
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSlideEdge("left", -10)}
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      title="Expand Left"
+                    >
+                      <ArrowLeft className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSlideEdge("left", 10)}
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      title="Trim Left"
+                    >
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-1.5 text-center">
+                  <div className="text-[10px] text-neutral-400 font-bold mb-1">RIGHT SIDE</div>
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSlideEdge("right", -10)}
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      title="Trim Right"
+                    >
+                      <ArrowLeft className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSlideEdge("right", 10)}
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      title="Expand Right"
+                    >
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Zoom Slider */}
@@ -897,7 +943,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                 <button
                   type="button"
                   onClick={handleRotate90}
-                  className="flex items-center gap-1.5 rounded-full bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 px-4 py-1.5 text-xs font-mono text-white transition-all active:scale-95"
+                  className="flex items-center gap-1.5 rounded-full bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 px-4 py-1.5 text-xs font-mono text-white transition-all active:scale-95 cursor-pointer"
                 >
                   <RotateCw className="h-4 w-4 text-[#02f52b]" />
                   <span>Rotate 90°</span>
@@ -906,7 +952,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsFlippedH((prev) => !prev)}
-                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-mono transition-all active:scale-95 ${
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-mono transition-all active:scale-95 cursor-pointer ${
                     isFlippedH
                       ? "bg-[#02f52b] text-[#080808] font-bold"
                       : "bg-neutral-900 border border-neutral-800 text-white hover:bg-neutral-800"
@@ -933,7 +979,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => setFineAngle(0)}
-                  className="text-[10px] font-mono text-white bg-neutral-800 px-2 py-0.5 rounded hover:bg-neutral-700"
+                  className="text-[10px] font-mono text-white bg-neutral-800 px-2 py-0.5 rounded hover:bg-neutral-700 cursor-pointer"
                 >
                   {fineAngle > 0 ? `+${fineAngle}°` : `${fineAngle}°`}
                 </button>
@@ -941,16 +987,16 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             </div>
           )}
 
-          {/* TAB 3: REDMI NOTE 13 PRO AI ENHANCE */}
+          {/* TAB 3: PORTRAIT AI ENHANCE */}
           {activeTab === "enhance" && (
             <div className="space-y-3 py-1 text-center">
               <p className="text-xs text-neutral-300 font-mono">
-                Redmi Note 13 Pro Portrait Engine • Auto-Tuning
+                Studio Portrait Engine • Auto-Tuning
               </p>
               <button
                 type="button"
                 onClick={handleToggleAutoEnhance}
-                className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-xs font-mono font-bold transition-all shadow-md ${
+                className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-xs font-mono font-bold transition-all shadow-md cursor-pointer ${
                   isEnhanced
                     ? "bg-[#02f52b] text-[#080808] ring-2 ring-[#02f52b]/50 shadow-[0_0_15px_rgba(2,245,43,0.4)]"
                     : "bg-neutral-900 border border-neutral-800 text-white hover:border-[#02f52b]"
@@ -974,7 +1020,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   max="50"
                   step="1"
                   value={brightness}
-                  onChange={(e) => setBrightness(parseInt(e.target.value))}
+                  onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
                   className="w-full accent-[#02f52b] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
                 />
                 <span className="text-[10px] font-mono text-[#02f52b] w-8 text-right font-bold">
@@ -991,7 +1037,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   max="50"
                   step="1"
                   value={contrast}
-                  onChange={(e) => setContrast(parseInt(e.target.value))}
+                  onChange={(e) => setContrast(parseInt(e.target.value, 10))}
                   className="w-full accent-[#02f52b] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
                 />
                 <span className="text-[10px] font-mono text-[#02f52b] w-8 text-right font-bold">
@@ -1008,7 +1054,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   max="50"
                   step="1"
                   value={saturation}
-                  onChange={(e) => setSaturation(parseInt(e.target.value))}
+                  onChange={(e) => setSaturation(parseInt(e.target.value, 10))}
                   className="w-full accent-[#02f52b] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
                 />
                 <span className="text-[10px] font-mono text-[#02f52b] w-8 text-right font-bold">
@@ -1019,12 +1065,12 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           )}
         </div>
 
-        {/* Bottom Phone Tool Navigation Tabs */}
+        {/* Bottom Tool Navigation Tabs */}
         <div className="flex items-center justify-center gap-2 border-t border-neutral-800 pt-2 max-w-sm mx-auto">
           <button
             type="button"
             onClick={() => setActiveTab("crop")}
-            className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors ${
+            className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors cursor-pointer ${
               activeTab === "crop" ? "text-[#02f52b] font-bold" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
@@ -1035,7 +1081,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab("rotate")}
-            className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors ${
+            className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors cursor-pointer ${
               activeTab === "rotate" ? "text-[#02f52b] font-bold" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
@@ -1046,7 +1092,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab("enhance")}
-            className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors ${
+            className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors cursor-pointer ${
               activeTab === "enhance" ? "text-[#02f52b] font-bold" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
@@ -1057,7 +1103,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab("light")}
-            className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors ${
+            className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors cursor-pointer ${
               activeTab === "light" ? "text-[#02f52b] font-bold" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
@@ -1069,7 +1115,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             <button
               type="button"
               onClick={onRetake}
-              className="flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono text-neutral-500 hover:text-neutral-300 transition-colors"
+              className="flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
             >
               <RotateCcw className="h-4 w-4" />
               <span>Retake</span>

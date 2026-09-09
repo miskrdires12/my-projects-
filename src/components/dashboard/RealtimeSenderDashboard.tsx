@@ -360,7 +360,7 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
             </div>
             <h3 className="text-sm font-bold text-[#080808] mt-3">1. Student Registration</h3>
             <p className="text-xs text-[#6b7771] mt-1">
-              3s auto-capture photo, Redmi Note 13 Pro 3:4 studio, and credentials
+              High-resolution camera photo, precision crop studio, and student information
             </p>
           </Link>
 

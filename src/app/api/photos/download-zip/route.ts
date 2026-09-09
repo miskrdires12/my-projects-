@@ -29,7 +29,7 @@ import fs from "fs";
 import path from "path";
 import { PassThrough } from "stream";
 import { generateSafePhotoFilename } from "@/lib/image-processing";
-import { getStudentPhotoFileName } from "@/lib/export-utils";
+import { getStudentPhotoFileName, formatPhoneForReceiver } from "@/lib/export-utils";
 
 // Factory for creating ZipArchive compatible with both legacy and archiver v8
 function createZipArchive(options: Record<string, unknown> = { zlib: { level: 5 } }) {
@@ -147,6 +147,12 @@ export async function POST(request: NextRequest) {
     (async () => {
       try {
         let photoCursor: string | undefined;
+        const manifestRows: string[] = [];
+        const escapeCSV = (val: any) => {
+          if (val === null || val === undefined) return '""';
+          const str = String(val).trim();
+          return `"${str.replace(/"/g, '""')}"`;
+        };
 
         while (true) {
           const chunk = await prisma.student.findMany({
@@ -155,7 +161,9 @@ export async function POST(request: NextRequest) {
               id: true,
               studentId: true,
               fullName: true,
+              sex: true,
               grade: true,
+              phone: true,
               department: true,
               photoPath: true,
               batch: { select: { batchNumber: true } },
@@ -214,10 +222,12 @@ export async function POST(request: NextRequest) {
                 break;
             }
 
+            let photoAdded = false;
             if (fs.existsSync(absolutePhotoPath)) {
               archive.file(absolutePhotoPath, {
                 name: `${folderPrefix}${safeFilename}`,
               });
+              photoAdded = true;
             } else if (s.photoPath.startsWith("data:")) {
               const base64Data = s.photoPath.split(",")[1];
               if (base64Data) {
@@ -225,13 +235,38 @@ export async function POST(request: NextRequest) {
                 archive.append(imgBuffer, {
                   name: `${folderPrefix}${safeFilename}`,
                 });
+                photoAdded = true;
               }
+            }
+
+            if (photoAdded) {
+              const formattedPhone = formatPhoneForReceiver(s.phone);
+              const localPhotoPath = `C:\\Users\\athede\\Desktop\\students project for 17000\\${safeFilename}`;
+              manifestRows.push([
+                escapeCSV(s.studentId),
+                escapeCSV(s.fullName),
+                escapeCSV(s.sex || "Male"),
+                escapeCSV(s.grade),
+                escapeCSV(formattedPhone),
+                escapeCSV(localPhotoPath),
+              ].join(","));
             }
           }
 
           if (chunk.length < CHUNK_SIZE) break;
           photoCursor = chunk[chunk.length - 1].id;
         }
+
+        // Append matching manifest CSV sheet inside the root of the ZIP
+        const manifestHeaders = ["StudentID", "Name", "Sex", "Grade", "Phone", "@photo"];
+        const manifestCsvContent = "\uFEFF" + [
+          manifestHeaders.map(escapeCSV).join(","),
+          ...manifestRows,
+        ].join("\r\n");
+
+        archive.append(Buffer.from(manifestCsvContent, "utf-8"), {
+          name: "Student_Manifest.csv",
+        });
 
         await archive.finalize();
       } catch {

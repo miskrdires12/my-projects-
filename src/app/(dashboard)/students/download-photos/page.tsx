@@ -33,6 +33,7 @@ import {
 import { getStudentsAction } from "@/actions/students";
 import { getBatchesAction } from "@/actions/batches";
 import JSZip from "jszip";
+import { formatPhoneForReceiver, getStudentPhotoLocalPath } from "@/lib/export-utils";
 
 type ScopeType = "all" | "grade" | "batch" | "department";
 type FolderStructure = "flat" | "by-grade" | "by-batch" | "by-department" | "custom";
@@ -200,6 +201,25 @@ export default function DownloadPhotosPage() {
               } catch {}
             }
           }
+
+          // Append companion manifest CSV into the ZIP archive
+          const manifestHeaders = ["StudentID", "Name", "Sex", "Grade", "Phone", "@photo"];
+          const escapeCSV = (val: any) => {
+            if (val === null || val === undefined) return '""';
+            const str = String(val).trim();
+            return `"${str.replace(/"/g, '""')}"`;
+          };
+          const manifestRows = withPhotos.map((s) => [
+            escapeCSV(s.studentId),
+            escapeCSV(s.fullName),
+            escapeCSV(s.sex || "Male"),
+            escapeCSV(s.grade),
+            escapeCSV(formatPhoneForReceiver(s.phone)),
+            escapeCSV(getStudentPhotoLocalPath(s)),
+          ].join(","));
+          const manifestCsv = "\uFEFF" + [manifestHeaders.map(escapeCSV).join(","), ...manifestRows].join("\r\n");
+          zip.file("Student_Manifest.csv", manifestCsv);
+
           const zipBlob = await zip.generateAsync({ type: "blob" });
           const url = window.URL.createObjectURL(zipBlob);
           const a = document.createElement("a");

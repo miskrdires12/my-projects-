@@ -6,10 +6,9 @@
 // Strictly designed for ultra-rapid enrollment (6,000+ students per day):
 // - 60% #f7faf9, 30% #02f52b, 10% #080808 color scheme
 // - Phone-first layout: 3:4 Portrait -> Core Credentials -> Send Button
-// - 3-second Auto-Capture: one-tap camera opening, 3..2..1 snap & auto-attach
-// - Redmi Note 13 Pro studio crop editor
-// - "Sent Successfully!" confirmation modal with rapid auto-reset
-// - IndexedDB database engine for 6,000+ records/day without quota limits
+// - High-speed instant snap & auto-attach photo studio
+// - Precision studio crop editor
+// - Dual persistence (IndexedDB + PostgreSQL)
 // ============================================================================
 
 import React, { useState, useEffect, useTransition } from "react";
@@ -17,25 +16,20 @@ import Link from "next/link";
 import {
   Camera,
   Upload,
-  AlertCircle,
-  Receipt,
-  ArrowLeft,
   Crop,
-  Zap,
+  CheckCircle2,
+  AlertCircle,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
   Check,
-  CheckCircle2,
   Loader2,
+  Receipt,
 } from "lucide-react";
+import { createStudentAction, getCustomFieldsAction, checkStudentIdAvailabilityAction } from "@/actions/students";
+import type { StudentFormInput } from "@/lib/validations";
 import { CameraModal } from "@/components/camera/CameraModal";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
-import {
-  createStudentAction,
-  checkStudentIdAvailabilityAction,
-  getCustomFieldsAction,
-} from "@/actions/students";
-import type { StudentFormInput } from "@/lib/validations";
 import { publishStudentSync } from "@/lib/sync-client";
 import { formatPhoneForReceiver } from "@/lib/export-utils";
 import { saveStudentToDB } from "@/lib/idb-storage";
@@ -54,7 +48,6 @@ export default function RegisterPage() {
 
   // Modals & Camera Controls
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [cameraAutoCapture3s, setCameraAutoCapture3s] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editorImageSrc, setEditorImageSrc] = useState<string | null>(null);
   const [editorOriginalFile, setEditorOriginalFile] = useState<File | null>(null);
@@ -91,7 +84,7 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState<Partial<StudentFormInput>>({
     studentId: "",
     fullName: "",
-    grade: "Grade 10",
+    grade: "10",
     sex: "Male",
     phone: "",
     emailAddress: "",
@@ -205,18 +198,9 @@ export default function RegisterPage() {
   };
 
   /**
-   * One-tap launch 3-second auto-capture camera
+   * Launch camera capture studio
    */
-  const handleLaunch3sAutoCapture = () => {
-    setCameraAutoCapture3s(true);
-    setIsCameraOpen(true);
-  };
-
-  /**
-   * Regular camera launch
-   */
-  const handleLaunchRegularCamera = () => {
-    setCameraAutoCapture3s(false);
+  const handleLaunchCamera = () => {
     setIsCameraOpen(true);
   };
 
@@ -292,7 +276,7 @@ export default function RegisterPage() {
   };
 
   /**
-   * Called when user saves cropped/refined photo from Redmi Note 13 Pro studio.
+   * Called when user saves cropped/refined photo from studio editor.
    */
   const handlePhotoEditorSave = (editedBlob: Blob) => {
     setIsEditorOpen(false);
@@ -444,7 +428,7 @@ export default function RegisterPage() {
     setFormData({
       studentId: `SB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
       fullName: "",
-      grade: "Grade 10",
+      grade: "10",
       sex: "Male",
       phone: "",
       emailAddress: "",
@@ -556,18 +540,18 @@ export default function RegisterPage() {
                       setIsEditorOpen(true);
                     }
                   }}
-                  className="w-36 rounded-xl bg-[#02f52b] text-[#080808] py-1.5 text-xs font-extrabold shadow-md flex items-center justify-center gap-1.5 hover:brightness-105"
+                  className="w-36 rounded-xl bg-[#02f52b] text-[#080808] py-1.5 text-xs font-extrabold shadow-md flex items-center justify-center gap-1.5 hover:brightness-105 cursor-pointer"
                 >
                   <Crop className="h-3.5 w-3.5" />
-                  <span>Redmi Studio</span>
+                  <span>Edit / Crop Photo</span>
                 </button>
                 <button
                   type="button"
-                  onClick={handleLaunch3sAutoCapture}
-                  className="w-36 rounded-xl bg-white text-[#080808] py-1.5 text-xs font-bold shadow-md flex items-center justify-center gap-1.5 hover:bg-neutral-100"
+                  onClick={handleLaunchCamera}
+                  className="w-36 rounded-xl bg-white text-[#080808] py-1.5 text-xs font-bold shadow-md flex items-center justify-center gap-1.5 hover:bg-neutral-100 cursor-pointer"
                 >
-                  <Zap className="h-3.5 w-3.5 text-[#080808]" />
-                  <span>Auto 3s Retake</span>
+                  <Camera className="h-3.5 w-3.5 text-[#080808]" />
+                  <span>Retake Photo</span>
                 </button>
                 <button
                   type="button"
@@ -575,7 +559,7 @@ export default function RegisterPage() {
                     setEditedPhotoPreview(null);
                     setOfficialPhotoPath(null);
                   }}
-                  className="text-[11px] font-mono text-white/80 hover:text-white underline pt-1"
+                  className="text-[11px] font-mono text-white/80 hover:text-white underline pt-1 cursor-pointer"
                 >
                   Remove Photo
                 </button>
@@ -584,25 +568,14 @@ export default function RegisterPage() {
           </div>
 
           {/* Quick Photo Buttons (Easy Phone Style) */}
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            {/* Big Primary Auto-Capture (3s) Button */}
+          <div className="pt-1">
             <button
               type="button"
-              onClick={handleLaunch3sAutoCapture}
-              className="flex items-center justify-center gap-1.5 rounded-xl bg-[#02f52b] text-[#080808] py-2.5 px-3 text-xs font-mono font-extrabold shadow-[0_0_12px_rgba(2,245,43,0.3)] hover:bg-[#00dc25] active:scale-95 transition-all cursor-pointer"
+              onClick={handleLaunchCamera}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#02f52b] text-[#080808] py-3 px-4 text-xs font-mono font-black shadow-[0_0_15px_rgba(2,245,43,0.35)] hover:bg-[#00dc25] active:scale-95 transition-all cursor-pointer"
             >
-              <Zap className="h-4 w-4 fill-[#080808]" />
-              <span>Auto Capture (3s)</span>
-            </button>
-
-            {/* Manual Camera Snap */}
-            <button
-              type="button"
-              onClick={handleLaunchRegularCamera}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-[#dce7e1] bg-white text-[#080808] py-2.5 px-3 text-xs font-mono font-bold hover:bg-[#eef5f1] active:scale-95 transition-all cursor-pointer"
-            >
-              <Camera className="h-4 w-4" />
-              <span>Manual Snap</span>
+              <Camera className="h-4 w-4 stroke-[2.5]" />
+              <span>Take Student Photo</span>
             </button>
           </div>
 
@@ -614,13 +587,13 @@ export default function RegisterPage() {
                   setEditorImageSrc(editedPhotoPreview);
                   setIsEditorOpen(true);
                 }}
-                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#02f52b] bg-[#02f52b]/10 py-2 text-xs font-mono font-bold text-[#080808] hover:bg-[#02f52b]/20 transition-colors"
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#02f52b] bg-[#02f52b]/10 py-2.5 text-xs font-mono font-bold text-[#080808] hover:bg-[#02f52b]/20 transition-colors cursor-pointer"
               >
                 <Crop className="h-3.5 w-3.5 text-[#080808]" />
-                <span>Open Redmi Note 13 Pro Editor</span>
+                <span>Edit & Crop Photo</span>
               </button>
             ) : (
-              <label className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#dce7e1] bg-[#f7faf9] py-2 text-xs font-mono font-semibold text-[#6b7771] hover:text-[#080808] hover:bg-[#eef5f1] transition-colors cursor-pointer">
+              <label className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#dce7e1] bg-[#f7faf9] py-2.5 text-xs font-mono font-semibold text-[#6b7771] hover:text-[#080808] hover:bg-[#eef5f1] transition-colors cursor-pointer">
                 <Upload className="h-3.5 w-3.5" />
                 <span>Upload From Gallery</span>
                 <input
@@ -727,35 +700,21 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* Grade / Class */}
+            {/* Grade (Number Input) */}
             <div>
               <label className="block text-xs font-bold text-[#080808] mb-1 font-mono">
-                Grade / Class <span className="text-red-500">*</span>
+                Grade <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-4 gap-1.5 mb-2">
-                {["Grade 9", "Grade 10", "Grade 11", "Grade 12"].map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setFormData((p) => ({ ...p, grade: g }))}
-                    className={`py-1.5 text-[11px] font-mono font-bold rounded-lg border transition-all ${
-                      formData.grade === g
-                        ? "bg-[#080808] text-white border-[#080808]"
-                        : "bg-[#f7faf9] text-[#6b7771] border-[#dce7e1] hover:text-[#080808]"
-                    }`}
-                  >
-                    {g.replace("Grade ", "G-")}
-                  </button>
-                ))}
-              </div>
               <input
-                type="text"
+                type="number"
                 name="grade"
+                min="1"
+                max="100"
                 value={formData.grade}
                 onChange={handleChange}
-                placeholder="e.g. Grade 10-A"
+                placeholder="e.g. 10"
                 required
-                className="w-full rounded-xl border border-[#dce7e1] bg-[#f7faf9] px-3.5 py-2 text-xs font-mono text-[#080808] focus:border-[#02f52b] focus:ring-1 focus:ring-[#02f52b] focus:outline-none"
+                className="w-full rounded-xl border border-[#dce7e1] bg-[#f7faf9] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] focus:border-[#02f52b] focus:ring-1 focus:ring-[#02f52b] focus:outline-none"
               />
             </div>
 
@@ -935,10 +894,9 @@ export default function RegisterPage() {
         onClose={() => setIsCameraOpen(false)}
         onCapture={handleWebcamCaptured}
         onEditPhoto={handleOpenPhotoEditor}
-        autoStart3sCountdown={cameraAutoCapture3s}
       />
 
-      {/* Redmi Note 13 Pro Photo Editor Modal */}
+      {/* Photo Studio Editor Modal */}
       {isEditorOpen && editorImageSrc && (
         <PhotoEditorModal
           isOpen={isEditorOpen}

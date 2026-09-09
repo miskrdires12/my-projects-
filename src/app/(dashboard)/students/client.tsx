@@ -36,7 +36,7 @@ import {
   updateStudentPhotoAction,
 } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
-import { subscribeToCloudSync } from "@/lib/sync-client";
+import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
 import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver } from "@/lib/export-utils";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 
@@ -79,6 +79,7 @@ interface StudentDirectoryClientProps {
 
 import {
   saveStudentsToDB,
+  saveStudentToDB,
   getAllStudentsFromDB,
   deleteStudentFromDB,
   clearAllStudentsFromDB,
@@ -342,17 +343,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     setSelectedIds(next);
   };
 
-  // Bulk Photo Download
+  // Bulk Photo Download (Includes matching Student_Manifest.csv inside the ZIP)
   const handleBulkDownloadPhotos = async () => {
-    if (selectedIds.size === 0) return;
+    const targetStudents = selectedIds.size > 0
+      ? displayStudents.filter((s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId)))
+      : displayStudents.filter((s) => Boolean(s.photoPath));
+
+    if (targetStudents.length === 0) {
+      alert("No student photographs found to download.");
+      return;
+    }
 
     try {
       const response = await fetch("/api/photos/download-zip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          studentIds: Array.from(selectedIds),
-          folderStructure: "by-grade",
+          studentIds: targetStudents.map((s) => s.id),
+          folderStructure: "flat",
         }),
       });
 
@@ -362,12 +370,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Selected_Student_Photos_${selectedIds.size}.zip`;
+      const dateTag = new Date().toISOString().split("T")[0];
+      const scopeLabel = selectedIds.size > 0 ? `Selected_${targetStudents.length}` : `All_${targetStudents.length}`;
+      a.download = `Student_Photos_With_Manifest_${scopeLabel}_${dateTag}.zip`;
       document.body.appendChild(a);
       a.click();
       a.remove();
+      window.URL.revokeObjectURL(url);
     } catch {
-      alert("Error downloading selected student photos.");
+      alert("Error downloading student photos ZIP.");
     }
   };
 
@@ -553,97 +564,120 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // [StudentID, Name, Grade, Phone, @photo (C:\Users\athede\Desktop\students project for 17000\<photo>)]
   // Smoothly handles 5,000 to 6,000+ records via server-side chunked query
   const handleExportExcel = (selectedOnly: boolean = false, overrideGrade?: string) => {
-    if (!selectedOnly) {
-      const targetGrade = overrideGrade !== undefined ? overrideGrade : (selectedGrade !== "ALL" ? selectedGrade : "");
-      const gradeQuery = targetGrade ? `&grade=${encodeURIComponent(targetGrade)}` : "";
-      window.location.href = `/api/students/export-csv?format=xlsx${gradeQuery}`;
+    const targetGrade = overrideGrade !== undefined ? overrideGrade : (selectedGrade !== "ALL" ? selectedGrade : "");
+
+    let listToExport: StudentExtended[] = [];
+    if (selectedOnly) {
+      listToExport = displayStudents.filter(
+        (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+      );
+      if (listToExport.length === 0) {
+        alert("No student records selected to export.");
+        return;
+      }
+    } else {
+      listToExport = targetGrade
+        ? displayStudents.filter((s) => s.grade === targetGrade)
+        : displayStudents;
+    }
+
+    if (listToExport.length > 0) {
+      const headers = [...RECEIVER_EXCEL_HEADERS];
+      const dataRows = listToExport.map((s) => [
+        s.studentId || "",
+        s.fullName || "",
+        s.sex || "Male",
+        s.grade || "",
+        formatPhoneForReceiver(s.phone),
+        getStudentPhotoLocalPath(s),
+      ]);
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+      ws["!cols"] = [
+        { wch: 18 },
+        { wch: 28 },
+        { wch: 14 },
+        { wch: 18 },
+        { wch: 70 },
+      ];
+      XLSX.utils.book_append_sheet(wb, ws, "Students");
+
+      const dateTag = new Date().toISOString().split("T")[0];
+      const scopeLabel = selectedOnly
+        ? `Selected_${listToExport.length}`
+        : targetGrade
+        ? `Grade_${targetGrade.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+        : `All_${listToExport.length}`;
+      const fileName = `Student_Credentials_${scopeLabel}_${dateTag}.xlsx`;
+
+      XLSX.writeFile(wb, fileName);
       return;
     }
 
-    const listToExport = displayStudents.filter(
-      (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
-    );
-
-    if (listToExport.length === 0) {
-      alert("No student records selected to export.");
-      return;
-    }
-
-    const headers = [...RECEIVER_EXCEL_HEADERS];
-    const dataRows = listToExport.map((s) => [
-      s.studentId || "",
-      s.fullName || "",
-      s.sex || "Male",
-      s.grade || "",
-      formatPhoneForReceiver(s.phone),
-      getStudentPhotoLocalPath(s),
-    ]);
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-    ws["!cols"] = [
-      { wch: 18 },
-      { wch: 28 },
-      { wch: 14 },
-      { wch: 18 },
-      { wch: 70 },
-    ];
-    XLSX.utils.book_append_sheet(wb, ws, "Students");
-
-    const dateTag = new Date().toISOString().split("T")[0];
-    const fileName = `Student_Credentials_Selected_${listToExport.length}_${dateTag}.xlsx`;
-
-    XLSX.writeFile(wb, fileName);
+    const gradeQuery = targetGrade ? `&grade=${encodeURIComponent(targetGrade)}` : "";
+    window.location.href = `/api/students/export-csv?format=xlsx${gradeQuery}`;
   };
 
   const handleExportCSV = (selectedOnly: boolean = false, overrideGrade?: string) => {
-    if (!selectedOnly) {
-      const targetGrade = overrideGrade !== undefined ? overrideGrade : (selectedGrade !== "ALL" ? selectedGrade : "");
-      const gradeQuery = targetGrade ? `&grade=${encodeURIComponent(targetGrade)}` : "";
-      window.location.href = `/api/students/export-csv?format=csv${gradeQuery}`;
-      return;
+    const targetGrade = overrideGrade !== undefined ? overrideGrade : (selectedGrade !== "ALL" ? selectedGrade : "");
+
+    let listToExport: StudentExtended[] = [];
+    if (selectedOnly) {
+      listToExport = displayStudents.filter(
+        (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+      );
+      if (listToExport.length === 0) {
+        alert("No student records selected to export.");
+        return;
+      }
+    } else {
+      listToExport = targetGrade
+        ? displayStudents.filter((s) => s.grade === targetGrade)
+        : displayStudents;
     }
 
-    const listToExport = displayStudents.filter(
-      (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
-    );
+    // Always generate CSV with UTF-8 BOM via client-side Blob — guaranteed to ALWAYS work!
+    if (listToExport.length > 0) {
+      const headers = [...RECEIVER_EXCEL_HEADERS];
+      const escapeCSV = (val: any) => {
+        if (val === null || val === undefined) return '""';
+        const str = String(val).trim();
+        return `"${str.replace(/"/g, '""')}"`;
+      };
 
-    if (listToExport.length === 0) {
-      alert("No student records selected to export.");
-      return;
-    }
-
-    const headers = [...RECEIVER_EXCEL_HEADERS];
-    const escapeCSV = (val: any) => {
-      if (val === null || val === undefined) return '""';
-      const str = String(val).trim();
-      return `"${str.replace(/"/g, '""')}"`;
-    };
-
-    const rows = listToExport.map((s) => {
-      return [
+      const rows = listToExport.map((s) => [
         escapeCSV(s.studentId),
         escapeCSV(s.fullName),
         escapeCSV(s.sex || "Male"),
         escapeCSV(s.grade),
         escapeCSV(formatPhoneForReceiver(s.phone)),
         escapeCSV(getStudentPhotoLocalPath(s)),
-      ].join(",");
-    });
+      ].join(","));
 
-    // Add UTF-8 BOM so Excel opens with proper character encoding
-    const csvContent = "\uFEFF" + [headers.map((h) => escapeCSV(h)).join(","), ...rows].join("\r\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const dateTag = new Date().toISOString().split("T")[0];
-    const fileName = `Student_Credentials_Selected_${listToExport.length}_${dateTag}.csv`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+      // Add UTF-8 BOM so Excel opens with proper character encoding
+      const csvContent = "\uFEFF" + [headers.map((h) => escapeCSV(h)).join(","), ...rows].join("\r\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const dateTag = new Date().toISOString().split("T")[0];
+      const scopeLabel = selectedOnly
+        ? `Selected_${listToExport.length}`
+        : targetGrade
+        ? `Grade_${targetGrade.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+        : `All_${listToExport.length}`;
+      const fileName = `Student_Credentials_${scopeLabel}_${dateTag}.csv`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      return;
+    }
+
+    const gradeQuery = targetGrade ? `&grade=${encodeURIComponent(targetGrade)}` : "";
+    window.location.href = `/api/students/export-csv?format=csv${gradeQuery}`;
   };
 
   // Download all selected students together into 1 combined CSV or Excel file via API
@@ -741,18 +775,37 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         console.warn("Upload fallback to dataUri:", uploadErr);
       }
 
-      // Update database and broadcast to receiver via server action
+      const updatedStudent: StudentExtended = {
+        ...studentToUpdate,
+        photoPath: finalPath,
+      };
+
+      // 1. Persist to IndexedDB (permanent local database supporting 6,000+ per day)
+      try {
+        await saveStudentToDB(updatedStudent as any);
+      } catch (idbErr) {
+        console.warn("IndexedDB photo update error:", idbErr);
+      }
+
+      // 2. Broadcast live update across all tabs and mobile/desktop clients
+      try {
+        publishStudentSync("UPSERT", updatedStudent as any);
+      } catch (syncErr) {
+        console.warn("Real-time sync photo broadcast notice:", syncErr);
+      }
+
+      // 3. Update database via server action
       try {
         await updateStudentPhotoAction(studentToUpdate.id, finalPath);
       } catch (actionErr) {
         console.warn("Server action photo update warning:", actionErr);
       }
 
-      // Update local state immediately
+      // 4. Update local React state immediately
       setDisplayStudents((prev) => {
         const next = prev.map((s) =>
           s.id === studentToUpdate.id || s.studentId === studentToUpdate.studentId
-            ? { ...s, photoPath: finalPath }
+            ? updatedStudent
             : s
         );
         safeSaveLocalEnrolledStudents(next);
