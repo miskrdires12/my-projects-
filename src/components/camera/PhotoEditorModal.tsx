@@ -368,10 +368,146 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         }
       }
 
-      newBox.x = Math.round(newX);
+    } else if (handle === "n") {
+      // Top Edge - crop from the top
+      let newH = startCrop.height - deltaY;
+      let newY = startCrop.y + deltaY;
+      if (newY < 0) {
+        newH += newY;
+        newY = 0;
+      }
+      if (newH < minSize) {
+        newY = startCrop.y + startCrop.height - minSize;
+        newH = minSize;
+      }
+      if (aspectRatio === "3:4") {
+        let newW = newH * (3 / 4);
+        if (newW > cW) {
+          newW = cW;
+          newH = newW * (4 / 3);
+          newY = startCrop.y + startCrop.height - newH;
+        }
+        const centerX = startCrop.x + startCrop.width / 2;
+        let newX = centerX - newW / 2;
+        if (newX < 0) newX = 0;
+        if (newX + newW > cW) newX = cW - newW;
+        newBox.x = Math.round(newX);
+        newBox.width = Math.round(newW);
+      } else if (aspectRatio === "1:1") {
+        let newW = newH;
+        if (newW > cW) {
+          newW = cW;
+          newH = newW;
+          newY = startCrop.y + startCrop.height - newH;
+        }
+        const centerX = startCrop.x + startCrop.width / 2;
+        let newX = centerX - newW / 2;
+        if (newX < 0) newX = 0;
+        if (newX + newW > cW) newX = cW - newW;
+        newBox.x = Math.round(newX);
+        newBox.width = Math.round(newW);
+      }
       newBox.y = Math.round(newY);
-      newBox.width = Math.round(newW);
       newBox.height = Math.round(newH);
+    } else if (handle === "s") {
+      // Bottom Edge - crop from the bottom
+      let newH = Math.max(minSize, Math.min(cH - startCrop.y, startCrop.height + deltaY));
+      if (aspectRatio === "3:4") {
+        let newW = newH * (3 / 4);
+        if (newW > cW) {
+          newW = cW;
+          newH = newW * (4 / 3);
+        }
+        const centerX = startCrop.x + startCrop.width / 2;
+        let newX = centerX - newW / 2;
+        if (newX < 0) newX = 0;
+        if (newX + newW > cW) newX = cW - newW;
+        newBox.x = Math.round(newX);
+        newBox.width = Math.round(newW);
+      } else if (aspectRatio === "1:1") {
+        let newW = newH;
+        if (newW > cW) {
+          newW = cW;
+          newH = newW;
+        }
+        const centerX = startCrop.x + startCrop.width / 2;
+        let newX = centerX - newW / 2;
+        if (newX < 0) newX = 0;
+        if (newX + newW > cW) newX = cW - newW;
+        newBox.x = Math.round(newX);
+        newBox.width = Math.round(newW);
+      }
+      newBox.height = Math.round(newH);
+    } else if (handle === "w") {
+      // Left Edge - crop from the left
+      let newW = startCrop.width - deltaX;
+      let newX = startCrop.x + deltaX;
+      if (newX < 0) {
+        newW += newX;
+        newX = 0;
+      }
+      if (newW < minSize) {
+        newX = startCrop.x + startCrop.width - minSize;
+        newW = minSize;
+      }
+      if (aspectRatio === "3:4") {
+        let newH = newW * (4 / 3);
+        if (newH > cH) {
+          newH = cH;
+          newW = newH * (3 / 4);
+          newX = startCrop.x + startCrop.width - newW;
+        }
+        const centerY = startCrop.y + startCrop.height / 2;
+        let newY = centerY - newH / 2;
+        if (newY < 0) newY = 0;
+        if (newY + newH > cH) newY = cH - newH;
+        newBox.y = Math.round(newY);
+        newBox.height = Math.round(newH);
+      } else if (aspectRatio === "1:1") {
+        let newH = newW;
+        if (newH > cH) {
+          newH = cH;
+          newW = newH;
+          newX = startCrop.x + startCrop.width - newW;
+        }
+        const centerY = startCrop.y + startCrop.height / 2;
+        let newY = centerY - newH / 2;
+        if (newY < 0) newY = 0;
+        if (newY + newH > cH) newY = cH - newH;
+        newBox.y = Math.round(newY);
+        newBox.height = Math.round(newH);
+      }
+      newBox.x = Math.round(newX);
+      newBox.width = Math.round(newW);
+    } else if (handle === "e") {
+      // Right Edge - crop from the right
+      let newW = Math.max(minSize, Math.min(cW - startCrop.x, startCrop.width + deltaX));
+      if (aspectRatio === "3:4") {
+        let newH = newW * (4 / 3);
+        if (newH > cH) {
+          newH = cH;
+          newW = newH * (3 / 4);
+        }
+        const centerY = startCrop.y + startCrop.height / 2;
+        let newY = centerY - newH / 2;
+        if (newY < 0) newY = 0;
+        if (newY + newH > cH) newY = cH - newH;
+        newBox.y = Math.round(newY);
+        newBox.height = Math.round(newH);
+      } else if (aspectRatio === "1:1") {
+        let newH = newW;
+        if (newH > cH) {
+          newH = cH;
+          newW = newH;
+        }
+        const centerY = startCrop.y + startCrop.height / 2;
+        let newY = centerY - newH / 2;
+        if (newY < 0) newY = 0;
+        if (newY + newH > cH) newY = cH - newH;
+        newBox.y = Math.round(newY);
+        newBox.height = Math.round(newH);
+      }
+      newBox.width = Math.round(newW);
     }
 
     setCropBox(newBox);
@@ -613,23 +749,42 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               <div className="absolute w-11 h-11" />
             </div>
 
-            {/* Edge Bar Indicators */}
+            {/* 4 Phone-Style Side Edge Handles (Crop from all sides) */}
+            {/* Top Edge Handle */}
             <div
-              className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-1 bg-white rounded-full z-20 cursor-ns-resize"
+              className="absolute top-0 left-1/4 right-1/4 -translate-y-1/2 h-8 z-20 cursor-ns-resize touch-none flex items-center justify-center group"
               onPointerDown={(e) => startDrag("n", e)}
-            />
+              title="Drag down or up to crop top"
+            >
+              <div className="w-12 h-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)] group-hover:scale-110 group-active:scale-125 transition-transform" />
+            </div>
+
+            {/* Bottom Edge Handle */}
             <div
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-1 bg-white rounded-full z-20 cursor-ns-resize"
+              className="absolute bottom-0 left-1/4 right-1/4 translate-y-1/2 h-8 z-20 cursor-ns-resize touch-none flex items-center justify-center group"
               onPointerDown={(e) => startDrag("s", e)}
-            />
+              title="Drag up or down to crop bottom"
+            >
+              <div className="w-12 h-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)] group-hover:scale-110 group-active:scale-125 transition-transform" />
+            </div>
+
+            {/* Left Edge Handle */}
             <div
-              className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 h-8 w-1 bg-white rounded-full z-20 cursor-ew-resize"
+              className="absolute left-0 top-1/4 bottom-1/4 -translate-x-1/2 w-8 z-20 cursor-ew-resize touch-none flex items-center justify-center group"
               onPointerDown={(e) => startDrag("w", e)}
-            />
+              title="Drag right or left to crop left side"
+            >
+              <div className="h-12 w-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)] group-hover:scale-110 group-active:scale-125 transition-transform" />
+            </div>
+
+            {/* Right Edge Handle */}
             <div
-              className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 h-8 w-1 bg-white rounded-full z-20 cursor-ew-resize"
+              className="absolute right-0 top-1/4 bottom-1/4 translate-x-1/2 w-8 z-20 cursor-ew-resize touch-none flex items-center justify-center group"
               onPointerDown={(e) => startDrag("e", e)}
-            />
+              title="Drag left or right to crop right side"
+            >
+              <div className="h-12 w-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)] group-hover:scale-110 group-active:scale-125 transition-transform" />
+            </div>
           </div>
         </div>
       </div>

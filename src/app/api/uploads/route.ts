@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { processAndSaveStudentPhoto } from "@/lib/image-processing";
 import prisma from "@/lib/prisma";
+import { publishStudentSync } from "@/lib/sync-engine";
 
 export async function POST(request: NextRequest) {
   // 1. Enforce authentication
@@ -69,10 +70,28 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          await prisma.student.update({
+          const updatedStudent = await prisma.student.update({
             where: { id: student.id },
             data: { photoPath: editedResult.relativePath },
           });
+
+          // Broadcast updated photo to receiver in real-time
+          publishStudentSync("UPSERT", {
+            id: updatedStudent.id,
+            studentId: updatedStudent.studentId,
+            fullName: updatedStudent.fullName,
+            phone: updatedStudent.phone,
+            sex: updatedStudent.sex,
+            grade: updatedStudent.grade,
+            school: updatedStudent.school,
+            department: updatedStudent.department,
+            academicYear: updatedStudent.academicYear,
+            photoPath: updatedStudent.photoPath,
+            qrCodeData: updatedStudent.qrCodeData || `STUDENT:${updatedStudent.studentId}`,
+            status: updatedStudent.status,
+            createdAt: updatedStudent.createdAt.toISOString(),
+            updatedAt: updatedStudent.updatedAt.toISOString(),
+          }).catch(() => {});
         }
       } catch (dbErr) {
         console.warn("Notice: Non-fatal student photo association warning:", dbErr);

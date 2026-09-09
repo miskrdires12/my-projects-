@@ -254,6 +254,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // Selection state for bulk operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeStudent, setActiveStudent] = useState<StudentExtended | null>(null);
+  const [isGradeClassificationOpen, setIsGradeClassificationOpen] = useState(false);
 
   // Update URL search parameters to trigger server-side query
   const applyFilters = (newParams: Record<string, string | number | undefined>) => {
@@ -587,14 +588,72 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     const csvContent = "\uFEFF" + [headers.map((h) => escapeCSV(h)).join(","), ...rows].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
+    const dateTag = new Date().toISOString().split("T")[0];
+    const fileName = `Student_Credentials_Selected_${listToExport.length}_${dateTag}.csv`;
     const a = document.createElement("a");
     a.href = url;
-    const dateTag = new Date().toISOString().split("T")[0];
-    a.download = `Student_Credentials_Selected_${listToExport.length}_${dateTag}.csv`;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+  };
+
+  // Download all selected students together into 1 combined CSV or Excel file via API
+  const downloadSelectedTogether = async (format: "csv" | "xlsx" = "csv") => {
+    if (selectedIds.size === 0) {
+      alert("No student records selected to export.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/students/export-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: Array.from(selectedIds),
+          format,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to export selected student records");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const dateTag = new Date().toISOString().split("T")[0];
+      const ext = format === "xlsx" ? "xlsx" : "csv";
+      a.download = `Student_Credentials_Selected_${selectedIds.size}_Together_${dateTag}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("Selected export API error, falling back:", err);
+      if (format === "xlsx") handleExportExcel(true);
+      else handleExportCSV(true);
+    }
+  };
+
+  // Select all visible students matching a specific grade
+  const handleSelectAllInGrade = (gradeName: string) => {
+    const gradeStudents = displayStudents.filter((s) => s.grade === gradeName);
+    const next = new Set(selectedIds);
+    const allGradeSelected =
+      gradeStudents.length > 0 && gradeStudents.every((s) => next.has(s.id));
+
+    if (allGradeSelected) {
+      gradeStudents.forEach((s) => {
+        next.delete(s.id);
+        if (s.studentId) next.delete(s.studentId);
+      });
+    } else {
+      gradeStudents.forEach((s) => {
+        next.add(s.id);
+      });
+    }
+    setSelectedIds(next);
   };
 
   // Save edited/cropped photo from PhotoEditorModal studio & sync to receiver
@@ -701,6 +760,19 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             )}
             <button
               type="button"
+              onClick={() => setIsGradeClassificationOpen(!isGradeClassificationOpen)}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-mono font-semibold transition-colors ${
+                isGradeClassificationOpen
+                  ? "border-black bg-black text-white"
+                  : "border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-100"
+              }`}
+              title="Toggle Grade Classification Panels"
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>{isGradeClassificationOpen ? "Hide Grade Classification" : "Classify by Grade"}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setIsGradeExportModalOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-1.5 text-xs font-mono font-semibold text-neutral-800 hover:bg-neutral-100 transition-colors"
               title="Download CSV for any specific grade"
@@ -761,6 +833,92 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             );
           })}
         </div>
+
+        {/* Grade Classification Cards Deck (when toggled active) */}
+        {isGradeClassificationOpen && (
+          <div className="pt-3 border-t border-neutral-200 mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {grades.map((g) => {
+              const count = gradeCounts?.[g] ?? 0;
+              const isSelected = selectedGrade === g;
+              const gradeVisibleCount = displayStudents.filter((s) => s.grade === g).length;
+              const gradeSelectedCount = displayStudents.filter(
+                (s) => s.grade === g && (selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId)))
+              ).length;
+              const isAllGradeSelected =
+                gradeVisibleCount > 0 && gradeSelectedCount === gradeVisibleCount;
+
+              return (
+                <div
+                  key={g}
+                  className={`rounded-xl border p-3 flex flex-col justify-between gap-2.5 transition-all ${
+                    isSelected
+                      ? "border-black bg-neutral-900 text-white shadow-md"
+                      : "border-neutral-200 bg-white text-neutral-900 hover:border-neutral-400"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span
+                        className={`text-[10px] font-mono uppercase font-bold tracking-wider ${
+                          isSelected ? "text-amber-400" : "text-accent"
+                        }`}
+                      >
+                        COHORT CLASSIFICATION
+                      </span>
+                      <h4 className="text-sm font-bold tracking-tight">{g}</h4>
+                    </div>
+                    <span
+                      className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
+                        isSelected
+                          ? "bg-white/20 text-white"
+                          : "bg-neutral-100 text-neutral-700"
+                      }`}
+                    >
+                      {count.toLocaleString()} students
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-100/20">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAllInGrade(g)}
+                      className={`flex-1 rounded-lg py-1 px-2 text-[11px] font-semibold transition-colors ${
+                        isAllGradeSelected
+                          ? "bg-amber-400 text-black font-bold"
+                          : isSelected
+                          ? "bg-white/15 text-white hover:bg-white/25"
+                          : "bg-neutral-100 text-neutral-800 hover:bg-neutral-200"
+                      }`}
+                      title={`Select or unselect all students in ${g}`}
+                    >
+                      {isAllGradeSelected ? "Selected ✓" : "Select Roster"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleExportCSV(false, g)}
+                      className="rounded-lg bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black py-1 px-2.5 text-[11px] font-bold flex items-center gap-1 shadow-xs transition-opacity"
+                      title={`Download ${g} CSV`}
+                    >
+                      <Download className="h-3 w-3" />
+                      <span>CSV</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleExportExcel(false, g)}
+                      className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-1 px-2 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                      title={`Download ${g} Excel`}
+                    >
+                      <FileSpreadsheet className="h-3 w-3" />
+                      <span>XLSX</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Search & Multi-Filter Controls Bar */}
@@ -885,21 +1043,23 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => handleExportExcel(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
-              title="Export only selected students to Excel (.xlsx)"
+              type="button"
+              onClick={() => downloadSelectedTogether("csv")}
+              className="flex items-center gap-1.5 rounded-lg bg-black text-white dark:bg-white dark:text-black px-3.5 py-1.5 text-xs font-bold shadow-md hover:opacity-90 transition-opacity"
+              title="Download all selected students together into 1 combined CSV file"
             >
-              <FileSpreadsheet className="h-3.5 w-3.5" />
-              <span>Export Selected ({selectedIds.size}) to Excel</span>
+              <Download className="h-3.5 w-3.5" />
+              <span>Download Selected Together ({selectedIds.size}) to CSV</span>
             </button>
 
             <button
-              onClick={() => handleExportCSV(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-black hover:bg-neutral-100 transition-colors"
-              title="Export only selected students to CSV"
+              type="button"
+              onClick={() => downloadSelectedTogether("xlsx")}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+              title="Export all selected students together to Excel (.xlsx)"
             >
-              <Download className="h-3.5 w-3.5 text-neutral-700" />
-              <span>CSV</span>
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              <span>Export Selected ({selectedIds.size}) to Excel</span>
             </button>
 
             <button

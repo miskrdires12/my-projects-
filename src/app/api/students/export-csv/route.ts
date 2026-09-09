@@ -1,6 +1,7 @@
 // ============================================================================
 // STUDENT BRIDGE — HIGH-THROUGHPUT (5000-6000+) STUDENT EXPORT ENGINE
 // - Grade Separation & Grade-Specific CSV/Excel Downloads
+// - Selected Data Export (combines all selected student records together)
 // - Cursor-based Chunked DB Queries (take: 1000) for zero memory spikes
 // - Strict 5 Columns: StudentID, Name, Grade, Phone, @photo
 // - Phone normalization with 2519
@@ -21,129 +22,170 @@ export const dynamic = "force-dynamic";
 
 const CHUNK_SIZE = 1000;
 
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getSession();
-    if (!session) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
+interface ExportOptions {
+  format?: string;
+  grade?: string | null;
+  ids?: string[] | null;
+}
 
-    const { searchParams } = new URL(request.url);
-    const format = (searchParams.get("format") || "csv").toLowerCase();
-    const gradeParam = searchParams.get("grade");
+async function handleExport(options: ExportOptions) {
+  const session = await getSession();
+  if (!session) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
 
-    // Build filter
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
-    if (gradeParam && gradeParam !== "ALL" && gradeParam !== "all" && gradeParam.trim() !== "") {
-      where.grade = gradeParam.trim();
-    }
+  const format = (options.format || "csv").toLowerCase();
+  const gradeParam = options.grade;
+  const ids = options.ids && options.ids.length > 0 ? options.ids : null;
 
-    // High-Throughput Cursor Pagination: Chunk in batches of 1000 records
-    // Avoids Node.js heap exhaustion on 5,000 to 6,000+ records
-    const allStudents: Array<{
-      id: string;
-      studentId: string;
-      fullName: string;
-      grade: string;
-      phone: string;
-      photoPath: string | null;
-    }> = [];
+  // Build Prisma filter
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = {};
+  if (gradeParam && gradeParam !== "ALL" && gradeParam !== "all" && gradeParam.trim() !== "") {
+    where.grade = gradeParam.trim();
+  }
 
-    let cursor: string | undefined;
+  if (ids) {
+    where.OR = [{ id: { in: ids } }, { studentId: { in: ids } }];
+  }
 
-    while (true) {
-      const chunk = await prisma.student.findMany({
-        where,
-        select: {
-          id: true,
-          studentId: true,
-          fullName: true,
-          grade: true,
-          phone: true,
-          photoPath: true,
-        },
-        take: CHUNK_SIZE,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        orderBy: { id: "asc" },
-      });
+  // High-Throughput Cursor Pagination: Chunk in batches of 1000 records
+  // Avoids Node.js heap exhaustion on 5,000 to 6,000+ records
+  const allStudents: Array<{
+    id: string;
+    studentId: string;
+    fullName: string;
+    grade: string;
+    phone: string;
+    photoPath: string | null;
+  }> = [];
 
-      if (chunk.length === 0) break;
-      allStudents.push(...chunk);
+  let cursor: string | undefined;
 
-      if (chunk.length < CHUNK_SIZE) break;
-      cursor = chunk[chunk.length - 1].id;
-    }
+  while (true) {
+    const chunk = await prisma.student.findMany({
+      where,
+      select: {
+        id: true,
+        studentId: true,
+        fullName: true,
+        grade: true,
+        phone: true,
+        photoPath: true,
+      },
+      take: CHUNK_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: { id: "asc" },
+    });
 
-    // Exact 5 columns requested by user:
-    // StudentID, Name, Grade, Phone, @photo
-    const headers = [...RECEIVER_EXCEL_HEADERS];
+    if (chunk.length === 0) break;
+    allStudents.push(...chunk);
 
-    const dataRows = allStudents.map((s) => [
-      s.studentId || "",
-      s.fullName || "",
-      s.grade || "",
-      formatPhoneForReceiver(s.phone),
-      getStudentPhotoLocalPath(s),
-    ]);
+    if (chunk.length < CHUNK_SIZE) break;
+    cursor = chunk[chunk.length - 1].id;
+  }
 
-    const dateTag = new Date().toISOString().split("T")[0];
-    const gradeLabel =
-      where.grade
-        ? `Grade_${where.grade.replace(/[^a-zA-Z0-9_-]/g, "_")}`
-        : "AllGrades";
+  // Exact 5 columns requested by user:
+  // StudentID, Name, Grade, Phone, @photo
+  const headers = [...RECEIVER_EXCEL_HEADERS];
 
-    // Export as Genuine Excel (.xlsx) file
-    if (format === "xlsx" || format === "excel") {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+  const dataRows = allStudents.map((s) => [
+    s.studentId || "",
+    s.fullName || "",
+    s.grade || "",
+    formatPhoneForReceiver(s.phone),
+    getStudentPhotoLocalPath(s),
+  ]);
 
-      // Set readable column widths
-      ws["!cols"] = [
-        { wch: 18 }, // StudentID
-        { wch: 28 }, // Name
-        { wch: 14 }, // Grade
-        { wch: 18 }, // Phone
-        { wch: 70 }, // @photo (Full local file path)
-      ];
+  const dateTag = new Date().toISOString().split("T")[0];
+  let fileCategory = "AllGrades";
+  if (ids) {
+    fileCategory = `Selected_${allStudents.length}_Students`;
+  } else if (where.grade) {
+    fileCategory = `Grade_${where.grade.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  }
 
-      XLSX.utils.book_append_sheet(wb, ws, "Students");
-      const excelBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  // Export as Genuine Excel (.xlsx) file
+  if (format === "xlsx" || format === "excel") {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
 
-      const fileName = `Student_Credentials_${gradeLabel}_${allStudents.length}_Records_${dateTag}.xlsx`;
+    // Set readable column widths
+    ws["!cols"] = [
+      { wch: 18 }, // StudentID
+      { wch: 28 }, // Name
+      { wch: 14 }, // Grade
+      { wch: 18 }, // Phone
+      { wch: 70 }, // @photo (Full local file path)
+    ];
 
-      return new NextResponse(excelBuffer, {
-        status: 200,
-        headers: {
-          "Content-Type":
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "Content-Disposition": `attachment; filename="${fileName}"`,
-        },
-      });
-    }
+    XLSX.utils.book_append_sheet(wb, ws, "Students");
+    const excelBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
-    // Export as CSV (Default)
-    const escapeCSV = (val: unknown) => {
-      if (val === null || val === undefined) return '""';
-      const str = String(val).trim();
-      return `"${str.replace(/"/g, '""')}"`;
-    };
+    const fileName = `Student_Credentials_${fileCategory}_${allStudents.length}_Records_${dateTag}.xlsx`;
 
-    const csvRows = dataRows.map((row) => row.map((cell) => escapeCSV(cell)).join(","));
-    const csvContent =
-      "\uFEFF" + [headers.map((h) => escapeCSV(h)).join(","), ...csvRows].join("\r\n");
-
-    const fileName = `Student_Credentials_${gradeLabel}_${allStudents.length}_Records_${dateTag}.csv`;
-
-    return new NextResponse(csvContent, {
+    return new NextResponse(excelBuffer, {
       status: 200,
       headers: {
-        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${fileName}"`,
       },
     });
+  }
+
+  // Export as CSV (Default)
+  const escapeCSV = (val: unknown) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).trim();
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
+  const csvRows = dataRows.map((row) => row.map((cell) => escapeCSV(cell)).join(","));
+  const csvContent =
+    "\uFEFF" + [headers.map((h) => escapeCSV(h)).join(","), ...csvRows].join("\r\n");
+
+  const fileName = `Student_Credentials_${fileCategory}_${allStudents.length}_Records_${dateTag}.csv`;
+
+  return new NextResponse(csvContent, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${fileName}"`,
+    },
+  });
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const format = searchParams.get("format") || "csv";
+    const grade = searchParams.get("grade");
+    const idsParam = searchParams.get("ids");
+    const ids = idsParam
+      ? idsParam
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : null;
+
+    return await handleExport({ format, grade, ids });
   } catch (error: unknown) {
-    console.error("Export students data error:", error);
+    console.error("Export students data GET error:", error);
+    return new NextResponse("Failed to export student data", { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const format = body.format || "csv";
+    const grade = body.grade || null;
+    const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : null;
+
+    return await handleExport({ format, grade, ids });
+  } catch (error: unknown) {
+    console.error("Export students data POST error:", error);
     return new NextResponse("Failed to export student data", { status: 500 });
   }
 }

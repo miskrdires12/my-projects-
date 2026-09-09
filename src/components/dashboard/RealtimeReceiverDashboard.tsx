@@ -53,13 +53,36 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   useEffect(() => {
     const unsubscribe = subscribeToCloudSync(
       (newStudent) => {
-        setData((prev) => ({
-          ...prev,
-          totalStudents: prev.totalStudents + 1,
-          photosCount: newStudent.photoPath ? prev.photosCount + 1 : prev.photosCount,
-          qrCount: newStudent.qrCodeData ? prev.qrCount + 1 : prev.qrCount,
-          readyForPrintCount: prev.readyForPrintCount + 1,
-        }));
+        setData((prev) => {
+          const isExisting = (prev.recentStudents || []).some(
+            (s: any) => s.studentId === newStudent.studentId || s.id === newStudent.id
+          );
+          const updatedRecent = [
+            newStudent,
+            ...(prev.recentStudents || []).filter(
+              (s: any) => s.studentId !== newStudent.studentId && s.id !== newStudent.id
+            ),
+          ].slice(0, 10);
+
+          return {
+            ...prev,
+            totalStudents: isExisting ? prev.totalStudents : prev.totalStudents + 1,
+            photosCount: newStudent.photoPath
+              ? isExisting
+                ? prev.photosCount
+                : prev.photosCount + 1
+              : prev.photosCount,
+            qrCount: newStudent.qrCodeData
+              ? isExisting
+                ? prev.qrCount
+                : prev.qrCount + 1
+              : prev.qrCount,
+            readyForPrintCount: isExisting
+              ? prev.readyForPrintCount
+              : prev.readyForPrintCount + 1,
+            recentStudents: updatedRecent,
+          };
+        });
         setLastUpdated(new Date().toLocaleTimeString());
       },
       () => {

@@ -99,7 +99,7 @@ export async function GET(request: Request) {
         }),
         prisma.student.findMany({
           take: 6,
-          orderBy: { createdAt: "desc" },
+          orderBy: { updatedAt: "desc" },
           select: {
             id: true,
             studentId: true,
@@ -109,6 +109,7 @@ export async function GET(request: Request) {
             photoPath: true,
             qrCodeData: true,
             createdAt: true,
+            updatedAt: true,
           },
         }),
         prisma.student.findMany({
