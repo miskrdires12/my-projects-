@@ -139,13 +139,23 @@ export default async function StudentsPage({
 
         <div className="flex items-center gap-3">
           <a
-            href="/api/students/export-csv"
+            href="/api/students/export-csv?format=xlsx"
             download
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-            title="Download full database student directory as CSV"
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+            title="Download full database student directory as Excel (.xlsx)"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
+          </a>
+
+          <a
+            href="/api/students/export-csv?format=csv"
+            download
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground hover:bg-surface-secondary transition-colors"
+            title="Download full database student directory as CSV"
+          >
+            <Download className="h-3.5 w-3.5 text-foreground-muted" />
+            <span>CSV</span>
           </a>
 
           <Link

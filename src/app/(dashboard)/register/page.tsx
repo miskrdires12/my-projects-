@@ -22,8 +22,10 @@ import {
   Tag,
   Receipt,
   ArrowLeft,
+  Crop,
 } from "lucide-react";
 import { CameraModal } from "@/components/camera/CameraModal";
+import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 import {
   createStudentAction,
   checkStudentIdAvailabilityAction,
@@ -46,6 +48,9 @@ export default function RegisterPage() {
 
   // Modals
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editorImageSrc, setEditorImageSrc] = useState<string | null>(null);
+  const [editorOriginalFile, setEditorOriginalFile] = useState<File | null>(null);
 
   // Status & Feedback
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -182,9 +187,14 @@ export default function RegisterPage() {
     setEditedPhotoPreview(previewUrl);
     setIsUploadingPhoto(true);
 
+    const safePhotoName = `${(formData.fullName || formData.studentId || "student")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "student"}.jpg`;
+
     try {
       const form = new FormData();
-      form.append("file", file, `${formData.studentId || "student"}_portrait.jpg`);
+      form.append("file", file, safePhotoName);
       form.append("studentId", formData.studentId || "");
 
       const res = await fetch("/api/uploads", {
@@ -222,6 +232,32 @@ export default function RegisterPage() {
     setEditedPhotoPreview(previewUrl);
     setOfficialPhotoPath(previewUrl);
     handleDirectPhotoUpload(file, previewUrl);
+  };
+
+  /**
+   * Opens photo crop and refinement studio for captured or uploaded photo.
+   */
+  const handleOpenPhotoEditor = (file: File, previewUrl: string) => {
+    setIsCameraOpen(false);
+    setEditorImageSrc(previewUrl);
+    setEditorOriginalFile(file);
+    setIsEditorOpen(true);
+  };
+
+  /**
+   * Called when user saves cropped/refined photo from PhotoEditorModal studio.
+   */
+  const handlePhotoEditorSave = (editedBlob: Blob) => {
+    setIsEditorOpen(false);
+    const safePhotoName = `${(formData.fullName || formData.studentId || "student")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "student"}.jpg`;
+    const editedFile = new File([editedBlob], safePhotoName, { type: "image/jpeg" });
+    const previewUrl = URL.createObjectURL(editedBlob);
+    setEditedPhotoPreview(previewUrl);
+    setOfficialPhotoPath(previewUrl);
+    handleDirectPhotoUpload(editedFile, previewUrl);
   };
 
   /**
@@ -886,16 +922,30 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* Overlay Retake / Delete Controls */}
+              {/* Overlay Retake / Edit / Delete Controls */}
               {editedPhotoPreview && (
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editedPhotoPreview) {
+                        setEditorImageSrc(editedPhotoPreview);
+                        setIsEditorOpen(true);
+                      }
+                    }}
+                    className="rounded-lg bg-white text-black px-2.5 py-1.5 text-xs font-semibold shadow hover:bg-neutral-100 transition-colors flex items-center gap-1.5"
+                    title="Crop and Refine Photo"
+                  >
+                    <Crop className="h-3.5 w-3.5" />
+                    <span>Crop & Edit</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setIsCameraOpen(true)}
-                    className="rounded-lg bg-white text-black px-3 py-1.5 text-xs font-semibold shadow hover:bg-neutral-100 transition-colors flex items-center gap-1.5"
+                    className="rounded-lg bg-white text-black px-2.5 py-1.5 text-xs font-semibold shadow hover:bg-neutral-100 transition-colors flex items-center gap-1.5"
                   >
                     <Camera className="h-3.5 w-3.5" />
-                    <span>Retake (Auto 3:4)</span>
+                    <span>Retake (3:4)</span>
                   </button>
                   <button
                     type="button"
@@ -911,6 +961,22 @@ export default function RegisterPage() {
                 </div>
               )}
             </div>
+
+            {/* Direct Crop & Edit Button if photo attached */}
+            {editedPhotoPreview && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditorImageSrc(editedPhotoPreview);
+                  setIsEditorOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-neutral-300 bg-white py-2 text-xs font-mono font-semibold text-black hover:bg-neutral-100 transition-colors shadow-xs"
+                title="Adjust crop, framing, zoom, or lighting"
+              >
+                <Crop className="h-3.5 w-3.5 text-neutral-700" />
+                <span>Crop & Edit Photo (3:4 Studio)</span>
+              </button>
+            )}
 
             {/* Capture Controls */}
             <div className="grid grid-cols-2 gap-2 pt-1">
@@ -993,7 +1059,23 @@ export default function RegisterPage() {
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onCapture={handleWebcamCaptured}
+        onEditPhoto={handleOpenPhotoEditor}
       />
+
+      {/* Post-Capture Photo Editor Studio Modal */}
+      {isEditorOpen && editorImageSrc && (
+        <PhotoEditorModal
+          isOpen={isEditorOpen}
+          onClose={() => setIsEditorOpen(false)}
+          originalImageSrc={editorImageSrc}
+          originalFile={editorOriginalFile}
+          onSave={handlePhotoEditorSave}
+          onRetake={() => {
+            setIsEditorOpen(false);
+            setIsCameraOpen(true);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -21,6 +21,7 @@ import {
   Upload,
   Sparkles,
   Zap,
+  Crop,
 } from "lucide-react";
 import { convertBlobTo300Dpi } from "@/lib/jpeg-dpi";
 
@@ -28,6 +29,7 @@ export interface CameraModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCapture: (file: File, previewUrl: string) => void;
+  onEditPhoto?: (file: File, previewUrl: string) => void;
   initialFacingMode?: "user" | "environment";
   maxDimensions?: { width: number; height: number }; // Default 900 × 1200 (exact 3:4 @ 300 DPI)
   compressionQuality?: number; // Default 0.90
@@ -44,6 +46,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   isOpen,
   onClose,
   onCapture,
+  onEditPhoto,
   initialFacingMode = "user",
   maxDimensions = { width: 900, height: 1200 },
   compressionQuality = 0.90,
@@ -488,6 +491,20 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     onClose();
   };
 
+  const handleOpenCropEditor = () => {
+    if (!capturedBlob || !capturedPreview) return;
+    const fileName = `student-photo-300dpi-${Date.now()}.jpg`;
+    const file = new File([capturedBlob], fileName, { type: "image/jpeg" });
+    const previewUrl = capturedPreview;
+    stopMediaTracks();
+    setCapturedBlob(null);
+    setCapturedPreview(null);
+    onClose();
+    if (onEditPhoto) {
+      onEditPhoto(file, previewUrl);
+    }
+  };
+
   const handleClose = () => {
     clearCountdownTimer();
     stopMediaTracks();
@@ -589,21 +606,35 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           {/* ID Framing Overlay (Active during streaming) */}
           {cameraState === "streaming" && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              {/* Head / Face Oval Guide */}
-              <div className="relative h-[68%] w-[58%] rounded-[50%] border-2 border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
-                {/* Center crosshairs */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-0.5 bg-white/60" />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-4 bg-white/60" />
+              {/* Strict Rectangular 3:4 ID Framing Guide (NO OVAL) */}
+              <div className="relative aspect-[3/4] h-[78%] max-h-[460px] border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] rounded-xs">
+                {/* Corner bracket highlight marks */}
+                <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 border-white" />
+                <div className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 border-white" />
+                <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 border-white" />
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 border-white" />
 
-                {/* Eye line guide */}
-                <div className="absolute top-[42%] left-2 right-2 border-b border-dotted border-white/40" />
+                {/* Center alignment crosshairs */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 bg-white/70" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 bg-white/70" />
+
+                {/* Upper third eye level guide line */}
+                <div className="absolute top-[38%] left-3 right-3 border-b border-dashed border-white/50 flex justify-between px-1">
+                  <span className="text-[9px] font-mono text-white/80 -mt-3.5 select-none uppercase tracking-wider">Eye Level</span>
+                  <span className="text-[9px] font-mono text-white/80 -mt-3.5 select-none font-bold">3:4 RECT</span>
+                </div>
+
+                {/* Chin level guide */}
+                <div className="absolute bottom-[22%] left-6 right-6 border-b border-dotted border-white/35 flex justify-center">
+                  <span className="text-[8px] font-mono text-white/60 -mt-3 select-none uppercase tracking-wider">Chin Alignment</span>
+                </div>
               </div>
 
               {/* Viewport badge */}
               <div className="absolute top-4 flex items-center gap-2">
                 <div className="rounded-full border border-neutral-700 bg-black/80 backdrop-blur-xs px-3 py-1 text-[10px] font-mono text-white flex items-center gap-1.5 shadow-md">
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>3:4 RATIO • 300 DPI AUTO</span>
+                  <span>3:4 RECTANGULAR • 300 DPI AUTO</span>
                 </div>
               </div>
             </div>
@@ -707,6 +738,17 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <span className="hidden sm:inline text-[11px] font-mono text-neutral-500">
                   3:4 • 300 DPI READY
                 </span>
+                {onEditPhoto && (
+                  <button
+                    type="button"
+                    onClick={handleOpenCropEditor}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-xs font-mono font-semibold text-black hover:bg-neutral-100 transition-colors shadow-xs"
+                    title="Open studio to crop, zoom, and adjust"
+                  >
+                    <Crop className="h-3.5 w-3.5 text-neutral-700" />
+                    <span>Crop & Edit</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleConfirm}

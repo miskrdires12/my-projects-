@@ -25,6 +25,7 @@ import {
   X,
   Palette,
 } from "lucide-react";
+import { convertBlobTo300Dpi } from "@/lib/jpeg-dpi";
 
 export interface PhotoEditorProps {
   isOpen: boolean;
@@ -337,10 +338,11 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
       }
 
       exportCanvas.toBlob(
-        (blob) => {
+        async (blob) => {
           if (blob) {
+            const blobWith300Dpi = await convertBlobTo300Dpi(blob);
             const originalBlob = originalFile ? new Blob([originalFile], { type: originalFile.type }) : null;
-            onSave(blob, originalBlob, {
+            onSave(blobWith300Dpi, originalBlob, {
               crop: { x: currentState.panX, y: currentState.panY, width: 600, height: 800 },
               zoom: currentState.zoom,
               rotation: currentState.rotation,

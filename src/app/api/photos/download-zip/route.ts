@@ -29,6 +29,7 @@ import fs from "fs";
 import path from "path";
 import { PassThrough } from "stream";
 import { generateSafePhotoFilename } from "@/lib/image-processing";
+import { getStudentPhotoFileName } from "@/lib/export-utils";
 
 // Factory for creating ZipArchive compatible with both legacy and archiver v8
 function createZipArchive(options: Record<string, unknown> = { zlib: { level: 5 } }) {
@@ -172,24 +173,14 @@ export async function POST(request: NextRequest) {
             const relativeClean = s.photoPath.replace(/^\//, "");
             const absolutePhotoPath = path.join(publicDir, relativeClean);
 
-            if (!fs.existsSync(absolutePhotoPath)) continue;
-
             // Determine duplicate status from name index
             const isDup =
               (nameOccurrences.get(s.fullName.trim().toLowerCase()) || 0) > 1;
 
-            // File extension from stored photo
-            const ext =
-              path.extname(absolutePhotoPath).replace(".", "").toLowerCase() ||
-              "jpg";
-
-            // Generate safe real-name filename
-            const safeFilename = generateSafePhotoFilename(
-              s.fullName,
-              s.studentId,
-              isDup,
-              ext
-            );
+            // Generate safe filename matching receiver Excel photo path (e.g. miskrdires.jpg)
+            const safeFilename =
+              getStudentPhotoFileName(s) ||
+              generateSafePhotoFilename(s.fullName, s.studentId, isDup, "jpg");
 
             // Determine folder prefix based on chosen structure
             let folderPrefix = "";
@@ -223,9 +214,19 @@ export async function POST(request: NextRequest) {
                 break;
             }
 
-            archive.file(absolutePhotoPath, {
-              name: `${folderPrefix}${safeFilename}`,
-            });
+            if (fs.existsSync(absolutePhotoPath)) {
+              archive.file(absolutePhotoPath, {
+                name: `${folderPrefix}${safeFilename}`,
+              });
+            } else if (s.photoPath.startsWith("data:")) {
+              const base64Data = s.photoPath.split(",")[1];
+              if (base64Data) {
+                const imgBuffer = Buffer.from(base64Data, "base64");
+                archive.append(imgBuffer, {
+                  name: `${folderPrefix}${safeFilename}`,
+                });
+              }
+            }
           }
 
           if (chunk.length < CHUNK_SIZE) break;

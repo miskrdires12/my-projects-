@@ -27,9 +27,11 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import Link from "next/link";
+import * as XLSX from "xlsx";
 import { deleteStudentAction, clearAllStudentsAction, deleteMultipleStudentsAction } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync } from "@/lib/sync-client";
+import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath } from "@/lib/export-utils";
 
 interface StudentExtended {
   id: string;
@@ -486,7 +488,48 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }
   };
 
-  // Export Feeded Data to CSV (Fulfills User Requirement)
+  // Export Feeded Data to Excel / CSV with strict 5 columns & local desktop path:
+  // [Student ID, Name, Grade, Phone, Photo (C:\Users\athede\Desktop\students project for 17000\<photo>)]
+  const handleExportExcel = (selectedOnly: boolean = false) => {
+    const listToExport = selectedOnly
+      ? displayStudents.filter(
+          (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+        )
+      : displayStudents;
+
+    if (listToExport.length === 0) {
+      alert("No student records available to export.");
+      return;
+    }
+
+    const headers = [...RECEIVER_EXCEL_HEADERS];
+    const dataRows = listToExport.map((s) => [
+      s.studentId || "",
+      s.fullName || "",
+      s.grade || "",
+      s.phone || "",
+      getStudentPhotoLocalPath(s),
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    ws["!cols"] = [
+      { wch: 18 },
+      { wch: 26 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 65 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "Students");
+
+    const dateTag = new Date().toISOString().split("T")[0];
+    const fileName = selectedOnly
+      ? `Student_Credentials_Selected_${listToExport.length}_${dateTag}.xlsx`
+      : `Student_Credential_Directory_${listToExport.length}_Records_${dateTag}.xlsx`;
+
+    XLSX.writeFile(wb, fileName);
+  };
+
   const handleExportCSV = (selectedOnly: boolean = false) => {
     const listToExport = selectedOnly
       ? displayStudents.filter(
@@ -499,31 +542,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       return;
     }
 
-    const headers = [
-      "Student ID",
-      "Full Name",
-      "Grade",
-      "Gender",
-      "Phone",
-      "Email Address",
-      "Department",
-      "School",
-      "Academic Year",
-      "Date of Birth",
-      "Blood Type",
-      "Roll Number",
-      "Guardian Name",
-      "Emergency Contact Name",
-      "Emergency Contact Phone",
-      "Nationality",
-      "Address",
-      "Status",
-      "Batch Number",
-      "Photo Available",
-      "QR Code Attached",
-      "Exported At",
-    ];
-
+    const headers = [...RECEIVER_EXCEL_HEADERS];
     const escapeCSV = (val: any) => {
       if (val === null || val === undefined) return '""';
       const str = String(val).trim();
@@ -531,42 +550,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     };
 
     const rows = listToExport.map((s) => {
-      const dobStr = s.dateOfBirth
-        ? typeof s.dateOfBirth === "string"
-          ? s.dateOfBirth.split("T")[0]
-          : new Date(s.dateOfBirth).toISOString().split("T")[0]
-        : "";
-      const hasPhoto = s.photoPath ? "YES" : "NO";
-      const hasQR = s.qrCodeData ? "YES" : "NO";
-
       return [
         escapeCSV(s.studentId),
         escapeCSV(s.fullName),
         escapeCSV(s.grade),
-        escapeCSV(s.sex),
         escapeCSV(s.phone),
-        escapeCSV(s.emailAddress || ""),
-        escapeCSV(s.department || ""),
-        escapeCSV(s.school || ""),
-        escapeCSV(s.academicYear || ""),
-        escapeCSV(dobStr),
-        escapeCSV(s.bloodType || ""),
-        escapeCSV(s.studentId || ""),
-        escapeCSV(s.guardianFullName || ""),
-        escapeCSV(s.emergencyContactName || ""),
-        escapeCSV(s.emergencyContactPhone || ""),
-        escapeCSV(s.nationality || "Citizen"),
-        escapeCSV(s.address || ""),
-        escapeCSV(s.status || "ACTIVE"),
-        escapeCSV(s.batch?.batchNumber || ""),
-        escapeCSV(hasPhoto),
-        escapeCSV(hasQR),
-        escapeCSV(new Date().toISOString().split("T")[0]),
+        escapeCSV(getStudentPhotoLocalPath(s)),
       ].join(",");
     });
 
     // Add UTF-8 BOM so Excel opens with proper character encoding
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const csvContent = "\uFEFF" + [headers.map((h) => escapeCSV(h)).join(","), ...rows].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -609,12 +603,21 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => handleExportCSV(false)}
-            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5"
-            title="Export all feeded student data to CSV file"
+            onClick={() => handleExportExcel(false)}
+            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5"
+            title="Export 5-column Excel sheet (Student ID, Name, Grade, Phone, Photo path)"
           >
             <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExportCSV(false)}
+            className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 transition-colors flex items-center gap-1.5"
+            title="Export 5-column CSV file"
+          >
+            <Download className="h-3.5 w-3.5 text-neutral-600" />
+            <span>CSV</span>
           </button>
           <button
             type="button"
@@ -701,12 +704,21 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => handleExportCSV(true)}
+              onClick={() => handleExportExcel(true)}
               className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
-              title="Export only selected students to CSV"
+              title="Export only selected students to Excel (.xlsx)"
             >
               <FileSpreadsheet className="h-3.5 w-3.5" />
-              <span>Export Selected ({selectedIds.size}) to CSV</span>
+              <span>Export Selected ({selectedIds.size}) to Excel</span>
+            </button>
+
+            <button
+              onClick={() => handleExportCSV(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-black hover:bg-neutral-100 transition-colors"
+              title="Export only selected students to CSV"
+            >
+              <Download className="h-3.5 w-3.5 text-neutral-700" />
+              <span>CSV</span>
             </button>
 
             <button
