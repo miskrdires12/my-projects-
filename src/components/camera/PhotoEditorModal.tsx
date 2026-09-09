@@ -327,6 +327,11 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           newW = newH;
           newY = 0;
         }
+      } else {
+        if (newH < minSize) {
+          newY = startCrop.y + startCrop.height - minSize;
+          newH = minSize;
+        }
       }
 
       newBox.y = Math.round(newY);
@@ -366,8 +371,17 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           newX = startCrop.x + (startCrop.width - newW);
           newY = 0;
         }
+      } else {
+        if (newH < minSize) {
+          newY = startCrop.y + startCrop.height - minSize;
+          newH = minSize;
+        }
       }
 
+      newBox.x = Math.round(newX);
+      newBox.y = Math.round(newY);
+      newBox.width = Math.round(newW);
+      newBox.height = Math.round(newH);
     } else if (handle === "n") {
       // Top Edge - crop from the top
       let newH = startCrop.height - deltaY;
@@ -642,16 +656,16 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         </button>
 
         <div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-mono font-semibold tracking-wider text-neutral-200">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[#02f52b] animate-pulse" />
           <span>3:4 PHONE CROP • 300 DPI</span>
         </div>
 
         <button
           type="button"
           onClick={handleSave}
-          className="flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-xs font-bold text-black hover:bg-neutral-200 transition-all shadow-md active:scale-95"
+          className="flex items-center gap-1.5 rounded-full bg-[#02f52b] px-4 py-1.5 text-xs font-bold text-[#080808] hover:brightness-110 transition-all shadow-glow-sm active:scale-95 cursor-pointer"
         >
-          <Check className="h-4 w-4 stroke-[2.5]" />
+          <Check className="h-4 w-4 stroke-[2.5] text-[#080808]" />
           <span>Done</span>
         </button>
       </div>

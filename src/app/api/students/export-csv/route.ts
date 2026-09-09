@@ -55,6 +55,7 @@ async function handleExport(options: ExportOptions) {
     id: string;
     studentId: string;
     fullName: string;
+    sex: string;
     grade: string;
     phone: string;
     photoPath: string | null;
@@ -69,6 +70,7 @@ async function handleExport(options: ExportOptions) {
         id: true,
         studentId: true,
         fullName: true,
+        sex: true,
         grade: true,
         phone: true,
         photoPath: true,
@@ -85,13 +87,13 @@ async function handleExport(options: ExportOptions) {
     cursor = chunk[chunk.length - 1].id;
   }
 
-  // Exact 5 columns requested by user:
-  // StudentID, Name, Grade, Phone, @photo
+  // Receiver columns: StudentID, Name, Sex, Grade, Phone, @photo
   const headers = [...RECEIVER_EXCEL_HEADERS];
 
   const dataRows = allStudents.map((s) => [
     s.studentId || "",
     s.fullName || "",
+    s.sex || "Male",
     s.grade || "",
     formatPhoneForReceiver(s.phone),
     getStudentPhotoLocalPath(s),

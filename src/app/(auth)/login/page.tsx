@@ -1,12 +1,12 @@
 "use client";
 
 // ============================================================================
-// STUDENT BRIDGE — ENTERPRISE AUTHENTICATION PORTAL
+// STUDENT BRIDGE — ENTERPRISE AUTHENTICATION PORTAL (SILICON LABS)
 // ============================================================================
 
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Key, User, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Key, User, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { loginAction } from "@/actions/auth";
 
 export default function LoginPage() {
@@ -39,7 +39,11 @@ export default function LoginPage() {
           setErrorMessage(result.error ?? "Authentication failed");
         } else {
           setSuccessRole(result.data.role);
-          router.push("/dashboard");
+          if (result.data.role === "SENDER") {
+            router.push("/register");
+          } else {
+            router.push("/dashboard");
+          }
         }
       } catch (err: any) {
         setErrorMessage(err?.message || "Failed to communicate with authentication service.");
@@ -48,56 +52,61 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-black p-4 selection:bg-accent selection:text-black">
+    <div className="relative min-h-screen flex items-center justify-center bg-[#f7faf9] p-4 text-[#080808] selection:bg-[#02f52b] selection:text-[#080808]">
       {/* Background ambient lighting */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-accent/5 blur-[120px] rounded-full" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-[#02f52b]/10 blur-[140px] rounded-full" />
       </div>
 
       <div className="relative w-full max-w-md">
-        {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-secondary border border-border mb-4 shadow-glow-sm">
-            <Shield className="h-7 w-7 text-accent" />
+        {/* Brand Header with Silicon Labs Logo */}
+        <div className="flex flex-col items-center text-center mb-7">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white border border-[#dce7e1] p-2 mb-3 shadow-[0_0_20px_rgba(2,245,43,0.25)]">
+            <img
+              src="/logo.png"
+              alt="Silicon Labs Logo"
+              className="h-full w-full object-contain"
+            />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground font-mono">
-            STUDENT <span className="text-accent">BRIDGE</span>
+          <h1 className="text-2xl font-extrabold tracking-tight text-[#080808] font-mono flex items-center gap-1.5">
+            <span>SILICON</span>
+            <span className="text-[#080808] bg-[#02f52b] px-1.5 py-0.5 rounded text-lg font-black">LABS</span>
           </h1>
-          <p className="text-xs text-foreground-muted mt-1 tracking-wider uppercase">
-            Institutional Identity & Management Portal
+          <p className="text-xs font-semibold text-[#6b7771] mt-1 tracking-wider uppercase font-mono">
+            Student Identity &amp; Card Manufacturing Platform
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="rounded-2xl border border-border bg-surface p-7 shadow-2xl shadow-black">
+        <div className="rounded-2xl border border-[#dce7e1] bg-white p-7 shadow-xl">
           <div className="mb-6">
-            <h2 className="text-base font-semibold text-foreground">Secure Sign In</h2>
-            <p className="text-xs text-foreground-muted mt-0.5">
-              Enter your credential pair to access your assigned role domain
+            <h2 className="text-base font-bold text-[#080808]">Secure Sign In</h2>
+            <p className="text-xs text-[#6b7771] mt-0.5">
+              Enter your credentials to access your workstation
             </p>
           </div>
 
           {errorMessage && (
-            <div className="mb-5 flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-400 animate-in fade-in">
+            <div className="mb-5 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-50 p-3.5 text-xs text-red-600 animate-in fade-in">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
           {successRole && (
-            <div className="mb-5 flex items-center gap-3 rounded-lg border border-accent/40 bg-accent-dim p-3.5 text-xs text-accent animate-in fade-in">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <div className="mb-5 flex items-center gap-3 rounded-xl border border-[#02f52b] bg-[#eef5f1] p-3.5 text-xs text-[#080808] font-bold animate-in fade-in">
+              <CheckCircle2 className="h-4 w-4 text-[#080808] shrink-0" />
               <span>Session verified for role: <strong>{successRole}</strong>. Redirecting...</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-foreground-muted mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-semibold text-[#3f4743] mb-1.5 uppercase tracking-wider">
                 Username or Institutional Email
               </label>
               <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-foreground-muted">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#6b7771]">
                   <User className="h-4 w-4" />
                 </div>
                 <input
@@ -106,17 +115,17 @@ export default function LoginPage() {
                   value={usernameOrEmail}
                   onChange={(e) => setUsernameOrEmail(e.target.value)}
                   placeholder="admin@studentbridge.internal"
-                  className="w-full rounded-lg border border-border bg-surface-secondary py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
+                  className="w-full rounded-xl border border-[#dce7e1] bg-[#f7faf9] py-2.5 pl-10 pr-3.5 text-sm text-[#080808] placeholder:text-[#6b7771] focus:border-[#02f52b] focus:outline-none focus:ring-2 focus:ring-[#02f52b]/30 transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground-muted mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-semibold text-[#3f4743] mb-1.5 uppercase tracking-wider">
                 Password
               </label>
               <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-foreground-muted">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#6b7771]">
                   <Key className="h-4 w-4" />
                 </div>
                 <input
@@ -125,7 +134,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full rounded-lg border border-border bg-surface-secondary py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
+                  className="w-full rounded-xl border border-[#dce7e1] bg-[#f7faf9] py-2.5 pl-10 pr-3.5 text-sm text-[#080808] placeholder:text-[#6b7771] focus:border-[#02f52b] focus:outline-none focus:ring-2 focus:ring-[#02f52b]/30 transition-all"
                 />
               </div>
             </div>
@@ -133,7 +142,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isPending}
-              className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-lg bg-accent py-2.5 px-4 text-xs font-bold text-black uppercase tracking-wider hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 transition-all shadow-glow-sm"
+              className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-[#02f52b] py-2.5 px-4 text-xs font-black text-[#080808] uppercase tracking-wider hover:bg-[#00dc25] focus:outline-none focus:ring-2 focus:ring-[#02f52b] disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(2,245,43,0.35)] active:scale-98"
             >
               {isPending ? (
                 <>
@@ -143,71 +152,71 @@ export default function LoginPage() {
               ) : (
                 <>
                   <span>Authenticate Session</span>
-                  <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="h-4 w-4 stroke-[2.5]" />
                 </>
               )}
             </button>
           </form>
 
           {/* Quick Role Selection Buttons */}
-          <div className="mt-6 pt-5 border-t border-border space-y-3">
-            <p className="text-[11px] font-mono text-foreground-muted uppercase tracking-wider">
+          <div className="mt-6 pt-5 border-t border-[#dce7e1] space-y-2.5">
+            <p className="text-[11px] font-mono text-[#6b7771] uppercase tracking-wider font-semibold">
               Select Operational Role Environment:
             </p>
             <div className="grid grid-cols-1 gap-2">
               <button
                 type="button"
                 onClick={() => handleQuickFill("sender@studentbridge.internal", "Password123!")}
-                className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 text-left transition-colors"
+                className="flex items-center justify-between p-2.5 rounded-xl border border-[#dce7e1] bg-[#f7faf9] hover:bg-[#eef5f1] hover:border-[#02f52b] text-left transition-all"
               >
                 <div>
-                  <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  <div className="text-xs font-bold text-[#080808] flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-[#02f52b]" />
                     SENDER WORKSTATION
                   </div>
-                  <div className="text-[11px] text-foreground-muted mt-0.5">
-                    Data enrollment, webcam capture, photo editor, batches & receipts
+                  <div className="text-[11px] text-[#6b7771] mt-0.5">
+                    Student registration &amp; photo capture studio
                   </div>
                 </div>
-                <span className="text-[11px] font-mono text-emerald-400 shrink-0">sender →</span>
+                <span className="text-[11px] font-mono font-bold text-[#080808] shrink-0">sender →</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleQuickFill("receiver@studentbridge.internal", "Password123!")}
-                className="flex items-center justify-between p-2.5 rounded-xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-left transition-colors"
+                className="flex items-center justify-between p-2.5 rounded-xl border border-[#dce7e1] bg-[#f7faf9] hover:bg-[#eef5f1] hover:border-[#02f52b] text-left transition-all"
               >
                 <div>
-                  <div className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-blue-400" />
-                    RECEIVER FACILITY (20,000+)
+                  <div className="text-xs font-bold text-[#080808] flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-[#02f52b]" />
+                    RECEIVER FACILITY
                   </div>
-                  <div className="text-[11px] text-foreground-muted mt-0.5">
-                    Student directory, CSV export, external QR, photo zip, designer, print engine
+                  <div className="text-[11px] text-[#6b7771] mt-0.5">
+                    Directory, CSV exports, photo zip, designer &amp; 8-up printing
                   </div>
                 </div>
-                <span className="text-[11px] font-mono text-blue-400 shrink-0">receiver →</span>
+                <span className="text-[11px] font-mono font-bold text-[#080808] shrink-0">receiver →</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleQuickFill("admin@studentbridge.internal", "AdminPassword123!")}
-                className="flex items-center justify-between p-2 rounded-lg border border-border bg-surface-secondary hover:bg-surface-tertiary text-left transition-colors"
+                className="flex items-center justify-between p-2.5 rounded-xl border border-[#dce7e1] bg-[#f7faf9] hover:bg-[#eef5f1] hover:border-[#02f52b] text-left transition-all"
               >
-                <div className="text-xs font-semibold text-accent flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5" />
-                  ADMINISTRATOR CONSOLE (ALL MODULES)
+                <div className="text-xs font-bold text-[#080808] flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-[#080808]" />
+                  ADMINISTRATOR CONSOLE
                 </div>
-                <span className="text-[11px] font-mono text-accent shrink-0">admin →</span>
+                <span className="text-[11px] font-mono font-bold text-[#080808] shrink-0">admin →</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Security Notice */}
-        <div className="mt-6 text-center text-[11px] text-foreground-subtle flex items-center justify-center gap-1.5">
-          <Shield className="h-3.5 w-3.5 text-accent" />
-          <span>Server-side cryptographic token verification active</span>
+        <div className="mt-5 text-center text-[11px] text-[#6b7771] font-mono flex items-center justify-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#02f52b]" />
+          <span>Encrypted stateless authentication session active</span>
         </div>
       </div>
     </div>

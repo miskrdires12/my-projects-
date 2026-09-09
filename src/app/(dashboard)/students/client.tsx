@@ -528,6 +528,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     const dataRows = listToExport.map((s) => [
       s.studentId || "",
       s.fullName || "",
+      s.sex || "Male",
       s.grade || "",
       formatPhoneForReceiver(s.phone),
       getStudentPhotoLocalPath(s),
@@ -578,6 +579,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       return [
         escapeCSV(s.studentId),
         escapeCSV(s.fullName),
+        escapeCSV(s.sex || "Male"),
         escapeCSV(s.grade),
         escapeCSV(formatPhoneForReceiver(s.phone)),
         escapeCSV(getStudentPhotoLocalPath(s)),
@@ -940,23 +942,34 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           >
             Search
           </button>
-          <button
-            type="button"
-            onClick={() => handleExportExcel(false)}
-            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5"
-            title="Export 5-column Excel sheet (Student ID, Name, Grade, Phone, Photo path)"
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span>Export Excel</span>
-          </button>
+          {selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => handleExportCSV(true)}
+              className="rounded-xl bg-[#02f52b] text-[#080808] px-4 py-2 text-xs font-bold hover:brightness-105 shadow-glow-sm transition-all flex items-center gap-1.5"
+              title={`Download ${selectedIds.size} Selected Students as CSV`}
+            >
+              <Download className="h-3.5 w-3.5 text-[#080808]" />
+              <span>Export Selected CSV ({selectedIds.size})</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleExportCSV(false)}
-            className="rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 transition-colors flex items-center gap-1.5"
-            title="Export 5-column CSV file"
+            className="rounded-xl border border-[#080808]/20 bg-white px-3.5 py-2 text-xs font-semibold text-[#080808] hover:bg-neutral-100 transition-colors flex items-center gap-1.5"
+            title="Download All Students as CSV"
           >
             <Download className="h-3.5 w-3.5 text-neutral-600" />
-            <span>CSV</span>
+            <span>Export All CSV</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExportExcel(false)}
+            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5"
+            title="Export 6-column Excel sheet (Student ID, Name, Sex, Grade, Phone, Photo path)"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span>Export All Excel</span>
           </button>
           <button
             type="button"
@@ -1036,35 +1049,46 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       {/* Bulk Action Bar (Visible when 1+ selected) */}
       {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/10 px-5 py-3 shadow-glow-sm">
-          <div className="flex items-center gap-2 text-xs font-semibold text-accent">
-            <span>{selectedIds.size} students selected</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#02f52b]/40 bg-[#02f52b]/10 px-5 py-3 shadow-glow-sm">
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#080808]">
+            <span className="bg-[#02f52b] text-[#080808] px-2 py-0.5 rounded-md font-mono font-bold">{selectedIds.size}</span>
+            <span>students selected</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => downloadSelectedTogether("csv")}
-              className="flex items-center gap-1.5 rounded-lg bg-black text-white dark:bg-white dark:text-black px-3.5 py-1.5 text-xs font-bold shadow-md hover:opacity-90 transition-opacity"
-              title="Download all selected students together into 1 combined CSV file"
+              onClick={() => handleExportCSV(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-[#02f52b] text-[#080808] px-3.5 py-1.5 text-xs font-bold shadow-md hover:brightness-105 transition-all"
+              title="Download only selected students to CSV"
             >
-              <Download className="h-3.5 w-3.5" />
-              <span>Download Selected Together ({selectedIds.size}) to CSV</span>
+              <Download className="h-3.5 w-3.5 text-[#080808]" />
+              <span>Export Selected CSV ({selectedIds.size})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleExportCSV(false)}
+              className="flex items-center gap-1.5 rounded-lg border border-[#080808]/20 bg-white text-[#080808] px-3 py-1.5 text-xs font-semibold hover:bg-neutral-100 transition-colors"
+              title="Download all students to CSV"
+            >
+              <Download className="h-3.5 w-3.5 text-neutral-600" />
+              <span>Export All CSV</span>
             </button>
 
             <button
               type="button"
               onClick={() => downloadSelectedTogether("xlsx")}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
-              title="Export all selected students together to Excel (.xlsx)"
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-500/30 transition-colors"
+              title="Export selected students to Excel (.xlsx)"
             >
               <FileSpreadsheet className="h-3.5 w-3.5" />
-              <span>Export Selected ({selectedIds.size}) to Excel</span>
+              <span>Export Selected Excel ({selectedIds.size})</span>
             </button>
 
             <button
               onClick={handleBulkDownloadPhotos}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-[#080808]/20 bg-white px-3 py-1.5 text-xs font-medium text-[#080808] hover:bg-neutral-100 transition-colors"
             >
               <Download className="h-3.5 w-3.5" />
               <span>Download Photos (.zip)</span>
@@ -1072,7 +1096,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
             <button
               onClick={handleBulkPrint}
-              className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-glow hover:bg-accent-hover transition-colors"
+              className="flex items-center gap-1.5 rounded-lg bg-[#080808] px-4 py-1.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors"
             >
               <Printer className="h-3.5 w-3.5" />
               <span>Print ID Cards</span>
@@ -1080,7 +1104,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
             <button
               onClick={handleBulkDelete}
-              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-500/20 transition-colors"
               title="Delete selected student records"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1094,22 +1118,23 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-surface-secondary text-[11px] uppercase tracking-wider text-foreground-muted">
+            <thead className="border-b border-[#dce7e1] bg-[#eef5f1] text-[11px] uppercase tracking-wider text-[#6b7771] font-mono">
               <tr>
                 <th className="w-10 px-4 py-3 text-center">
                   <input
                     type="checkbox"
                     checked={selectedIds.size === displayStudents.length && displayStudents.length > 0}
                     onChange={handleToggleSelectAll}
-                    className="accent-black rounded h-3.5 w-3.5"
+                    className="accent-[#02f52b] rounded h-3.5 w-3.5 cursor-pointer"
                   />
                 </th>
-                <th className="px-4 py-3">Portrait</th>
+                <th className="px-4 py-3">Photo</th>
                 <th className="px-4 py-3">Student ID</th>
                 <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Sex</th>
                 <th className="px-4 py-3">Grade</th>
                 <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Photo</th>
+                <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">QR</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -1125,7 +1150,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       <div className="space-y-1">
                         <h4 className="text-base font-bold text-black tracking-tight">Student Directory is Empty (0 Records)</h4>
                         <p className="text-xs text-neutral-500 leading-relaxed">
-                          All previous data has been purged. The database is clean and ready to accept your fresh real-world data feed (up to 20,000+ students).
+                          All previous data has been purged. The database is clean and ready to accept your fresh real-world data feed.
                         </p>
                       </div>
                       <div className="flex items-center gap-3 pt-2">
@@ -1134,7 +1159,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                           className="px-4 py-2 bg-black text-white text-xs font-bold rounded-lg hover:bg-neutral-800 transition-colors shadow-sm flex items-center gap-1.5"
                         >
                           <Upload className="w-3.5 h-3.5" />
-                          Import Excel / CSV (Up to 20k)
+                          Import Excel / CSV
                         </Link>
                         <Link
                           href="/register"
@@ -1190,6 +1215,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
                       <td className="px-4 py-3 font-medium text-foreground">
                         {student.fullName}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold border ${
+                            student.sex?.toLowerCase() === "female"
+                              ? "bg-purple-50 text-purple-700 border-purple-200"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          }`}
+                        >
+                          {student.sex || "Male"}
+                        </span>
                       </td>
 
                       <td className="px-4 py-3 text-foreground-muted">{student.grade}</td>
@@ -1401,8 +1438,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <span className="text-foreground">{activeStudent.grade}</span>
               </div>
               <div className="pt-2 flex justify-between">
-                <span className="text-foreground-muted">Gender:</span>
-                <span className="text-foreground">{activeStudent.sex}</span>
+                <span className="text-foreground-muted">Sex:</span>
+                <span className="text-foreground font-semibold">{activeStudent.sex || "Male"}</span>
               </div>
               <div className="pt-2 flex justify-between">
                 <span className="text-foreground-muted">Phone:</span>
@@ -1511,7 +1548,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             </div>
 
             <p className="text-xs text-neutral-600 mb-4">
-              Download CSV or Excel files separated by grade cohorts. All exports follow the strict 5-column receiver format (StudentID, Name, Grade, Phone, @photo) and handle large cohorts (5,000–6,000+ records) smoothly.
+              Download CSV or Excel files separated by grade cohorts. All exports follow the strict 6-column receiver format (StudentID, Name, Sex, Grade, Phone, @photo) and handle large cohorts smoothly.
             </p>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">

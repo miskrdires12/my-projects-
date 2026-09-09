@@ -5,12 +5,13 @@
 export const RECEIVER_STUDENT_PHOTO_FOLDER = "C:\\Users\\athede\\Desktop\\students project for 17000";
 
 /**
- * Exact 5-column headers required for receiver student photo excel:
- * ["StudentID", "Name", "Grade", "Phone", "@photo"]
+ * Receiver student photo excel headers:
+ * ["StudentID", "Name", "Sex", "Grade", "Phone", "@photo"]
  */
 export const RECEIVER_EXCEL_HEADERS = [
   "StudentID",
   "Name",
+  "Sex",
   "Grade",
   "Phone",
   "@photo",
@@ -129,12 +130,13 @@ export function getStudentPhotoLocalPath(student: StudentPhotoIdentity): string 
 }
 
 /**
- * Maps a student record into the exact 5 receiver columns:
- * [StudentID, Name, Grade, Phone, @photo]
+ * Maps a student record into receiver columns:
+ * [StudentID, Name, Sex, Grade, Phone, @photo]
  */
 export function formatStudentForReceiverExcel(student: {
   studentId: string;
   fullName: string;
+  sex?: string | null;
   grade: string;
   phone: string;
   photoPath?: string | null;
@@ -142,6 +144,7 @@ export function formatStudentForReceiverExcel(student: {
   return [
     student.studentId || "",
     student.fullName || "",
+    student.sex || "Male",
     student.grade || "",
     formatPhoneForReceiver(student.phone),
     getStudentPhotoLocalPath(student),

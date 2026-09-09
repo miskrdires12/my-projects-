@@ -141,7 +141,7 @@ export default async function StudentsPage({
             <span>Student Credential Directory</span>
           </h1>
           <p className="text-xs text-foreground-muted mt-0.5">
-            Production student repository — Server-side indexed for 20,000+ student throughput
+            Verified student roster — High-performance credential management, editing, and batch exports
           </p>
         </div>
 

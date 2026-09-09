@@ -630,21 +630,37 @@ export default function RegisterPage() {
                 />
               </div>
 
-              {/* Gender / Sex */}
+              {/* Sex */}
               <div>
-                <label className="block text-xs font-medium text-foreground mb-1">
-                  Sex / Gender <span className="text-accent">*</span>
+                <label className="block text-xs font-medium text-foreground mb-1.5">
+                  Sex <span className="text-[#02f52b] font-bold">*</span>
                 </label>
-                <select
-                  name="sex"
-                  value={formData.sex}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground focus:border-accent focus:outline-none"
-                >
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData((p) => ({ ...p, sex: "Male" }))}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition-all ${
+                      formData.sex === "Male"
+                        ? "bg-[#02f52b] text-[#080808] border-[#02f52b] font-bold shadow-glow-sm"
+                        : "bg-surface-secondary text-foreground border-border hover:bg-neutral-200/60"
+                    }`}
+                  >
+                    <span className="text-sm font-bold">♂</span>
+                    <span>Male</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData((p) => ({ ...p, sex: "Female" }))}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition-all ${
+                      formData.sex === "Female"
+                        ? "bg-[#02f52b] text-[#080808] border-[#02f52b] font-bold shadow-glow-sm"
+                        : "bg-surface-secondary text-foreground border-border hover:bg-neutral-200/60"
+                    }`}
+                  >
+                    <span className="text-sm font-bold">♀</span>
+                    <span>Female</span>
+                  </button>
+                </div>
               </div>
 
               {/* Grade / Class Batch */}
@@ -911,16 +927,16 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isPending || isUploadingPhoto || idAvailability.available === false}
-              className="flex items-center gap-2 rounded-xl bg-black px-6 py-2.5 text-xs font-semibold text-white hover:bg-neutral-800 disabled:opacity-50 transition-colors shadow-xs"
+              className="flex items-center gap-2 rounded-xl bg-[#02f52b] px-6 py-2.5 text-xs font-bold text-[#080808] hover:brightness-105 disabled:opacity-50 transition-all shadow-glow-sm cursor-pointer"
             >
               {isPending ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin text-[#080808]" />
                   <span>Enrolling Student...</span>
                 </>
               ) : (
                 <>
-                  <FileCheck className="h-4 w-4" />
+                  <FileCheck className="h-4 w-4 text-[#080808]" />
                   <span>Save Official Record</span>
                 </>
               )}

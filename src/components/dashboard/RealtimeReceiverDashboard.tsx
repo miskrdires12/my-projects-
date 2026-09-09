@@ -218,11 +218,11 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-neutral-800 pb-6">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-white font-semibold tracking-wider uppercase">
-              RECEIVER CENTRAL FACILITY
+            <span className="text-xs font-mono text-[#02f52b] font-semibold tracking-wider uppercase">
+              RECEIVER WORKSTATION
             </span>
             <span className="text-neutral-600">/</span>
-            <span className="text-xs text-neutral-400 font-mono">20,000+ HIGH-THROUGHPUT SYSTEM</span>
+            <span className="text-xs text-neutral-400 font-mono">STUDENT DIRECTORY</span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
             ID Production, Asset Matching & Print Center
@@ -309,7 +309,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           <div className="text-xl font-bold font-mono text-white mt-1.5">
             {data.totalStudents.toLocaleString()}
           </div>
-          <div className="text-[10px] text-neutral-500 font-mono mt-0.5">20,000+ SYSTEM</div>
+          <div className="text-[10px] text-neutral-400 font-mono mt-0.5">ACTIVE ROSTER</div>
         </div>
 
         <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3.5">
