@@ -31,7 +31,7 @@ import * as XLSX from "xlsx";
 import { deleteStudentAction, clearAllStudentsAction, deleteMultipleStudentsAction } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync } from "@/lib/sync-client";
-import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath } from "@/lib/export-utils";
+import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver } from "@/lib/export-utils";
 
 interface StudentExtended {
   id: string;
@@ -507,7 +507,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       s.studentId || "",
       s.fullName || "",
       s.grade || "",
-      s.phone || "",
+      formatPhoneForReceiver(s.phone),
       getStudentPhotoLocalPath(s),
     ]);
 
@@ -554,7 +554,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         escapeCSV(s.studentId),
         escapeCSV(s.fullName),
         escapeCSV(s.grade),
-        escapeCSV(s.phone),
+        escapeCSV(formatPhoneForReceiver(s.phone)),
         escapeCSV(getStudentPhotoLocalPath(s)),
       ].join(",");
     });

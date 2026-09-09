@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import * as XLSX from "xlsx";
-import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath } from "@/lib/export-utils";
+import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver } from "@/lib/export-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +29,14 @@ export async function GET(request: NextRequest) {
     });
 
     // Exact 5 columns requested by user:
-    // Student ID, Name, Grade, Phone, Photo
+    // StudentID, Name, Grade, Phone, @photo
     const headers = [...RECEIVER_EXCEL_HEADERS];
 
     const dataRows = students.map((s) => [
       s.studentId || "",
       s.fullName || "",
       s.grade || "",
-      s.phone || "",
+      formatPhoneForReceiver(s.phone),
       getStudentPhotoLocalPath(s),
     ]);
 

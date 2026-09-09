@@ -33,6 +33,7 @@ import {
 } from "@/actions/students";
 import type { StudentFormInput } from "@/lib/validations";
 import { publishStudentSync } from "@/lib/sync-client";
+import { formatPhoneForReceiver } from "@/lib/export-utils";
 
 interface CustomFieldMeta {
   id: string;
@@ -137,15 +138,31 @@ export default function RegisterPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    let finalVal: any = value;
+    if (name === "dateOfBirth") {
+      finalVal = value ? new Date(value) : undefined;
+    } else if (name === "phone") {
+      let p = value;
+      // If operator starts typing 09..., auto-convert to 2519...
+      if (p.startsWith("09")) {
+        p = "2519" + p.substring(2);
+      }
+      finalVal = p;
+    }
+
     setFormData((prev) => ({
       ...prev,
-      [name]:
-        name === "dateOfBirth"
-          ? value
-            ? new Date(value)
-            : undefined
-          : value,
+      [name]: finalVal,
     }));
+  };
+
+  const handlePhoneBlur = () => {
+    if (formData.phone) {
+      setFormData((prev) => ({
+        ...prev,
+        phone: formatPhoneForReceiver(prev.phone),
+      }));
+    }
   };
 
   const handleCustomFieldChange = (key: string, value: string) => {
@@ -187,10 +204,13 @@ export default function RegisterPage() {
     setEditedPhotoPreview(previewUrl);
     setIsUploadingPhoto(true);
 
-    const safePhotoName = `${(formData.fullName || formData.studentId || "student")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "") || "student"}.jpg`;
+    let cleanName = (formData.fullName || formData.studentId || "student")
+      .replace(/[/\\]/g, " - ")
+      .replace(/[:*?"<>|]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
+    const safePhotoName = `${cleanName}.jpg`;
 
     try {
       const form = new FormData();
@@ -249,10 +269,13 @@ export default function RegisterPage() {
    */
   const handlePhotoEditorSave = (editedBlob: Blob) => {
     setIsEditorOpen(false);
-    const safePhotoName = `${(formData.fullName || formData.studentId || "student")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "") || "student"}.jpg`;
+    let cleanName = (formData.fullName || formData.studentId || "student")
+      .replace(/[/\\]/g, " - ")
+      .replace(/[:*?"<>|]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
+    const safePhotoName = `${cleanName}.jpg`;
     const editedFile = new File([editedBlob], safePhotoName, { type: "image/jpeg" });
     const previewUrl = URL.createObjectURL(editedBlob);
     setEditedPhotoPreview(previewUrl);
@@ -261,7 +284,8 @@ export default function RegisterPage() {
   };
 
   /**
-   * Called when an image is selected via file input. Directly attaches photo.
+   * Called when an image is selected via file input.
+   * Immediately opens the phone-style crop studio.
    */
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -272,7 +296,7 @@ export default function RegisterPage() {
       const dataUrl = reader.result as string;
       setEditedPhotoPreview(dataUrl);
       setOfficialPhotoPath(dataUrl);
-      handleDirectPhotoUpload(file, dataUrl);
+      handleOpenPhotoEditor(file, dataUrl);
     };
     reader.readAsDataURL(file);
   };
@@ -581,7 +605,8 @@ export default function RegisterPage() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="+1 (555) 000-0000"
+                  onBlur={handlePhoneBlur}
+                  placeholder="251912345678"
                   required
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
                 />
