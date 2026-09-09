@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Users, UserPlus, Printer, Download, QrCode, ArrowLeft, FileSpreadsheet } from "lucide-react";
+import { Users, UserPlus, Download, QrCode, ArrowLeft, FileSpreadsheet, Printer } from "lucide-react";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -165,14 +165,6 @@ export default async function StudentsPage({
             <Download className="h-3.5 w-3.5 text-foreground-muted" />
             <span>{grade !== "ALL" ? `CSV (${grade})` : "CSV"}</span>
           </a>
-
-          <Link
-            href="/students/download-photos"
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-xs font-semibold text-foreground hover:bg-surface-secondary transition-colors"
-          >
-            <Download className="h-4 w-4 text-emerald-400" />
-            <span>Download Photos</span>
-          </Link>
 
           <Link
             href="/students/qr-import"

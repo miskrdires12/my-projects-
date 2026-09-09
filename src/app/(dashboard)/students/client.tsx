@@ -26,9 +26,11 @@ import {
   Upload,
   FileSpreadsheet,
   Crop,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import JSZip from "jszip";
 import {
   deleteStudentAction,
   clearAllStudentsAction,
@@ -288,6 +290,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeStudent, setActiveStudent] = useState<StudentExtended | null>(null);
   const [isGradeClassificationOpen, setIsGradeClassificationOpen] = useState(false);
+  const [isDownloadingPhotos, setIsDownloadingPhotos] = useState(false);
 
   // Update URL search parameters to trigger server-side query
   const applyFilters = (newParams: Record<string, string | number | undefined>) => {
@@ -350,11 +353,14 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       : displayStudents.filter((s) => Boolean(s.photoPath));
 
     if (targetStudents.length === 0) {
-      alert("No student photographs found to download.");
+      alert("No student photographs found to download in this view.");
       return;
     }
 
+    setIsDownloadingPhotos(true);
+
     try {
+      // 1. Attempt server streaming endpoint
       const response = await fetch("/api/photos/download-zip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -364,21 +370,85 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to generate ZIP");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const dateTag = new Date().toISOString().split("T")[0];
-      const scopeLabel = selectedIds.size > 0 ? `Selected_${targetStudents.length}` : `All_${targetStudents.length}`;
-      a.download = `Student_Photos_With_Manifest_${scopeLabel}_${dateTag}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob && blob.size > 100) {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          const dateTag = new Date().toISOString().split("T")[0];
+          const scopeLabel = selectedIds.size > 0 ? `Selected_${targetStudents.length}` : `All_${targetStudents.length}`;
+          a.download = `Student_Photos_With_Manifest_${scopeLabel}_${dateTag}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          return;
+        }
+      }
+      throw new Error("Server zip unavailable, fallback to client packaging");
     } catch {
-      alert("Error downloading student photos ZIP.");
+      // 2. Client-side JSZip packaging (works 100% offline or with local IndexedDB images)
+      try {
+        const zip = new JSZip();
+        const photoFolder = zip.folder("photos") || zip;
+        const manifestRows: string[] = [
+          "StudentID,Name,Sex,Grade,Phone,@photo"
+        ];
+
+        for (const student of targetStudents) {
+          const sId = student.studentId || student.id;
+          const cleanName = (student.fullName || sId || "student")
+            .replace(/[/\\]/g, " - ")
+            .replace(/[:*?"<>|]/g, "")
+            .trim();
+          const photoFileName = `${cleanName} - ${sId}.jpg`;
+          const sex = student.sex || "Male";
+          const grade = student.grade || "10";
+          const phone = formatPhoneForReceiver(student.phone);
+
+          manifestRows.push(
+            `"${sId}","${cleanName}","${sex}","${grade}","${phone}","${photoFileName}"`
+          );
+
+          if (student.photoPath) {
+            try {
+              if (student.photoPath.startsWith("data:image/")) {
+                const base64Data = student.photoPath.split(",")[1];
+                if (base64Data) {
+                  photoFolder.file(photoFileName, base64Data, { base64: true });
+                }
+              } else {
+                const res = await fetch(student.photoPath);
+                if (res.ok) {
+                  const imgBlob = await res.blob();
+                  photoFolder.file(photoFileName, imgBlob);
+                }
+              }
+            } catch {}
+          }
+        }
+
+        // Add companion Student_Manifest.csv with UTF-8 BOM
+        const csvContent = "\uFEFF" + manifestRows.join("\r\n");
+        zip.file("Student_Manifest.csv", csvContent);
+
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = window.URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        const dateTag = new Date().toISOString().split("T")[0];
+        const scopeLabel = selectedIds.size > 0 ? `Selected_${targetStudents.length}` : `All_${targetStudents.length}`;
+        a.download = `Student_Photos_With_Manifest_${scopeLabel}_${dateTag}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err: any) {
+        alert("Failed to create photos ZIP archive: " + (err?.message || "Unknown error"));
+      }
+    } finally {
+      setIsDownloadingPhotos(false);
     }
   };
 
@@ -1077,6 +1147,26 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           </button>
           <button
             type="button"
+            disabled={isDownloadingPhotos}
+            onClick={handleBulkDownloadPhotos}
+            className="rounded-xl bg-[#080808] text-white px-4 py-2 text-xs font-mono font-bold hover:bg-neutral-800 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+            title="Download Student Photos ZIP archive with companion Student_Manifest.csv spreadsheet"
+          >
+            {isDownloadingPhotos ? (
+              <Loader2 className="h-3.5 w-3.5 text-[#02f52b] animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5 text-[#02f52b]" />
+            )}
+            <span>
+              {isDownloadingPhotos
+                ? "Packaging ZIP..."
+                : selectedIds.size > 0
+                ? `Download Photos ZIP (${selectedIds.size})`
+                : "Download Photos (.zip)"}
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={handleClearAllStudents}
             className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-mono font-semibold text-neutral-700 hover:text-red-600 hover:border-red-300 transition-colors"
             title="Delete all data to feed fresh records"
@@ -1191,11 +1281,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             </button>
 
             <button
+              type="button"
+              disabled={isDownloadingPhotos}
               onClick={handleBulkDownloadPhotos}
-              className="flex items-center gap-1.5 rounded-lg border border-[#080808]/20 bg-white px-3 py-1.5 text-xs font-medium text-[#080808] hover:bg-neutral-100 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-[#080808]/20 bg-white px-3 py-1.5 text-xs font-medium text-[#080808] hover:bg-neutral-100 transition-colors disabled:opacity-50 cursor-pointer"
+              title="Download selected student photos in ZIP with matching manifest sheet"
             >
-              <Download className="h-3.5 w-3.5" />
-              <span>Download Photos (.zip)</span>
+              {isDownloadingPhotos ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#080808]" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              <span>{isDownloadingPhotos ? "Packaging..." : `Download Photos (.zip)`}</span>
             </button>
 
             <button

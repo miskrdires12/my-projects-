@@ -14,7 +14,6 @@ import {
   Database,
   FileSpreadsheet,
   QrCode,
-  Download,
   Layers,
   Sparkles,
   Menu,
@@ -177,19 +176,6 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 >
                   <QrCode className="h-4 w-4 shrink-0" />
                   <span>Import QR Codes</span>
-                </Link>
-
-                <Link
-                  href="/students/download-photos"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/students/download-photos"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <Download className="h-4 w-4 shrink-0" />
-                  <span>Download Photos (.zip)</span>
                 </Link>
               </div>
 

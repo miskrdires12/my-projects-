@@ -17,7 +17,6 @@ import {
   AlertCircle,
   Camera,
   QrCode,
-  Download,
   Activity,
   ArrowUpRight,
   Clock,
@@ -275,11 +274,11 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         {/* Action Controls & Fast Dropdown */}
         <div className="flex items-center gap-2">
           <Link
-            href="/students/download-photos"
+            href="/students"
             className="inline-flex items-center gap-2 rounded-xl border border-[#dce7e1] bg-white px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] hover:bg-[#eef5f1] transition-colors shadow-xs"
           >
-            <Download className="h-4 w-4 text-[#080808]" />
-            <span>Download Photos (.zip)</span>
+            <Users className="h-4 w-4 text-[#080808]" />
+            <span>Student Directory</span>
           </Link>
 
           <Link
@@ -484,10 +483,10 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               </Link>
               <span className="text-[#dce7e1]">|</span>
               <Link
-                href="/students/download-photos"
+                href="/students"
                 className="text-xs font-mono font-bold text-[#080808] hover:text-[#02f52b] flex items-center gap-1"
               >
-                <span>Photo ZIP</span>
+                <span>Directory & Photos</span>
                 <ArrowUpRight className="h-3 w-3" />
               </Link>
             </div>
