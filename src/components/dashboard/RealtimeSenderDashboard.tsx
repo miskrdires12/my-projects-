@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { subscribeToCloudSync } from "@/lib/sync-client";
+import { getAllStudentsFromDB } from "@/lib/idb-storage";
 
 interface SenderDashboardProps {
   initialData: {
@@ -82,14 +83,28 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
         let localCount = 0;
         let localPhotos = 0;
         let localStudents: any[] = [];
+
+        // Pull from high-capacity IndexedDB first (6,000+ students)
         try {
-          const raw = localStorage.getItem("sb_enrolled_students");
-          if (raw) {
-            localStudents = JSON.parse(raw);
-            localCount = localStudents.length;
-            localPhotos = localStudents.filter((s: any) => Boolean(s.photoPath)).length;
+          const idbList = await getAllStudentsFromDB();
+          if (idbList && idbList.length > 0) {
+            localStudents = idbList;
+            localCount = idbList.length;
+            localPhotos = idbList.filter((s: any) => Boolean(s.photoPath)).length;
           }
         } catch {}
+
+        // Fallback / merge with localStorage if needed
+        if (localStudents.length === 0) {
+          try {
+            const raw = localStorage.getItem("sb_enrolled_students");
+            if (raw) {
+              localStudents = JSON.parse(raw);
+              localCount = localStudents.length;
+              localPhotos = localStudents.filter((s: any) => Boolean(s.photoPath)).length;
+            }
+          } catch {}
+        }
 
         setData((prev) => {
           const total = Math.max(json.metrics.totalEnrolled, localCount, prev.totalEnrolled);
@@ -138,31 +153,31 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
   }, [autoRefresh, fetchMetrics]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 text-white">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16 text-[#080808]">
       {/* Notice Alert if redirected */}
       {notice === "sender_station_only" && (
-        <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-4 text-xs text-neutral-300 flex items-center gap-3">
-          <Shield className="h-5 w-5 text-white shrink-0" />
+        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 text-xs text-[#3f4743] flex items-center gap-3 shadow-sm">
+          <Shield className="h-5 w-5 text-[#080808] shrink-0" />
           <div>
-            <strong className="text-white">Sender Workstation Active:</strong> You have been redirected to your enrollment dashboard. Receiver production tools are restricted to the Central Receiver Facility.
+            <strong className="text-[#080808]">Sender Workstation Active:</strong> You have been redirected to your enrollment dashboard. Receiver production tools are restricted to the Central Receiver Facility.
           </div>
         </div>
       )}
 
-      {/* Real-time Status Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border border-neutral-800 bg-neutral-950 px-4 py-2.5 rounded-lg text-xs">
+      {/* Real-time Status Banner (Strict 60/30/10 theme) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border border-[#dce7e1] bg-white px-4 py-3 rounded-2xl text-xs shadow-sm">
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-2.5 w-2.5">
             {autoRefresh && (
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#02f52b] opacity-75" />
             )}
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#02f52b]" />
           </span>
-          <span className="font-mono uppercase tracking-wider font-semibold text-white">
+          <span className="font-mono uppercase tracking-wider font-extrabold text-[#080808]">
             {autoRefresh ? "Real-time Live Sync Active" : "Live Sync Paused"}
           </span>
-          <span className="text-neutral-500">•</span>
-          <span className="text-neutral-400 font-mono text-[11px]">
+          <span className="text-[#dce7e1]">•</span>
+          <span className="text-[#6b7771] font-mono text-[11px]">
             Last updated: {lastUpdated || "Just now"}
           </span>
         </div>
@@ -171,10 +186,10 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
           <button
             type="button"
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`px-2.5 py-1 text-[11px] font-mono rounded border transition-colors ${
+            className={`px-3 py-1 text-[11px] font-mono font-bold rounded-xl border transition-all ${
               autoRefresh
-                ? "border-white bg-white text-black font-semibold"
-                : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:text-white"
+                ? "border-[#02f52b] bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.3)]"
+                : "border-[#dce7e1] bg-[#f7faf9] text-[#6b7771] hover:text-[#080808]"
             }`}
           >
             Auto-Sync: {autoRefresh ? "ON (4s)" : "OFF"}
@@ -183,29 +198,29 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
             type="button"
             onClick={fetchMetrics}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded border border-neutral-700 bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-semibold rounded-xl border border-[#dce7e1] bg-white text-[#080808] hover:bg-[#eef5f1] disabled:opacity-50 transition-colors"
           >
-            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin text-[#02f52b]" : ""}`} />
             <span>Refresh Now</span>
           </button>
         </div>
       </div>
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-neutral-800 pb-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-[#dce7e1] pb-6">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-white font-semibold tracking-wider uppercase">
+            <span className="text-xs font-mono text-[#080808] font-extrabold tracking-wider uppercase">
               SENDER WORKSTATION
             </span>
-            <span className="text-neutral-600">/</span>
-            <span className="text-xs text-neutral-400">REGISTRATION & CAPTURE CONSOLE</span>
+            <span className="text-[#dce7e1]">/</span>
+            <span className="text-xs text-[#6b7771] font-semibold">REGISTRATION &amp; CAPTURE CONSOLE</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
-            Student Enrollment & Photo Capture
+          <h1 className="text-2xl font-black tracking-tight text-[#080808] mt-1">
+            Student Enrollment &amp; Photo Capture
           </h1>
-          <p className="text-xs text-neutral-400 mt-0.5">
-            Collect student information, take webcam photos, group into batches, and issue receipts
+          <p className="text-xs text-[#6b7771] mt-0.5">
+            Collect student information, take 3s auto-capture photos, group into batches, and issue receipts
           </p>
         </div>
 
@@ -213,7 +228,7 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
         <div className="flex items-center gap-2">
           <Link
             href="/register"
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-bold text-black hover:bg-neutral-200 transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#02f52b] px-4 py-2 text-xs font-extrabold text-[#080808] hover:bg-[#00dc25] transition-all shadow-[0_0_12px_rgba(2,245,43,0.3)] active:scale-95"
           >
             <UserPlus className="h-4 w-4 stroke-[2.5]" />
             <span>Enroll New Student</span>
@@ -223,43 +238,43 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
             <button
               type="button"
               onClick={() => setActionsOpen(!actionsOpen)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs font-medium text-white hover:bg-neutral-800 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] bg-white px-3 py-2 text-xs font-semibold text-[#080808] hover:bg-[#eef5f1] transition-colors shadow-2xs"
             >
               <span>Quick Actions</span>
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#6b7771]" />
             </button>
 
             {actionsOpen && (
               <div
-                className="absolute right-0 mt-1 w-56 rounded-lg border border-neutral-700 bg-neutral-950 p-1 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100"
+                className="absolute right-0 mt-1 w-56 rounded-2xl border border-[#dce7e1] bg-white p-1.5 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100"
                 onClick={() => setActionsOpen(false)}
               >
                 <Link
                   href="/register"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-neutral-200 hover:bg-neutral-800 hover:text-white rounded"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] hover:bg-[#eef5f1] rounded-xl font-medium"
                 >
-                  <UserPlus className="h-3.5 w-3.5" />
+                  <UserPlus className="h-3.5 w-3.5 text-[#02f52b]" />
                   <span>Manual Registration</span>
                 </Link>
                 <Link
                   href="/sender/photo-import"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-neutral-200 hover:bg-neutral-800 hover:text-white rounded"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] hover:bg-[#eef5f1] rounded-xl font-medium"
                 >
-                  <FolderArchive className="h-3.5 w-3.5" />
+                  <FolderArchive className="h-3.5 w-3.5 text-[#02f52b]" />
                   <span>Folder Photo Matcher</span>
                 </Link>
                 <Link
                   href="/sender/batches"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-neutral-200 hover:bg-neutral-800 hover:text-white rounded"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] hover:bg-[#eef5f1] rounded-xl font-medium"
                 >
-                  <Boxes className="h-3.5 w-3.5" />
+                  <Boxes className="h-3.5 w-3.5 text-[#02f52b]" />
                   <span>Dispatch Batches</span>
                 </Link>
                 <Link
                   href="/sender/receipts"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-neutral-200 hover:bg-neutral-800 hover:text-white rounded"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] hover:bg-[#eef5f1] rounded-xl font-medium"
                 >
-                  <Receipt className="h-3.5 w-3.5" />
+                  <Receipt className="h-3.5 w-3.5 text-[#02f52b]" />
                   <span>Print Registration Receipts</span>
                 </Link>
               </div>
@@ -268,39 +283,39 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
         </div>
       </div>
 
-      {/* Monochrome Primary KPI Grid */}
+      {/* Strict 60/30/10 KPI Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
-          <div className="flex items-center justify-between text-xs text-neutral-400">
-            <span>Total Enrolled</span>
-            <Users className="h-4 w-4 text-white" />
+        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm hover:border-[#02f52b] transition-colors">
+          <div className="flex items-center justify-between text-xs text-[#6b7771]">
+            <span className="font-semibold">Total Enrolled</span>
+            <Users className="h-4 w-4 text-[#02f52b]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-white mt-2">
+          <div className="text-2xl font-bold font-mono text-[#080808] mt-2">
             {data.totalEnrolled.toLocaleString()}
           </div>
-          <div className="text-[10px] text-neutral-500 mt-1 font-mono">DATABASE TOTAL</div>
+          <div className="text-[10px] text-[#6b7771] mt-1 font-mono">DATABASE TOTAL</div>
         </div>
 
-        <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
-          <div className="flex items-center justify-between text-xs text-neutral-400">
-            <span>Enrolled Today</span>
-            <UserPlus className="h-4 w-4 text-white" />
+        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm hover:border-[#02f52b] transition-colors">
+          <div className="flex items-center justify-between text-xs text-[#6b7771]">
+            <span className="font-semibold">Enrolled Today</span>
+            <UserPlus className="h-4 w-4 text-[#02f52b]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-white mt-2">
+          <div className="text-2xl font-bold font-mono text-[#080808] mt-2">
             {data.enrolledToday.toLocaleString()}
           </div>
-          <div className="text-[10px] text-neutral-500 mt-1 font-mono">CURRENT WORK SHIFT</div>
+          <div className="text-[10px] text-[#6b7771] mt-1 font-mono">CURRENT WORK SHIFT</div>
         </div>
 
-        <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
-          <div className="flex items-center justify-between text-xs text-neutral-400">
-            <span>Photos Attached</span>
-            <Camera className="h-4 w-4 text-white" />
+        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm hover:border-[#02f52b] transition-colors">
+          <div className="flex items-center justify-between text-xs text-[#6b7771]">
+            <span className="font-semibold">Photos Attached</span>
+            <Camera className="h-4 w-4 text-[#02f52b]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-white mt-2">
+          <div className="text-2xl font-bold font-mono text-[#080808] mt-2">
             {data.photosCaptured.toLocaleString()}
           </div>
-          <div className="text-[10px] text-neutral-400 mt-1 font-mono">
+          <div className="text-[10px] text-[#6b7771] mt-1 font-mono">
             {data.totalEnrolled > 0
               ? Math.round((data.photosCaptured / data.totalEnrolled) * 100)
               : 0}
@@ -308,124 +323,124 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
           </div>
         </div>
 
-        <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
-          <div className="flex items-center justify-between text-xs text-neutral-400">
-            <span>Transfer Batches</span>
-            <Boxes className="h-4 w-4 text-white" />
+        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm hover:border-[#02f52b] transition-colors">
+          <div className="flex items-center justify-between text-xs text-[#6b7771]">
+            <span className="font-semibold">Transfer Batches</span>
+            <Boxes className="h-4 w-4 text-[#02f52b]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-white mt-2">{data.totalBatches}</div>
-          <div className="text-[10px] text-neutral-500 mt-1 font-mono">
+          <div className="text-2xl font-bold font-mono text-[#080808] mt-2">{data.totalBatches}</div>
+          <div className="text-[10px] text-[#6b7771] mt-1 font-mono">
             {data.sentBatchesCount} SENT • {data.draftBatchesCount} DRAFT
           </div>
         </div>
       </div>
 
       {/* Unified Sender Tools Pipeline */}
-      <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-5">
-        <div className="flex items-center justify-between border-b border-neutral-800 pb-3 mb-4">
+      <div className="rounded-2xl border border-[#dce7e1] bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between border-b border-[#dce7e1] pb-3 mb-4">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-white" />
-            <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+            <span className="h-2 w-2 rounded-full bg-[#02f52b]" />
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#080808]">
               Enrollment Operations Pipeline
             </h2>
           </div>
-          <span className="text-[11px] text-neutral-400 font-mono">Step-by-step workflow</span>
+          <span className="text-[11px] text-[#6b7771] font-mono">Step-by-step workflow</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Link
             href="/register"
-            className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-white hover:bg-neutral-850 transition-all group"
+            className="rounded-xl border border-[#dce7e1] bg-[#f7faf9] p-4 hover:border-[#02f52b] hover:shadow-[0_0_15px_rgba(2,245,43,0.15)] transition-all group"
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-neutral-700 bg-black text-neutral-300">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] bg-white text-[#080808] font-bold">
                 STEP 1
               </span>
-              <ArrowUpRight className="h-4 w-4 text-neutral-500 group-hover:text-white transition-colors" />
+              <ArrowUpRight className="h-4 w-4 text-[#6b7771] group-hover:text-[#080808] transition-colors" />
             </div>
-            <h3 className="text-sm font-semibold text-white mt-3">1. Student Registration</h3>
-            <p className="text-xs text-neutral-400 mt-1">
-              Webcam photo capture, photo editing, and student credentials
+            <h3 className="text-sm font-bold text-[#080808] mt-3">1. Student Registration</h3>
+            <p className="text-xs text-[#6b7771] mt-1">
+              3s auto-capture photo, Redmi Note 13 Pro 3:4 studio, and credentials
             </p>
           </Link>
 
           <Link
             href="/sender/photo-import"
-            className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-white hover:bg-neutral-850 transition-all group"
+            className="rounded-xl border border-[#dce7e1] bg-[#f7faf9] p-4 hover:border-[#02f52b] hover:shadow-[0_0_15px_rgba(2,245,43,0.15)] transition-all group"
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-neutral-700 bg-black text-neutral-300">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] bg-white text-[#080808] font-bold">
                 STEP 2
               </span>
-              <ArrowUpRight className="h-4 w-4 text-neutral-500 group-hover:text-white transition-colors" />
+              <ArrowUpRight className="h-4 w-4 text-[#6b7771] group-hover:text-[#080808] transition-colors" />
             </div>
-            <h3 className="text-sm font-semibold text-white mt-3">2. Folder Photo Match</h3>
-            <p className="text-xs text-neutral-400 mt-1">
+            <h3 className="text-sm font-bold text-[#080808] mt-3">2. Folder Photo Match</h3>
+            <p className="text-xs text-[#6b7771] mt-1">
               Import a folder of portraits and auto-match by student ID
             </p>
           </Link>
 
           <Link
             href="/sender/batches"
-            className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-white hover:bg-neutral-850 transition-all group"
+            className="rounded-xl border border-[#dce7e1] bg-[#f7faf9] p-4 hover:border-[#02f52b] hover:shadow-[0_0_15px_rgba(2,245,43,0.15)] transition-all group"
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-neutral-700 bg-black text-neutral-300">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] bg-white text-[#080808] font-bold">
                 STEP 3
               </span>
-              <ArrowUpRight className="h-4 w-4 text-neutral-500 group-hover:text-white transition-colors" />
+              <ArrowUpRight className="h-4 w-4 text-[#6b7771] group-hover:text-[#080808] transition-colors" />
             </div>
-            <h3 className="text-sm font-semibold text-white mt-3">3. Dispatch Batches</h3>
-            <p className="text-xs text-neutral-400 mt-1">
+            <h3 className="text-sm font-bold text-[#080808] mt-3">3. Dispatch Batches</h3>
+            <p className="text-xs text-[#6b7771] mt-1">
               Create batches, validate completeness, and transmit to Receiver
             </p>
           </Link>
 
           <Link
             href="/sender/receipts"
-            className="rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-white hover:bg-neutral-850 transition-all group"
+            className="rounded-xl border border-[#dce7e1] bg-[#f7faf9] p-4 hover:border-[#02f52b] hover:shadow-[0_0_15px_rgba(2,245,43,0.15)] transition-all group"
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-neutral-700 bg-black text-neutral-300">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] bg-white text-[#080808] font-bold">
                 STEP 4
               </span>
-              <ArrowUpRight className="h-4 w-4 text-neutral-500 group-hover:text-white transition-colors" />
+              <ArrowUpRight className="h-4 w-4 text-[#6b7771] group-hover:text-[#080808] transition-colors" />
             </div>
-            <h3 className="text-sm font-semibold text-white mt-3">4. Print Receipts</h3>
-            <p className="text-xs text-neutral-400 mt-1">
+            <h3 className="text-sm font-bold text-[#080808] mt-3">4. Print Receipts</h3>
+            <p className="text-xs text-[#6b7771] mt-1">
               Issue enrollment proof for students or print batch manifests
             </p>
           </Link>
         </div>
       </div>
 
-      {/* Live Recent Enrolled Students Table */}
-      <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+      {/* Live Recent Enrolled Students Stream */}
+      <div className="rounded-2xl border border-[#dce7e1] bg-white p-5 space-y-4 shadow-sm">
+        <div className="flex items-center justify-between border-b border-[#dce7e1] pb-3">
           <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-neutral-400" />
-            <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+            <Clock className="h-4 w-4 text-[#6b7771]" />
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#080808]">
               Live Enrollment Stream ({data.recentStudents.length})
             </h2>
           </div>
           <Link
             href="/sender/receipts"
-            className="text-xs text-neutral-300 hover:text-white hover:underline font-mono"
+            className="text-xs text-[#080808] hover:text-[#02f52b] hover:underline font-mono font-semibold"
           >
             View All Receipts →
           </Link>
         </div>
 
         {data.recentStudents.length === 0 ? (
-          <div className="text-center py-10 text-xs text-neutral-500">
+          <div className="text-center py-10 text-xs text-[#6b7771]">
             No students enrolled yet. Click &quot;Enroll New Student&quot; to begin.
           </div>
         ) : (
-          <div className="divide-y divide-neutral-900">
+          <div className="divide-y divide-[#dce7e1]">
             {data.recentStudents.map((s) => (
-              <div key={s.id} className="py-3 flex items-center justify-between text-xs">
+              <div key={s.id || s.studentId} className="py-3 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded border border-neutral-800 bg-neutral-900 flex items-center justify-center overflow-hidden shrink-0">
+                  <div className="h-9 w-9 rounded-xl border border-[#dce7e1] bg-[#f7faf9] flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                     {s.photoPath ? (
                       <img
                         src={s.photoPath}
@@ -433,12 +448,12 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <Camera className="h-4 w-4 text-neutral-600" />
+                      <Camera className="h-4 w-4 text-[#6b7771]" />
                     )}
                   </div>
                   <div>
-                    <div className="font-semibold text-white">{s.fullName}</div>
-                    <div className="text-[11px] font-mono text-neutral-400">
+                    <div className="font-bold text-[#080808]">{s.fullName}</div>
+                    <div className="text-[11px] font-mono text-[#6b7771]">
                       ID: {s.studentId} • {s.grade}
                     </div>
                   </div>
@@ -446,17 +461,17 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
 
                 <div className="flex items-center gap-2.5">
                   <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border font-bold ${
                       s.photoPath
-                        ? "border-neutral-600 bg-neutral-900 text-white"
-                        : "border-neutral-800 bg-black text-neutral-500"
+                        ? "border-[#02f52b] bg-[#eef5f1] text-[#080808]"
+                        : "border-[#dce7e1] bg-[#f7faf9] text-[#6b7771]"
                     }`}
                   >
                     {s.photoPath ? "PHOTO READY" : "NO PHOTO"}
                   </span>
                   <Link
                     href={`/sender/receipts?studentId=${s.studentId}`}
-                    className="inline-flex items-center gap-1 rounded border border-neutral-700 bg-neutral-900 px-2.5 py-1 text-[11px] text-white hover:bg-white hover:text-black transition-colors"
+                    className="inline-flex items-center gap-1 rounded-xl border border-[#dce7e1] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#080808] hover:bg-[#02f52b] transition-all shadow-2xs"
                   >
                     <Receipt className="h-3 w-3" />
                     <span>Receipt</span>

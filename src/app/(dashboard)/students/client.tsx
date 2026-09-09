@@ -77,6 +77,27 @@ interface StudentDirectoryClientProps {
   gradeCounts?: Record<string, number>;
 }
 
+import {
+  saveStudentsToDB,
+  getAllStudentsFromDB,
+  deleteStudentFromDB,
+  clearAllStudentsFromDB,
+} from "@/lib/idb-storage";
+
+// Safe database helper using IndexedDB (handles 6,000 to 20,000+ students with photos safely)
+const safeSaveLocalEnrolledStudents = (list: StudentExtended[]) => {
+  saveStudentsToDB(list as any).catch((err) => {
+    console.warn("IndexedDB bulk save notice:", err);
+  });
+  try {
+    const lightList = list.slice(0, 100).map((s) => ({
+      ...s,
+      photoPath: s.photoPath && s.photoPath.length > 500 ? null : s.photoPath,
+    }));
+    localStorage.setItem("sb_enrolled_students", JSON.stringify(lightList));
+  } catch {}
+};
+
 export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   students,
   totalCount,
@@ -91,24 +112,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   // Dual-Persistence Client State
   const [displayStudents, setDisplayStudents] = useState<StudentExtended[]>(students);
   const [editingStudent, setEditingStudent] = useState<StudentExtended | null>(null);
   const [isGradeExportModalOpen, setIsGradeExportModalOpen] = useState<boolean>(false);
+  const [activePage, setActivePage] = useState<number>(currentPage || 1);
+  const [activePageSize, setActivePageSize] = useState<number>(pageSize || 25);
 
-  // Safe localStorage helper to prevent QuotaExceededError on 5,000–6,000 records
-  const safeSaveLocalEnrolledStudents = (list: StudentExtended[]) => {
-    try {
-      const capped = list.slice(0, 250);
-      localStorage.setItem("sb_enrolled_students", JSON.stringify(capped));
-    } catch (err) {
-      console.warn("localStorage quota protection engaged:", err);
-    }
-  };
+  useEffect(() => {
+    if (currentPage) setActivePage(currentPage);
+  }, [currentPage]);
 
-  // 1. Initial Load: Merge server students, localStorage, and pull from /api/students/sync with tombstone suppression
+  useEffect(() => {
+    if (pageSize) setActivePageSize(pageSize);
+  }, [pageSize]);
+
+  // 1. Initial Load: Merge server students, high-capacity IndexedDB, localStorage, and pull from /api/students/sync
   useEffect(() => {
     const loadAndMerge = async () => {
       let deletedIds = new Set<string>();
@@ -119,6 +140,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         }
       } catch {}
 
+      // Load from IndexedDB (supports 6,000+ students with high-res photos)
+      let idbList: any[] = [];
+      try {
+        idbList = await getAllStudentsFromDB();
+      } catch {}
+
       let localList: StudentExtended[] = [];
       try {
         const raw = localStorage.getItem("sb_enrolled_students");
@@ -126,9 +153,14 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       } catch {}
 
       const map = new Map<string, StudentExtended>();
+      idbList.forEach((s) => {
+        if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
+          map.set(s.studentId, s as any);
+        }
+      });
       localList.forEach((s) => {
         if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-          map.set(s.studentId, s);
+          if (!map.has(s.studentId)) map.set(s.studentId, s);
         }
       });
       students.forEach((s) => {
@@ -137,7 +169,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         }
       });
 
-      // Also pull latest from /api/students/sync (which rehydrates from Cloud Sync if container was empty)
+      // Also pull latest from /api/students/sync (rehydrates from Cloud Sync)
       try {
         const res = await fetch("/api/students/sync");
         if (res.ok) {
@@ -284,10 +316,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   };
 
   const handlePageChange = (newPage: number) => {
+    setActivePage(newPage);
     applyFilters({ page: newPage });
   };
 
   const handlePageSizeChange = (newSize: number) => {
+    setActivePageSize(newSize);
+    setActivePage(1);
     applyFilters({ pageSize: newSize, page: 1 });
   };
 
@@ -378,6 +413,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       if (studentId && !list.includes(studentId)) list.push(studentId);
       localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
 
+      deleteStudentFromDB(id).catch(() => {});
+      if (studentId) deleteStudentFromDB(studentId).catch(() => {});
+
       const raw = localStorage.getItem("sb_enrolled_students");
       if (raw) {
         const localList = JSON.parse(raw);
@@ -441,6 +479,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       });
       localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
 
+      idsToDelete.forEach((id) => deleteStudentFromDB(id).catch(() => {}));
+      selectedItems.forEach((item) => {
+        if (item.id) deleteStudentFromDB(item.id).catch(() => {});
+        if (item.studentId) deleteStudentFromDB(item.studentId).catch(() => {});
+      });
+
       const raw = localStorage.getItem("sb_enrolled_students");
       if (raw) {
         const localList = JSON.parse(raw);
@@ -480,6 +524,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         "Are you sure you want to permanently delete ALL student records? This will clear the entire credential directory so you can feed your own fresh data."
       )
     ) {
+      clearAllStudentsFromDB().catch(() => {});
       try {
         const allIds = displayStudents.flatMap((s) => [s.id, s.studentId]).filter(Boolean);
         localStorage.setItem("sb_deleted_student_ids", JSON.stringify(allIds));
@@ -725,9 +770,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   };
 
   const totalEffective = Math.max(totalCount, displayStudents.length);
-  const totalPages = Math.ceil(totalEffective / pageSize) || 1;
-  const startItem = totalEffective === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const endItem = Math.min(currentPage * pageSize, totalEffective);
+  const totalPages = Math.ceil(totalEffective / activePageSize) || 1;
+  const startItem = totalEffective === 0 ? 0 : (activePage - 1) * activePageSize + 1;
+  const endItem = Math.min(activePage * activePageSize, totalEffective);
+
+  // Client-side pagination slice ensuring Per page (25, 50, 100) functions instantaneously
+  const paginatedStudents = React.useMemo(() => {
+    const start = (activePage - 1) * activePageSize;
+    return displayStudents.slice(start, start + activePageSize);
+  }, [displayStudents, activePage, activePageSize]);
 
   return (
     <div className="space-y-4">
@@ -1173,7 +1224,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   </td>
                 </tr>
               ) : (
-                displayStudents.map((student) => {
+                paginatedStudents.map((student) => {
                   const isSelected = selectedIds.has(student.id);
                   const hasPhoto = Boolean(student.photoPath);
                   const hasQR = Boolean(student.qrCodeData);
@@ -1309,15 +1360,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <span>
               Showing <strong className="text-foreground">{startItem}</strong> to{" "}
               <strong className="text-foreground">{endItem}</strong> of{" "}
-              <strong className="text-foreground font-mono">{totalCount.toLocaleString()}</strong> students
+              <strong className="text-foreground font-mono">{totalEffective.toLocaleString()}</strong> students
             </span>
 
             <div className="flex items-center gap-1.5">
               <span>Per page:</span>
               <select
-                value={pageSize}
+                value={activePageSize}
                 onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
-                className="rounded border border-border bg-surface px-2 py-1 text-xs text-foreground focus:border-accent focus:outline-none"
+                className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-foreground focus:border-accent focus:outline-none cursor-pointer"
               >
                 <option value={25}>25</option>
                 <option value={50}>50</option>
@@ -1327,22 +1378,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="font-mono">
-              Page {currentPage} of {totalPages}
+            <span className="font-mono font-semibold">
+              Page {activePage} of {totalPages}
             </span>
 
             <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage <= 1 || isPending}
+              onClick={() => handlePageChange(activePage - 1)}
+              disabled={activePage <= 1}
               className="rounded-lg border border-border bg-surface p-1.5 text-foreground hover:bg-surface-secondary disabled:opacity-30 transition-colors"
+              title="Previous Page"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
 
             <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage >= totalPages || isPending}
+              onClick={() => handlePageChange(activePage + 1)}
+              disabled={activePage >= totalPages}
               className="rounded-lg border border-border bg-surface p-1.5 text-foreground hover:bg-surface-secondary disabled:opacity-30 transition-colors"
+              title="Next Page"
             >
               <ChevronRight className="h-4 w-4" />
             </button>

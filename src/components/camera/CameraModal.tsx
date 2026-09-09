@@ -31,8 +31,9 @@ export interface CameraModalProps {
   onCapture: (file: File, previewUrl: string) => void;
   onEditPhoto?: (file: File, previewUrl: string) => void;
   initialFacingMode?: "user" | "environment";
-  maxDimensions?: { width: number; height: number }; // Default 900 × 1200 (exact 3:4 @ 300 DPI)
-  compressionQuality?: number; // Default 0.90
+  maxDimensions?: { width: number; height: number }; // Default 1200 × 1600 (exact 3:4 @ 300 DPI)
+  compressionQuality?: number; // Default 0.96
+  autoStart3sCountdown?: boolean;
 }
 
 type CameraState = "idle" | "requesting" | "streaming" | "captured" | "error";
@@ -48,8 +49,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   onCapture,
   onEditPhoto,
   initialFacingMode = "user",
-  maxDimensions = { width: 900, height: 1200 },
-  compressionQuality = 0.90,
+  maxDimensions = { width: 1200, height: 1600 },
+  compressionQuality = 0.96,
+  autoStart3sCountdown = false,
 }) => {
   const [cameraState, setCameraState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isFlashlightOn, setIsFlashlightOn] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const hasAutoStartedRef = useRef<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -243,11 +246,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       setCapturedPreview(null);
       setCapturedBlob(null);
       clearCountdownTimer();
+      hasAutoStartedRef.current = false;
       startCamera();
     } else {
       clearCountdownTimer();
       stopMediaTracks();
       setCameraState("idle");
+      hasAutoStartedRef.current = false;
     }
 
     return () => {
@@ -255,6 +260,17 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       stopMediaTracks();
     };
   }, [isOpen, startCamera, stopMediaTracks, clearCountdownTimer]);
+
+  // Auto-trigger 3-second auto-capture when streaming starts if autoStart3sCountdown is enabled
+  useEffect(() => {
+    if (isOpen && cameraState === "streaming" && autoStart3sCountdown && !hasAutoStartedRef.current) {
+      hasAutoStartedRef.current = true;
+      const timeout = setTimeout(() => {
+        handleStartAutoCapture();
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [isOpen, cameraState, autoStart3sCountdown]);
 
   /**
    * Toggle between front and rear cameras
@@ -651,35 +667,36 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           {/* ID Framing Overlay (Active during streaming) */}
           {cameraState === "streaming" && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              {/* Strict Rectangular 3:4 ID Framing Guide (NO OVAL) */}
-              <div className="relative aspect-[3/4] h-[78%] max-h-[460px] border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] rounded-xs">
+              {/* Strict Rectangular 3:4 ID Framing Guide (Redmi Note 13 Pro Style) */}
+              <div className="relative aspect-[3/4] h-[78%] max-h-[460px] border-2 border-[#02f52b] shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] rounded-xs">
                 {/* Corner bracket highlight marks */}
-                <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 border-white" />
-                <div className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 border-white" />
-                <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 border-white" />
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 border-white" />
+                <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 border-[#02f52b]" />
+                <div className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 border-[#02f52b]" />
+                <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 border-[#02f52b]" />
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 border-[#02f52b]" />
 
                 {/* Center alignment crosshairs */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 bg-white/70" />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 bg-white/70" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 bg-[#02f52b]/70" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 bg-[#02f52b]/70" />
 
                 {/* Upper third eye level guide line */}
-                <div className="absolute top-[38%] left-3 right-3 border-b border-dashed border-white/50 flex justify-between px-1">
-                  <span className="text-[9px] font-mono text-white/80 -mt-3.5 select-none uppercase tracking-wider">Eye Level</span>
-                  <span className="text-[9px] font-mono text-white/80 -mt-3.5 select-none font-bold">3:4 RECT</span>
+                <div className="absolute top-[38%] left-3 right-3 border-b border-dashed border-[#02f52b]/60 flex justify-between px-1">
+                  <span className="text-[9px] font-mono text-[#02f52b] -mt-3.5 select-none uppercase tracking-wider font-semibold">Eye Level</span>
+                  <span className="text-[9px] font-mono text-[#02f52b] -mt-3.5 select-none font-bold">3:4 RECT</span>
                 </div>
 
                 {/* Chin level guide */}
-                <div className="absolute bottom-[22%] left-6 right-6 border-b border-dotted border-white/35 flex justify-center">
-                  <span className="text-[8px] font-mono text-white/60 -mt-3 select-none uppercase tracking-wider">Chin Alignment</span>
+                <div className="absolute bottom-[22%] left-6 right-6 border-b border-dotted border-[#02f52b]/40 flex justify-center">
+                  <span className="text-[8px] font-mono text-white/70 -mt-3 select-none uppercase tracking-wider">Chin Alignment</span>
                 </div>
               </div>
 
               {/* Viewport badge */}
               <div className="absolute top-4 flex items-center gap-2">
-                <div className="rounded-full border border-neutral-700 bg-black/80 backdrop-blur-xs px-3 py-1 text-[10px] font-mono text-white flex items-center gap-1.5 shadow-md">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>3:4 RECTANGULAR • 300 DPI AUTO</span>
+                <div className="rounded-full border border-neutral-800 bg-black/85 backdrop-blur-xs px-3 py-1 text-[10px] font-mono text-white flex items-center gap-1.5 shadow-md">
+                  <span className="h-2 w-2 rounded-full bg-[#02f52b] animate-pulse" />
+                  <span className="text-white font-semibold">3:4 RECTANGULAR</span>
+                  <span className="text-[#02f52b] font-bold">• 300 DPI AUTO</span>
                 </div>
                 {isFlashlightOn && (
                   <div className="rounded-full border border-amber-400/90 bg-amber-400/25 backdrop-blur-xs px-2.5 py-1 text-[10px] font-mono font-bold text-amber-300 flex items-center gap-1 shadow-lg animate-pulse">
@@ -698,12 +715,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
           {/* Auto Capture Countdown Overlay */}
           {countdown !== null && (
-            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/50 backdrop-blur-2xs animate-in fade-in duration-150">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-white bg-black/80 shadow-2xl animate-bounce">
-                <span className="font-mono text-5xl font-black text-white">{countdown}</span>
+            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-[#02f52b] bg-black/90 shadow-[0_0_30px_rgba(2,245,43,0.5)] animate-bounce">
+                <span className="font-mono text-5xl font-black text-[#02f52b]">{countdown}</span>
               </div>
-              <p className="mt-4 font-mono text-xs font-bold uppercase tracking-widest text-white drop-shadow-md">
-                Smile • Auto-Capturing 3:4 @ 300 DPI
+              <p className="mt-4 font-mono text-xs font-bold uppercase tracking-widest text-white drop-shadow-md flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-[#02f52b] animate-ping" />
+                <span>Auto-Capturing 3:4 @ 300 DPI</span>
               </p>
               <button
                 type="button"
@@ -862,10 +880,10 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   type="button"
                   onClick={handleStartAutoCapture}
                   disabled={cameraState !== "streaming" || countdown !== null}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-black px-4 py-2.5 text-xs font-mono font-bold text-white hover:bg-neutral-800 active:scale-95 transition-all shadow-xs disabled:opacity-40 disabled:pointer-events-none"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#02f52b] px-4 py-2.5 text-xs font-mono font-extrabold text-[#080808] hover:bg-[#00dc25] active:scale-95 transition-all shadow-[0_0_12px_rgba(2,245,43,0.35)] disabled:opacity-40 disabled:pointer-events-none"
                   title="Auto-Capture 3s Countdown & Auto-Attach"
                 >
-                  <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
+                  <Zap className="h-3.5 w-3.5 text-[#080808] fill-[#080808]" />
                   <span>Auto Capture (3s)</span>
                 </button>
 
