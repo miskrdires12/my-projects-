@@ -61,15 +61,19 @@ export async function processAndSaveStudentPhoto(
   const randomId = crypto.randomBytes(12).toString("hex");
   const fileName = `${subfolder}_${Date.now()}_${randomId}.jpg`;
 
-  // 5. Transform: auto-orient, resize to max 600x800 portrait, 85 quality JPEG
+  // 5. Transform: auto-orient, resize to strict 3:4 portrait (900×1200), 300 DPI, 90 quality JPEG
   const processedBuffer = await sharp(fileBuffer)
     .rotate()
-    .resize(600, 800, {
-      fit: "inside",
-      withoutEnlargement: true,
+    .resize(900, 1200, {
+      fit: "cover",
+      position: "center",
+      withoutEnlargement: false,
+    })
+    .withMetadata({
+      density: 300,
     })
     .jpeg({
-      quality: 85,
+      quality: 90,
       mozjpeg: true,
     })
     .toBuffer();
@@ -105,12 +109,14 @@ export async function processAndSaveStudentPhoto(
     fileName,
     relativePath,
     absolutePath: targetDir,
-    width: finalMetadata.width ?? 600,
-    height: finalMetadata.height ?? 800,
+    width: finalMetadata.width ?? 900,
+    height: finalMetadata.height ?? 1200,
     format: "jpeg",
     sizeBytes: processedBuffer.length,
   };
 }
+
+export { setJpeg300Dpi, convertBlobTo300Dpi } from "./jpeg-dpi";
 
 /**
  * Sanitizes a student's real name for safe filesystem usage without

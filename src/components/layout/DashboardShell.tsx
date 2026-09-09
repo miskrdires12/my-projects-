@@ -348,8 +348,8 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
       {/* User Identity & Sign Out */}
       <div className="border-t border-neutral-200 p-4 bg-neutral-50">
-        <div className="flex items-center justify-between">
-          <div className="truncate pr-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="truncate pr-1">
             <div className="text-xs font-bold text-black truncate font-mono">{session.username}</div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="inline-block h-2 w-2 rounded-full bg-black" />
@@ -366,10 +366,11 @@ export default function DashboardShell({ session, children }: DashboardShellProp
           <form action={logoutAction}>
             <button
               type="submit"
-              className="rounded-lg p-2 text-neutral-600 hover:bg-neutral-200 hover:text-black transition-colors"
-              title="Sign out"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-mono font-semibold text-neutral-800 hover:bg-black hover:text-white hover:border-black transition-all shadow-2xs"
+              title="Sign out session"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Sign Out</span>
             </button>
           </form>
         </div>
@@ -451,6 +452,30 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             <div className="hidden sm:flex items-center gap-2 rounded-full border border-neutral-300 bg-neutral-50 px-3 py-1 text-[11px] font-mono text-neutral-600">
               <span className="h-2 w-2 rounded-full bg-black" />
               <span>ONLINE</span>
+            </div>
+
+            {/* Header User Identity & 1-Click Logout Action */}
+            <div className="flex items-center gap-2 border-l border-neutral-200 pl-2.5">
+              <div className="hidden lg:flex flex-col text-right">
+                <span className="text-xs font-bold font-mono text-black leading-tight truncate max-w-[120px]">
+                  {session.username}
+                </span>
+                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-neutral-500">
+                  {isAdmin ? "Admin" : isSender ? "Sender" : "Receiver"}
+                </span>
+              </div>
+
+              <form action={logoutAction}>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-1.5 text-xs font-mono font-semibold text-neutral-800 hover:bg-black hover:text-white hover:border-black transition-all shadow-2xs"
+                  title="Sign Out Session"
+                  aria-label="Sign Out"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Sign Out</span>
+                </button>
+              </form>
             </div>
           </div>
         </header>

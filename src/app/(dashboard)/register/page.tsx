@@ -67,7 +67,7 @@ export default function RegisterPage() {
 
   // Form Fields
   const [formData, setFormData] = useState<Partial<StudentFormInput>>({
-    studentId: `SB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+    studentId: "",
     fullName: "",
     grade: "",
     sex: "Male",
@@ -88,6 +88,15 @@ export default function RegisterPage() {
 
   // Load registered Custom Fields on mount
   useEffect(() => {
+    setFormData((current) =>
+      current.studentId
+        ? current
+        : {
+            ...current,
+            studentId: `SB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+          },
+    );
+
     getCustomFieldsAction()
       .then((fields) => {
         if (fields) setCustomFieldsList(fields as CustomFieldMeta[]);
@@ -850,10 +859,12 @@ export default function RegisterPage() {
               </h3>
               {officialPhotoPath ? (
                 <span className="flex items-center gap-1 text-[10px] text-black font-mono font-bold">
-                  <CheckCircle2 className="h-3 w-3" /> ATTACHED
+                  <CheckCircle2 className="h-3 w-3" /> 3:4 • 300 DPI ATTACHED
                 </span>
               ) : (
-                <span className="text-[10px] text-neutral-400 font-mono">PENDING</span>
+                <span className="text-[10px] text-neutral-500 font-mono font-semibold">
+                  3:4 • 300 DPI AUTO
+                </span>
               )}
             </div>
 
@@ -870,7 +881,7 @@ export default function RegisterPage() {
                   <Camera className="h-10 w-10 stroke-[1.25] text-neutral-400 mb-2" />
                   <span className="text-xs font-medium text-black">No Portrait Captured</span>
                   <span className="text-[10px] text-neutral-400 mt-0.5">
-                    Capture via webcam or upload image
+                    Webcam auto-captures 3:4 @ 300 DPI
                   </span>
                 </div>
               )}
@@ -884,7 +895,7 @@ export default function RegisterPage() {
                     className="rounded-lg bg-white text-black px-3 py-1.5 text-xs font-semibold shadow hover:bg-neutral-100 transition-colors flex items-center gap-1.5"
                   >
                     <Camera className="h-3.5 w-3.5" />
-                    <span>Retake Photo</span>
+                    <span>Retake (Auto 3:4)</span>
                   </button>
                   <button
                     type="button"
@@ -909,7 +920,7 @@ export default function RegisterPage() {
                 className="flex items-center justify-center gap-2 rounded-lg bg-black p-2.5 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors shadow-xs"
               >
                 <Camera className="h-4 w-4" />
-                <span>Webcam</span>
+                <span>Webcam (Auto 3:4)</span>
               </button>
 
               <label className="flex items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white p-2.5 text-xs font-medium text-black hover:bg-neutral-100 transition-colors cursor-pointer">

@@ -1,7 +1,9 @@
 import React from "react";
-import { Database, Activity, HardDrive, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { Database, Activity, HardDrive, CheckCircle2, ArrowLeft, LogOut } from "lucide-react";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { logoutAction } from "@/actions/auth";
 import { redirect } from "next/navigation";
 
 export default async function AdminDatabasePage() {
@@ -23,14 +25,40 @@ export default async function AdminDatabasePage() {
 
   return (
     <div className="space-y-8">
-      <div className="border-b border-border pb-5">
-        <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-          <Database className="h-5 w-5 text-accent" />
-          <span>System Health & Database Telemetry</span>
-        </h1>
-        <p className="text-xs text-foreground-muted mt-1">
-          Monitor persistence metrics, operational throughput, and system audit logs
-        </p>
+      {/* Top Breadcrumb & Action Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-5">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-mono text-neutral-500 mb-1">
+            <Link href="/dashboard" className="hover:text-black transition-colors flex items-center gap-1">
+              <ArrowLeft className="h-3 w-3" />
+              <span>Dashboard</span>
+            </Link>
+            <span>/</span>
+            <span className="text-black font-semibold">Administration</span>
+            <span>/</span>
+            <span className="text-black">Database & Logs</span>
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-black flex items-center gap-2">
+            <Database className="h-5 w-5 text-black" />
+            <span>System Health & Database Telemetry</span>
+          </h1>
+          <p className="text-xs text-neutral-500 mt-1">
+            Monitor persistence metrics, operational throughput, and system audit logs
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-mono font-semibold text-red-700 hover:bg-red-100 transition-colors shadow-xs"
+              title="End admin session"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Sign Out Admin</span>
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Metrics Row */}
