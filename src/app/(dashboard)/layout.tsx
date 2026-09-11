@@ -1,4 +1,5 @@
 import React from "react";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import DashboardShell from "@/components/layout/DashboardShell";
 
@@ -8,18 +9,15 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession();
-  const activeSession = session || {
-    userId: "operator-001",
-    username: "Station Operator",
-    email: "operator@studentbridge.internal",
-    role: "SENDER" as const,
-  };
+  if (!session) {
+    redirect("/login");
+  }
 
   return (
     <DashboardShell
       session={{
-        username: activeSession.username,
-        role: activeSession.role,
+        username: session.username,
+        role: session.role,
       }}
     >
       {children}

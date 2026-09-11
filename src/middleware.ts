@@ -62,23 +62,34 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 3. Handle login and root paths: direct straight to registration studio
-  if (isRoot || pathname === "/login") {
-    return NextResponse.redirect(new URL("/register", request.url));
+  // 3. Handle login and root paths
+  if (pathname === "/login") {
+    if (sessionUser) {
+      const dest = sessionUser.role === "SENDER" ? "/register" : "/dashboard";
+      return NextResponse.redirect(new URL(dest, request.url));
+    }
+    return NextResponse.next();
   }
 
-  // 4. Allow public routes
+  if (isRoot) {
+    if (sessionUser) {
+      const dest = sessionUser.role === "SENDER" ? "/register" : "/dashboard";
+      return NextResponse.redirect(new URL(dest, request.url));
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // 4. Allow public static assets and auth endpoints
   if (isPublic) {
     return NextResponse.next();
   }
 
-  // 5. Provide verified session or fallback operator identity
-  const user = sessionUser || {
-    userId: "operator-001",
-    username: "Station Operator",
-    email: "operator@studentbridge.internal",
-    role: "SENDER" as UserRole,
-  };
+  // 5. Enforce authentication on all protected routes
+  if (!sessionUser) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  const user = sessionUser;
 
   // Inject secure headers into downstream request
   const requestHeaders = new Headers(request.headers);

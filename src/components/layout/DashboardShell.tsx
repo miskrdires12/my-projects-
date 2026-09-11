@@ -14,9 +14,10 @@ import {
   Sparkles,
   X,
   Sun,
-  RotateCcw,
+  LogOut,
 } from "lucide-react";
 import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
+import { logoutAction } from "@/actions/auth";
 
 interface DashboardShellProps {
   session: {
@@ -55,6 +56,16 @@ export default function DashboardShell({ session, children }: DashboardShellProp
       document.documentElement.classList.remove("dark");
       localStorage.setItem("sb_theme", "light");
     }
+  };
+
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await purgeSensitiveClientStorage();
+    } catch {}
+    await logoutAction();
   };
 
   const role = session.role;
@@ -293,17 +304,13 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
           <button
             type="button"
-            onClick={async () => {
-              try {
-                await purgeSensitiveClientStorage();
-              } catch {}
-              window.location.reload();
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-2.5 py-1.5 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all shadow-2xs active:scale-95 cursor-pointer"
-            title="Clear cache and reload session"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/25 px-2.5 py-1.5 text-xs font-mono font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cool-btn-hover transition-all cursor-pointer disabled:opacity-50"
+            title="Sign Out of Station"
           >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset</span>
+            <LogOut className="h-3.5 w-3.5 stroke-[2.5]" />
+            <span>{isSigningOut ? "Signing Out..." : "Sign Out"}</span>
           </button>
         </div>
       </div>
@@ -402,6 +409,18 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                   {session.username}
                 </span>
               </div>
+
+              {/* Sign Out Button in Header Bar */}
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/25 px-2.5 py-1.5 text-xs font-mono font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cool-btn-hover transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                title="Sign Out of Workstation"
+              >
+                <LogOut className="h-3.5 w-3.5 stroke-[2.5]" />
+                <span className="hidden sm:inline">{isSigningOut ? "..." : "Sign Out"}</span>
+              </button>
             </div>
           </div>
         </header>
