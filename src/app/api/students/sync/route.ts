@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import {
-  fetchCloudStudents,
   publishStudentSync,
   rehydrateDatabaseFromCloud,
 } from "@/lib/sync-engine";
@@ -18,25 +17,25 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    // 2. If container has 0 students, pull from Cloud Sync
-    if (dbStudents.length === 0) {
-      await rehydrateDatabaseFromCloud();
-      dbStudents = await prisma.student.findMany({
-        orderBy: { createdAt: "desc" },
+    // 2. If database has records, it is the authoritative source of truth
+    if (dbStudents.length > 0) {
+      return NextResponse.json({
+        success: true,
+        students: dbStudents,
+        totalCount: dbStudents.length,
       });
     }
 
-    // 3. Merge with any fresh cloud students
-    const cloudStudents = await fetchCloudStudents();
-    const map = new Map<string, any>();
-    cloudStudents.forEach((s) => map.set(s.studentId, s));
-    dbStudents.forEach((s) => map.set(s.studentId, s));
+    // 3. If container has 0 students, pull and rehydrate from Cloud Sync
+    await rehydrateDatabaseFromCloud();
+    dbStudents = await prisma.student.findMany({
+      orderBy: { createdAt: "desc" },
+    });
 
-    const finalStudents = Array.from(map.values());
     return NextResponse.json({
       success: true,
-      students: finalStudents,
-      totalCount: finalStudents.length,
+      students: dbStudents,
+      totalCount: dbStudents.length,
     });
   } catch (err: any) {
     console.error("Student sync GET error:", err);

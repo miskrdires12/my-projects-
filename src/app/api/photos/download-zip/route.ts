@@ -257,17 +257,7 @@ export async function POST(request: NextRequest) {
           photoCursor = chunk[chunk.length - 1].id;
         }
 
-        // Append matching manifest CSV sheet inside the root of the ZIP
-        const manifestHeaders = ["StudentID", "Name", "Sex", "Grade", "Phone", "@photo"];
-        const manifestCsvContent = "\uFEFF" + [
-          manifestHeaders.map(escapeCSV).join(","),
-          ...manifestRows,
-        ].join("\r\n");
-
-        archive.append(Buffer.from(manifestCsvContent, "utf-8"), {
-          name: "Student_Manifest.csv",
-        });
-
+        // Finalize ZIP with only classified photos in grade folders (no unwanted CSV)
         await archive.finalize();
       } catch {
         archive.abort();

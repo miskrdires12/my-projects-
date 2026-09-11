@@ -65,6 +65,8 @@ interface StudentExtended {
   status: string;
   batch?: { batchNumber: string; title: string } | null;
   customValues?: { customField: { label: string; fieldKey: string }; value: string }[];
+  createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
 }
 
 interface StudentDirectoryClientProps {
@@ -173,6 +175,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       });
 
       const immediateMerged = Array.from(map.values());
+      immediateMerged.sort((a, b) => {
+        const tA = new Date(a.createdAt || 0).getTime();
+        const tB = new Date(b.createdAt || 0).getTime();
+        return tB - tA;
+      });
       setDisplayStudents(immediateMerged);
       safeSaveLocalEnrolledStudents(immediateMerged);
 
@@ -184,13 +191,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             if (Array.isArray(data.students) && data.students.length > 0) {
               setDisplayStudents((prev) => {
                 const freshMap = new Map<string, StudentExtended>();
-                prev.forEach((s) => freshMap.set(s.studentId, s));
                 data.students.forEach((s: any) => {
                   if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
                     freshMap.set(s.studentId, s);
                   }
                 });
+                prev.forEach((s) => {
+                  if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
+                    freshMap.set(s.studentId, s);
+                  }
+                });
                 const next = Array.from(freshMap.values());
+                next.sort((a, b) => {
+                  const tA = new Date(a.createdAt || 0).getTime();
+                  const tB = new Date(b.createdAt || 0).getTime();
+                  return tB - tA;
+                });
                 safeSaveLocalEnrolledStudents(next);
                 return next;
               });
@@ -219,9 +235,19 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
         setDisplayStudents((prev) => {
           const map = new Map<string, StudentExtended>();
-          prev.forEach((s) => map.set(s.studentId, s));
+          // Put the newest student at the very top
           map.set(newStudent.studentId, newStudent);
+          prev.forEach((s) => {
+            if (s.studentId !== newStudent.studentId) {
+              map.set(s.studentId, s);
+            }
+          });
           const updated = Array.from(map.values());
+          updated.sort((a, b) => {
+            const tA = new Date(a.createdAt || 0).getTime();
+            const tB = new Date(b.createdAt || 0).getTime();
+            return tB - tA;
+          });
           safeSaveLocalEnrolledStudents(updated);
           return updated;
         });
@@ -354,107 +380,118 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     setSelectedIds(next);
   };
 
-  // Bulk Photo Download (Includes matching Student_Manifest.csv inside the ZIP)
+  // Bulk Photo Download (Grouped strictly by Grade folders, without companion CSV)
   const handleBulkDownloadPhotos = async () => {
     const targetStudents = selectedIds.size > 0
       ? displayStudents.filter((s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId)))
-      : displayStudents.filter((s) => Boolean(s.photoPath));
+      : displayStudents;
 
-    if (targetStudents.length === 0) {
-      alert("No student photographs found to download in this view.");
+    const withPhotos = targetStudents.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0));
+
+    if (withPhotos.length === 0) {
+      alert(
+        selectedIds.size > 0
+          ? `None of the ${selectedIds.size} selected student(s) have photographs attached.`
+          : "No student photographs found to download in this view."
+      );
       return;
     }
 
     setIsDownloadingPhotos(true);
 
     try {
-      // 1. Attempt server streaming endpoint
-      const response = await fetch("/api/photos/download-zip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentIds: targetStudents.map((s) => s.id),
-          folderStructure: "flat",
-        }),
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        if (blob && blob.size > 100) {
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          const dateTag = new Date().toISOString().split("T")[0];
-          const scopeLabel = selectedIds.size > 0 ? `Selected_${targetStudents.length}` : `All_${targetStudents.length}`;
-          a.download = `Student_Photos_With_Manifest_${scopeLabel}_${dateTag}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.URL.revokeObjectURL(url);
-          return;
-        }
-      }
-      throw new Error("Server zip unavailable, fallback to client packaging");
-    } catch {
-      // 2. Client-side JSZip packaging (works 100% offline or with local IndexedDB images)
+      // 1. Attempt server streaming endpoint with by-grade folder structure
       try {
-        const zip = new JSZip();
-        const photoFolder = zip.folder("photos") || zip;
-        const manifestRows: string[] = [
-          "StudentID,Name,Sex,Grade,Phone,@photo"
-        ];
+        const response = await fetch("/api/photos/download-zip", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentIds: withPhotos.map((s) => s.id),
+            folderStructure: "by-grade",
+          }),
+        });
 
-        for (const student of targetStudents) {
-          const sId = student.studentId || student.id;
-          const cleanName = (student.fullName || sId || "student")
-            .replace(/[/\\]/g, " - ")
-            .replace(/[:*?"<>|]/g, "")
-            .trim();
-          const photoFileName = `${cleanName} - ${sId}.jpg`;
-          const sex = student.sex || "Male";
-          const grade = student.grade || "10";
-          const phone = formatPhoneForReceiver(student.phone);
-
-          manifestRows.push(
-            `"${sId}","${cleanName}","${sex}","${grade}","${phone}","${photoFileName}"`
-          );
-
-          if (student.photoPath) {
-            try {
-              if (student.photoPath.startsWith("data:image/")) {
-                const base64Data = student.photoPath.split(",")[1];
-                if (base64Data) {
-                  photoFolder.file(photoFileName, base64Data, { base64: true });
-                }
-              } else {
-                const res = await fetch(student.photoPath);
-                if (res.ok) {
-                  const imgBlob = await res.blob();
-                  photoFolder.file(photoFileName, imgBlob);
-                }
-              }
-            } catch {}
+        if (response.ok) {
+          const blob = await response.blob();
+          if (blob && blob.size > 200) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const dateTag = new Date().toISOString().split("T")[0];
+            const scopeLabel = selectedIds.size > 0 ? `Selected_${withPhotos.length}` : `All_${withPhotos.length}`;
+            a.download = `Student_Photos_By_Grade_${scopeLabel}_${dateTag}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              try {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+              } catch {}
+            }, 500);
+            return;
           }
         }
-
-        // Add companion Student_Manifest.csv with UTF-8 BOM
-        const csvContent = "\uFEFF" + manifestRows.join("\r\n");
-        zip.file("Student_Manifest.csv", csvContent);
-
-        const zipBlob = await zip.generateAsync({ type: "blob" });
-        const url = window.URL.createObjectURL(zipBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        const dateTag = new Date().toISOString().split("T")[0];
-        const scopeLabel = selectedIds.size > 0 ? `Selected_${targetStudents.length}` : `All_${targetStudents.length}`;
-        a.download = `Student_Photos_With_Manifest_${scopeLabel}_${dateTag}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (err: any) {
-        alert("Failed to create photos ZIP archive: " + (err?.message || "Unknown error"));
+      } catch (serverErr) {
+        console.warn("Server streaming zip fallback to client JSZip:", serverErr);
       }
+
+      // 2. Client-side JSZip packaging organized by Grade Folders (Works offline, with IndexedDB base64 photos, etc.)
+      const zip = new JSZip();
+
+      for (const student of withPhotos) {
+        const sId = student.studentId || student.id;
+        let cleanName = (student.fullName || sId || "student")
+          .replace(/[/\\]/g, " - ")
+          .replace(/[:*?"<>|]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
+        const photoFileName = `${cleanName} - ${sId}.jpg`;
+
+        // Organize strictly into Grade Folders
+        const gradeStr = (student.grade || "General").trim() || "General";
+        const safeGradeFolder = `Grade_${gradeStr.replace(/Grade /i, "").replace(/[:*?"<>|/\\]/g, "_")}`;
+        const gradeFolder = zip.folder(safeGradeFolder) || zip;
+
+        if (student.photoPath) {
+          try {
+            if (student.photoPath.startsWith("data:image/")) {
+              const base64Data = student.photoPath.split(",")[1];
+              if (base64Data) {
+                gradeFolder.file(photoFileName, base64Data, { base64: true });
+              }
+            } else {
+              const res = await fetch(student.photoPath);
+              if (res.ok) {
+                const imgBlob = await res.blob();
+                gradeFolder.file(photoFileName, imgBlob);
+              }
+            }
+          } catch (photoErr) {
+            console.warn(`Failed to package photo for ${sId}:`, photoErr);
+          }
+        }
+      }
+
+      // Generate pure photo ZIP (no unwanted CSV)
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      const dateTag = new Date().toISOString().split("T")[0];
+      const scopeLabel = selectedIds.size > 0 ? `Selected_${withPhotos.length}` : `All_${withPhotos.length}`;
+      a.download = `Student_Photos_By_Grade_${scopeLabel}_${dateTag}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+    } catch (err: any) {
+      console.error("ZIP creation error:", err);
+      alert("Failed to create photos ZIP archive: " + (err?.message || "Unknown error"));
     } finally {
       setIsDownloadingPhotos(false);
     }
@@ -513,6 +550,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         );
         localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
       }
+
+      // Broadcast to live sync channel so receiver dashboard updates instantly
+      publishStudentSync("DELETE", studentId || id).catch(() => {});
     } catch {}
 
     // 2. Immediate UI update
@@ -582,6 +622,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         );
         localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
       }
+
+      // Broadcast each delete to live cloud sync so receiver dashboard updates immediately
+      idsToDelete.forEach((id) => {
+        publishStudentSync("DELETE", id).catch(() => {});
+      });
     } catch {}
 
     setDisplayStudents((prev) =>
@@ -618,6 +663,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         const allIds = displayStudents.flatMap((s) => [s.id, s.studentId]).filter(Boolean);
         localStorage.setItem("sb_deleted_student_ids", JSON.stringify(allIds));
         localStorage.removeItem("sb_enrolled_students");
+        publishStudentSync("CLEAR").catch(() => {});
       } catch {}
       setDisplayStudents([]);
       setSelectedIds(new Set());
