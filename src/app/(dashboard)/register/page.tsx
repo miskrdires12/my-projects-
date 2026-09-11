@@ -209,7 +209,8 @@ export default function RegisterPage() {
    */
   const handleDirectPhotoUpload = async (file: File, previewUrl: string) => {
     setEditedPhotoPreview(previewUrl);
-    setIsUploadingPhoto(true);
+    setOfficialPhotoPath(previewUrl);
+    setIsUploadingPhoto(false);
 
     let cleanName = (formData.fullName || formData.studentId || "student")
       .replace(/[/\\]/g, " - ")
@@ -219,35 +220,26 @@ export default function RegisterPage() {
     cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
     const safePhotoName = `${cleanName}.jpg`;
 
+    // Non-blocking background upload to server
     try {
       const form = new FormData();
       form.append("file", file, safePhotoName);
       form.append("studentId", formData.studentId || "");
 
-      const res = await fetch("/api/uploads", {
+      fetch("/api/uploads", {
         method: "POST",
         body: form,
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        setOfficialPhotoPath(result.relativePath);
-      } else {
-        const reader = new FileReader();
-        reader.onload = () => {
-          setOfficialPhotoPath(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setOfficialPhotoPath(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } finally {
-      setIsUploadingPhoto(false);
-    }
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            const result = await res.json();
+            if (result?.relativePath) {
+              setOfficialPhotoPath(result.relativePath);
+            }
+          }
+        })
+        .catch(() => {});
+    } catch {}
   };
 
   /**

@@ -23,11 +23,12 @@ const config: Config = {
           strong: "#080808",
         },
         accent: {
-          DEFAULT: "#02f52b",
-          hover: "#00dc25",
+          DEFAULT: "#6eed28",
+          hover: "#5cd913",
+          lemon: "#74eb28",
           dark: "#080808",
-          glow: "rgba(2, 245, 43, 0.25)",
-          dim: "rgba(2, 245, 43, 0.12)",
+          glow: "rgba(110, 237, 40, 0.35)",
+          dim: "rgba(110, 237, 40, 0.12)",
         },
         foreground: {
           DEFAULT: "#080808",

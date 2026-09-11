@@ -7,8 +7,8 @@
   --surface: #ffffff;
   --surface-secondary: #eef5f1;
   --surface-tertiary: #e2ede6;
-  --accent: #02f52b;
-  --accent-hover: #00dc25;
+  --accent: #6eed28;
+  --accent-hover: #5cd913;
   --foreground: #080808;
   --foreground-muted: #3f4743;
   --foreground-subtle: #6b7771;
@@ -28,7 +28,7 @@ body {
 }
 
 ::selection {
-  background-color: #02f52b;
+  background-color: #6eed28;
   color: #080808;
 }
 
@@ -48,16 +48,56 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #02f52b;
+  background: #6eed28;
+}
+
+/* Fluid sliding shimmer animation */
+@keyframes fluidShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.fluid-slide-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fluid-slide-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0.2) 80%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.fluid-slide-btn:hover::after {
+  transform: translateX(100%);
 }
 
 /* Glow animation */
 @keyframes greenPulse {
   0%, 100% {
-    box-shadow: 0 0 12px -2px rgba(2, 245, 43, 0.3);
+    box-shadow: 0 0 12px -2px rgba(110, 237, 40, 0.3);
   }
   50% {
-    box-shadow: 0 0 24px 2px rgba(2, 245, 43, 0.5);
+    box-shadow: 0 0 24px 2px rgba(110, 237, 40, 0.5);
   }
 }
 

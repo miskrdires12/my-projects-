@@ -172,24 +172,32 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         }
       });
 
-      // Also pull latest from /api/students/sync (rehydrates from Cloud Sync)
-      try {
-        const res = await fetch("/api/students/sync");
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.students)) {
-            data.students.forEach((s: any) => {
-              if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-                map.set(s.studentId, s);
-              }
-            });
-          }
-        }
-      } catch {}
+      const immediateMerged = Array.from(map.values());
+      setDisplayStudents(immediateMerged);
+      safeSaveLocalEnrolledStudents(immediateMerged);
 
-      const merged = Array.from(map.values());
-      setDisplayStudents(merged);
-      safeSaveLocalEnrolledStudents(merged);
+      // Non-blocking background sync from cloud
+      fetch("/api/students/sync")
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.students) && data.students.length > 0) {
+              setDisplayStudents((prev) => {
+                const freshMap = new Map<string, StudentExtended>();
+                prev.forEach((s) => freshMap.set(s.studentId, s));
+                data.students.forEach((s: any) => {
+                  if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
+                    freshMap.set(s.studentId, s);
+                  }
+                });
+                const next = Array.from(freshMap.values());
+                safeSaveLocalEnrolledStudents(next);
+                return next;
+              });
+            }
+          }
+        })
+        .catch(() => {});
     };
 
     loadAndMerge();
