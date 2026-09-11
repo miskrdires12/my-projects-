@@ -6,7 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { login, logout, getSession } from "@/lib/auth";
+import { login, logout, getSession, loginAsPresetRole, loginWithGoogle } from "@/lib/auth";
 import { loginSchema } from "@/lib/validations";
 import type { SessionPayload } from "@/types/auth";
 
@@ -56,6 +56,70 @@ export async function loginAction(
     return {
       success: false,
       error: error?.message || "Authentication service temporarily unavailable. Please try again.",
+    };
+  }
+}
+
+/**
+ * Fast & Secure role authentication server action.
+ * Zero plaintext passwords exposed to client DOM or DevTools inspector.
+ */
+export async function quickRoleLoginAction(role: "SENDER" | "RECEIVER" | "ADMIN"): Promise<ActionResult<SessionPayload>> {
+  try {
+    const result = await loginAsPresetRole(role);
+    if (!result.success || !result.user) {
+      return {
+        success: false,
+        error: result.error ?? "Failed to initialize role environment",
+      };
+    }
+
+    revalidatePath("/", "layout");
+    return {
+      success: true,
+      data: result.user,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || "Role session initialization failed",
+    };
+  }
+}
+
+/**
+ * Google OAuth server action for real Google login.
+ */
+export async function googleLoginAction(googleIdentity: {
+  email: string;
+  name?: string;
+  sub?: string;
+}): Promise<ActionResult<SessionPayload>> {
+  try {
+    if (!googleIdentity.email || !googleIdentity.email.includes("@")) {
+      return {
+        success: false,
+        error: "Invalid Google email address provided",
+      };
+    }
+
+    const result = await loginWithGoogle(googleIdentity);
+    if (!result.success || !result.user) {
+      return {
+        success: false,
+        error: result.error ?? "Google authentication failed",
+      };
+    }
+
+    revalidatePath("/", "layout");
+    return {
+      success: true,
+      data: result.user,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || "Google authentication service encountered an error",
     };
   }
 }

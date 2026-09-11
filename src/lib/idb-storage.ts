@@ -244,6 +244,52 @@ export async function clearAllStudentsFromDB(): Promise<void> {
 }
 
 /**
+ * PRIVACY & SECURITY PURGE:
+ * Sanitizes all local client-side caches, IndexedDB stores, and local/session storage.
+ * Ensures that inspecting DevTools (F12 -> Application -> IndexedDB) on shared workstations
+ * or after signing out never exposes student records, photos (DP), or credentials.
+ */
+export async function purgeSensitiveClientStorage(): Promise<void> {
+  try {
+    if (typeof window !== "undefined") {
+      // 1. Clear IndexedDB records
+      if ("indexedDB" in window) {
+        try {
+          await clearAllStudentsFromDB();
+        } catch {
+          // If connection is in an odd state, attempt database drop
+          try {
+            if (dbInstance) {
+              dbInstance.close();
+              dbInstance = null;
+            }
+            window.indexedDB.deleteDatabase(DB_NAME);
+          } catch {}
+        }
+      }
+
+      // 2. Clear browser local and session storage
+      try {
+        localStorage.clear();
+      } catch {}
+      try {
+        sessionStorage.clear();
+      } catch {}
+
+      // 3. Clear any memory references
+      if (dbInstance) {
+        try {
+          dbInstance.close();
+        } catch {}
+        dbInstance = null;
+      }
+    }
+  } catch (err) {
+    console.warn("Storage sanitization notice:", err);
+  }
+}
+
+/**
  * Subscribes to local IndexedDB sync events across tabs.
  */
 export function subscribeToDBChanges(callback: (event: any) => void): () => void {

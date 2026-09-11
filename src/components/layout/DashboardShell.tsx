@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
+import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
 
 interface DashboardShellProps {
   session: {
@@ -32,6 +33,12 @@ interface DashboardShellProps {
 export default function DashboardShell({ session, children }: DashboardShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+
+  const handleLogout = async () => {
+    try {
+      await purgeSensitiveClientStorage();
+    } catch {}
+  };
 
   const role = session.role;
   const isSender = role === "SENDER";
@@ -294,7 +301,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             </div>
           </div>
 
-          <form action={logoutAction}>
+          <form action={logoutAction} onSubmit={handleLogout}>
             <button
               type="submit"
               className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] bg-white px-2.5 py-1.5 text-xs font-mono font-semibold text-[#080808] hover:bg-[#080808] hover:text-[#02f52b] hover:border-[#080808] transition-all shadow-2xs active:scale-95"
@@ -393,7 +400,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 </span>
               </div>
 
-              <form action={logoutAction}>
+              <form action={logoutAction} onSubmit={handleLogout}>
                 <button
                   type="submit"
                   className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] bg-[#f7faf9] px-3 py-1.5 text-xs font-mono font-semibold text-[#080808] hover:bg-[#080808] hover:text-[#02f52b] hover:border-[#080808] transition-all shadow-2xs active:scale-95"

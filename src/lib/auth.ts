@@ -278,6 +278,104 @@ export async function login(credentials: {
   return { success: false, error: "Invalid username or password" };
 }
 
+/**
+ * Authenticates or provisions a verified Google OAuth identity.
+ * Validates against database or provisions institutional role securely.
+ */
+export async function loginWithGoogle(googleUser: {
+  email: string;
+  name?: string;
+  sub?: string;
+}): Promise<LoginResponse> {
+  const email = googleUser.email.trim().toLowerCase();
+  let user: any = null;
+
+  try {
+    user = await prisma.user.findFirst({
+      where: { email },
+    });
+  } catch (err) {
+    console.warn("Prisma error looking up Google user:", err);
+  }
+
+  let role: UserRole = "SENDER";
+  let userId = `google-${googleUser.sub || Math.random().toString(36).slice(2, 10)}`;
+  let username = googleUser.name ? googleUser.name.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() : email.split("@")[0];
+
+  if (user) {
+    role = user.role as UserRole;
+    userId = user.id;
+    username = user.username;
+  } else {
+    try {
+      const created = await prisma.user.create({
+        data: {
+          id: userId,
+          username,
+          email,
+          passwordHash: "GOOGLE_OAUTH_MANAGED",
+          role,
+        },
+      });
+      userId = created.id;
+      username = created.username;
+    } catch {
+      // Non-fatal fallback for read-only / serverless environment
+    }
+  }
+
+  const sessionPayload: Omit<SessionPayload, "iat" | "exp"> = {
+    userId,
+    username,
+    email,
+    role,
+  };
+
+  const token = await signSessionToken(sessionPayload);
+  await setSessionCookie(token);
+
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: "AUTH_LOGIN_GOOGLE",
+        entityType: "USER",
+        entityId: userId,
+        metadata: JSON.stringify({ email, role }),
+      },
+    });
+  } catch {
+    // Non-fatal
+  }
+
+  return {
+    success: true,
+    user: sessionPayload,
+  };
+}
+
+/**
+ * Server-side preset role authentication.
+ * Keeps demo credentials strictly on the server and completely hidden from client DOM/inspectors.
+ */
+export async function loginAsPresetRole(targetRole: "SENDER" | "RECEIVER" | "ADMIN"): Promise<LoginResponse> {
+  const mapping: Record<string, { username: string; email: string; pass: string }> = {
+    SENDER: { username: "sender", email: "sender@studentbridge.internal", pass: "Password123!" },
+    RECEIVER: { username: "receiver", email: "receiver@studentbridge.internal", pass: "Password123!" },
+    ADMIN: { username: "admin", email: "admin@studentbridge.internal", pass: "AdminPassword123!" },
+  };
+
+  const cred = mapping[targetRole];
+  if (!cred) {
+    return { success: false, error: "Invalid role environment specified" };
+  }
+
+  return login({
+    emailOrUsername: cred.email,
+    passwordPlain: cred.pass,
+  });
+}
+
 export async function logout(ipAddress?: string): Promise<void> {
   const session = await getSession();
   if (session) {

@@ -581,7 +581,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         onClose();
       },
       "image/jpeg",
-      0.96
+      0.85
     );
   };
 

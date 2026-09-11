@@ -48,7 +48,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   onEditPhoto,
   initialFacingMode = "user",
   maxDimensions = { width: 1600, height: 1600 },
-  compressionQuality = 0.96,
+  compressionQuality = 0.85,
 }) => {
   const [cameraState, setCameraState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
