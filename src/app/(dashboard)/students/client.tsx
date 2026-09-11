@@ -13,7 +13,6 @@ import {
   Printer,
   Eye,
   Trash2,
-  QrCode,
   X,
   Camera,
   Download,
@@ -122,7 +121,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // Dual-Persistence Client State
   const [displayStudents, setDisplayStudents] = useState<StudentExtended[]>(students);
   const [editingStudent, setEditingStudent] = useState<StudentExtended | null>(null);
-  const [isGradeExportModalOpen, setIsGradeExportModalOpen] = useState<boolean>(false);
   const [activePage, setActivePage] = useState<number>(currentPage || 1);
   const [activePageSize, setActivePageSize] = useState<number>(pageSize || 25);
 
@@ -318,12 +316,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [selectedGrade, setSelectedGrade] = useState(searchParams.get("grade") || "ALL");
   const [selectedDept, setSelectedDept] = useState(searchParams.get("department") || "ALL");
   const [selectedPhotoStatus, setSelectedPhotoStatus] = useState(searchParams.get("photoStatus") || "ALL");
-  const [selectedQrStatus, setSelectedQrStatus] = useState(searchParams.get("qrStatus") || "ALL");
 
   // Selection state for bulk operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeStudent, setActiveStudent] = useState<StudentExtended | null>(null);
-  const [isGradeClassificationOpen, setIsGradeClassificationOpen] = useState(false);
   const [isDownloadingPhotos, setIsDownloadingPhotos] = useState(false);
 
   // Update URL search parameters to trigger server-side query
@@ -841,26 +837,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }
   };
 
-  // Select all visible students matching a specific grade
-  const handleSelectAllInGrade = (gradeName: string) => {
-    const gradeStudents = displayStudents.filter((s) => s.grade === gradeName);
-    const next = new Set(selectedIds);
-    const allGradeSelected =
-      gradeStudents.length > 0 && gradeStudents.every((s) => next.has(s.id));
-
-    if (allGradeSelected) {
-      gradeStudents.forEach((s) => {
-        next.delete(s.id);
-        if (s.studentId) next.delete(s.studentId);
-      });
-    } else {
-      gradeStudents.forEach((s) => {
-        next.add(s.id);
-      });
-    }
-    setSelectedIds(next);
-  };
-
   // Save edited/cropped photo from PhotoEditorModal studio & sync to receiver
   const handleSaveEditedPhoto = async (editedBlob: Blob, _originalBlob?: Blob | null, _metadata?: any) => {
     if (!editingStudent) return;
@@ -959,72 +935,19 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Grade Separation Bar (First separate by grade, then download CSV) */}
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-black text-white text-xs font-mono font-bold">
-              #
-            </div>
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-black font-mono">
-                GRADE SEPARATION & CSV QUICK-DOWNLOAD
-              </h3>
-              <p className="text-[11px] text-neutral-500">
-                Separate student records by grade cohort and download grade-specific CSV/Excel files (handles 5,000–6,000+ records)
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {selectedGrade !== "ALL" && (
-              <button
-                type="button"
-                onClick={() => handleExportCSV(false, selectedGrade)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-black px-3.5 py-1.5 text-xs font-mono font-bold text-white hover:bg-neutral-800 transition-colors shadow-xs"
-                title={`Download ${selectedGrade} CSV file with strict 5 columns`}
-              >
-                <Download className="h-3.5 w-3.5 text-amber-300" />
-                <span>Download {selectedGrade} CSV</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setIsGradeClassificationOpen(!isGradeClassificationOpen)}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-mono font-semibold transition-colors ${
-                isGradeClassificationOpen
-                  ? "border-black bg-black text-white"
-                  : "border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-100"
-              }`}
-              title="Toggle Grade Classification Panels"
-            >
-              <Users className="h-3.5 w-3.5" />
-              <span>{isGradeClassificationOpen ? "Hide Grade Classification" : "Classify by Grade"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsGradeExportModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-1.5 text-xs font-mono font-semibold text-neutral-800 hover:bg-neutral-100 transition-colors"
-              title="Download CSV for any specific grade"
-            >
-              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
-              <span>All Grades CSV Hub</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Grade Pills / Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+      {/* Grade Cohort Tabs (Clean, Sleek, Instant Filtering) */}
+      {grades.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
           <button
             type="button"
             onClick={() => {
               setSelectedGrade("ALL");
               applyFilters({ grade: "ALL" });
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold whitespace-nowrap transition-all ${
+            className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
               selectedGrade === "ALL"
-                ? "bg-black text-white shadow-xs"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                ? "bg-[#8fe617] text-[#070908] font-bold shadow-xs"
+                : "bg-surface border border-border text-foreground-muted hover:text-foreground hover:bg-surface-secondary"
             }`}
           >
             All Students ({totalCount.toLocaleString()})
@@ -1033,183 +956,74 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             const count = gradeCounts?.[g];
             const isSelected = selectedGrade === g;
             return (
-              <div key={g} className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedGrade(g);
-                    applyFilters({ grade: g });
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold whitespace-nowrap transition-all ${
-                    isSelected
-                      ? "bg-black text-white shadow-xs"
-                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
-                  }`}
-                >
-                  {g} {count !== undefined ? `(${count.toLocaleString()})` : ""}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleExportCSV(false, g);
-                  }}
-                  title={`Direct Download ${g} CSV`}
-                  className="rounded-lg p-1 text-neutral-400 hover:text-black hover:bg-neutral-200 transition-colors"
-                >
-                  <Download className="h-3 w-3" />
-                </button>
-              </div>
+              <button
+                key={g}
+                type="button"
+                onClick={() => {
+                  setSelectedGrade(g);
+                  applyFilters({ grade: g });
+                }}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
+                  isSelected
+                    ? "bg-[#8fe617] text-[#070908] font-bold shadow-xs"
+                    : "bg-surface border border-border text-foreground-muted hover:text-foreground hover:bg-surface-secondary"
+                }`}
+              >
+                {g} {count !== undefined ? `(${count.toLocaleString()})` : ""}
+              </button>
             );
           })}
         </div>
+      )}
 
-        {/* Grade Classification Cards Deck (when toggled active) */}
-        {isGradeClassificationOpen && (
-          <div className="pt-3 border-t border-neutral-200 mt-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-            {grades.map((g) => {
-              const count = gradeCounts?.[g] ?? 0;
-              const isSelected = selectedGrade === g;
-              const gradeVisibleCount = displayStudents.filter((s) => s.grade === g).length;
-              const gradeSelectedCount = displayStudents.filter(
-                (s) => s.grade === g && (selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId)))
-              ).length;
-              const isAllGradeSelected =
-                gradeVisibleCount > 0 && gradeSelectedCount === gradeVisibleCount;
-
-              return (
-                <div
-                  key={g}
-                  className={`rounded-xl border p-3 flex flex-col justify-between gap-2.5 transition-all ${
-                    isSelected
-                      ? "border-black bg-neutral-900 text-white shadow-md"
-                      : "border-neutral-200 bg-white text-neutral-900 hover:border-neutral-400"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span
-                        className={`text-[10px] font-mono uppercase font-bold tracking-wider ${
-                          isSelected ? "text-amber-400" : "text-accent"
-                        }`}
-                      >
-                        COHORT CLASSIFICATION
-                      </span>
-                      <h4 className="text-sm font-bold tracking-tight">{g}</h4>
-                    </div>
-                    <span
-                      className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
-                        isSelected
-                          ? "bg-white/20 text-white"
-                          : "bg-neutral-100 text-neutral-700"
-                      }`}
-                    >
-                      {count.toLocaleString()} students
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-100/20">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectAllInGrade(g)}
-                      className={`flex-1 rounded-lg py-1 px-2 text-[11px] font-semibold transition-colors ${
-                        isAllGradeSelected
-                          ? "bg-amber-400 text-black font-bold"
-                          : isSelected
-                          ? "bg-white/15 text-white hover:bg-white/25"
-                          : "bg-neutral-100 text-neutral-800 hover:bg-neutral-200"
-                      }`}
-                      title={`Select or unselect all students in ${g}`}
-                    >
-                      {isAllGradeSelected ? "Selected ✓" : "Select Roster"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleExportCSV(false, g)}
-                      className="rounded-lg bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black py-1 px-2.5 text-[11px] font-bold flex items-center gap-1 shadow-xs transition-opacity"
-                      title={`Download ${g} CSV`}
-                    >
-                      <Download className="h-3 w-3" />
-                      <span>CSV</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleExportExcel(false, g)}
-                      className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-1 px-2 text-[11px] font-semibold flex items-center gap-1 transition-colors"
-                      title={`Download ${g} Excel`}
-                    >
-                      <FileSpreadsheet className="h-3 w-3" />
-                      <span>XLSX</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Search & Multi-Filter Controls Bar */}
-      <div className="rounded-2xl border border-border bg-surface p-4 space-y-3">
-        <form onSubmit={handleSearchSubmit} className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-foreground-muted" />
+      {/* Search & Multi-Filter Controls Bar (Comfortable Size & Enterprise Layout) */}
+      <div className="rounded-2xl border border-border bg-surface p-4 sm:p-5 space-y-4 shadow-xs">
+        <form onSubmit={handleSearchSubmit} className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-4 top-3.5 h-4 w-4 text-foreground-muted" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by Name, Student ID, Phone, Department, or School..."
-              className="w-full rounded-xl border border-border bg-surface-secondary pl-10 pr-4 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
+              className="w-full h-11 rounded-xl border border-border bg-surface-secondary pl-11 pr-4 text-sm text-foreground placeholder:text-foreground-subtle focus:border-[#8fe617] focus:outline-none transition-colors"
             />
           </div>
           <button
             type="submit"
-            className="rounded-xl bg-black px-5 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors"
+            className="h-11 px-6 rounded-xl bg-[#8fe617] text-[#070908] font-bold text-sm hover:brightness-105 transition-all shadow-xs"
           >
             Search
           </button>
-          {selectedIds.size > 0 && (
-            <button
-              type="button"
-              onClick={() => handleExportCSV(true)}
-              className="rounded-xl bg-[#8fe617] text-[#062404] px-4 py-2 text-xs font-bold hover:brightness-105 shadow-glow-sm transition-all flex items-center gap-1.5 font-mono"
-              title={`Download ${selectedIds.size} Selected Students as CSV`}
-            >
-              <Download className="h-3.5 w-3.5 text-[#062404]" />
-              <span>Export Selected CSV ({selectedIds.size})</span>
-            </button>
-          )}
           <button
             type="button"
             onClick={() => handleExportCSV(false)}
-            className="rounded-xl border border-[#080808]/20 bg-white px-3.5 py-2 text-xs font-semibold text-[#080808] hover:bg-neutral-100 transition-colors flex items-center gap-1.5"
-            title="Download All Students as CSV"
+            className="h-11 px-4 rounded-xl border border-border bg-surface hover:bg-surface-secondary text-foreground text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs"
+            title="Download full student directory as CSV"
           >
-            <Download className="h-3.5 w-3.5 text-neutral-600" />
-            <span>Export All CSV</span>
+            <Download className="h-4 w-4 text-foreground-muted" />
+            <span>Export CSV</span>
           </button>
           <button
             type="button"
             onClick={() => handleExportExcel(false)}
-            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5"
-            title="Export 6-column Excel sheet (Student ID, Name, Sex, Grade, Phone, Photo path)"
+            className="h-11 px-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs"
+            title="Download full student directory as Excel (.xlsx)"
           >
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span>Export All Excel</span>
+            <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+            <span>Export Excel</span>
           </button>
           <button
             type="button"
             disabled={isDownloadingPhotos}
             onClick={handleBulkDownloadPhotos}
-            className="rounded-xl bg-[#080808] text-white px-4 py-2 text-xs font-mono font-bold hover:bg-neutral-800 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
-            title="Download Student Photos ZIP archive with companion Student_Manifest.csv spreadsheet"
+            className="h-11 px-5 rounded-xl bg-black text-white hover:bg-neutral-800 dark:bg-neutral-900 dark:border dark:border-[#223126] text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+            title="Download student portraits organized into Grade folders (ZIP archive)"
           >
             {isDownloadingPhotos ? (
-              <Loader2 className="h-3.5 w-3.5 text-[#8fe617] animate-spin" />
+              <Loader2 className="h-4 w-4 text-[#8fe617] animate-spin" />
             ) : (
-              <Download className="h-3.5 w-3.5 text-[#8fe617]" />
+              <Download className="h-4 w-4 text-[#8fe617]" />
             )}
             <span>
               {isDownloadingPhotos
@@ -1222,23 +1036,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           <button
             type="button"
             onClick={handleClearAllStudents}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-mono font-semibold text-neutral-700 hover:text-red-600 hover:border-red-300 transition-colors"
+            className="h-11 px-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 text-sm font-semibold transition-colors flex items-center gap-1.5"
             title="Delete all data to feed fresh records"
           >
-            Clear All Data
+            <Trash2 className="h-4 w-4" />
+            <span>Clear All Data</span>
           </button>
         </form>
 
-        {/* Filters Grid (Streamlined) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-          {/* Grade */}
+        {/* 3-Column Streamlined Filters Grid (QR removed) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          {/* Grade Filter */}
           <select
             value={selectedGrade}
             onChange={(e) => {
               setSelectedGrade(e.target.value);
               applyFilters({ grade: e.target.value });
             }}
-            className="rounded-lg border border-border bg-surface-secondary px-2.5 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
+            className="h-10 rounded-xl border border-border bg-surface-secondary px-3.5 text-sm text-foreground focus:border-[#8fe617] focus:outline-none transition-colors"
           >
             <option value="ALL">All Grades</option>
             {grades.map((g) => (
@@ -1248,14 +1063,14 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             ))}
           </select>
 
-          {/* Department */}
+          {/* Department Filter */}
           <select
             value={selectedDept}
             onChange={(e) => {
               setSelectedDept(e.target.value);
               applyFilters({ department: e.target.value });
             }}
-            className="rounded-lg border border-border bg-surface-secondary px-2.5 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
+            className="h-10 rounded-xl border border-border bg-surface-secondary px-3.5 text-sm text-foreground focus:border-[#8fe617] focus:outline-none transition-colors"
           >
             <option value="ALL">All Departments</option>
             {departments.map((d) => (
@@ -1265,32 +1080,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             ))}
           </select>
 
-          {/* Photo Status */}
+          {/* Photo Status Filter */}
           <select
             value={selectedPhotoStatus}
             onChange={(e) => {
               setSelectedPhotoStatus(e.target.value);
               applyFilters({ photoStatus: e.target.value });
             }}
-            className="rounded-lg border border-border bg-surface-secondary px-2.5 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
+            className="h-10 rounded-xl border border-border bg-surface-secondary px-3.5 text-sm text-foreground focus:border-[#8fe617] focus:outline-none transition-colors"
           >
             <option value="ALL">Photo: All</option>
             <option value="HAS_PHOTO">Photo: Available</option>
             <option value="MISSING_PHOTO">Photo: Missing</option>
-          </select>
-
-          {/* QR Status */}
-          <select
-            value={selectedQrStatus}
-            onChange={(e) => {
-              setSelectedQrStatus(e.target.value);
-              applyFilters({ qrStatus: e.target.value });
-            }}
-            className="rounded-lg border border-border bg-surface-secondary px-2.5 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
-          >
-            <option value="ALL">QR: All</option>
-            <option value="HAS_QR">QR: Attached</option>
-            <option value="MISSING_QR">QR: Missing</option>
           </select>
         </div>
       </div>
@@ -1372,55 +1173,54 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       {/* Main Student Data Table */}
       <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-[#dce7e1] bg-[#eef5f1] text-[11px] uppercase tracking-wider text-[#6b7771] font-mono">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-border bg-surface-secondary text-xs uppercase tracking-wider text-foreground-muted font-mono">
               <tr>
-                <th className="w-10 px-4 py-3 text-center">
+                <th className="w-12 px-4 py-3.5 text-center">
                   <input
                     type="checkbox"
                     checked={selectedIds.size === displayStudents.length && displayStudents.length > 0}
                     onChange={handleToggleSelectAll}
-                    className="accent-[#8fe617] rounded h-3.5 w-3.5 cursor-pointer"
+                    className="accent-[#8fe617] rounded h-4 w-4 cursor-pointer"
                   />
                 </th>
-                <th className="px-4 py-3">Photo</th>
-                <th className="px-4 py-3">Student ID</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Sex</th>
-                <th className="px-4 py-3">Grade</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">QR</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3.5 w-16">Photo</th>
+                <th className="px-4 py-3.5">Student ID</th>
+                <th className="px-4 py-3.5">Name</th>
+                <th className="px-4 py-3.5">Sex</th>
+                <th className="px-4 py-3.5">Grade</th>
+                <th className="px-4 py-3.5">Phone</th>
+                <th className="px-4 py-3.5">Photo Status</th>
+                <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {displayStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-16 px-6 text-center bg-white">
+                  <td colSpan={9} className="py-20 px-6 text-center bg-surface">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
-                      <div className="w-14 h-14 rounded-2xl bg-neutral-100 border border-black/10 flex items-center justify-center text-black">
-                        <Users className="w-7 h-7" />
+                      <div className="w-16 h-16 rounded-2xl bg-surface-secondary border border-border flex items-center justify-center text-accent">
+                        <Users className="w-8 h-8" />
                       </div>
-                      <div className="space-y-1">
-                        <h4 className="text-base font-bold text-black tracking-tight">Student Directory is Empty (0 Records)</h4>
-                        <p className="text-xs text-neutral-500 leading-relaxed">
+                      <div className="space-y-1.5">
+                        <h4 className="text-lg font-bold text-foreground tracking-tight">Student Directory is Empty (0 Records)</h4>
+                        <p className="text-xs text-foreground-muted leading-relaxed">
                           All previous data has been purged. The database is clean and ready to accept your fresh real-world data feed.
                         </p>
                       </div>
                       <div className="flex items-center gap-3 pt-2">
                         <Link
                           href="/students/import"
-                          className="px-4 py-2 bg-black text-white text-xs font-bold rounded-lg hover:bg-neutral-800 transition-colors shadow-sm flex items-center gap-1.5"
+                          className="px-5 py-2.5 bg-[#8fe617] text-[#070908] text-sm font-bold rounded-xl hover:brightness-105 transition-all shadow-xs flex items-center gap-2"
                         >
-                          <Upload className="w-3.5 h-3.5" />
+                          <Upload className="w-4 h-4" />
                           Import Excel / CSV
                         </Link>
                         <Link
                           href="/register"
-                          className="px-4 py-2 bg-white text-black border border-black/20 text-xs font-semibold rounded-lg hover:bg-neutral-50 transition-colors flex items-center gap-1.5"
+                          className="px-5 py-2.5 bg-surface text-foreground border border-border text-sm font-semibold rounded-xl hover:bg-surface-secondary transition-colors flex items-center gap-2"
                         >
-                          <UserPlus className="w-3.5 h-3.5" />
+                          <UserPlus className="w-4 h-4" />
                           Enroll Single Student
                         </Link>
                       </div>
@@ -1431,27 +1231,26 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 paginatedStudents.map((student) => {
                   const isSelected = selectedIds.has(student.id);
                   const hasPhoto = Boolean(student.photoPath);
-                  const hasQR = Boolean(student.qrCodeData);
 
                   return (
                     <tr
                       key={student.id}
                       className={`transition-colors ${
-                        isSelected ? "bg-neutral-100" : "hover:bg-neutral-50"
+                        isSelected ? "bg-[#8fe617]/10" : "hover:bg-surface-secondary/60"
                       }`}
                     >
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3.5 text-center">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleToggleSelect(student.id)}
-                          className="accent-black rounded h-3.5 w-3.5"
+                          className="accent-[#8fe617] rounded h-4 w-4 cursor-pointer"
                         />
                       </td>
 
                       {/* Photo Thumbnail */}
-                      <td className="px-4 py-2">
-                        <div className="h-10 w-8 rounded border border-neutral-300 bg-neutral-100 overflow-hidden flex items-center justify-center">
+                      <td className="px-4 py-3">
+                        <div className="h-14 w-11 rounded-xl border border-border bg-surface-secondary overflow-hidden flex items-center justify-center shadow-xs">
                           {student.photoPath ? (
                             <img
                               src={student.photoPath}
@@ -1459,72 +1258,67 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <Camera className="h-3 w-3 text-neutral-400" />
+                            <Camera className="h-4 w-4 text-foreground-subtle" />
                           )}
                         </div>
                       </td>
 
-                      <td className="px-4 py-3 font-mono font-semibold text-foreground">
+                      <td className="px-4 py-3.5 font-mono font-bold text-sm text-foreground">
                         {student.studentId}
                       </td>
 
-                      <td className="px-4 py-3 font-medium text-foreground">
+                      <td className="px-4 py-3.5 font-semibold text-sm text-foreground">
                         {student.fullName}
                       </td>
 
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold border ${
+                          className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${
                             student.sex?.toLowerCase() === "female"
-                              ? "bg-purple-50 text-purple-700 border-purple-200"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
                           }`}
                         >
                           {student.sex || "Male"}
                         </span>
                       </td>
 
-                      <td className="px-4 py-3 text-foreground-muted">{student.grade}</td>
-                      <td className="px-4 py-3 text-foreground-muted font-mono">{student.phone}</td>
+                      <td className="px-4 py-3.5 text-sm font-medium text-foreground">{student.grade}</td>
+                      <td className="px-4 py-3.5 text-sm font-mono text-foreground-muted">{student.phone}</td>
 
                       {/* Photo Status */}
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5">
                         {hasPhoto ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-black">
-                            <CheckCircle2 className="h-3 w-3 text-black" /> OK
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#8fe617]/15 text-[#8fe617] border border-[#8fe617]/30">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Photo OK
                           </span>
-                        ) : null}
-                      </td>
-
-                      {/* QR Status */}
-                      <td className="px-4 py-3">
-                        {hasQR ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-black">
-                            <CheckCircle2 className="h-3 w-3 text-black" /> OK
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                            Missing
                           </span>
-                        ) : null}
+                        )}
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {student.photoPath && (
                             <>
                               <button
                                 type="button"
                                 onClick={() => handleDownloadSinglePhoto(student.photoPath!, student.fullName)}
-                                className="rounded p-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-black transition-colors"
+                                className="rounded-lg p-2 text-foreground-muted hover:bg-surface-secondary hover:text-foreground transition-colors"
                                 title={`Download Photo (${student.fullName}.jpg)`}
                               >
-                                <Download className="h-3.5 w-3.5" />
+                                <Download className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setEditingStudent(student)}
-                                className="rounded p-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-black transition-colors"
+                                className="rounded-lg p-2 text-foreground-muted hover:bg-surface-secondary hover:text-foreground transition-colors"
                                 title={`Crop & Edit Photo (${student.fullName})`}
                               >
-                                <Crop className="h-3.5 w-3.5 text-neutral-800" />
+                                <Crop className="h-4 w-4" />
                               </button>
                             </>
                           )}
@@ -1532,20 +1326,20 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                           <button
                             type="button"
                             onClick={() => setActiveStudent(student)}
-                            className="rounded p-1.5 text-neutral-600 hover:bg-neutral-100 hover:text-black transition-colors"
+                            className="rounded-lg p-2 text-foreground-muted hover:bg-surface-secondary hover:text-foreground transition-colors"
                             title="Inspect Profile"
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            <Eye className="h-4 w-4" />
                           </button>
 
                           {(userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
                             <button
                               type="button"
                               onClick={() => handleDelete(student.id, student.fullName, student.studentId)}
-                              className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-red-600 transition-colors"
+                              className="rounded-lg p-2 text-foreground-muted hover:bg-red-500/10 hover:text-red-500 transition-colors"
                               title="Delete Record"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           )}
                         </div>
@@ -1624,68 +1418,47 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               </button>
             </div>
 
-            {/* Media Row: Photo + QR */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <span className="text-[10px] font-mono uppercase text-foreground-muted block">
-                  Official Portrait
-                </span>
-                <div className="aspect-[3/4] rounded-xl border border-border bg-black overflow-hidden flex items-center justify-center">
-                  {activeStudent.photoPath ? (
-                    <img
-                      src={activeStudent.photoPath}
-                      alt={activeStudent.fullName}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Camera className="h-6 w-6 text-foreground-subtle" />
-                  )}
-                </div>
-                {activeStudent.photoPath && (
-                  <div className="pt-1 space-y-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadSinglePhoto(activeStudent.photoPath!, activeStudent.fullName)}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold text-black hover:underline"
-                    >
-                      <Download className="h-3 w-3" /> Download Photo ({activeStudent.fullName}.jpg)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingStudent(activeStudent)}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold text-black bg-neutral-100 border border-neutral-300 rounded-lg px-2.5 py-1 hover:bg-neutral-200 transition-colors w-full justify-center shadow-xs"
-                    >
-                      <Crop className="h-3.5 w-3.5 text-black" /> Crop & Edit Photo
-                    </button>
-                    <div className="text-[10px] font-mono text-neutral-500 truncate" title={`/photos/${activeStudent.fullName}.jpg`}>
-                      Path: /photos/{activeStudent.fullName}.jpg
-                    </div>
-                  </div>
+            {/* Studio Photo Showcase (QR Removed) */}
+            <div className="flex flex-col items-center justify-center space-y-3 p-4 rounded-2xl border border-border bg-surface-secondary/40">
+              <span className="text-xs font-mono uppercase tracking-wider text-foreground-muted font-semibold">
+                Official Studio Portrait (3:4)
+              </span>
+              <div className="w-48 aspect-[3/4] rounded-2xl border-2 border-border bg-black overflow-hidden flex items-center justify-center shadow-lg relative">
+                {activeStudent.photoPath ? (
+                  <img
+                    src={activeStudent.photoPath}
+                    alt={activeStudent.fullName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Camera className="h-10 w-10 text-foreground-subtle" />
                 )}
               </div>
-
-              <div className="space-y-1">
-                <span className="text-[10px] font-mono uppercase text-foreground-muted block">
-                  Credential QR
-                </span>
-                <div className="aspect-square rounded-xl border border-border bg-white p-2 flex items-center justify-center">
-                  {activeStudent.qrCodeData ? (
-                    activeStudent.qrCodeData.startsWith("/") ? (
-                      <img
-                        src={activeStudent.qrCodeData}
-                        alt="External QR"
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <QrCode className="h-16 w-16 text-black" />
-                    )
-                  ) : null}
+              {activeStudent.photoPath && (
+                <div className="flex flex-col gap-2 w-full max-w-xs pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadSinglePhoto(activeStudent.photoPath!, activeStudent.fullName)}
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-surface border border-border text-foreground hover:bg-surface-secondary transition-colors"
+                  >
+                    <Download className="h-3.5 w-3.5 text-[#8fe617]" /> Download Portrait (.jpg)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingStudent(activeStudent)}
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-[#8fe617] text-[#070908] font-bold hover:brightness-105 transition-all shadow-xs"
+                  >
+                    <Crop className="h-3.5 w-3.5" /> Crop & Edit Portrait
+                  </button>
+                  <div className="text-[11px] font-mono text-foreground-muted text-center truncate pt-0.5">
+                    /photos/{activeStudent.fullName}.jpg
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Field Details */}
-            <div className="space-y-3 divide-y divide-border text-xs">
+            <div className="space-y-3 divide-y divide-border text-sm">
               <div className="pt-2 flex justify-between">
                 <span className="text-foreground-muted">Name:</span>
                 <strong className="text-foreground">{activeStudent.fullName}</strong>
@@ -1781,99 +1554,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           onClose={() => setEditingStudent(null)}
           onSave={handleSaveEditedPhoto}
         />
-      )}
-
-      {/* Grade-Separated CSV & Excel Export Hub Modal (Handles 5,000–6,000+ records) */}
-      {isGradeExportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="relative w-full max-w-lg rounded-2xl border border-neutral-300 bg-white shadow-2xl p-6 text-black">
-            <div className="flex items-center justify-between border-b border-neutral-200 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
-                <h3 className="text-sm font-bold uppercase tracking-wider font-mono">
-                  Grade-Separated CSV & Excel Export Hub
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsGradeExportModalOpen(false)}
-                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-black transition-colors"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-neutral-600 mb-4">
-              Download CSV or Excel files separated by grade cohorts. All exports follow the strict 6-column receiver format (StudentID, Name, Sex, Grade, Phone, @photo) and handle large cohorts smoothly.
-            </p>
-
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              <div className="flex items-center justify-between p-3 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 transition-colors">
-                <div>
-                  <div className="text-xs font-bold font-mono text-black">All Grades (Full Directory)</div>
-                  <div className="text-[11px] text-neutral-500 font-mono">{totalCount.toLocaleString()} total students</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleExportCSV(false, "");
-                      setIsGradeExportModalOpen(false);
-                    }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-black text-white text-xs font-mono font-bold rounded-lg hover:bg-neutral-800 transition-colors shadow-xs"
-                  >
-                    <Download className="h-3 w-3 text-amber-300" /> CSV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleExportExcel(false, "");
-                      setIsGradeExportModalOpen(false);
-                    }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 text-xs font-mono font-bold rounded-lg hover:bg-emerald-500/20 transition-colors"
-                  >
-                    <FileSpreadsheet className="h-3 w-3" /> Excel
-                  </button>
-                </div>
-              </div>
-
-              {grades.map((g) => {
-                const count = gradeCounts?.[g] ?? 0;
-                return (
-                  <div key={g} className="flex items-center justify-between p-3 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 transition-colors">
-                    <div>
-                      <div className="text-xs font-bold font-mono text-black">{g}</div>
-                      <div className="text-[11px] text-neutral-500 font-mono">{count.toLocaleString()} students</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleExportCSV(false, g);
-                          setIsGradeExportModalOpen(false);
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-black text-white text-xs font-mono font-bold rounded-lg hover:bg-neutral-800 transition-colors shadow-xs"
-                      >
-                        <Download className="h-3 w-3 text-amber-300" /> CSV
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleExportExcel(false, g);
-                          setIsGradeExportModalOpen(false);
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 text-xs font-mono font-bold rounded-lg hover:bg-emerald-500/20 transition-colors"
-                      >
-                        <FileSpreadsheet className="h-3 w-3" /> Excel
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

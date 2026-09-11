@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Users, UserPlus, Download, QrCode, ArrowLeft, FileSpreadsheet, Printer } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -17,7 +17,6 @@ export default async function StudentsPage({
     batchId?: string;
     department?: string;
     photoStatus?: string;
-    qrStatus?: string;
     page?: string;
     pageSize?: string;
   };
@@ -33,7 +32,6 @@ export default async function StudentsPage({
   const batchId = searchParams.batchId ?? "ALL";
   const department = searchParams.department ?? "ALL";
   const photoStatus = searchParams.photoStatus ?? "ALL";
-  const qrStatus = searchParams.qrStatus ?? "ALL";
 
   const page = Math.max(1, parseInt(searchParams.page || "1", 10));
   const pageSize = Math.min(100, Math.max(10, parseInt(searchParams.pageSize || "25", 10)));
@@ -70,12 +68,6 @@ export default async function StudentsPage({
     where.photoPath = null;
   }
 
-  if (qrStatus === "HAS_QR") {
-    where.qrCodes = { some: { status: "MATCHED" } };
-  } else if (qrStatus === "MISSING_QR") {
-    where.qrCodes = { none: {} };
-  }
-
   // Optimized parallel queries for high performance (20,000+ students)
   const [totalCount, students, grades, departments, batches, gradeGroups] = await Promise.all([
     prisma.student.count({ where }),
@@ -84,7 +76,6 @@ export default async function StudentsPage({
       include: {
         batch: { select: { batchNumber: true, title: true } },
         photos: { take: 1, orderBy: { createdAt: "desc" } },
-        qrCodes: { take: 1, orderBy: { createdAt: "desc" } },
         customValues: { include: { customField: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -118,80 +109,16 @@ export default async function StudentsPage({
   });
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1 text-xs text-foreground-muted hover:text-foreground transition-colors mr-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              <span>Back</span>
-            </Link>
-            <span className="text-xs font-mono text-accent font-semibold tracking-wider uppercase">
-              RECEIVER PLATFORM
-            </span>
-            <span className="text-xs text-foreground-muted">/</span>
-            <span className="text-xs text-foreground-muted">DIRECTORY</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5 mt-1">
-            <Users className="h-6 w-6 text-accent" />
-            <span>Student Credential Directory</span>
-          </h1>
-          <p className="text-xs text-foreground-muted mt-0.5">
-            Verified student roster — High-performance credential management, editing, and batch exports
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <a
-            href={`/api/students/export-csv?format=xlsx${grade !== "ALL" ? `&grade=${encodeURIComponent(grade)}` : ""}`}
-            download
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-            title={grade !== "ALL" ? `Download ${grade} directory as Excel (.xlsx)` : "Download full database student directory as Excel (.xlsx)"}
-          >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
-            <span>{grade !== "ALL" ? `Export ${grade} Excel` : "Export Excel"}</span>
-          </a>
-
-          <a
-            href={`/api/students/export-csv?format=csv${grade !== "ALL" ? `&grade=${encodeURIComponent(grade)}` : ""}`}
-            download
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground hover:bg-surface-secondary transition-colors"
-            title={grade !== "ALL" ? `Download ${grade} directory as CSV` : "Download full database student directory as CSV"}
-          >
-            <Download className="h-3.5 w-3.5 text-foreground-muted" />
-            <span>{grade !== "ALL" ? `CSV (${grade})` : "CSV"}</span>
-          </a>
-
-          <Link
-            href="/students/qr-import"
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-xs font-semibold text-foreground hover:bg-surface-secondary transition-colors"
-          >
-            <QrCode className="h-4 w-4 text-accent" />
-            <span>Import QR</span>
-          </Link>
-
-          {(session.role === "SENDER" || session.role === "ADMIN") && (
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white hover:bg-accent-hover shadow-glow transition-all"
-            >
-              <UserPlus className="h-4 w-4" />
-              <span>Enroll Student</span>
-            </Link>
-          )}
-
-          <Link
-            href="/print-engine"
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-xs font-semibold text-foreground hover:bg-surface-secondary transition-colors"
-          >
-            <Printer className="h-4 w-4 text-accent" />
-            <span>8-Up Print Engine</span>
-          </Link>
-        </div>
+    <div className="space-y-4 w-full px-4 sm:px-6 lg:px-8 pb-12">
+      {/* Sleek Top Navigation Bar: Back to Dashboard */}
+      <div className="flex items-center justify-between pt-1">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl border border-border bg-surface text-foreground font-semibold text-sm shadow-xs hover:border-[#8fe617] hover:bg-[#8fe617]/10 hover:text-[#8fe617] transition-all group"
+        >
+          <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-1 text-[#8fe617]" />
+          <span>Back to Dashboard</span>
+        </Link>
       </div>
 
       {/* Interactive Directory Table with True Server-Side Pagination */}
