@@ -21,9 +21,9 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
-  ArrowLeft,
   Check,
   Loader2,
+  RotateCcw,
   Receipt,
 } from "lucide-react";
 import { createStudentAction, getCustomFieldsAction, checkStudentIdAvailabilityAction } from "@/actions/students";
@@ -481,30 +481,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-[#f7faf9] text-[#080808] pb-16">
       {/* Phone-Centric Container */}
-      <div className="max-w-xl mx-auto px-4 pt-3 space-y-4">
-        {/* Top Header Bar */}
-        <div className="flex items-center justify-between py-2 border-b border-[#dce7e1]">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-[#080808] hover:text-[#02f52b] transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Dashboard</span>
-          </Link>
-
-          <div className="flex items-center gap-1.5 bg-[#080808] text-white px-3 py-1 rounded-full text-[11px] font-mono font-bold shadow-xs">
-            <span className="h-2 w-2 rounded-full bg-[#02f52b] animate-pulse" />
-            <span>SENDER STATION</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleResetForm}
-            className="text-xs font-mono text-[#6b7771] hover:text-[#080808] transition-colors"
-          >
-            Clear
-          </button>
-        </div>
+      <div className="max-w-xl mx-auto px-4 pt-4 space-y-4">
 
         {/* Error Alert Banner */}
         {errorMessage && (
@@ -519,12 +496,10 @@ export default function RegisterPage() {
            ==================================================================== */}
         <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm space-y-3 transition-colors duration-200">
           <div className="flex items-center justify-end pb-1">
-            {officialPhotoPath ? (
+            {officialPhotoPath && (
               <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                <Check className="h-3 w-3" /> 3:4 Photo Attached
+                <Check className="h-3 w-3" /> Photo Attached
               </span>
-            ) : (
-              <span className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93]">3:4 Studio • 300 DPI</span>
             )}
           </div>
 
@@ -543,7 +518,7 @@ export default function RegisterPage() {
                 </div>
                 <div className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4]">Take Student Photo</div>
                 <div className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93]">
-                  Pure 3:4 ratio at 300 DPI
+                  3:4 Portrait Photo
                 </div>
               </div>
             )}
@@ -681,44 +656,47 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Sex / Gender Dropdown (NO ICONS) */}
+            {/* Sex / Gender Dropdown (Zero Blue, Lemon Green #8fe617 Only) */}
             <div>
               <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
                 Sex <span className="text-red-500">*</span>
               </label>
-              <select
-                name="sex"
-                value={formData.sex}
-                onChange={handleChange}
-                required
-                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] focus:outline-none transition-all cursor-pointer"
-              >
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
+              <div className="relative">
+                <select
+                  name="sex"
+                  value={formData.sex}
+                  onChange={handleChange}
+                  required
+                  className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:shadow-[0_0_12px_rgba(143,230,23,0.3)] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all cursor-pointer accent-[#8fe617]"
+                >
+                  <option value="Male" className="bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4]">Male</option>
+                  <option value="Female" className="bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4]">Female</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#8fe617]">
+                  <ChevronDown className="h-4 w-4 stroke-[2.5]" />
+                </div>
+              </div>
             </div>
 
-            {/* Grade (Number Input) */}
+            {/* Grade (Writable Input - Supports KG, KG-1, 10, etc.) */}
             <div>
               <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
-                Grade <span className="text-red-500">*</span>
+                Grade / Class <span className="text-red-500">*</span>
               </label>
               <input
-                type="number"
+                type="text"
                 name="grade"
-                min="1"
-                max="100"
                 value={formData.grade}
                 onChange={handleChange}
-                placeholder="e.g. 10"
+                placeholder="e.g. 10, KG, or KG-1"
                 required
-                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] focus:outline-none transition-all"
+                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] placeholder:text-[#6b7771] dark:placeholder:text-[#8a9e93] hover:border-[#8fe617] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all"
               />
             </div>
 
             {/* Phone Number */}
             <div>
-              <label className="block text-xs font-bold text-[#080808] mb-1 font-mono">
+              <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
                 Phone Number <span className="text-red-500">*</span>
               </label>
               <input
@@ -729,76 +707,76 @@ export default function RegisterPage() {
                 onBlur={handlePhoneBlur}
                 placeholder="251912345678"
                 required
-                className="w-full rounded-xl border border-[#dce7e1] bg-[#f7faf9] px-3.5 py-2.5 text-xs font-mono text-[#080808] focus:border-[#02f52b] focus:ring-1 focus:ring-[#02f52b] focus:outline-none"
+                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] placeholder:text-[#6b7771] dark:placeholder:text-[#8a9e93] hover:border-[#8fe617] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all"
               />
             </div>
 
-            {/* Collapsible Additional Details (Keeps screen clean for fast entry) */}
-            <div className="pt-2 border-t border-[#eef5f1]">
+            {/* Collapsible Additional Details */}
+            <div className="pt-2 border-t border-[#eef5f1] dark:border-[#26332b]">
               <button
                 type="button"
                 onClick={() => setShowOptionalFields(!showOptionalFields)}
-                className="flex items-center justify-between w-full text-xs font-mono text-[#6b7771] hover:text-[#080808] py-1"
+                className="flex items-center justify-between w-full text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] py-1 transition-colors"
               >
                 <span>{showOptionalFields ? "Hide Extra Details" : "+ More Details (School, DOB, Address)"}</span>
-                {showOptionalFields ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {showOptionalFields ? <ChevronUp className="h-4 w-4 text-[#8fe617]" /> : <ChevronDown className="h-4 w-4" />}
               </button>
 
               {showOptionalFields && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
                   <div>
-                    <label className="block text-[11px] font-mono text-[#6b7771] mb-1">School</label>
+                    <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">School</label>
                     <input
                       type="text"
                       name="school"
                       value={formData.school || ""}
                       onChange={handleChange}
                       placeholder="School name"
-                      className="w-full rounded-lg border border-[#dce7e1] bg-[#f7faf9] px-3 py-2 text-xs focus:outline-none focus:border-[#02f52b]"
+                      className="w-full rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-mono text-[#6b7771] mb-1">Academic Year</label>
+                    <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">Academic Year</label>
                     <input
                       type="text"
                       name="academicYear"
                       value={formData.academicYear || ""}
                       onChange={handleChange}
                       placeholder="2026-2027"
-                      className="w-full rounded-lg border border-[#dce7e1] bg-[#f7faf9] px-3 py-2 text-xs focus:outline-none focus:border-[#02f52b]"
+                      className="w-full rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-mono text-[#6b7771] mb-1">Guardian Name</label>
+                    <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">Guardian Name</label>
                     <input
                       type="text"
                       name="guardianFullName"
                       value={formData.guardianFullName || ""}
                       onChange={handleChange}
                       placeholder="Guardian name"
-                      className="w-full rounded-lg border border-[#dce7e1] bg-[#f7faf9] px-3 py-2 text-xs focus:outline-none focus:border-[#02f52b]"
+                      className="w-full rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-mono text-[#6b7771] mb-1">Emergency Phone</label>
+                    <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">Emergency Phone</label>
                     <input
                       type="text"
                       name="emergencyContactPhone"
                       value={formData.emergencyContactPhone || ""}
                       onChange={handleChange}
                       placeholder="Emergency phone"
-                      className="w-full rounded-lg border border-[#dce7e1] bg-[#f7faf9] px-3 py-2 text-xs focus:outline-none focus:border-[#02f52b]"
+                      className="w-full rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all"
                     />
                   </div>
 
                   {customFieldsList.map((cf) => (
                     <div key={cf.id}>
-                      <label className="block text-[11px] font-mono text-[#6b7771] mb-1">{cf.label}</label>
+                      <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">{cf.label}</label>
                       <input
                         type="text"
                         value={customFieldValues[cf.fieldKey] || ""}
                         onChange={(e) => handleCustomFieldChange(cf.fieldKey, e.target.value)}
-                        className="w-full rounded-lg border border-[#dce7e1] bg-[#f7faf9] px-3 py-2 text-xs focus:outline-none focus:border-[#02f52b]"
+                        className="w-full rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all"
                       />
                     </div>
                   ))}
@@ -808,13 +786,13 @@ export default function RegisterPage() {
           </div>
 
           {/* ====================================================================
-              ACTION BUTTON (SEND & REGISTER STUDENT)
+              ACTION BUTTONS (STANDARD POSITION: SAVE & SEND + CLEAR FORM)
              ==================================================================== */}
-          <div className="pt-2">
+          <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
             <button
               type="submit"
               disabled={isPending || isUploadingPhoto || idAvailability.available === false}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#8fe617] py-3.5 px-6 text-sm font-mono font-black text-[#062404] hover:bg-[#7ecc10] active:scale-[0.98] cool-btn-hover transition-all shadow-[0_0_22px_rgba(143,230,23,0.45)] disabled:opacity-50 cursor-pointer"
+              className="flex-1 w-full flex items-center justify-center gap-2 rounded-2xl bg-[#8fe617] py-3.5 px-6 text-sm font-mono font-black text-[#062404] hover:bg-[#7ecc10] active:scale-[0.98] animated-btn transition-all shadow-[0_0_22px_rgba(143,230,23,0.45)] disabled:opacity-50 cursor-pointer"
             >
               {isPending ? (
                 <>
@@ -827,6 +805,17 @@ export default function RegisterPage() {
                   <span>SAVE & SEND TO RECEIVER</span>
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetForm}
+              disabled={isPending}
+              className="w-full sm:w-auto px-5 py-3.5 rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] hover:bg-neutral-100 dark:hover:bg-[#232d27] text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] hover:border-[#8fe617] hover:shadow-[0_0_14px_rgba(143,230,23,0.25)] transition-all flex items-center justify-center gap-2 cursor-pointer animated-btn shrink-0"
+              title="Reset all form fields and photo"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>Clear Form</span>
             </button>
           </div>
         </form>

@@ -224,10 +224,8 @@ export default function SettingsPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono text-[#8fe617] font-bold tracking-wider uppercase">
-              SENDER STATION
+              HARDWARE &amp; DEFAULTS
             </span>
-            <span className="text-xs text-[#6b7771] dark:text-[#7f9488]">/</span>
-            <span className="text-xs text-[#6b7771] dark:text-[#7f9488]">HARDWARE &amp; DEFAULTS</span>
           </div>
           <h1 className="text-2xl font-black tracking-tight text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2.5 mt-1">
             <Smartphone className="h-6 w-6 text-[#8fe617]" />
@@ -625,7 +623,7 @@ export default function SettingsPage() {
             <div className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
               <span>Silicon Labs Student Bridge</span>
               <span className="bg-[#8fe617]/20 text-[#062404] dark:text-[#8fe617] text-[10px] font-mono font-black px-2 py-0.5 rounded-full">
-                SENDER STATION
+                Station
               </span>
             </div>
             <div className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">

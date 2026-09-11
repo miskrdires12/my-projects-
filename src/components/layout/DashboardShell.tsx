@@ -13,10 +13,8 @@ import {
   Settings,
   Database,
   Sparkles,
-  Menu,
   X,
   Sun,
-  Moon,
 } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
@@ -295,7 +293,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="inline-block h-2 w-2 rounded-full bg-[#8fe617]" />
               <span className="text-[9px] font-mono uppercase font-bold tracking-wider text-[#6b7771] dark:text-[#8a9e93]">
-                {isSender ? "SENDER STATION" : isReceiver ? "RECEIVER FACILITY" : "ADMINISTRATOR"}
+                {isSender ? "Station Active" : isReceiver ? "Production" : "Administrator"}
               </span>
             </div>
           </div>
@@ -340,44 +338,40 @@ export default function DashboardShell({ session, children }: DashboardShellProp
         <header className="flex h-14 items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] px-4 sm:px-6 shadow-xs transition-colors duration-200">
           
           <div className="flex items-center gap-3">
-            {/* Clickable Slicing Menu Toggle Button */}
+            {/* Advanced Animated Menu Icon Button (Icon Only, Standard Touch Size) */}
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:shadow-[0_0_12px_rgba(143,230,23,0.3)] transition-all cool-btn-hover cursor-pointer font-mono text-xs font-bold"
+              className="h-10 w-10 flex flex-col items-center justify-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#161c18] hover:border-[#8fe617] hover:bg-[#8fe617]/10 hover:shadow-[0_0_16px_rgba(143,230,23,0.35)] transition-all duration-300 group cursor-pointer animated-icon-btn shrink-0"
               aria-label="Open navigation menu"
+              title="Navigation Menu"
             >
-              <Menu className="h-4 w-4 text-[#8fe617]" />
-              <span className="hidden sm:inline">Menu</span>
+              <span className="h-0.5 w-5 rounded-full bg-[#080808] dark:bg-[#f2f7f4] group-hover:bg-[#8fe617] group-hover:w-3.5 group-hover:-translate-x-0.5 transition-all duration-300" />
+              <span className="h-0.5 w-5 rounded-full bg-[#8fe617] group-hover:scale-x-110 transition-all duration-300" />
+              <span className="h-0.5 w-5 rounded-full bg-[#080808] dark:bg-[#f2f7f4] group-hover:bg-[#8fe617] group-hover:w-3.5 group-hover:translate-x-0.5 transition-all duration-300" />
             </button>
-
-            {/* Operational Status Badge */}
-            <span className="inline-flex items-center gap-2 rounded-xl px-2.5 py-1 text-[11px] font-mono font-bold tracking-wider uppercase border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4]">
-              <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
-              <span>
-                {isSender
-                  ? "SENDER STATION"
-                  : isReceiver
-                  ? "RECEIVER FACILITY"
-                  : "ADMIN CONSOLE"}
-              </span>
-            </span>
           </div>
 
           <div className="flex items-center gap-2.5">
-            {/* Dark / Night Mode Toggle Button */}
+            {/* Turning Sun-Only Theme Toggle (Deep Dark in Night Mode, Zero White) */}
             <button
               type="button"
               onClick={toggleTheme}
-              className="p-2 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:shadow-[0_0_12px_rgba(143,230,23,0.25)] transition-all cool-btn-hover cursor-pointer"
-              title={isDarkMode ? "Switch to Light Studio" : "Switch to Night Mode"}
+              className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all duration-300 animated-icon-btn cursor-pointer ${
+                isDarkMode
+                  ? "border-[#26332b] bg-[#0d120f] text-[#8fe617] hover:border-[#8fe617] hover:shadow-[0_0_15px_rgba(143,230,23,0.3)]"
+                  : "border-[#dce7e1] bg-[#f7faf9] text-amber-500 hover:border-amber-400 hover:shadow-[0_0_15px_rgba(245,158,11,0.25)]"
+              }`}
+              title={isDarkMode ? "Night Mode Active (Click to rotate to Light Studio)" : "Light Studio Active (Click to rotate to Night Mode)"}
               aria-label="Toggle theme"
             >
-              {isDarkMode ? (
-                <Sun className="h-4 w-4 text-[#8fe617]" />
-              ) : (
-                <Moon className="h-4 w-4 text-[#6b7771]" />
-              )}
+              <Sun
+                className={`h-5 w-5 sun-turn-icon transform ${
+                  isDarkMode
+                    ? "rotate-180 text-[#8fe617] fill-[#8fe617]/20"
+                    : "rotate-0 text-amber-500 hover:rotate-90 fill-amber-400/20"
+                }`}
+              />
             </button>
 
             {/* Sender New Registration Action Button (No 'Enroll') */}
@@ -405,12 +399,10 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
             {/* Header User Identity & 1-Click Logout Action */}
             <div className="flex items-center gap-2 border-l border-[#dce7e1] dark:border-[#26332b] pl-2.5">
-              <div className="hidden lg:flex flex-col text-right">
-                <span className="text-xs font-bold font-mono text-[#080808] dark:text-[#f2f7f4] leading-tight truncate max-w-[120px]">
+              <div className="hidden lg:flex items-center gap-1.5 text-right">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
+                <span className="text-xs font-bold font-mono text-[#080808] dark:text-[#f2f7f4] leading-tight truncate max-w-[140px]">
                   {session.username}
-                </span>
-                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-[#6b7771] dark:text-[#8a9e93]">
-                  {isAdmin ? "Admin" : isSender ? "Sender" : "Receiver"}
                 </span>
               </div>
 

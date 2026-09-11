@@ -500,33 +500,21 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       aria-labelledby="camera-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150"
     >
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-neutral-300 bg-white shadow-2xl text-black">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-neutral-300 dark:border-[#26332b] bg-white dark:bg-[#161c18] shadow-2xl text-[#080808] dark:text-[#f2f7f4]">
         {/* Flash Effect on Capture */}
         {isFlashing && (
           <div className="pointer-events-none absolute inset-0 z-50 bg-white transition-opacity duration-200" />
         )}
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-3.5 bg-white">
+        <div className="flex items-center justify-between border-b border-neutral-200 dark:border-[#26332b] px-5 py-3.5 bg-white dark:bg-[#161c18]">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white shadow-xs">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#080808] dark:bg-[#0d120f] border border-neutral-800 dark:border-[#26332b] text-[#8fe617] shadow-xs">
               <Camera className="h-4 w-4 stroke-[2.5]" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 id="camera-modal-title" className="text-xs font-bold tracking-wider uppercase text-black font-mono">
-                  SENDER WEBCAM STUDIO
-                </h2>
-                <span className="rounded bg-black px-1.5 py-0.5 text-[9px] font-mono font-bold text-white uppercase">
-                  3:4 • 300 DPI
-                </span>
-              </div>
-              <p className="text-[11px] text-neutral-500 mt-0.5">
-                {cameraState === "captured"
-                  ? "Portrait captured at 300 DPI"
-                  : "Position face in frame • Tap snap to capture & attach"}
-              </p>
-            </div>
+            <h2 id="camera-modal-title" className="text-xs font-mono font-bold tracking-wider uppercase text-[#080808] dark:text-[#f2f7f4]">
+              Camera Studio
+            </h2>
           </div>
           <div className="flex items-center gap-1.5">
             {cameraState === "streaming" && (
@@ -708,40 +696,37 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Action Controls Footer */}
-        <div className="flex items-center justify-between border-t border-neutral-200 bg-neutral-50 px-5 py-3.5">
+        <div className="flex items-center justify-between border-t border-neutral-200 dark:border-[#26332b] bg-neutral-50 dark:bg-[#161c18] px-5 py-3.5">
           {cameraState === "captured" ? (
             <>
               <button
                 type="button"
                 onClick={handleRetake}
-                className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 py-2 text-xs font-mono text-black hover:bg-neutral-100 transition-colors"
+                className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-4 py-2 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#232d27] transition-all animated-icon-btn cursor-pointer"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
-                Retake
+                <span>Retake</span>
               </button>
 
               <div className="flex items-center gap-2">
-                <span className="hidden sm:inline text-[11px] font-mono text-neutral-500">
-                  3:4 • 300 DPI READY
-                </span>
                 {onEditPhoto && (
                   <button
                     type="button"
                     onClick={handleOpenCropEditor}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-xs font-mono font-semibold text-black hover:bg-neutral-100 transition-colors shadow-xs"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-3.5 py-2 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#232d27] transition-all animated-icon-btn shadow-xs cursor-pointer"
                     title="Open studio to crop, zoom, and adjust"
                   >
-                    <Crop className="h-3.5 w-3.5 text-neutral-700" />
+                    <Crop className="h-3.5 w-3.5 text-[#6b7771] dark:text-[#a4b8ad]" />
                     <span>Crop & Edit</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  className="inline-flex items-center gap-2 rounded-lg bg-black px-5 py-2 text-xs font-mono font-bold text-white hover:bg-neutral-800 transition-colors shadow-xs"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#8fe617] px-5 py-2 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] shadow-[0_0_16px_rgba(143,230,23,0.35)] transition-all animated-btn active:scale-95 cursor-pointer"
                 >
                   <Check className="h-4 w-4 stroke-[2.5]" />
-                  Use This Photo
+                  <span>Use This Photo</span>
                 </button>
               </div>
             </>
@@ -752,7 +737,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   type="button"
                   onClick={handleToggleCamera}
                   disabled={cameraState !== "streaming"}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-mono text-neutral-700 hover:text-black hover:bg-neutral-100 transition-colors disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-3 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#232d27] transition-all animated-icon-btn disabled:opacity-40 cursor-pointer"
                   title="Switch Front/Rear"
                 >
                   <FlipHorizontal className="h-3.5 w-3.5" />
@@ -763,21 +748,21 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   type="button"
                   onClick={handleToggleFlashlight}
                   disabled={cameraState !== "streaming"}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-mono transition-all disabled:opacity-40 ${
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-mono transition-all animated-icon-btn disabled:opacity-40 cursor-pointer ${
                     isFlashlightOn
-                      ? "border-amber-400 bg-amber-400/20 text-black font-bold shadow-xs ring-1 ring-amber-400"
-                      : "border-neutral-300 bg-white text-neutral-700 hover:text-black hover:bg-neutral-100"
+                      ? "border-amber-400 bg-amber-400/20 text-[#080808] dark:text-white font-bold shadow-xs ring-1 ring-amber-400"
+                      : "border-neutral-300 dark:border-[#26332b] bg-white dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#232d27]"
                   }`}
                   title="Toggle Flashlight (Hardware Torch + Screen Fill-Light)"
                 >
-                  <Zap className={`h-3.5 w-3.5 ${isFlashlightOn ? "fill-amber-400 text-amber-500 animate-pulse" : "text-neutral-500"}`} />
+                  <Zap className={`h-3.5 w-3.5 ${isFlashlightOn ? "fill-amber-400 text-amber-500 animate-pulse" : "text-[#6b7771] dark:text-[#a4b8ad]"}`} />
                   <span className="hidden sm:inline">{isFlashlightOn ? "Flash ON" : "Flash"}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-mono text-neutral-700 hover:text-black hover:bg-neutral-100 transition-colors disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-3 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#232d27] transition-all animated-icon-btn disabled:opacity-40 cursor-pointer"
                   title="Upload image file"
                 >
                   <Upload className="h-3.5 w-3.5" />
@@ -785,14 +770,14 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 </button>
               </div>
 
-              {/* Central Capture Actions: Primary Snap (instant capture & auto-attach) + Snap & Review */}
+              {/* Central Capture Actions: Primary Snap + Snap & Review */}
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => handleCaptureFrame(true)}
                   disabled={cameraState !== "streaming"}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#8fe617] px-5 py-2.5 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] active:scale-95 transition-all shadow-[0_0_18px_rgba(143,230,23,0.4)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-                  title="Instant Snap, 300 DPI conversion, and direct attach to student record"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#8fe617] px-5 py-2.5 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] active:scale-95 transition-all shadow-[0_0_18px_rgba(143,230,23,0.4)] animated-btn disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                  title="Instant Snap and direct attach to student record"
                 >
                   <Camera className="h-4 w-4 stroke-[2.5]" />
                   <span>Snap Photo</span>
@@ -802,7 +787,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   type="button"
                   onClick={() => handleCaptureFrame(false)}
                   disabled={cameraState !== "streaming"}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-mono font-semibold text-neutral-800 hover:text-black hover:bg-neutral-100 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-3 py-2 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#232d27] active:scale-95 transition-all animated-icon-btn disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                   title="Snap and review/crop before attaching"
                 >
                   <span className="hidden sm:inline">Snap & Review</span>
@@ -812,7 +797,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               <button
                 type="button"
                 onClick={handleClose}
-                className="rounded-lg px-2.5 py-2 text-xs font-mono text-neutral-600 hover:text-black transition-colors"
+                className="rounded-lg px-2.5 py-2 text-xs font-mono text-[#6b7771] dark:text-[#a4b8ad] hover:text-[#080808] dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
               >
                 Cancel
               </button>
