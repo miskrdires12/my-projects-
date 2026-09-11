@@ -610,10 +610,10 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         </button>
 
         <div className="flex items-center gap-2 rounded-full bg-neutral-900 border border-neutral-800 px-3.5 py-1 text-[11px] font-mono font-semibold tracking-wider text-neutral-200 shadow-inner">
-          <span className="h-2 w-2 rounded-full bg-[#02f52b] shadow-[0_0_8px_#02f52b]" />
+          <span className="h-2 w-2 rounded-full bg-[#8fe617] shadow-[0_0_8px_#8fe617]" />
           <span className="text-white font-bold">STUDIO PHOTO CROPPER</span>
           <span className="text-neutral-500">•</span>
-          <span className="text-[#02f52b] font-mono uppercase font-bold">
+          <span className="text-[#8fe617] font-mono uppercase font-bold">
             {aspectRatio === "3:4" ? "3:4 Portrait" : aspectRatio === "1:1" ? "1:1 Square" : "Free Crop"}
           </span>
         </div>
@@ -621,9 +621,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         <button
           type="button"
           onClick={handleSave}
-          className="flex items-center gap-1.5 rounded-full bg-[#02f52b] px-4 py-1.5 text-xs font-bold text-[#080808] hover:bg-[#00dc25] transition-all shadow-[0_0_15px_rgba(2,245,43,0.4)] active:scale-95 cursor-pointer"
+          className="flex items-center gap-1.5 rounded-full bg-[#8fe617] px-4 py-1.5 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] transition-all shadow-[0_0_15px_rgba(143,230,23,0.4)] active:scale-95 cursor-pointer"
         >
-          <Check className="h-4 w-4 stroke-[2.5] text-[#080808]" />
+          <Check className="h-4 w-4 stroke-[2.5] text-[#062404]" />
           <span>Done</span>
         </button>
       </div>
@@ -658,7 +658,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
 
           {/* Interactive Crop Box */}
           <div
-            className="absolute border-2 border-[#02f52b] pointer-events-auto select-none"
+            className="absolute border-2 border-[#8fe617] pointer-events-auto select-none"
             style={{
               left: `${cropBox.x}px`,
               top: `${cropBox.y}px`,
@@ -678,37 +678,37 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   isInteracting || activeTab === "crop" ? "opacity-85" : "opacity-35"
                 }`}
               >
-                <div className="absolute top-1/3 left-0 right-0 border-b border-[#02f52b]/50 border-dashed" />
-                <div className="absolute top-2/3 left-0 right-0 border-b border-[#02f52b]/50 border-dashed" />
-                <div className="absolute left-1/3 top-0 bottom-0 border-r border-[#02f52b]/50 border-dashed" />
-                <div className="absolute left-2/3 top-0 bottom-0 border-r border-[#02f52b]/50 border-dashed" />
+                <div className="absolute top-1/3 left-0 right-0 border-b border-[#8fe617]/50 border-dashed" />
+                <div className="absolute top-2/3 left-0 right-0 border-b border-[#8fe617]/50 border-dashed" />
+                <div className="absolute left-1/3 top-0 bottom-0 border-r border-[#8fe617]/50 border-dashed" />
+                <div className="absolute left-2/3 top-0 bottom-0 border-r border-[#8fe617]/50 border-dashed" />
               </div>
             </div>
 
             {/* Corner Handles */}
             <div
-              className="absolute -top-1.5 -left-1.5 w-7 h-7 border-t-4 border-l-4 border-[#02f52b] cursor-nwse-resize rounded-tl-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(2,245,43,0.8)]"
+              className="absolute -top-1.5 -left-1.5 w-7 h-7 border-t-4 border-l-4 border-[#8fe617] cursor-nwse-resize rounded-tl-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(143,230,23,0.8)]"
               onPointerDown={(e) => startDrag("nw", e)}
             >
               <div className="absolute w-12 h-12" />
             </div>
 
             <div
-              className="absolute -top-1.5 -right-1.5 w-7 h-7 border-t-4 border-r-4 border-[#02f52b] cursor-nesw-resize rounded-tr-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(2,245,43,0.8)]"
+              className="absolute -top-1.5 -right-1.5 w-7 h-7 border-t-4 border-r-4 border-[#8fe617] cursor-nesw-resize rounded-tr-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(143,230,23,0.8)]"
               onPointerDown={(e) => startDrag("ne", e)}
             >
               <div className="absolute w-12 h-12" />
             </div>
 
             <div
-              className="absolute -bottom-1.5 -left-1.5 w-7 h-7 border-b-4 border-l-4 border-[#02f52b] cursor-nesw-resize rounded-bl-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(2,245,43,0.8)]"
+              className="absolute -bottom-1.5 -left-1.5 w-7 h-7 border-b-4 border-l-4 border-[#8fe617] cursor-nesw-resize rounded-bl-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(143,230,23,0.8)]"
               onPointerDown={(e) => startDrag("sw", e)}
             >
               <div className="absolute w-12 h-12" />
             </div>
 
             <div
-              className="absolute -bottom-1.5 -right-1.5 w-7 h-7 border-b-4 border-r-4 border-[#02f52b] cursor-nwse-resize rounded-br-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(2,245,43,0.8)]"
+              className="absolute -bottom-1.5 -right-1.5 w-7 h-7 border-b-4 border-r-4 border-[#8fe617] cursor-nwse-resize rounded-br-xs z-30 touch-none flex items-center justify-center shadow-[0_0_8px_rgba(143,230,23,0.8)]"
               onPointerDown={(e) => startDrag("se", e)}
             >
               <div className="absolute w-12 h-12" />
@@ -723,9 +723,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               onPointerDown={(e) => startDrag("n", e)}
               title="Slide top side up or down"
             >
-              <div className="w-14 h-2 bg-[#02f52b] rounded-full shadow-[0_0_10px_rgba(2,245,43,0.9)] flex items-center justify-center gap-1 group-hover:scale-110 transition-transform">
-                <ArrowUp className="h-2.5 w-2.5 text-[#080808]" />
-                <ArrowDown className="h-2.5 w-2.5 text-[#080808]" />
+              <div className="w-14 h-2 bg-[#8fe617] rounded-full shadow-[0_0_10px_rgba(143,230,23,0.9)] flex items-center justify-center gap-1 group-hover:scale-110 transition-transform">
+                <ArrowUp className="h-2.5 w-2.5 text-[#062404]" />
+                <ArrowDown className="h-2.5 w-2.5 text-[#062404]" />
               </div>
             </div>
 
@@ -735,9 +735,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               onPointerDown={(e) => startDrag("s", e)}
               title="Slide bottom side up or down"
             >
-              <div className="w-14 h-2 bg-[#02f52b] rounded-full shadow-[0_0_10px_rgba(2,245,43,0.9)] flex items-center justify-center gap-1 group-hover:scale-110 transition-transform">
-                <ArrowUp className="h-2.5 w-2.5 text-[#080808]" />
-                <ArrowDown className="h-2.5 w-2.5 text-[#080808]" />
+              <div className="w-14 h-2 bg-[#8fe617] rounded-full shadow-[0_0_10px_rgba(143,230,23,0.9)] flex items-center justify-center gap-1 group-hover:scale-110 transition-transform">
+                <ArrowUp className="h-2.5 w-2.5 text-[#062404]" />
+                <ArrowDown className="h-2.5 w-2.5 text-[#062404]" />
               </div>
             </div>
 
@@ -747,9 +747,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               onPointerDown={(e) => startDrag("w", e)}
               title="Slide left side left or right"
             >
-              <div className="h-14 w-2 bg-[#02f52b] rounded-full shadow-[0_0_10px_rgba(2,245,43,0.9)] flex flex-col items-center justify-center gap-1 group-hover:scale-110 transition-transform">
-                <ArrowLeft className="h-2.5 w-2.5 text-[#080808]" />
-                <ArrowRight className="h-2.5 w-2.5 text-[#080808]" />
+              <div className="h-14 w-2 bg-[#8fe617] rounded-full shadow-[0_0_10px_rgba(143,230,23,0.9)] flex flex-col items-center justify-center gap-1 group-hover:scale-110 transition-transform">
+                <ArrowLeft className="h-2.5 w-2.5 text-[#062404]" />
+                <ArrowRight className="h-2.5 w-2.5 text-[#062404]" />
               </div>
             </div>
 
@@ -759,9 +759,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               onPointerDown={(e) => startDrag("e", e)}
               title="Slide right side left or right"
             >
-              <div className="h-14 w-2 bg-[#02f52b] rounded-full shadow-[0_0_10px_rgba(2,245,43,0.9)] flex flex-col items-center justify-center gap-1 group-hover:scale-110 transition-transform">
-                <ArrowLeft className="h-2.5 w-2.5 text-[#080808]" />
-                <ArrowRight className="h-2.5 w-2.5 text-[#080808]" />
+              <div className="h-14 w-2 bg-[#8fe617] rounded-full shadow-[0_0_10px_rgba(143,230,23,0.9)] flex flex-col items-center justify-center gap-1 group-hover:scale-110 transition-transform">
+                <ArrowLeft className="h-2.5 w-2.5 text-[#062404]" />
+                <ArrowRight className="h-2.5 w-2.5 text-[#062404]" />
               </div>
             </div>
           </div>
@@ -784,7 +784,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   onClick={handleApplyFreeRatio}
                   className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all cursor-pointer ${
                     aspectRatio === "free"
-                      ? "bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.4)]"
+                      ? "bg-[#8fe617] text-[#062404] shadow-[0_0_10px_rgba(143,230,23,0.4)]"
                       : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
                   }`}
                 >
@@ -796,7 +796,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   onClick={handleApply34Ratio}
                   className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all cursor-pointer ${
                     aspectRatio === "3:4"
-                      ? "bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.4)]"
+                      ? "bg-[#8fe617] text-[#062404] shadow-[0_0_10px_rgba(143,230,23,0.4)]"
                       : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
                   }`}
                 >
@@ -808,7 +808,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   onClick={handleApply11Ratio}
                   className={`rounded-full px-3.5 py-1 text-xs font-mono font-bold transition-all cursor-pointer ${
                     aspectRatio === "1:1"
-                      ? "bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.4)]"
+                      ? "bg-[#8fe617] text-[#062404] shadow-[0_0_10px_rgba(143,230,23,0.4)]"
                       : "bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
                   }`}
                 >
@@ -833,7 +833,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSlideEdge("top", -10)}
-                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#8fe617] hover:text-[#062404] transition-colors"
                       title="Expand Top"
                     >
                       <ArrowUp className="h-3 w-3" />
@@ -841,7 +841,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSlideEdge("top", 10)}
-                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#8fe617] hover:text-[#062404] transition-colors"
                       title="Trim Top"
                     >
                       <ArrowDown className="h-3 w-3" />
@@ -855,7 +855,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSlideEdge("bottom", -10)}
-                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#8fe617] hover:text-[#062404] transition-colors"
                       title="Trim Bottom"
                     >
                       <ArrowUp className="h-3 w-3" />
@@ -863,7 +863,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSlideEdge("bottom", 10)}
-                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#8fe617] hover:text-[#062404] transition-colors"
                       title="Expand Bottom"
                     >
                       <ArrowDown className="h-3 w-3" />
@@ -877,7 +877,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSlideEdge("left", -10)}
-                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#8fe617] hover:text-[#062404] transition-colors"
                       title="Expand Left"
                     >
                       <ArrowLeft className="h-3 w-3" />
@@ -885,7 +885,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSlideEdge("left", 10)}
-                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#8fe617] hover:text-[#062404] transition-colors"
                       title="Trim Left"
                     >
                       <ArrowRight className="h-3 w-3" />
@@ -899,7 +899,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSlideEdge("right", -10)}
-                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#8fe617] hover:text-[#062404] transition-colors"
                       title="Trim Right"
                     >
                       <ArrowLeft className="h-3 w-3" />
@@ -907,7 +907,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSlideEdge("right", 10)}
-                      className="p-1 rounded bg-neutral-800 hover:bg-[#02f52b] hover:text-black transition-colors"
+                      className="p-1 rounded bg-neutral-800 hover:bg-[#8fe617] hover:text-[#062404] transition-colors"
                       title="Expand Right"
                     >
                       <ArrowRight className="h-3 w-3" />
@@ -926,10 +926,10 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   step="0.05"
                   value={zoom}
                   onChange={(e) => setZoom(parseFloat(e.target.value))}
-                  className="w-full accent-[#02f52b] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
+                  className="w-full accent-[#8fe617] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
                 />
                 <ZoomIn className="h-3.5 w-3.5 text-neutral-400 shrink-0" />
-                <span className="text-[10px] font-mono text-[#02f52b] w-10 text-right font-bold">
+                <span className="text-[10px] font-mono text-[#8fe617] w-10 text-right font-bold">
                   {Math.round(zoom * 100)}%
                 </span>
               </div>
@@ -945,7 +945,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   onClick={handleRotate90}
                   className="flex items-center gap-1.5 rounded-full bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 px-4 py-1.5 text-xs font-mono text-white transition-all active:scale-95 cursor-pointer"
                 >
-                  <RotateCw className="h-4 w-4 text-[#02f52b]" />
+                  <RotateCw className="h-4 w-4 text-[#8fe617]" />
                   <span>Rotate 90°</span>
                 </button>
 
@@ -954,7 +954,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   onClick={() => setIsFlippedH((prev) => !prev)}
                   className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-mono transition-all active:scale-95 cursor-pointer ${
                     isFlippedH
-                      ? "bg-[#02f52b] text-[#080808] font-bold"
+                      ? "bg-[#8fe617] text-[#062404] font-bold"
                       : "bg-neutral-900 border border-neutral-800 text-white hover:bg-neutral-800"
                   }`}
                 >
@@ -973,7 +973,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   step="0.5"
                   value={fineAngle}
                   onChange={(e) => setFineAngle(parseFloat(e.target.value))}
-                  className="w-full accent-[#02f52b] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
+                  className="w-full accent-[#8fe617] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
                 />
                 <span className="text-[10px] font-mono text-neutral-400 shrink-0">+45°</span>
                 <button
@@ -998,11 +998,11 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                 onClick={handleToggleAutoEnhance}
                 className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-xs font-mono font-bold transition-all shadow-md cursor-pointer ${
                   isEnhanced
-                    ? "bg-[#02f52b] text-[#080808] ring-2 ring-[#02f52b]/50 shadow-[0_0_15px_rgba(2,245,43,0.4)]"
-                    : "bg-neutral-900 border border-neutral-800 text-white hover:border-[#02f52b]"
+                    ? "bg-[#8fe617] text-[#062404] ring-2 ring-[#8fe617]/50 shadow-[0_0_15px_rgba(143,230,23,0.4)]"
+                    : "bg-neutral-900 border border-neutral-800 text-white hover:border-[#8fe617]"
                 }`}
               >
-                <Sparkles className={`h-4 w-4 ${isEnhanced ? "text-[#080808]" : "text-[#02f52b]"}`} />
+                <Sparkles className={`h-4 w-4 ${isEnhanced ? "text-[#062404]" : "text-[#8fe617]"}`} />
                 <span>{isEnhanced ? "Enhanced ✓ (Clarity & Skin Tone)" : "One-Tap Auto Enhance"}</span>
               </button>
             </div>
@@ -1021,9 +1021,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   step="1"
                   value={brightness}
                   onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
-                  className="w-full accent-[#02f52b] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
+                  className="w-full accent-[#8fe617] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
                 />
-                <span className="text-[10px] font-mono text-[#02f52b] w-8 text-right font-bold">
+                <span className="text-[10px] font-mono text-[#8fe617] w-8 text-right font-bold">
                   {brightness > 0 ? `+${brightness}` : brightness}
                 </span>
               </div>
@@ -1038,9 +1038,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   step="1"
                   value={contrast}
                   onChange={(e) => setContrast(parseInt(e.target.value, 10))}
-                  className="w-full accent-[#02f52b] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
+                  className="w-full accent-[#8fe617] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
                 />
-                <span className="text-[10px] font-mono text-[#02f52b] w-8 text-right font-bold">
+                <span className="text-[10px] font-mono text-[#8fe617] w-8 text-right font-bold">
                   {contrast > 0 ? `+${contrast}` : contrast}
                 </span>
               </div>
@@ -1055,9 +1055,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
                   step="1"
                   value={saturation}
                   onChange={(e) => setSaturation(parseInt(e.target.value, 10))}
-                  className="w-full accent-[#02f52b] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
+                  className="w-full accent-[#8fe617] h-1.5 rounded-lg bg-neutral-800 cursor-pointer"
                 />
-                <span className="text-[10px] font-mono text-[#02f52b] w-8 text-right font-bold">
+                <span className="text-[10px] font-mono text-[#8fe617] w-8 text-right font-bold">
                   {saturation > 0 ? `+${saturation}` : saturation}
                 </span>
               </div>
@@ -1071,7 +1071,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             type="button"
             onClick={() => setActiveTab("crop")}
             className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors cursor-pointer ${
-              activeTab === "crop" ? "text-[#02f52b] font-bold" : "text-neutral-500 hover:text-neutral-300"
+              activeTab === "crop" ? "text-[#8fe617] font-bold" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
             <Crop className="h-4 w-4" />
@@ -1082,7 +1082,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             type="button"
             onClick={() => setActiveTab("rotate")}
             className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors cursor-pointer ${
-              activeTab === "rotate" ? "text-[#02f52b] font-bold" : "text-neutral-500 hover:text-neutral-300"
+              activeTab === "rotate" ? "text-[#8fe617] font-bold" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
             <RotateCw className="h-4 w-4" />
@@ -1093,7 +1093,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             type="button"
             onClick={() => setActiveTab("enhance")}
             className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors cursor-pointer ${
-              activeTab === "enhance" ? "text-[#02f52b] font-bold" : "text-neutral-500 hover:text-neutral-300"
+              activeTab === "enhance" ? "text-[#8fe617] font-bold" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
             <Sparkles className="h-4 w-4" />
@@ -1104,7 +1104,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             type="button"
             onClick={() => setActiveTab("light")}
             className={`flex flex-1 flex-col items-center gap-1 py-1 text-[11px] font-mono transition-colors cursor-pointer ${
-              activeTab === "light" ? "text-[#02f52b] font-bold" : "text-neutral-500 hover:text-neutral-300"
+              activeTab === "light" ? "text-[#8fe617] font-bold" : "text-neutral-500 hover:text-neutral-300"
             }`}
           >
             <Sun className="h-4 w-4" />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -12,12 +12,11 @@ import {
   LogOut,
   Settings,
   Database,
-  FileSpreadsheet,
-  QrCode,
-  Layers,
   Sparkles,
   Menu,
   X,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
@@ -31,8 +30,35 @@ interface DashboardShellProps {
 }
 
 export default function DashboardShell({ session, children }: DashboardShellProps) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const pathname = usePathname();
+
+  // Dark / Night mode initialization
+  useEffect(() => {
+    try {
+      const savedTheme = localStorage.getItem("sb_theme");
+      if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        setIsDarkMode(true);
+        document.documentElement.classList.add("dark");
+      } else {
+        setIsDarkMode(false);
+        document.documentElement.classList.remove("dark");
+      }
+    } catch {}
+  }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !isDarkMode;
+    setIsDarkMode(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("sb_theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("sb_theme", "light");
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -45,15 +71,15 @@ export default function DashboardShell({ session, children }: DashboardShellProp
   const isReceiver = role === "RECEIVER";
   const isAdmin = role === "ADMIN";
 
-  const closeMobile = () => setMobileOpen(false);
+  const closeMenu = () => setMenuOpen(false);
 
   const navContent = (
-    <div className="flex flex-col h-full justify-between bg-white text-[#080808] font-sans">
+    <div className="flex flex-col h-full justify-between bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4] font-sans transition-colors duration-200">
       <div>
         {/* Brand Header with Silicon Labs Logo */}
-        <div className="flex h-16 items-center justify-between border-b border-[#dce7e1] px-5 bg-white">
-          <Link href={isSender ? "/register" : "/dashboard"} className="flex items-center gap-3 group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f7faf9] border border-[#dce7e1] p-1 shadow-xs group-hover:border-[#02f52b] transition-all">
+        <div className="flex h-16 items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] px-5 bg-white dark:bg-[#161c18]">
+          <Link href={isSender ? "/register" : "/dashboard"} onClick={closeMenu} className="flex items-center gap-3 group">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f7faf9] dark:bg-[#1c2420] border border-[#dce7e1] dark:border-[#26332b] p-1 shadow-xs group-hover:border-[#8fe617] transition-all">
               <img
                 src="/logo.png"
                 alt="Silicon Labs Logo"
@@ -61,21 +87,21 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               />
             </div>
             <div>
-              <div className="font-mono text-sm font-extrabold tracking-tight text-[#080808] flex items-center gap-1">
+              <div className="font-mono text-sm font-extrabold tracking-tight text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1">
                 <span>SILICON</span>
-                <span className="text-[#02f52b] bg-[#080808] px-1 rounded text-xs">LABS</span>
+                <span className="text-[#080808] bg-[#8fe617] px-1 rounded text-xs font-black">LABS</span>
               </div>
-              <div className="text-[10px] uppercase tracking-wider font-mono font-semibold text-[#6b7771]">
+              <div className="text-[10px] uppercase tracking-wider font-mono font-semibold text-[#6b7771] dark:text-[#8a9e93]">
                 {isSender ? "Sender Workstation" : isReceiver ? "Receiver Facility" : "Admin Console"}
               </div>
             </div>
           </Link>
 
-          {/* Close button on mobile */}
+          {/* Close button */}
           <button
             type="button"
-            onClick={closeMobile}
-            className="md:hidden p-1.5 rounded-lg border border-[#dce7e1] text-[#3f4743] hover:text-[#080808] hover:border-[#080808] transition-colors"
+            onClick={closeMenu}
+            className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#26332b] text-[#3f4743] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] hover:border-[#8fe617] transition-colors cursor-pointer"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -84,21 +110,21 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
         {/* Navigation Links */}
         <nav className="p-4 space-y-4 text-xs font-medium">
-          {/* SENDER ENVIRONMENT — ONLY Student Registration & System Settings */}
+          {/* SENDER ENVIRONMENT — Registration & System Settings */}
           {isSender && (
             <div className="space-y-1.5">
-              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] pb-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#02f52b]" />
+              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] dark:border-[#26332b] pb-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
                 <span>Sender Workstation</span>
               </div>
 
               <Link
                 href="/register"
-                onClick={closeMobile}
-                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/register"
-                    ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                    : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <UserPlus className="h-4 w-4 shrink-0" />
@@ -107,11 +133,86 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
               <Link
                 href="/settings"
-                onClick={closeMobile}
-                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/settings"
-                    ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                    : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                <span>Station Settings</span>
+              </Link>
+            </div>
+          )}
+
+          {/* RECEIVER ENVIRONMENT */}
+          {isReceiver && (
+            <div className="space-y-1.5">
+              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] dark:border-[#26332b] pb-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
+                <span>Receiver Station</span>
+              </div>
+
+              <Link
+                href="/dashboard"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/dashboard"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <LayoutDashboard className="h-4 w-4 shrink-0" />
+                <span>Live Metrics</span>
+              </Link>
+
+              <Link
+                href="/students"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/students"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Users className="h-4 w-4 shrink-0" />
+                <span>Student Directory</span>
+              </Link>
+
+              <Link
+                href="/print-engine"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/print-engine"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Printer className="h-4 w-4 shrink-0" />
+                <span>Print Engine (8-Up)</span>
+              </Link>
+
+              <Link
+                href="/designer"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/designer"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span>Badge Designer</span>
+              </Link>
+
+              <Link
+                href="/settings"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/settings"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Settings className="h-4 w-4 shrink-0" />
@@ -120,182 +221,80 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             </div>
           )}
 
-          {/* RECEIVER & ADMIN ENVIRONMENT */}
-          {!isSender && (
-            <>
-              {/* Dashboard */}
-              <div className="space-y-1">
-                <Link
-                  href="/dashboard"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/dashboard"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <LayoutDashboard className="h-4 w-4 shrink-0" />
-                  <span>{isReceiver ? "Receiver Dashboard" : "Executive Overview"}</span>
-                </Link>
+          {/* ADMIN ENVIRONMENT */}
+          {isAdmin && (
+            <div className="space-y-1.5 pt-2 border-t border-[#dce7e1] dark:border-[#26332b]">
+              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 pb-1">
+                <Shield className="h-3 w-3 text-[#8fe617]" />
+                <span>Administrator</span>
               </div>
 
-              {/* Operations */}
-              <div className="space-y-1">
-                <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] pb-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#02f52b]" />
-                  <span>Student Operations</span>
-                </div>
+              <Link
+                href="/dashboard"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/dashboard"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <LayoutDashboard className="h-4 w-4 shrink-0" />
+                <span>Dashboard</span>
+              </Link>
 
-                <Link
-                  href="/students"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/students"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <Users className="h-4 w-4 shrink-0" />
-                  <span>Student Directory</span>
-                </Link>
+              <Link
+                href="/admin/users"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/admin/users"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Shield className="h-4 w-4 shrink-0" />
+                <span>Security & Roles</span>
+              </Link>
 
-                <Link
-                  href="/students/import"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/students/import"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <FileSpreadsheet className="h-4 w-4 shrink-0" />
-                  <span>Data Importer (Excel/CSV)</span>
-                </Link>
+              <Link
+                href="/admin/database"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/admin/database"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Database className="h-4 w-4 shrink-0" />
+                <span>Database Manager</span>
+              </Link>
 
-                <Link
-                  href="/students/qr-import"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/students/qr-import"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <QrCode className="h-4 w-4 shrink-0" />
-                  <span>Import QR Codes</span>
-                </Link>
-              </div>
-
-              {/* ID Studio & Production Tools */}
-              <div className="space-y-1 pt-1">
-                <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#6b7771]">
-                  ID Studio &amp; Printing
-                </div>
-
-                <Link
-                  href="/designer"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/designer"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <Layers className="h-4 w-4 shrink-0" />
-                  <span>Canva ID Designer</span>
-                </Link>
-
-                <Link
-                  href="/bulker"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/bulker"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <Printer className="h-4 w-4 shrink-0" />
-                  <span>Bulker &amp; Templates</span>
-                </Link>
-
-                <Link
-                  href="/print-engine"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/print-engine"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <Sparkles className="h-4 w-4 shrink-0" />
-                  <span>8-Up A4 Print Engine</span>
-                </Link>
-              </div>
-
-              {/* Admin tools */}
-              {isAdmin && (
-                <div className="space-y-1 pt-1">
-                  <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] pb-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#02f52b]" />
-                    <span>Administration</span>
-                  </div>
-
-                  <Link
-                    href="/admin/users"
-                    onClick={closeMobile}
-                    className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                      pathname === "/admin/users"
-                        ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                        : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                    }`}
-                  >
-                    <Shield className="h-4 w-4 shrink-0" />
-                    <span>Security &amp; Roles</span>
-                  </Link>
-
-                  <Link
-                    href="/admin/database"
-                    onClick={closeMobile}
-                    className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                      pathname === "/admin/database"
-                        ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                        : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                    }`}
-                  >
-                    <Database className="h-4 w-4 shrink-0" />
-                    <span>Database &amp; Logs</span>
-                  </Link>
-                </div>
-              )}
-
-              {/* Settings */}
-              <div className="pt-2 border-t border-[#dce7e1]">
-                <Link
-                  href="/settings"
-                  onClick={closeMobile}
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all ${
-                    pathname === "/settings"
-                      ? "bg-[#02f52b] text-[#080808] font-bold shadow-[0_0_12px_rgba(2,245,43,0.3)] scale-[1.01]"
-                      : "text-[#3f4743] hover:bg-[#eef5f1] hover:text-[#080808]"
-                  }`}
-                >
-                  <Settings className="h-4 w-4 shrink-0" />
-                  <span>System Settings</span>
-                </Link>
-              </div>
-            </>
+              <Link
+                href="/settings"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/settings"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                <span>System Settings</span>
+              </Link>
+            </div>
           )}
         </nav>
       </div>
 
-      {/* User Identity & Sign Out Footer */}
-      <div className="border-t border-[#dce7e1] p-4 bg-[#f7faf9]">
-        <div className="flex items-center justify-between gap-2">
-          <div className="truncate pr-1">
-            <div className="text-xs font-bold text-[#080808] truncate font-mono">{session.username}</div>
+      {/* User Profile & Sign Out Footer in Drawer */}
+      <div className="border-t border-[#dce7e1] dark:border-[#26332b] p-4 bg-[#f7faf9] dark:bg-[#1c2420]">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-xs font-bold font-mono text-[#080808] dark:text-[#f2f7f4] leading-tight truncate max-w-[130px]">
+              {session.username}
+            </span>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-[#02f52b]" />
-              <span className="text-[9px] font-mono uppercase font-bold tracking-wider text-[#6b7771]">
+              <span className="inline-block h-2 w-2 rounded-full bg-[#8fe617]" />
+              <span className="text-[9px] font-mono uppercase font-bold tracking-wider text-[#6b7771] dark:text-[#8a9e93]">
                 {isSender ? "SENDER STATION" : isReceiver ? "RECEIVER FACILITY" : "ADMINISTRATOR"}
               </span>
             </div>
@@ -304,7 +303,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
           <form action={logoutAction} onSubmit={handleLogout}>
             <button
               type="submit"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] bg-white px-2.5 py-1.5 text-xs font-mono font-semibold text-[#080808] hover:bg-[#080808] hover:text-[#02f52b] hover:border-[#080808] transition-all shadow-2xs active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] px-2.5 py-1.5 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#080808] dark:hover:bg-[#8fe617] hover:text-[#8fe617] dark:hover:text-[#062404] hover:border-[#8fe617] transition-all shadow-2xs active:scale-95 cursor-pointer"
               title="Sign out session"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -317,71 +316,86 @@ export default function DashboardShell({ session, children }: DashboardShellProp
   );
 
   return (
-    <div className="flex min-h-screen bg-[#f7faf9] text-[#080808]">
-      {/* Desktop Sidebar (Fixed) */}
-      <aside className="hidden md:flex fixed inset-y-0 left-0 z-40 w-64 border-r border-[#dce7e1] bg-white flex-col justify-between overflow-y-auto shadow-sm">
-        {navContent}
-      </aside>
-
-      {/* Mobile Drawer (Overlay) */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
-          {/* Backdrop */}
+    <div className="min-h-screen bg-[#f7faf9] dark:bg-[#0d120f] text-[#080808] dark:text-[#f2f7f4] transition-colors duration-200">
+      
+      {/* Clickable Smooth-Slicing Menu Drawer (Not Sticky/Fixed) */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop with smooth fade */}
           <div
-            className="fixed inset-0 bg-[#080808]/60 backdrop-blur-xs animate-in fade-in duration-200"
-            onClick={closeMobile}
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
+            onClick={closeMenu}
           />
-          {/* Sidebar Drawer */}
-          <aside className="relative z-50 w-72 max-w-[85vw] h-full border-r border-[#dce7e1] bg-white shadow-2xl animate-in slide-in-from-left duration-200">
+          {/* Smooth Slicing Drawer Panel */}
+          <aside className="relative z-50 w-72 max-w-[85vw] h-full border-r border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] shadow-2xl animate-in slide-in-from-left duration-250 ease-out">
             {navContent}
           </aside>
         </div>
       )}
 
-      {/* Main Content Area */}
-      <div className="md:pl-64 pl-0 flex-1 flex flex-col min-w-0 bg-[#f7faf9]">
-        {/* Top Header */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[#dce7e1] bg-white/95 backdrop-blur-md px-4 sm:px-8 shadow-xs">
+      {/* Main Full-Screen Layout */}
+      <div className="flex flex-col min-w-0 min-h-screen">
+        
+        {/* Unpinned Header (Natural scrolling, not rigidly sticky/fixed) */}
+        <header className="flex h-14 items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] px-4 sm:px-6 shadow-xs transition-colors duration-200">
+          
           <div className="flex items-center gap-3">
-            {/* Hamburger Button on Phone/Mobile */}
+            {/* Clickable Slicing Menu Toggle Button */}
             <button
               type="button"
-              onClick={() => setMobileOpen(true)}
-              className="md:hidden p-2 rounded-xl border border-[#dce7e1] text-[#080808] hover:bg-[#eef5f1] transition-colors"
+              onClick={() => setMenuOpen(true)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:shadow-[0_0_12px_rgba(143,230,23,0.3)] transition-all cool-btn-hover cursor-pointer font-mono text-xs font-bold"
               aria-label="Open navigation menu"
             >
-              <Menu className="h-4 w-4" />
+              <Menu className="h-4 w-4 text-[#8fe617]" />
+              <span className="hidden sm:inline">Menu</span>
             </button>
 
             {/* Operational Status Badge */}
-            <span className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-[11px] font-mono font-bold tracking-wider uppercase border border-[#dce7e1] bg-[#f7faf9] text-[#080808]">
-              <span className="h-2 w-2 rounded-full bg-[#02f52b] animate-pulse" />
+            <span className="inline-flex items-center gap-2 rounded-xl px-2.5 py-1 text-[11px] font-mono font-bold tracking-wider uppercase border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4]">
+              <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
               <span>
                 {isSender
                   ? "SENDER STATION"
                   : isReceiver
                   ? "RECEIVER FACILITY"
-                  : "ADMINISTRATIVE CONSOLE"}
+                  : "ADMIN CONSOLE"}
               </span>
             </span>
           </div>
 
           <div className="flex items-center gap-2.5">
+            {/* Dark / Night Mode Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-2 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:shadow-[0_0_12px_rgba(143,230,23,0.25)] transition-all cool-btn-hover cursor-pointer"
+              title={isDarkMode ? "Switch to Light Studio" : "Switch to Night Mode"}
+              aria-label="Toggle theme"
+            >
+              {isDarkMode ? (
+                <Sun className="h-4 w-4 text-[#8fe617]" />
+              ) : (
+                <Moon className="h-4 w-4 text-[#6b7771]" />
+              )}
+            </button>
+
+            {/* Sender New Registration Action Button (No 'Enroll') */}
             {isSender && (
               <Link
                 href="/register"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#02f52b] text-[#080808] px-3.5 py-1.5 text-xs font-bold hover:bg-[#00dc25] transition-all shadow-[0_0_12px_rgba(2,245,43,0.3)] active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3.5 py-1.5 text-xs font-bold hover:bg-[#7ecc10] transition-all shadow-[0_0_15px_rgba(143,230,23,0.35)] cool-btn-hover active:scale-95"
               >
                 <UserPlus className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span className="hidden sm:inline">Enroll Student</span>
-                <span className="sm:hidden">Enroll</span>
+                <span className="hidden sm:inline">Register Student</span>
+                <span className="sm:hidden">Register</span>
               </Link>
             )}
 
             {isReceiver && (
               <Link
                 href="/print-engine"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#02f52b] text-[#080808] px-3.5 py-1.5 text-xs font-bold hover:bg-[#00dc25] transition-all shadow-[0_0_12px_rgba(2,245,43,0.3)] active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3.5 py-1.5 text-xs font-bold hover:bg-[#7ecc10] transition-all shadow-[0_0_15px_rgba(143,230,23,0.35)] cool-btn-hover active:scale-95"
               >
                 <Printer className="h-3.5 w-3.5 stroke-[2.5]" />
                 <span className="hidden sm:inline">8-Up Print Engine</span>
@@ -390,12 +404,12 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             )}
 
             {/* Header User Identity & 1-Click Logout Action */}
-            <div className="flex items-center gap-2 border-l border-[#dce7e1] pl-2.5">
+            <div className="flex items-center gap-2 border-l border-[#dce7e1] dark:border-[#26332b] pl-2.5">
               <div className="hidden lg:flex flex-col text-right">
-                <span className="text-xs font-bold font-mono text-[#080808] leading-tight truncate max-w-[120px]">
+                <span className="text-xs font-bold font-mono text-[#080808] dark:text-[#f2f7f4] leading-tight truncate max-w-[120px]">
                   {session.username}
                 </span>
-                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-[#6b7771]">
+                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-[#6b7771] dark:text-[#8a9e93]">
                   {isAdmin ? "Admin" : isSender ? "Sender" : "Receiver"}
                 </span>
               </div>
@@ -403,7 +417,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               <form action={logoutAction} onSubmit={handleLogout}>
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] bg-[#f7faf9] px-3 py-1.5 text-xs font-mono font-semibold text-[#080808] hover:bg-[#080808] hover:text-[#02f52b] hover:border-[#080808] transition-all shadow-2xs active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-1.5 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#080808] dark:hover:bg-[#8fe617] hover:text-[#8fe617] dark:hover:text-[#062404] hover:border-[#8fe617] transition-all shadow-2xs cool-btn-hover active:scale-95 cursor-pointer"
                   title="Sign Out Session"
                   aria-label="Sign Out"
                 >
@@ -415,8 +429,10 @@ export default function DashboardShell({ session, children }: DashboardShellProp
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-[#f7faf9]">{children}</main>
+        {/* Page Content with Full Width */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-[#f7faf9] dark:bg-[#0d120f] transition-colors duration-200">
+          {children}
+        </main>
       </div>
     </div>
   );

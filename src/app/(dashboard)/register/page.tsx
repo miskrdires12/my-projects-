@@ -48,6 +48,7 @@ export default function RegisterPage() {
 
   // Modals & Camera Controls
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("environment");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editorImageSrc, setEditorImageSrc] = useState<string | null>(null);
   const [editorOriginalFile, setEditorOriginalFile] = useState<File | null>(null);
@@ -101,14 +102,33 @@ export default function RegisterPage() {
     status: "ACTIVE",
   });
 
-  // Generate clean default student ID on mount
+  // Generate clean default student ID & load Sender Station defaults on mount
   useEffect(() => {
+    let defaultGrade = "10";
+    let defaultSchool = "";
+    let defaultAcademicYear = "2026-2027";
+    let idPrefix = "SB-";
+    try {
+      const saved = localStorage.getItem("sb_app_settings");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.defaultGrade) defaultGrade = parsed.defaultGrade;
+        if (parsed.schoolName) defaultSchool = parsed.schoolName;
+        if (parsed.academicYear) defaultAcademicYear = parsed.academicYear;
+        if (parsed.idPrefix) idPrefix = parsed.idPrefix;
+        if (parsed.cameraFacing) setCameraFacing(parsed.cameraFacing);
+      }
+    } catch {}
+
     setFormData((current) =>
       current.studentId
         ? current
         : {
             ...current,
-            studentId: `SB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+            grade: current.grade || defaultGrade,
+            school: current.school || defaultSchool,
+            academicYear: current.academicYear || defaultAcademicYear,
+            studentId: `${idPrefix}${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
           }
     );
 
@@ -417,17 +437,32 @@ export default function RegisterPage() {
   };
 
   const handleResetForm = () => {
+    let defaultGrade = "10";
+    let defaultSchool = "";
+    let defaultAcademicYear = "2026-2027";
+    let idPrefix = "SB-";
+    try {
+      const saved = localStorage.getItem("sb_app_settings");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.defaultGrade) defaultGrade = parsed.defaultGrade;
+        if (parsed.schoolName) defaultSchool = parsed.schoolName;
+        if (parsed.academicYear) defaultAcademicYear = parsed.academicYear;
+        if (parsed.idPrefix) idPrefix = parsed.idPrefix;
+      }
+    } catch {}
+
     setFormData({
-      studentId: `SB-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+      studentId: `${idPrefix}${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
       fullName: "",
-      grade: "10",
+      grade: defaultGrade,
       sex: "Male",
       phone: "",
       emailAddress: "",
       address: "",
-      school: "",
+      school: defaultSchool,
       department: "",
-      academicYear: "2026-2027",
+      academicYear: defaultAcademicYear,
       guardianFullName: "",
       emergencyContactPhone: "",
       emergencyContactName: "",
@@ -480,29 +515,21 @@ export default function RegisterPage() {
         )}
 
         {/* ====================================================================
-            STEP 1: 3:4 PORTRAIT CAMERA & AUTO-CAPTURE 3S (EASY PHONE VIEWPORT)
+            PORTRAIT CAMERA (EASY PHONE VIEWPORT, PURE 3:4 STUDIO)
            ==================================================================== */}
-        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm space-y-3">
-          <div className="flex items-center justify-between border-b border-[#eef5f1] pb-2">
-            <div className="flex items-center gap-2">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#02f52b] text-[11px] font-extrabold text-[#080808]">
-                1
-              </span>
-              <span className="text-xs font-mono uppercase tracking-wider font-extrabold text-[#080808]">
-                Student Photo (3:4 Studio)
-              </span>
-            </div>
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm space-y-3 transition-colors duration-200">
+          <div className="flex items-center justify-end pb-1">
             {officialPhotoPath ? (
-              <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Check className="h-3 w-3" /> 3:4 Attached
+              <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <Check className="h-3 w-3" /> 3:4 Photo Attached
               </span>
             ) : (
-              <span className="text-[10px] font-mono text-[#6b7771]">3:4 • 300 DPI</span>
+              <span className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93]">3:4 Studio • 300 DPI</span>
             )}
           </div>
 
           {/* Photo Viewfinder Display */}
-          <div className="relative aspect-[3/4] max-w-[240px] mx-auto rounded-2xl border-2 border-dashed border-[#dce7e1] bg-[#f7faf9] overflow-hidden flex items-center justify-center shadow-inner group">
+          <div className="relative aspect-[3/4] max-w-[240px] mx-auto rounded-2xl border-2 border-dashed border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] overflow-hidden flex items-center justify-center shadow-inner group">
             {editedPhotoPreview ? (
               <img
                 src={editedPhotoPreview}
@@ -511,11 +538,11 @@ export default function RegisterPage() {
               />
             ) : (
               <div className="flex flex-col items-center justify-center p-4 text-center space-y-1.5">
-                <div className="h-12 w-12 rounded-full bg-[#eef5f1] flex items-center justify-center text-[#080808]">
-                  <Camera className="h-6 w-6 stroke-[1.75]" />
+                <div className="h-12 w-12 rounded-full bg-[#eef5f1] dark:bg-[#232d27] flex items-center justify-center text-[#080808] dark:text-[#f2f7f4]">
+                  <Camera className="h-6 w-6 stroke-[1.75] text-[#8fe617]" />
                 </div>
-                <div className="text-xs font-bold text-[#080808]">Take Student Photo</div>
-                <div className="text-[10px] font-mono text-[#6b7771]">
+                <div className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4]">Take Student Photo</div>
+                <div className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93]">
                   Pure 3:4 ratio at 300 DPI
                 </div>
               </div>
@@ -523,7 +550,7 @@ export default function RegisterPage() {
 
             {/* Quick Actions Hover/Tap Overlay */}
             {editedPhotoPreview && (
-              <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2 backdrop-blur-2xs">
                 <button
                   type="button"
                   onClick={() => {
@@ -532,7 +559,7 @@ export default function RegisterPage() {
                       setIsEditorOpen(true);
                     }
                   }}
-                  className="w-36 rounded-xl bg-[#02f52b] text-[#080808] py-1.5 text-xs font-extrabold shadow-md flex items-center justify-center gap-1.5 hover:brightness-105 cursor-pointer"
+                  className="w-36 rounded-xl bg-[#8fe617] text-[#062404] py-1.5 text-xs font-black shadow-md flex items-center justify-center gap-1.5 cool-btn-hover cursor-pointer"
                 >
                   <Crop className="h-3.5 w-3.5" />
                   <span>Edit / Crop Photo</span>
@@ -540,9 +567,9 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={handleLaunchCamera}
-                  className="w-36 rounded-xl bg-white text-[#080808] py-1.5 text-xs font-bold shadow-md flex items-center justify-center gap-1.5 hover:bg-neutral-100 cursor-pointer"
+                  className="w-36 rounded-xl bg-white dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4] py-1.5 text-xs font-bold shadow-md flex items-center justify-center gap-1.5 hover:bg-neutral-100 dark:hover:bg-[#232d27] cursor-pointer"
                 >
-                  <Camera className="h-3.5 w-3.5 text-[#080808]" />
+                  <Camera className="h-3.5 w-3.5 text-[#8fe617]" />
                   <span>Retake Photo</span>
                 </button>
                 <button
@@ -564,7 +591,7 @@ export default function RegisterPage() {
             <button
               type="button"
               onClick={handleLaunchCamera}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#02f52b] text-[#080808] py-3 px-4 text-xs font-mono font-black shadow-[0_0_15px_rgba(2,245,43,0.35)] hover:bg-[#00dc25] active:scale-95 transition-all cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#8fe617] text-[#062404] py-3 px-4 text-xs font-mono font-black shadow-[0_0_18px_rgba(143,230,23,0.35)] hover:bg-[#7ecc10] active:scale-95 cool-btn-hover transition-all cursor-pointer"
             >
               <Camera className="h-4 w-4 stroke-[2.5]" />
               <span>Take Student Photo</span>
@@ -579,13 +606,13 @@ export default function RegisterPage() {
                   setEditorImageSrc(editedPhotoPreview);
                   setIsEditorOpen(true);
                 }}
-                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#02f52b] bg-[#02f52b]/10 py-2.5 text-xs font-mono font-bold text-[#080808] hover:bg-[#02f52b]/20 transition-colors cursor-pointer"
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#8fe617] bg-[#8fe617]/10 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#8fe617]/20 transition-colors cool-btn-hover cursor-pointer"
               >
-                <Crop className="h-3.5 w-3.5 text-[#080808]" />
+                <Crop className="h-3.5 w-3.5 text-[#8fe617]" />
                 <span>Edit & Crop Photo</span>
               </button>
             ) : (
-              <label className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#dce7e1] bg-[#f7faf9] py-2.5 text-xs font-mono font-semibold text-[#6b7771] hover:text-[#080808] hover:bg-[#eef5f1] transition-colors cursor-pointer">
+              <label className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] py-2.5 text-xs font-mono font-semibold text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] transition-colors cool-btn-hover cursor-pointer">
                 <Upload className="h-3.5 w-3.5" />
                 <span>Upload From Gallery</span>
                 <input
@@ -600,36 +627,31 @@ export default function RegisterPage() {
         </div>
 
         {/* ====================================================================
-            STEP 2: CORE STUDENT CREDENTIALS (EASY PHONE INPUTS)
+            CORE STUDENT CREDENTIALS (EASY PHONE INPUTS)
            ==================================================================== */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm space-y-3.5">
-            <div className="flex items-center justify-between border-b border-[#eef5f1] pb-2">
-              <div className="flex items-center gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#02f52b] text-[11px] font-extrabold text-[#080808]">
-                  2
-                </span>
-                <span className="text-xs font-mono uppercase tracking-wider font-extrabold text-[#080808]">
-                  Student Information
-                </span>
-              </div>
-              <span className="text-[10px] font-mono text-[#02f52b] font-bold">REQUIRED</span>
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm space-y-3.5 transition-colors duration-200">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#26332b] pb-2">
+              <span className="text-xs font-mono uppercase tracking-wider font-extrabold text-[#080808] dark:text-[#f2f7f4]">
+                Student Information
+              </span>
+              <span className="text-[10px] font-mono text-[#8fe617] font-bold">REQUIRED</span>
             </div>
 
             {/* Student ID */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-[#080808] font-mono">
+                <label className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4] font-mono">
                   Student ID <span className="text-red-500">*</span>
                 </label>
                 {idAvailability.checking ? (
-                  <span className="text-[10px] font-mono text-[#6b7771] flex items-center gap-1">
+                  <span className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93] flex items-center gap-1">
                     <Loader2 className="h-3 w-3 animate-spin" /> checking...
                   </span>
                 ) : idAvailability.available === true ? (
-                  <span className="text-[10px] font-mono text-emerald-700 font-bold">✓ Ready</span>
+                  <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-bold">✓ Ready</span>
                 ) : idAvailability.available === false ? (
-                  <span className="text-[10px] font-mono text-rose-600 font-bold">✕ Taken</span>
+                  <span className="text-[10px] font-mono text-rose-600 dark:text-rose-400 font-bold">✕ Taken</span>
                 ) : null}
               </div>
               <input
@@ -639,13 +661,13 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 placeholder="e.g. STU-2026-001"
                 required
-                className="w-full rounded-xl border border-[#dce7e1] bg-[#f7faf9] px-3.5 py-2.5 text-xs font-mono text-[#080808] focus:border-[#02f52b] focus:ring-1 focus:ring-[#02f52b] focus:outline-none"
+                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] focus:outline-none transition-all"
               />
             </div>
 
             {/* Full Name */}
             <div>
-              <label className="block text-xs font-bold text-[#080808] mb-1 font-mono">
+              <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
                 Full Name <span className="text-red-500">*</span>
               </label>
               <input
@@ -655,46 +677,30 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 placeholder="e.g. Abebe Kebede"
                 required
-                className="w-full rounded-xl border border-[#dce7e1] bg-[#f7faf9] px-3.5 py-2.5 text-xs text-[#080808] font-semibold placeholder:text-[#6b7771] focus:border-[#02f52b] focus:ring-1 focus:ring-[#02f52b] focus:outline-none"
+                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs text-[#080808] dark:text-[#f2f7f4] font-semibold placeholder:text-[#6b7771] dark:placeholder:text-[#8a9e93] focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] focus:outline-none transition-all"
               />
             </div>
 
-            {/* Sex / Gender Chips (Easy Phone Style) */}
+            {/* Sex / Gender Dropdown (NO ICONS) */}
             <div>
-              <label className="block text-xs font-bold text-[#080808] mb-1.5 font-mono">
-                Sex / Gender <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
+                Sex <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormData((p) => ({ ...p, sex: "Male" }))}
-                  className={`py-2.5 px-4 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 border transition-all ${
-                    formData.sex === "Male"
-                      ? "bg-[#02f52b] text-[#080808] border-[#02f52b] shadow-[0_0_12px_rgba(2,245,43,0.35)] scale-[1.01]"
-                      : "bg-[#f7faf9] text-[#6b7771] border-[#dce7e1] hover:text-[#080808]"
-                  }`}
-                >
-                  <span className="text-base">👦</span>
-                  <span>Male</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData((p) => ({ ...p, sex: "Female" }))}
-                  className={`py-2.5 px-4 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 border transition-all ${
-                    formData.sex === "Female"
-                      ? "bg-[#02f52b] text-[#080808] border-[#02f52b] shadow-[0_0_12px_rgba(2,245,43,0.35)] scale-[1.01]"
-                      : "bg-[#f7faf9] text-[#6b7771] border-[#dce7e1] hover:text-[#080808]"
-                  }`}
-                >
-                  <span className="text-base">👧</span>
-                  <span>Female</span>
-                </button>
-              </div>
+              <select
+                name="sex"
+                value={formData.sex}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] focus:outline-none transition-all cursor-pointer"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
             </div>
 
             {/* Grade (Number Input) */}
             <div>
-              <label className="block text-xs font-bold text-[#080808] mb-1 font-mono">
+              <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
                 Grade <span className="text-red-500">*</span>
               </label>
               <input
@@ -706,7 +712,7 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 placeholder="e.g. 10"
                 required
-                className="w-full rounded-xl border border-[#dce7e1] bg-[#f7faf9] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] focus:border-[#02f52b] focus:ring-1 focus:ring-[#02f52b] focus:outline-none"
+                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] focus:outline-none transition-all"
               />
             </div>
 
@@ -802,22 +808,22 @@ export default function RegisterPage() {
           </div>
 
           {/* ====================================================================
-              STEP 3: BIG ACTION BUTTON (SEND & ENROLL STUDENT)
+              ACTION BUTTON (SEND & REGISTER STUDENT)
              ==================================================================== */}
           <div className="pt-2">
             <button
               type="submit"
               disabled={isPending || isUploadingPhoto || idAvailability.available === false}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#02f52b] py-3.5 px-6 text-sm font-mono font-extrabold text-[#080808] hover:bg-[#00dc25] active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(2,245,43,0.4)] disabled:opacity-50 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#8fe617] py-3.5 px-6 text-sm font-mono font-black text-[#062404] hover:bg-[#7ecc10] active:scale-[0.98] cool-btn-hover transition-all shadow-[0_0_22px_rgba(143,230,23,0.45)] disabled:opacity-50 cursor-pointer"
             >
               {isPending ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin text-[#080808]" />
-                  <span>Enrolling & Syncing...</span>
+                  <Loader2 className="h-5 w-5 animate-spin text-[#062404]" />
+                  <span>Registering & Syncing...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="h-5 w-5 text-[#080808] stroke-[2.5]" />
+                  <CheckCircle2 className="h-5 w-5 text-[#062404] stroke-[2.5]" />
                   <span>SAVE & SEND TO RECEIVER</span>
                 </>
               )}
@@ -831,30 +837,30 @@ export default function RegisterPage() {
          ==================================================================== */}
       {sentSuccessfullyData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-sm rounded-3xl border-2 border-[#02f52b] bg-white p-6 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-sm rounded-3xl border-2 border-[#8fe617] bg-white dark:bg-[#161c18] p-6 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-200">
             {/* Animated Check Icon */}
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#02f52b] shadow-[0_0_25px_rgba(2,245,43,0.6)]">
-              <Check className="h-9 w-9 text-[#080808] stroke-[3]" />
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#8fe617] shadow-[0_0_25px_rgba(143,230,23,0.6)]">
+              <Check className="h-9 w-9 text-[#062404] stroke-[3]" />
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xl font-mono font-black tracking-tight text-[#080808]">
+              <h3 className="text-xl font-mono font-black tracking-tight text-[#080808] dark:text-[#f2f7f4]">
                 Sent Successfully!
               </h3>
-              <p className="text-xs text-[#3f4743]">
-                Student enrolled & synced to Receiver Workstation
+              <p className="text-xs text-[#3f4743] dark:text-[#a4b8ad]">
+                Student registered & synced to Receiver Workstation
               </p>
             </div>
 
             {/* Student Preview Card */}
-            <div className="rounded-2xl border border-[#dce7e1] bg-[#f7faf9] p-3 text-left space-y-1 font-mono text-xs">
-              <div className="font-bold text-[#080808] text-sm truncate">
+            <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-3 text-left space-y-1 font-mono text-xs">
+              <div className="font-bold text-[#080808] dark:text-[#f2f7f4] text-sm truncate">
                 {sentSuccessfullyData.fullName}
               </div>
-              <div className="text-[#3f4743]">
-                ID: <strong className="text-[#080808]">{sentSuccessfullyData.studentId}</strong>
+              <div className="text-[#3f4743] dark:text-[#a4b8ad]">
+                ID: <strong className="text-[#080808] dark:text-[#f2f7f4]">{sentSuccessfullyData.studentId}</strong>
               </div>
-              <div className="text-[#3f4743]">
+              <div className="text-[#3f4743] dark:text-[#a4b8ad]">
                 Class: {sentSuccessfullyData.grade} • {sentSuccessfullyData.sex}
               </div>
             </div>
@@ -864,13 +870,13 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={handleResetForm}
-                className="w-full rounded-xl bg-[#02f52b] text-[#080808] py-2.5 text-xs font-mono font-extrabold shadow-md hover:bg-[#00dc25] transition-all cursor-pointer"
+                className="w-full rounded-xl bg-[#8fe617] text-[#062404] py-2.5 text-xs font-mono font-black shadow-md hover:bg-[#7ecc10] cool-btn-hover transition-all cursor-pointer"
               >
-                Enroll Next Student ({autoResetTimer}s)
+                Register Next Student ({autoResetTimer}s)
               </button>
               <Link
                 href={`/sender/receipts?studentId=${sentSuccessfullyData.studentId}`}
-                className="w-full flex items-center justify-center gap-1 rounded-xl border border-[#dce7e1] bg-white py-2 text-xs font-mono font-semibold text-[#080808] hover:bg-[#eef5f1] transition-colors"
+                className="w-full flex items-center justify-center gap-1 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] py-2 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] cool-btn-hover transition-colors"
               >
                 <Receipt className="h-3.5 w-3.5" />
                 <span>View / Print Receipt</span>
@@ -886,6 +892,7 @@ export default function RegisterPage() {
         onClose={() => setIsCameraOpen(false)}
         onCapture={handleWebcamCaptured}
         onEditPhoto={handleOpenPhotoEditor}
+        initialFacingMode={cameraFacing}
       />
 
       {/* Photo Studio Editor Modal */}

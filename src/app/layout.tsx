@@ -12,8 +12,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-[#f7faf9] text-[#080808] antialiased selection:bg-[#02f52b] selection:text-[#080808]">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('sb_theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}}catch(e){}})()`,
+          }}
+        />
+      </head>
+      <body className="min-h-screen bg-[#f7faf9] dark:bg-[#0d120f] text-[#080808] dark:text-[#f2f7f4] antialiased selection:bg-[#8fe617] selection:text-[#062404]">
         {children}
       </body>
     </html>

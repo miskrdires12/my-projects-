@@ -1,5 +1,14 @@
 "use client";
 
+// ============================================================================
+// STUDENT BRIDGE — SENDER REALTIME OPERATIONAL DASHBOARD
+// Ultra-fast registration & photo capture console for Sender Station:
+// - True Lemon Green (#8fe617) accents
+// - Full Light / Dark / Night Mode support
+// - Zero "Enroll" terminology (strictly "Register")
+// - Live Real-Time IndexedDB & Cloud Sync stream
+// ============================================================================
+
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -7,177 +16,132 @@ import {
   UserPlus,
   Camera,
   Boxes,
-  RefreshCw,
-  ArrowUpRight,
   Receipt,
+  ArrowUpRight,
+  Clock,
+  RefreshCw,
   FolderArchive,
   ChevronDown,
-  Shield,
-  Clock,
 } from "lucide-react";
+import { getStudentCountFromDB } from "@/lib/idb-storage";
 
-import { subscribeToCloudSync } from "@/lib/sync-client";
-import { getAllStudentsFromDB } from "@/lib/idb-storage";
-
-interface SenderDashboardProps {
-  initialData: {
-    totalEnrolled: number;
-    enrolledToday: number;
-    photosCaptured: number;
-    totalBatches: number;
-    draftBatchesCount: number;
-    sentBatchesCount: number;
-    recentStudents: any[];
-    recentBatches: any[];
-  };
-  notice?: string;
+interface SenderDashboardData {
+  totalEnrolled: number;
+  enrolledToday: number;
+  photosCaptured: number;
+  totalBatches: number;
+  sentBatchesCount: number;
+  draftBatchesCount: number;
+  recentStudents: Array<{
+    id: string;
+    studentId: string;
+    fullName: string;
+    grade: string;
+    photoPath?: string | null;
+    createdAt?: string;
+  }>;
 }
 
-export default function RealtimeSenderDashboard({ initialData, notice }: SenderDashboardProps) {
-  const [data, setData] = useState(initialData);
+export function RealtimeSenderDashboard() {
+  const [data, setData] = useState<SenderDashboardData>({
+    totalEnrolled: 0,
+    enrolledToday: 0,
+    photosCaptured: 0,
+    totalBatches: 0,
+    sentBatchesCount: 0,
+    draftBatchesCount: 0,
+    recentStudents: [],
+  });
+
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [actionsOpen, setActionsOpen] = useState(false);
 
-  useEffect(() => {
-    setLastUpdated(new Date().toLocaleTimeString());
-  }, []);
-
-  // Listen to Global Cloud Sync Bus in real-time
-  useEffect(() => {
-    const unsubscribe = subscribeToCloudSync(
-      (newStudent) => {
-        setData((prev) => ({
-          ...prev,
-          totalEnrolled: prev.totalEnrolled + 1,
-          enrolledToday: prev.enrolledToday + 1,
-          photosCaptured: newStudent.photoPath ? prev.photosCaptured + 1 : prev.photosCaptured,
-          recentStudents: [newStudent, ...prev.recentStudents.filter((s) => s.studentId !== newStudent.studentId)].slice(0, 10),
-        }));
-        setLastUpdated(new Date().toLocaleTimeString());
-      },
-      () => {
-        fetchMetrics();
-      },
-      () => {
-        setData((prev) => ({
-          ...prev,
-          totalEnrolled: 0,
-          enrolledToday: 0,
-          photosCaptured: 0,
-          recentStudents: [],
-        }));
-        setLastUpdated(new Date().toLocaleTimeString());
-      }
-    );
-    return () => unsubscribe();
-  }, []);
-
   const fetchMetrics = useCallback(async () => {
+    setIsRefreshing(true);
     try {
-      setIsRefreshing(true);
-      const res = await fetch("/api/dashboard/live-metrics?role=SENDER", { cache: "no-store" });
+      // 1. Fetch server-side metrics
+      const res = await fetch("/api/sender/metrics", { cache: "no-store" });
+      let serverData: any = null;
       if (res.ok) {
-        const json = await res.json();
-        let localCount = 0;
-        let localPhotos = 0;
-        let localStudents: any[] = [];
-
-        // Pull from high-capacity IndexedDB first (6,000+ students)
-        try {
-          const idbList = await getAllStudentsFromDB();
-          if (idbList && idbList.length > 0) {
-            localStudents = idbList;
-            localCount = idbList.length;
-            localPhotos = idbList.filter((s: any) => Boolean(s.photoPath)).length;
-          }
-        } catch {}
-
-        // Fallback / merge with localStorage if needed
-        if (localStudents.length === 0) {
-          try {
-            const raw = localStorage.getItem("sb_enrolled_students");
-            if (raw) {
-              localStudents = JSON.parse(raw);
-              localCount = localStudents.length;
-              localPhotos = localStudents.filter((s: any) => Boolean(s.photoPath)).length;
-            }
-          } catch {}
-        }
-
-        setData((prev) => {
-          const total = Math.max(json.metrics.totalEnrolled, localCount, prev.totalEnrolled);
-          const today = Math.max(json.metrics.enrolledToday, localCount, prev.enrolledToday);
-          const photos = Math.max(json.metrics.photosCaptured, localPhotos, prev.photosCaptured);
-
-          const mergedStudents = [...(json.recentStudents || [])];
-          for (const ls of localStudents) {
-            if (!mergedStudents.some((ms: any) => ms.studentId === ls.studentId)) {
-              mergedStudents.unshift(ls);
-            }
-          }
-          for (const ps of prev.recentStudents) {
-            if (!mergedStudents.some((ms: any) => ms.studentId === ps.studentId)) {
-              mergedStudents.push(ps);
-            }
-          }
-
-          return {
-            totalEnrolled: total,
-            enrolledToday: today,
-            photosCaptured: photos,
-            totalBatches: json.metrics.totalBatches,
-            draftBatchesCount: json.metrics.draftBatchesCount,
-            sentBatchesCount: json.metrics.sentBatchesCount,
-            recentStudents: mergedStudents.slice(0, 10),
-            recentBatches: json.recentBatches || prev.recentBatches,
-          };
-        });
-        setLastUpdated(new Date().toLocaleTimeString());
+        serverData = await res.json();
       }
+
+      // 2. Read local high-capacity IndexedDB count
+      let idbCount = 0;
+      try {
+        idbCount = await getStudentCountFromDB();
+      } catch {}
+
+      // 3. Read localStorage backup cache
+      let localCount = 0;
+      let localRecent: any[] = [];
+      try {
+        const raw = localStorage.getItem("sb_enrolled_students");
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            localCount = list.length;
+            localRecent = list.slice(0, 10).map((s: any) => ({
+              id: s.id || s.studentId,
+              studentId: s.studentId,
+              fullName: s.fullName,
+              grade: s.grade,
+              photoPath: s.photoPath,
+              createdAt: s.createdAt,
+            }));
+          }
+        }
+      } catch {}
+
+      const effectiveTotal = Math.max(serverData?.totalEnrolled || 0, idbCount, localCount);
+      const effectiveRecent =
+        serverData?.recentStudents && serverData.recentStudents.length > 0
+          ? serverData.recentStudents
+          : localRecent;
+
+      setData({
+        totalEnrolled: effectiveTotal,
+        enrolledToday: serverData?.enrolledToday || localRecent.length,
+        photosCaptured: serverData?.photosCaptured || effectiveRecent.filter((s: any) => !!s.photoPath).length,
+        totalBatches: serverData?.totalBatches || 0,
+        sentBatchesCount: serverData?.sentBatchesCount || 0,
+        draftBatchesCount: serverData?.draftBatchesCount || 0,
+        recentStudents: effectiveRecent,
+      });
+
+      setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
-      console.error("Failed to poll sender metrics:", err);
+      console.warn("Sender dashboard metric poll notice:", err);
     } finally {
       setIsRefreshing(false);
     }
   }, []);
 
-  // Poll every 4 seconds when autoRefresh is enabled
   useEffect(() => {
+    fetchMetrics();
     if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      fetchMetrics();
-    }, 4000);
+    const interval = setInterval(fetchMetrics, 4000);
     return () => clearInterval(interval);
-  }, [autoRefresh, fetchMetrics]);
+  }, [fetchMetrics, autoRefresh]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 text-[#080808]">
-      {/* Notice Alert if redirected */}
-      {notice === "sender_station_only" && (
-        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 text-xs text-[#3f4743] flex items-center gap-3 shadow-sm">
-          <Shield className="h-5 w-5 text-[#080808] shrink-0" />
-          <div>
-            <strong className="text-[#080808]">Sender Workstation Active:</strong> You have been redirected to your enrollment dashboard. Receiver production tools are restricted to the Central Receiver Facility.
-          </div>
-        </div>
-      )}
-
-      {/* Real-time Status Banner (Strict 60/30/10 theme) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border border-[#dce7e1] bg-white px-4 py-3 rounded-2xl text-xs shadow-sm">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      {/* Real-time Status Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] px-4 py-3 rounded-2xl text-xs shadow-sm">
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-2.5 w-2.5">
             {autoRefresh && (
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#02f52b] opacity-75" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#8fe617] opacity-75" />
             )}
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#02f52b]" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#8fe617]" />
           </span>
-          <span className="font-mono uppercase tracking-wider font-extrabold text-[#080808]">
-            {autoRefresh ? "Real-time Live Sync Active" : "Live Sync Paused"}
+          <span className="font-mono uppercase tracking-wider font-extrabold text-[#080808] dark:text-[#f2f7f4]">
+            {autoRefresh ? "Real-time Station Sync Active" : "Live Sync Paused"}
           </span>
-          <span className="text-[#dce7e1]">•</span>
-          <span className="text-[#6b7771] font-mono text-[11px]">
+          <span className="text-[#dce7e1] dark:text-[#26332b]">•</span>
+          <span className="text-[#6b7771] dark:text-[#7f9488] font-mono text-[11px]">
             Last updated: {lastUpdated || "Just now"}
           </span>
         </div>
@@ -186,10 +150,10 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
           <button
             type="button"
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`px-3 py-1 text-[11px] font-mono font-bold rounded-xl border transition-all ${
+            className={`px-3 py-1 text-[11px] font-mono font-bold rounded-xl border transition-all cool-btn-hover ${
               autoRefresh
-                ? "border-[#02f52b] bg-[#02f52b] text-[#080808] shadow-[0_0_10px_rgba(2,245,43,0.3)]"
-                : "border-[#dce7e1] bg-[#f7faf9] text-[#6b7771] hover:text-[#080808]"
+                ? "border-[#8fe617] bg-[#8fe617] text-[#062404] shadow-[0_0_12px_rgba(143,230,23,0.3)]"
+                : "border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] text-[#6b7771] dark:text-[#7f9488] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
             }`}
           >
             Auto-Sync: {autoRefresh ? "ON (4s)" : "OFF"}
@@ -198,29 +162,31 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
             type="button"
             onClick={fetchMetrics}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-semibold rounded-xl border border-[#dce7e1] bg-white text-[#080808] hover:bg-[#eef5f1] disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-semibold rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] disabled:opacity-50 transition-colors cool-btn-hover"
           >
-            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin text-[#02f52b]" : ""}`} />
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin text-[#8fe617]" : ""}`} />
             <span>Refresh Now</span>
           </button>
         </div>
       </div>
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-[#dce7e1] pb-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-[#dce7e1] dark:border-[#26332b] pb-6">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-[#080808] font-extrabold tracking-wider uppercase">
+            <span className="text-xs font-mono text-[#8fe617] font-extrabold tracking-wider uppercase">
               SENDER WORKSTATION
             </span>
-            <span className="text-[#dce7e1]">/</span>
-            <span className="text-xs text-[#6b7771] font-semibold">REGISTRATION &amp; CAPTURE CONSOLE</span>
+            <span className="text-[#dce7e1] dark:text-[#26332b]">/</span>
+            <span className="text-xs text-[#6b7771] dark:text-[#7f9488] font-semibold">
+              REGISTRATION &amp; CAPTURE CONSOLE
+            </span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-[#080808] mt-1">
-            Student Enrollment &amp; Photo Capture
+          <h1 className="text-2xl font-black tracking-tight text-[#080808] dark:text-[#f2f7f4] mt-1">
+            Student Registration &amp; Photo Studio
           </h1>
-          <p className="text-xs text-[#6b7771] mt-0.5">
-            Collect student information, take 3s auto-capture photos, group into batches, and issue receipts
+          <p className="text-xs text-[#6b7771] dark:text-[#7f9488] mt-0.5">
+            Rapid student registration, high-resolution 300 DPI studio portraits, dispatch batches, and receipts
           </p>
         </div>
 
@@ -228,53 +194,53 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
         <div className="flex items-center gap-2">
           <Link
             href="/register"
-            className="inline-flex items-center gap-2 rounded-xl bg-[#02f52b] px-4 py-2 text-xs font-extrabold text-[#080808] hover:bg-[#00dc25] transition-all shadow-[0_0_12px_rgba(2,245,43,0.3)] active:scale-95"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#8fe617] px-4 py-2 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] transition-all shadow-[0_0_15px_rgba(143,230,23,0.35)] cool-btn-hover active:scale-95"
           >
             <UserPlus className="h-4 w-4 stroke-[2.5]" />
-            <span>Enroll New Student</span>
+            <span>Register New Student</span>
           </Link>
 
           <div className="relative">
             <button
               type="button"
               onClick={() => setActionsOpen(!actionsOpen)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] bg-white px-3 py-2 text-xs font-semibold text-[#080808] hover:bg-[#eef5f1] transition-colors shadow-2xs"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-3 py-2 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] transition-colors shadow-2xs cool-btn-hover"
             >
               <span>Quick Actions</span>
-              <ChevronDown className="h-3.5 w-3.5 text-[#6b7771]" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#6b7771] dark:text-[#7f9488]" />
             </button>
 
             {actionsOpen && (
               <div
-                className="absolute right-0 mt-1 w-56 rounded-2xl border border-[#dce7e1] bg-white p-1.5 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100"
+                className="absolute right-0 mt-1 w-56 rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-1.5 shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100"
                 onClick={() => setActionsOpen(false)}
               >
                 <Link
                   href="/register"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] hover:bg-[#eef5f1] rounded-xl font-medium"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] rounded-xl font-medium"
                 >
-                  <UserPlus className="h-3.5 w-3.5 text-[#02f52b]" />
-                  <span>Manual Registration</span>
+                  <UserPlus className="h-3.5 w-3.5 text-[#8fe617]" />
+                  <span>Student Registration</span>
                 </Link>
                 <Link
                   href="/sender/photo-import"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] hover:bg-[#eef5f1] rounded-xl font-medium"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] rounded-xl font-medium"
                 >
-                  <FolderArchive className="h-3.5 w-3.5 text-[#02f52b]" />
+                  <FolderArchive className="h-3.5 w-3.5 text-[#8fe617]" />
                   <span>Folder Photo Matcher</span>
                 </Link>
                 <Link
                   href="/sender/batches"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] hover:bg-[#eef5f1] rounded-xl font-medium"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] rounded-xl font-medium"
                 >
-                  <Boxes className="h-3.5 w-3.5 text-[#02f52b]" />
+                  <Boxes className="h-3.5 w-3.5 text-[#8fe617]" />
                   <span>Dispatch Batches</span>
                 </Link>
                 <Link
                   href="/sender/receipts"
-                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] hover:bg-[#eef5f1] rounded-xl font-medium"
+                  className="flex items-center gap-2 px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] rounded-xl font-medium"
                 >
-                  <Receipt className="h-3.5 w-3.5 text-[#02f52b]" />
+                  <Receipt className="h-3.5 w-3.5 text-[#8fe617]" />
                   <span>Print Registration Receipts</span>
                 </Link>
               </div>
@@ -283,177 +249,177 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
         </div>
       </div>
 
-      {/* Strict 60/30/10 KPI Grid */}
+      {/* KPI Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm hover:border-[#02f52b] transition-colors">
-          <div className="flex items-center justify-between text-xs text-[#6b7771]">
-            <span className="font-semibold">Total Enrolled</span>
-            <Users className="h-4 w-4 text-[#02f52b]" />
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm hover:border-[#8fe617] transition-all cool-hover">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#7f9488]">
+            <span className="font-semibold">Total Registered</span>
+            <Users className="h-4 w-4 text-[#8fe617]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-[#080808] mt-2">
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-2">
             {data.totalEnrolled.toLocaleString()}
           </div>
-          <div className="text-[10px] text-[#6b7771] mt-1 font-mono">DATABASE TOTAL</div>
+          <div className="text-[10px] text-[#6b7771] dark:text-[#7f9488] mt-1 font-mono">DATABASE TOTAL</div>
         </div>
 
-        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm hover:border-[#02f52b] transition-colors">
-          <div className="flex items-center justify-between text-xs text-[#6b7771]">
-            <span className="font-semibold">Enrolled Today</span>
-            <UserPlus className="h-4 w-4 text-[#02f52b]" />
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm hover:border-[#8fe617] transition-all cool-hover">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#7f9488]">
+            <span className="font-semibold">Registered Today</span>
+            <UserPlus className="h-4 w-4 text-[#8fe617]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-[#080808] mt-2">
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-2">
             {data.enrolledToday.toLocaleString()}
           </div>
-          <div className="text-[10px] text-[#6b7771] mt-1 font-mono">CURRENT WORK SHIFT</div>
+          <div className="text-[10px] text-[#6b7771] dark:text-[#7f9488] mt-1 font-mono">CURRENT SHIFT</div>
         </div>
 
-        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm hover:border-[#02f52b] transition-colors">
-          <div className="flex items-center justify-between text-xs text-[#6b7771]">
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm hover:border-[#8fe617] transition-all cool-hover">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#7f9488]">
             <span className="font-semibold">Photos Attached</span>
-            <Camera className="h-4 w-4 text-[#02f52b]" />
+            <Camera className="h-4 w-4 text-[#8fe617]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-[#080808] mt-2">
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-2">
             {data.photosCaptured.toLocaleString()}
           </div>
-          <div className="text-[10px] text-[#6b7771] mt-1 font-mono">
-            {data.totalEnrolled > 0
-              ? Math.round((data.photosCaptured / data.totalEnrolled) * 100)
-              : 0}
-            % OF ENROLLED
+          <div className="text-[10px] text-[#6b7771] dark:text-[#7f9488] mt-1 font-mono">
+            {data.totalEnrolled > 0 ? Math.round((data.photosCaptured / data.totalEnrolled) * 100) : 0}% READY
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#dce7e1] bg-white p-4 shadow-sm hover:border-[#02f52b] transition-colors">
-          <div className="flex items-center justify-between text-xs text-[#6b7771]">
-            <span className="font-semibold">Transfer Batches</span>
-            <Boxes className="h-4 w-4 text-[#02f52b]" />
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm hover:border-[#8fe617] transition-all cool-hover">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#7f9488]">
+            <span className="font-semibold">Dispatch Batches</span>
+            <Boxes className="h-4 w-4 text-[#8fe617]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-[#080808] mt-2">{data.totalBatches}</div>
-          <div className="text-[10px] text-[#6b7771] mt-1 font-mono">
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-2">
+            {data.totalBatches}
+          </div>
+          <div className="text-[10px] text-[#6b7771] dark:text-[#7f9488] mt-1 font-mono">
             {data.sentBatchesCount} SENT • {data.draftBatchesCount} DRAFT
           </div>
         </div>
       </div>
 
-      {/* Unified Sender Tools Pipeline */}
-      <div className="rounded-2xl border border-[#dce7e1] bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between border-b border-[#dce7e1] pb-3 mb-4">
+      {/* Unified Sender Operations Pipeline */}
+      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-5 shadow-sm">
+        <div className="flex items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] pb-3 mb-4">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-[#02f52b]" />
-            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#080808]">
-              Enrollment Operations Pipeline
+            <span className="h-2 w-2 rounded-full bg-[#8fe617]" />
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+              Registration Operations Pipeline
             </h2>
           </div>
-          <span className="text-[11px] text-[#6b7771] font-mono">Step-by-step workflow</span>
+          <span className="text-[11px] text-[#6b7771] dark:text-[#7f9488] font-mono">Step-by-step workflow</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Link
             href="/register"
-            className="rounded-xl border border-[#dce7e1] bg-[#f7faf9] p-4 hover:border-[#02f52b] hover:shadow-[0_0_15px_rgba(2,245,43,0.15)] transition-all group"
+            className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 hover:border-[#8fe617] hover:shadow-[0_0_15px_rgba(143,230,23,0.15)] transition-all group cool-hover"
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] bg-white text-[#080808] font-bold">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4] font-bold">
                 STEP 1
               </span>
-              <ArrowUpRight className="h-4 w-4 text-[#6b7771] group-hover:text-[#080808] transition-colors" />
+              <ArrowUpRight className="h-4 w-4 text-[#6b7771] dark:text-[#7f9488] group-hover:text-[#8fe617] transition-colors" />
             </div>
-            <h3 className="text-sm font-bold text-[#080808] mt-3">1. Student Registration</h3>
-            <p className="text-xs text-[#6b7771] mt-1">
-              High-resolution camera photo, precision crop studio, and student information
+            <h3 className="text-sm font-bold text-[#080808] dark:text-[#f2f7f4] mt-3">1. Student Registration</h3>
+            <p className="text-xs text-[#6b7771] dark:text-[#7f9488] mt-1">
+              High-resolution camera photo, precision crop studio, and student credentials
             </p>
           </Link>
 
           <Link
             href="/sender/photo-import"
-            className="rounded-xl border border-[#dce7e1] bg-[#f7faf9] p-4 hover:border-[#02f52b] hover:shadow-[0_0_15px_rgba(2,245,43,0.15)] transition-all group"
+            className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 hover:border-[#8fe617] hover:shadow-[0_0_15px_rgba(143,230,23,0.15)] transition-all group cool-hover"
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] bg-white text-[#080808] font-bold">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4] font-bold">
                 STEP 2
               </span>
-              <ArrowUpRight className="h-4 w-4 text-[#6b7771] group-hover:text-[#080808] transition-colors" />
+              <ArrowUpRight className="h-4 w-4 text-[#6b7771] dark:text-[#7f9488] group-hover:text-[#8fe617] transition-colors" />
             </div>
-            <h3 className="text-sm font-bold text-[#080808] mt-3">2. Folder Photo Match</h3>
-            <p className="text-xs text-[#6b7771] mt-1">
+            <h3 className="text-sm font-bold text-[#080808] dark:text-[#f2f7f4] mt-3">2. Folder Photo Match</h3>
+            <p className="text-xs text-[#6b7771] dark:text-[#7f9488] mt-1">
               Import a folder of portraits and auto-match by student ID
             </p>
           </Link>
 
           <Link
             href="/sender/batches"
-            className="rounded-xl border border-[#dce7e1] bg-[#f7faf9] p-4 hover:border-[#02f52b] hover:shadow-[0_0_15px_rgba(2,245,43,0.15)] transition-all group"
+            className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 hover:border-[#8fe617] hover:shadow-[0_0_15px_rgba(143,230,23,0.15)] transition-all group cool-hover"
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] bg-white text-[#080808] font-bold">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4] font-bold">
                 STEP 3
               </span>
-              <ArrowUpRight className="h-4 w-4 text-[#6b7771] group-hover:text-[#080808] transition-colors" />
+              <ArrowUpRight className="h-4 w-4 text-[#6b7771] dark:text-[#7f9488] group-hover:text-[#8fe617] transition-colors" />
             </div>
-            <h3 className="text-sm font-bold text-[#080808] mt-3">3. Dispatch Batches</h3>
-            <p className="text-xs text-[#6b7771] mt-1">
+            <h3 className="text-sm font-bold text-[#080808] dark:text-[#f2f7f4] mt-3">3. Dispatch Batches</h3>
+            <p className="text-xs text-[#6b7771] dark:text-[#7f9488] mt-1">
               Create batches, validate completeness, and transmit to Receiver
             </p>
           </Link>
 
           <Link
             href="/sender/receipts"
-            className="rounded-xl border border-[#dce7e1] bg-[#f7faf9] p-4 hover:border-[#02f52b] hover:shadow-[0_0_15px_rgba(2,245,43,0.15)] transition-all group"
+            className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 hover:border-[#8fe617] hover:shadow-[0_0_15px_rgba(143,230,23,0.15)] transition-all group cool-hover"
           >
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] bg-white text-[#080808] font-bold">
+              <span className="font-mono text-[10px] px-2 py-0.5 rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4] font-bold">
                 STEP 4
               </span>
-              <ArrowUpRight className="h-4 w-4 text-[#6b7771] group-hover:text-[#080808] transition-colors" />
+              <ArrowUpRight className="h-4 w-4 text-[#6b7771] dark:text-[#7f9488] group-hover:text-[#8fe617] transition-colors" />
             </div>
-            <h3 className="text-sm font-bold text-[#080808] mt-3">4. Print Receipts</h3>
-            <p className="text-xs text-[#6b7771] mt-1">
-              Issue enrollment proof for students or print batch manifests
+            <h3 className="text-sm font-bold text-[#080808] dark:text-[#f2f7f4] mt-3">4. Print Receipts</h3>
+            <p className="text-xs text-[#6b7771] dark:text-[#7f9488] mt-1">
+              Issue registration receipts for students or print batch manifests
             </p>
           </Link>
         </div>
       </div>
 
-      {/* Live Recent Enrolled Students Stream */}
-      <div className="rounded-2xl border border-[#dce7e1] bg-white p-5 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between border-b border-[#dce7e1] pb-3">
+      {/* Live Recent Registered Students Stream */}
+      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-5 space-y-4 shadow-sm">
+        <div className="flex items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] pb-3">
           <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-[#6b7771]" />
-            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#080808]">
-              Live Enrollment Stream ({data.recentStudents.length})
+            <Clock className="h-4 w-4 text-[#6b7771] dark:text-[#7f9488]" />
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+              Live Registration Stream ({data.recentStudents.length})
             </h2>
           </div>
           <Link
             href="/sender/receipts"
-            className="text-xs text-[#080808] hover:text-[#02f52b] hover:underline font-mono font-semibold"
+            className="text-xs text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] dark:hover:text-[#8fe617] hover:underline font-mono font-semibold transition-colors"
           >
             View All Receipts →
           </Link>
         </div>
 
         {data.recentStudents.length === 0 ? (
-          <div className="text-center py-10 text-xs text-[#6b7771]">
-            No students enrolled yet. Click &quot;Enroll New Student&quot; to begin.
+          <div className="text-center py-10 text-xs text-[#6b7771] dark:text-[#7f9488]">
+            No students registered yet. Click &quot;Register New Student&quot; to begin.
           </div>
         ) : (
-          <div className="divide-y divide-[#dce7e1]">
+          <div className="divide-y divide-[#dce7e1] dark:divide-[#26332b]">
             {data.recentStudents.map((s) => (
               <div key={s.id || s.studentId} className="py-3 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-xl border border-[#dce7e1] bg-[#f7faf9] flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                  <div className="h-9 w-9 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                     {s.photoPath ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={s.photoPath}
                         alt={s.fullName}
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <Camera className="h-4 w-4 text-[#6b7771]" />
+                      <Camera className="h-4 w-4 text-[#6b7771] dark:text-[#7f9488]" />
                     )}
                   </div>
                   <div>
-                    <div className="font-bold text-[#080808]">{s.fullName}</div>
-                    <div className="text-[11px] font-mono text-[#6b7771]">
+                    <div className="font-bold text-[#080808] dark:text-[#f2f7f4]">{s.fullName}</div>
+                    <div className="text-[11px] font-mono text-[#6b7771] dark:text-[#7f9488]">
                       ID: {s.studentId} • {s.grade}
                     </div>
                   </div>
@@ -463,15 +429,15 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
                   <span
                     className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border font-bold ${
                       s.photoPath
-                        ? "border-[#02f52b] bg-[#eef5f1] text-[#080808]"
-                        : "border-[#dce7e1] bg-[#f7faf9] text-[#6b7771]"
+                        ? "border-[#8fe617] bg-[#8fe617]/15 text-[#062404] dark:text-[#8fe617]"
+                        : "border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] text-[#6b7771] dark:text-[#7f9488]"
                     }`}
                   >
                     {s.photoPath ? "PHOTO READY" : "NO PHOTO"}
                   </span>
                   <Link
                     href={`/sender/receipts?studentId=${s.studentId}`}
-                    className="inline-flex items-center gap-1 rounded-xl border border-[#dce7e1] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#080808] hover:bg-[#02f52b] transition-all shadow-2xs"
+                    className="inline-flex items-center gap-1 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-2.5 py-1 text-[11px] font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#8fe617] hover:text-[#062404] dark:hover:bg-[#8fe617] dark:hover:text-[#062404] transition-all shadow-2xs cool-btn-hover"
                   >
                     <Receipt className="h-3 w-3" />
                     <span>Receipt</span>

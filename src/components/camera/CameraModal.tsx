@@ -600,25 +600,25 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           {cameraState === "streaming" && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
               {/* Portrait Centering Guide */}
-              <div className="relative aspect-[3/4] h-[78%] max-h-[460px] border-2 border-[#02f52b] shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] rounded-xs">
+              <div className="relative aspect-[3/4] h-[78%] max-h-[460px] border-2 border-[#8fe617] shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] rounded-xs">
                 {/* Corner bracket highlight marks */}
-                <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 border-[#02f52b]" />
-                <div className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 border-[#02f52b]" />
-                <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 border-[#02f52b]" />
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 border-[#02f52b]" />
+                <div className="absolute -top-1 -left-1 w-6 h-6 border-t-3 border-l-3 border-[#8fe617]" />
+                <div className="absolute -top-1 -right-1 w-6 h-6 border-t-3 border-r-3 border-[#8fe617]" />
+                <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-3 border-l-3 border-[#8fe617]" />
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-3 border-r-3 border-[#8fe617]" />
 
                 {/* Center alignment crosshairs */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 bg-[#02f52b]/70" />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 bg-[#02f52b]/70" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-0.5 bg-[#8fe617]/70" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 bg-[#8fe617]/70" />
 
                 {/* Upper third eye level guide line */}
-                <div className="absolute top-[38%] left-3 right-3 border-b border-dashed border-[#02f52b]/60 flex justify-between px-1">
-                  <span className="text-[9px] font-mono text-[#02f52b] -mt-3.5 select-none uppercase tracking-wider font-semibold">Eye Level</span>
-                  <span className="text-[9px] font-mono text-[#02f52b] -mt-3.5 select-none font-bold">PORTRAIT</span>
+                <div className="absolute top-[38%] left-3 right-3 border-b border-dashed border-[#8fe617]/60 flex justify-between px-1">
+                  <span className="text-[9px] font-mono text-[#8fe617] -mt-3.5 select-none uppercase tracking-wider font-semibold">Eye Level</span>
+                  <span className="text-[9px] font-mono text-[#8fe617] -mt-3.5 select-none font-bold">PORTRAIT</span>
                 </div>
 
                 {/* Chin level guide */}
-                <div className="absolute bottom-[22%] left-6 right-6 border-b border-dotted border-[#02f52b]/40 flex justify-center">
+                <div className="absolute bottom-[22%] left-6 right-6 border-b border-dotted border-[#8fe617]/40 flex justify-center">
                   <span className="text-[8px] font-mono text-white/70 -mt-3 select-none uppercase tracking-wider">Chin Alignment</span>
                 </div>
               </div>
@@ -626,9 +626,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               {/* Viewport badge */}
               <div className="absolute top-4 flex items-center gap-2">
                 <div className="rounded-full border border-neutral-800 bg-black/85 backdrop-blur-xs px-3 py-1 text-[10px] font-mono text-white flex items-center gap-1.5 shadow-md">
-                  <span className="h-2 w-2 rounded-full bg-[#02f52b] animate-pulse" />
+                  <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
                   <span className="text-white font-semibold">ULTRA HD</span>
-                  <span className="text-[#02f52b] font-bold">• 300 DPI AUTO</span>
+                  <span className="text-[#8fe617] font-bold">• 300 DPI AUTO</span>
                 </div>
                 {isFlashlightOn && (
                   <div className="rounded-full border border-amber-400/90 bg-amber-400/25 backdrop-blur-xs px-2.5 py-1 text-[10px] font-mono font-bold text-amber-300 flex items-center gap-1 shadow-lg animate-pulse">
@@ -791,7 +791,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                   type="button"
                   onClick={() => handleCaptureFrame(true)}
                   disabled={cameraState !== "streaming"}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#02f52b] px-5 py-2.5 text-xs font-mono font-black text-[#080808] hover:bg-[#00dc25] active:scale-95 transition-all shadow-[0_0_15px_rgba(2,245,43,0.4)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#8fe617] px-5 py-2.5 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] active:scale-95 transition-all shadow-[0_0_18px_rgba(143,230,23,0.4)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                   title="Instant Snap, 300 DPI conversion, and direct attach to student record"
                 >
                   <Camera className="h-4 w-4 stroke-[2.5]" />

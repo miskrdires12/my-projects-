@@ -23,12 +23,12 @@ const config: Config = {
           strong: "#080808",
         },
         accent: {
-          DEFAULT: "#6eed28",
-          hover: "#5cd913",
-          lemon: "#74eb28",
+          DEFAULT: "#8fe617",
+          hover: "#7ecc10",
+          lemon: "#9ee817",
           dark: "#080808",
-          glow: "rgba(110, 237, 40, 0.35)",
-          dim: "rgba(110, 237, 40, 0.12)",
+          glow: "rgba(143, 230, 23, 0.35)",
+          dim: "rgba(143, 230, 23, 0.14)",
         },
         foreground: {
           DEFAULT: "#080808",
@@ -36,7 +36,7 @@ const config: Config = {
           subtle: "#6b7771",
         },
         status: {
-          active: "#02f52b",
+          active: "#8fe617",
           inactive: "#8a9690",
           archived: "#4b5563",
           suspended: "#6b7280",
@@ -47,8 +47,8 @@ const config: Config = {
         mono: ["var(--font-jetbrains)", "JetBrains Mono", "ui-monospace", "monospace"],
       },
       boxShadow: {
-        glow: "0 0 20px -3px rgba(2, 245, 43, 0.35)",
-        "glow-sm": "0 0 10px -2px rgba(2, 245, 43, 0.25)",
+        glow: "0 0 20px -3px rgba(143, 230, 23, 0.35)",
+        "glow-sm": "0 0 10px -2px rgba(143, 230, 23, 0.25)",
         card: "0 2px 12px -2px rgba(8, 8, 8, 0.05)",
         "card-hover": "0 8px 24px -4px rgba(8, 8, 8, 0.08)",
       },
