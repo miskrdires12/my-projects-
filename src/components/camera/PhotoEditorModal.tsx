@@ -7,7 +7,7 @@
 // - Independent Side-by-Side Edge Sliding (Left, Right, Top, Bottom)
 // - On-demand 3:4 Aspect Ratio apply by user (defaults to Free Crop)
 // - Ultra-pure high-resolution 300 DPI export (1200×1600 for 3:4 or native crop)
-// - Signature neon electric green (#02f52b) framing and edge slide handles
+// - Signature lemon green (#8fe617) framing and edge slide handles
 // - Rule-of-thirds grid alignment
 // - One-tap Auto Enhance (clarity & skin-tone optimization)
 // - 90° rotation & horizontal flip

@@ -99,14 +99,14 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             </div>
           </Link>
 
-          {/* Close button */}
+          {/* Animated borderless X close button */}
           <button
             type="button"
             onClick={closeMenu}
-            className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#26332b] text-[#3f4743] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] hover:border-[#8fe617] transition-colors cursor-pointer"
+            className="p-2 rounded-xl border-0 outline-none ring-0 focus:outline-none text-[#3f4743] dark:text-[#8a9e93] hover:text-[#8fe617] hover:bg-[#8fe617]/15 transition-all duration-300 group cursor-pointer active:scale-90"
             aria-label="Close menu"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5 transition-transform duration-300 ease-out group-hover:rotate-90 group-hover:scale-110" />
           </button>
         </div>
 

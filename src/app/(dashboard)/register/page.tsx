@@ -4,7 +4,7 @@
 // STUDENT BRIDGE — PHONE-EASY STUDENT ENROLLMENT STATION (SENDER)
 //
 // Strictly designed for ultra-rapid enrollment (6,000+ students per day):
-// - 60% #f7faf9, 30% #02f52b, 10% #080808 color scheme
+// - 60% #f7faf9, 30% #8fe617, 10% #080808 color scheme
 // - Phone-first layout: 3:4 Portrait -> Core Credentials -> Send Button
 // - High-speed instant snap & auto-attach photo studio
 // - Precision studio crop editor

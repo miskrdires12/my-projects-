@@ -1128,10 +1128,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <button
               type="button"
               onClick={() => handleExportCSV(true)}
-              className="rounded-xl bg-[#02f52b] text-[#080808] px-4 py-2 text-xs font-bold hover:brightness-105 shadow-glow-sm transition-all flex items-center gap-1.5"
+              className="rounded-xl bg-[#8fe617] text-[#062404] px-4 py-2 text-xs font-bold hover:brightness-105 shadow-glow-sm transition-all flex items-center gap-1.5 font-mono"
               title={`Download ${selectedIds.size} Selected Students as CSV`}
             >
-              <Download className="h-3.5 w-3.5 text-[#080808]" />
+              <Download className="h-3.5 w-3.5 text-[#062404]" />
               <span>Export Selected CSV ({selectedIds.size})</span>
             </button>
           )}
@@ -1161,9 +1161,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             title="Download Student Photos ZIP archive with companion Student_Manifest.csv spreadsheet"
           >
             {isDownloadingPhotos ? (
-              <Loader2 className="h-3.5 w-3.5 text-[#02f52b] animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 text-[#8fe617] animate-spin" />
             ) : (
-              <Download className="h-3.5 w-3.5 text-[#02f52b]" />
+              <Download className="h-3.5 w-3.5 text-[#8fe617]" />
             )}
             <span>
               {isDownloadingPhotos
@@ -1251,9 +1251,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       {/* Bulk Action Bar (Visible when 1+ selected) */}
       {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#02f52b]/40 bg-[#02f52b]/10 px-5 py-3 shadow-glow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#8fe617]/40 bg-[#8fe617]/10 px-5 py-3 shadow-glow-sm">
           <div className="flex items-center gap-2 text-xs font-semibold text-[#080808]">
-            <span className="bg-[#02f52b] text-[#080808] px-2 py-0.5 rounded-md font-mono font-bold">{selectedIds.size}</span>
+            <span className="bg-[#8fe617] text-[#062404] px-2 py-0.5 rounded-md font-mono font-bold">{selectedIds.size}</span>
             <span>students selected</span>
           </div>
 
@@ -1261,10 +1261,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <button
               type="button"
               onClick={() => handleExportCSV(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-[#02f52b] text-[#080808] px-3.5 py-1.5 text-xs font-bold shadow-md hover:brightness-105 transition-all"
+              className="flex items-center gap-1.5 rounded-lg bg-[#8fe617] text-[#062404] px-3.5 py-1.5 text-xs font-bold shadow-md hover:brightness-105 transition-all font-mono"
               title="Download only selected students to CSV"
             >
-              <Download className="h-3.5 w-3.5 text-[#080808]" />
+              <Download className="h-3.5 w-3.5 text-[#062404]" />
               <span>Export Selected CSV ({selectedIds.size})</span>
             </button>
 
@@ -1334,7 +1334,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     type="checkbox"
                     checked={selectedIds.size === displayStudents.length && displayStudents.length > 0}
                     onChange={handleToggleSelectAll}
-                    className="accent-[#02f52b] rounded h-3.5 w-3.5 cursor-pointer"
+                    className="accent-[#8fe617] rounded h-3.5 w-3.5 cursor-pointer"
                   />
                 </th>
                 <th className="px-4 py-3">Photo</th>
