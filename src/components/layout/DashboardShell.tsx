@@ -9,14 +9,13 @@ import {
   Printer,
   Shield,
   LayoutDashboard,
-  LogOut,
   Settings,
   Database,
   Sparkles,
   X,
   Sun,
+  RotateCcw,
 } from "lucide-react";
-import { logoutAction } from "@/actions/auth";
 import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
 
 interface DashboardShellProps {
@@ -36,7 +35,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem("sb_theme");
-      if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+      if (savedTheme === "dark") {
         setIsDarkMode(true);
         document.documentElement.classList.add("dark");
       } else {
@@ -56,12 +55,6 @@ export default function DashboardShell({ session, children }: DashboardShellProp
       document.documentElement.classList.remove("dark");
       localStorage.setItem("sb_theme", "light");
     }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await purgeSensitiveClientStorage();
-    } catch {}
   };
 
   const role = session.role;
@@ -298,34 +291,38 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             </div>
           </div>
 
-          <form action={logoutAction} onSubmit={handleLogout}>
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] px-2.5 py-1.5 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#080808] dark:hover:bg-[#8fe617] hover:text-[#8fe617] dark:hover:text-[#062404] hover:border-[#8fe617] transition-all shadow-2xs active:scale-95 cursor-pointer"
-              title="Sign out session"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span>Sign Out</span>
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await purgeSensitiveClientStorage();
+              } catch {}
+              window.location.reload();
+            }}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-2.5 py-1.5 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all shadow-2xs active:scale-95 cursor-pointer"
+            title="Clear cache and reload session"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>Reset</span>
+          </button>
         </div>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#f7faf9] dark:bg-[#0d120f] text-[#080808] dark:text-[#f2f7f4] transition-colors duration-200">
+    <div className="min-h-screen bg-[#f7faf9] dark:bg-[#070908] text-[#080808] dark:text-[#f2f7f4] transition-colors duration-200">
       
       {/* Clickable Smooth-Slicing Menu Drawer (Not Sticky/Fixed) */}
       {menuOpen && (
         <div className="fixed inset-0 z-50 flex">
           {/* Backdrop with smooth fade */}
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
             onClick={closeMenu}
           />
           {/* Smooth Slicing Drawer Panel */}
-          <aside className="relative z-50 w-72 max-w-[85vw] h-full border-r border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] shadow-2xl animate-in slide-in-from-left duration-250 ease-out">
+          <aside className="relative z-50 w-72 max-w-[85vw] h-full border-r border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] shadow-2xl animate-in slide-in-from-left duration-250 ease-out">
             {navContent}
           </aside>
         </div>
@@ -335,14 +332,14 @@ export default function DashboardShell({ session, children }: DashboardShellProp
       <div className="flex flex-col min-w-0 min-h-screen">
         
         {/* Unpinned Header (Natural scrolling, not rigidly sticky/fixed) */}
-        <header className="flex h-14 items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] px-4 sm:px-6 shadow-xs transition-colors duration-200">
+        <header className="flex h-14 items-center justify-between border-b border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-4 sm:px-6 shadow-xs transition-colors duration-200">
           
           <div className="flex items-center gap-3">
             {/* Advanced Animated Menu Icon Button (Icon Only, Standard Touch Size) */}
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
-              className="h-10 w-10 flex flex-col items-center justify-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#161c18] hover:border-[#8fe617] hover:bg-[#8fe617]/10 hover:shadow-[0_0_16px_rgba(143,230,23,0.35)] transition-all duration-300 group cursor-pointer animated-icon-btn shrink-0"
+              className="h-10 w-10 flex flex-col items-center justify-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#111613] hover:border-[#8fe617] hover:bg-[#8fe617]/10 hover:shadow-[0_0_16px_rgba(143,230,23,0.35)] transition-all duration-300 group cursor-pointer animated-icon-btn shrink-0"
               aria-label="Open navigation menu"
               title="Navigation Menu"
             >
@@ -359,7 +356,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               onClick={toggleTheme}
               className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all duration-300 animated-icon-btn cursor-pointer ${
                 isDarkMode
-                  ? "border-[#26332b] bg-[#0d120f] text-[#8fe617] hover:border-[#8fe617] hover:shadow-[0_0_15px_rgba(143,230,23,0.3)]"
+                  ? "border-[#223126] bg-[#070908] text-[#8fe617] hover:border-[#8fe617] hover:shadow-[0_0_15px_rgba(143,230,23,0.3)]"
                   : "border-[#dce7e1] bg-[#f7faf9] text-amber-500 hover:border-amber-400 hover:shadow-[0_0_15px_rgba(245,158,11,0.25)]"
               }`}
               title={isDarkMode ? "Night Mode Active (Click to rotate to Light Studio)" : "Light Studio Active (Click to rotate to Night Mode)"}
@@ -397,32 +394,20 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               </Link>
             )}
 
-            {/* Header User Identity & 1-Click Logout Action */}
-            <div className="flex items-center gap-2 border-l border-[#dce7e1] dark:border-[#26332b] pl-2.5">
-              <div className="hidden lg:flex items-center gap-1.5 text-right">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
+            {/* Header User Identity & Active Status Indicator */}
+            <div className="flex items-center gap-2 border-l border-[#dce7e1] dark:border-[#223126] pl-2.5">
+              <div className="flex items-center gap-1.5 text-right bg-[#f7faf9] dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126] px-3 py-1.5 rounded-xl shadow-2xs">
+                <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
                 <span className="text-xs font-bold font-mono text-[#080808] dark:text-[#f2f7f4] leading-tight truncate max-w-[140px]">
                   {session.username}
                 </span>
               </div>
-
-              <form action={logoutAction} onSubmit={handleLogout}>
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-1.5 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#080808] dark:hover:bg-[#8fe617] hover:text-[#8fe617] dark:hover:text-[#062404] hover:border-[#8fe617] transition-all shadow-2xs cool-btn-hover active:scale-95 cursor-pointer"
-                  title="Sign Out Session"
-                  aria-label="Sign Out"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Sign Out</span>
-                </button>
-              </form>
             </div>
           </div>
         </header>
 
         {/* Page Content with Full Width */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-[#f7faf9] dark:bg-[#0d120f] transition-colors duration-200">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-[#f7faf9] dark:bg-[#070908] transition-colors duration-200">
           {children}
         </main>
       </div>

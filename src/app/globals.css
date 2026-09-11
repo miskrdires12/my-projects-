@@ -173,13 +173,7 @@ select {
 }
 
 select:focus {
-  border-color: #8fe617 !important;
-  box-shadow: 0 0 0 3px rgba(143, 230, 23, 0.25) !important;
-  outline: none !important;
-}
-
-select:hover {
-  border-color: #8fe617 !important;
+  outline: none;
 }
 
 select option {

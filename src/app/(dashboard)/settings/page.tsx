@@ -17,17 +17,15 @@ import {
   Upload,
   Trash2,
   CheckCircle2,
-  RotateCcw,
-  ShieldCheck,
   Smartphone,
+  RotateCcw,
   Save,
   Moon,
   Sun,
   Layers,
   Sparkles,
 } from "lucide-react";
-import Image from "next/image";
-import { getStudentCountFromDB } from "@/lib/idb-storage";
+import { getStudentCountFromDB, getAllStudentsFromDB, saveStudentsToDB } from "@/lib/idb-storage";
 
 interface SenderSettings {
   theme: "light" | "dark";
@@ -60,7 +58,6 @@ const DEFAULT_SENDER_SETTINGS: SenderSettings = {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SenderSettings>(DEFAULT_SENDER_SETTINGS);
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [storageUsedKb, setStorageUsedKb] = useState<number>(0);
   const [studentCount, setStudentCount] = useState<number>(0);
 
   // Load saved sender settings & storage metrics on mount
@@ -81,16 +78,6 @@ export default function SettingsPage() {
       } else {
         setSettings((prev) => ({ ...prev, theme: savedTheme }));
       }
-
-      // Calculate localStorage byte footprint
-      let totalBytes = 0;
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key) {
-          totalBytes += (localStorage.getItem(key) || "").length * 2;
-        }
-      }
-      setStorageUsedKb(Math.round(totalBytes / 1024));
 
       // Read real IndexedDB student count
       getStudentCountFromDB()
@@ -147,10 +134,12 @@ export default function SettingsPage() {
   };
 
   const handleClearDraftCache = () => {
-    if (confirm("Clear temporary photo draft buffers and unattached captures? (Registered students in database will NOT be affected)")) {
+    if (confirm("Clear temporary photo draft buffers and unattached captures? (Saved students in database will NOT be affected)")) {
       try {
         localStorage.removeItem("sb_student_draft");
         localStorage.removeItem("sb_photo_draft");
+        localStorage.removeItem("sb_last_photo_preview");
+        sessionStorage.clear();
         alert("Draft buffers cleared successfully.");
         window.location.reload();
       } catch (e) {
@@ -159,16 +148,35 @@ export default function SettingsPage() {
     }
   };
 
-  const handleExportBackup = () => {
+  const handleExportBackup = async () => {
     try {
+      let idbStudents: any[] = [];
+      try {
+        idbStudents = await getAllStudentsFromDB();
+      } catch {}
+
       const studentsRaw = localStorage.getItem("sb_enrolled_students") || "[]";
+      let localStudents: any[] = [];
+      try {
+        localStudents = JSON.parse(studentsRaw);
+      } catch {}
+
+      // Deduplicate by studentId or id
+      const studentMap = new Map();
+      for (const s of [...idbStudents, ...localStudents]) {
+        if (s && (s.studentId || s.id)) {
+          studentMap.set(s.studentId || s.id, s);
+        }
+      }
+      const combinedStudents = Array.from(studentMap.values());
+
       const settingsRaw = localStorage.getItem("sb_app_settings") || "{}";
       const backupData = {
-        app: "SiliconLabs Student Bridge Sender Station",
+        app: "SiliconLabs Student Bridge Station",
         version: "2.5.0",
         exportDate: new Date().toISOString(),
         settings: JSON.parse(settingsRaw),
-        students: JSON.parse(studentsRaw),
+        students: combinedStudents,
       };
 
       const blob = new Blob([JSON.stringify(backupData, null, 2)], {
@@ -177,7 +185,7 @@ export default function SettingsPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `StudentBridge_SenderBackup_${new Date().toISOString().split("T")[0]}.json`;
+      a.download = `StudentBridge_Backup_${new Date().toISOString().split("T")[0]}.json`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -192,13 +200,16 @@ export default function SettingsPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
         const data = JSON.parse(text);
 
         if (data.students && Array.isArray(data.students)) {
           localStorage.setItem("sb_enrolled_students", JSON.stringify(data.students));
+          try {
+            await saveStudentsToDB(data.students);
+          } catch {}
         }
         if (data.settings) {
           localStorage.setItem("sb_app_settings", JSON.stringify(data.settings));
@@ -208,7 +219,7 @@ export default function SettingsPage() {
           }
         }
 
-        alert(`Sender backup restored! ${data.students?.length || 0} student records verified.`);
+        alert(`Station backup restored! ${data.students?.length || 0} student records verified.`);
         window.location.reload();
       } catch (err) {
         alert("Invalid backup JSON file.");
@@ -520,73 +531,33 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* 4. High-Capacity IndexedDB & Draft Cache Management */}
-      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-6 shadow-sm space-y-5">
-        <div className="flex items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-[#8fe617]/15 flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
-              <HardDrive className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-[#080808] dark:text-[#f2f7f4]">High-Capacity Storage &amp; Draft Cache</h2>
-              <p className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">Offline-ready database health, buffer management, and backup archive</p>
-            </div>
+      {/* 4. Backup & Local Cache Management */}
+      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-5 shadow-sm space-y-3.5">
+        <div className="flex items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] pb-2.5">
+          <div className="flex items-center gap-2">
+            <HardDrive className="h-4 w-4 text-[#8fe617]" />
+            <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+              Backup &amp; Cache Actions
+            </h2>
           </div>
-          <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-[#8fe617]/15 text-[#062404] dark:text-[#8fe617]">
-            {studentCount} Students Cached
-          </span>
+          {studentCount > 0 && (
+            <span className="text-[10px] font-mono font-bold text-[#8fe617] bg-[#8fe617]/10 px-2 py-0.5 rounded-full border border-[#8fe617]/20">
+              {studentCount} Students
+            </span>
+          )}
         </div>
 
-        {/* Database & High-Capacity Storage Health */}
-        <div className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#dce7e1] dark:border-[#26332b] pb-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
-                <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">High-Capacity IndexedDB Engine</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#8fe617]/20 text-[#062404] dark:text-[#8fe617] font-black">
-                  UNLIMITED QUOTA
-                </span>
-              </div>
-              <p className="text-[11px] text-[#6b7771] dark:text-[#7f9488] mt-0.5">
-                Multi-gigabyte persistent storage capable of storing 6,000+ to 100,000+ students and high-resolution portraits offline and online.
-              </p>
-            </div>
-            <div className="text-right shrink-0">
-              <div className="text-sm font-mono font-black text-[#080808] dark:text-[#f2f7f4]">{studentCount} Students</div>
-              <div className="text-[10px] font-mono text-[#8fe617] font-bold">100% Retained</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
-            <div className="rounded-lg bg-white dark:bg-[#161c18] border border-[#dce7e1] dark:border-[#26332b] p-2.5 space-y-1">
-              <div className="text-[10px] text-[#6b7771] dark:text-[#7f9488] uppercase">Settings Footprint</div>
-              <div className="font-bold text-[#080808] dark:text-[#f2f7f4]">{storageUsedKb} KB (Optimal)</div>
-              <div className="text-[10px] text-[#6b7771] dark:text-[#7f9488]">Station defaults &amp; hardware flags</div>
-            </div>
-            <div className="rounded-lg bg-white dark:bg-[#161c18] border border-[#dce7e1] dark:border-[#26332b] p-2.5 space-y-1">
-              <div className="text-[10px] text-[#6b7771] dark:text-[#7f9488] uppercase">Station Real-Time Sync</div>
-              <div className="font-bold text-[#8fe617] flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
-                <span>Active &amp; Broadcasting</span>
-              </div>
-              <div className="text-[10px] text-[#6b7771] dark:text-[#7f9488]">Receiver workstation auto-receives records</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Station Backup & Cache Flush */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             type="button"
             onClick={handleExportBackup}
-            className="flex items-center justify-center gap-2 rounded-xl bg-[#080808] dark:bg-black text-[#f2f7f4] p-3 text-xs font-mono font-bold hover:bg-neutral-800 transition-colors shadow-xs cool-btn-hover"
+            className="flex items-center justify-center gap-2 rounded-xl bg-[#080808] dark:bg-[#0a0d0b] border border-neutral-800 dark:border-[#26332b] text-[#f2f7f4] p-3 text-xs font-mono font-bold hover:bg-neutral-800 transition-colors shadow-xs animated-btn cursor-pointer"
           >
             <Download className="h-4 w-4 text-[#8fe617]" />
             <span>Export Station Backup</span>
           </button>
 
-          <label className="flex items-center justify-center gap-2 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] p-3 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] transition-colors cursor-pointer shadow-xs cool-btn-hover">
+          <label className="flex items-center justify-center gap-2 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] p-3 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] transition-colors cursor-pointer shadow-xs animated-btn">
             <Upload className="h-4 w-4 text-[#6b7771] dark:text-[#7f9488]" />
             <span>Restore From JSON</span>
             <input
@@ -600,41 +571,11 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={handleClearDraftCache}
-            className="flex items-center justify-center gap-2 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/20 p-3 text-xs font-mono font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors cool-btn-hover"
+            className="flex items-center justify-center gap-2 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/20 p-3 text-xs font-mono font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors animated-btn cursor-pointer"
           >
             <Trash2 className="h-4 w-4" />
             <span>Flush Photo Draft Cache</span>
           </button>
-        </div>
-      </div>
-
-      {/* 5. System Status & Brand Card */}
-      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 relative shrink-0">
-            <Image
-              src="/logo.png"
-              alt="Silicon Labs"
-              fill
-              className="object-contain"
-            />
-          </div>
-          <div>
-            <div className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
-              <span>Silicon Labs Student Bridge</span>
-              <span className="bg-[#8fe617]/20 text-[#062404] dark:text-[#8fe617] text-[10px] font-mono font-black px-2 py-0.5 rounded-full">
-                Station
-              </span>
-            </div>
-            <div className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">
-              6,000+ Daily Student Capacity • Ultra-Fast Studio • Lemon Green #8fe617
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#062404] dark:text-[#8fe617] bg-[#8fe617]/15 border border-[#8fe617]/30 px-3 py-1.5 rounded-xl">
-          <ShieldCheck className="h-4 w-4 text-[#8fe617]" />
-          <span>Sender Hardware Operational</span>
         </div>
       </div>
     </div>

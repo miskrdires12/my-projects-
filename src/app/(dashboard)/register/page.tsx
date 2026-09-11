@@ -479,14 +479,14 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f7faf9] text-[#080808] pb-16">
+    <div className="min-h-screen bg-[#f7faf9] dark:bg-[#070908] text-[#080808] dark:text-[#f2f7f4] pb-16 transition-colors duration-200">
       {/* Phone-Centric Container */}
       <div className="max-w-xl mx-auto px-4 pt-4 space-y-4">
 
         {/* Error Alert Banner */}
         {errorMessage && (
-          <div className="rounded-xl border border-red-300 bg-red-50 p-3.5 flex items-center gap-2.5 text-xs text-red-700 font-semibold shadow-xs">
-            <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+          <div className="rounded-xl border border-red-300 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-3.5 flex items-center gap-2.5 text-xs text-red-700 dark:text-red-400 font-semibold shadow-xs">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -494,7 +494,7 @@ export default function RegisterPage() {
         {/* ====================================================================
             PORTRAIT CAMERA (EASY PHONE VIEWPORT, PURE 3:4 STUDIO)
            ==================================================================== */}
-        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm space-y-3 transition-colors duration-200">
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] dark:border-t-2 dark:border-t-[#8fe617] bg-white dark:bg-[#111613] p-4 shadow-sm dark:shadow-[0_12px_32px_rgba(0,0,0,0.8),0_0_15px_rgba(143,230,23,0.06)] space-y-3 transition-all duration-200">
           <div className="flex items-center justify-end pb-1">
             {officialPhotoPath && (
               <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 rounded-full flex items-center gap-1">
@@ -605,8 +605,8 @@ export default function RegisterPage() {
             CORE STUDENT CREDENTIALS (EASY PHONE INPUTS)
            ==================================================================== */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-4 shadow-sm space-y-3.5 transition-colors duration-200">
-            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#26332b] pb-2">
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] dark:border-t-2 dark:border-t-[#8fe617] bg-white dark:bg-[#111613] p-4 shadow-sm dark:shadow-[0_12px_32px_rgba(0,0,0,0.8),0_0_15px_rgba(143,230,23,0.06)] space-y-3.5 transition-all duration-200">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#223126] pb-2">
               <span className="text-xs font-mono uppercase tracking-wider font-extrabold text-[#080808] dark:text-[#f2f7f4]">
                 Student Information
               </span>
@@ -656,7 +656,7 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Sex / Gender Dropdown (Zero Blue, Lemon Green #8fe617 Only) */}
+            {/* Sex / Gender Dropdown (Blue Hover & Focus) */}
             <div>
               <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
                 Sex <span className="text-red-500">*</span>
@@ -667,12 +667,12 @@ export default function RegisterPage() {
                   value={formData.sex}
                   onChange={handleChange}
                   required
-                  className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:shadow-[0_0_12px_rgba(143,230,23,0.3)] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all cursor-pointer accent-[#8fe617]"
+                  className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-blue-500 hover:shadow-[0_0_14px_rgba(59,130,246,0.35)] focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 focus:outline-none transition-all cursor-pointer accent-blue-500"
                 >
                   <option value="Male" className="bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4]">Male</option>
                   <option value="Female" className="bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4]">Female</option>
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#8fe617]">
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-blue-500">
                   <ChevronDown className="h-4 w-4 stroke-[2.5]" />
                 </div>
               </div>
