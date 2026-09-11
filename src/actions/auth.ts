@@ -6,9 +6,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { login, logout, getSession, loginAsPresetRole, loginWithGoogle } from "@/lib/auth";
+import { login, logout, getSession, loginAsPresetRole, loginWithGoogle, lookupUserRoleByEmail } from "@/lib/auth";
 import { loginSchema } from "@/lib/validations";
-import type { SessionPayload } from "@/types/auth";
+import type { SessionPayload, UserRole } from "@/types/auth";
 
 export interface ActionResult<T = unknown> {
   success: boolean;
@@ -88,12 +88,29 @@ export async function quickRoleLoginAction(role: "SENDER" | "RECEIVER" | "ADMIN"
 }
 
 /**
+ * Looks up if an institutional email has an assigned role.
+ */
+export async function lookupUserRoleAction(email: string): Promise<{ exists: boolean; role?: UserRole }> {
+  try {
+    const role = await lookupUserRoleByEmail(email);
+    if (role) {
+      return { exists: true, role };
+    }
+    return { exists: false };
+  } catch {
+    return { exists: false };
+  }
+}
+
+/**
  * Google OAuth server action for real Google login.
+ * Remembers assigned role: if an email was previously assigned Sender, it always logs in as Sender.
  */
 export async function googleLoginAction(googleIdentity: {
   email: string;
   name?: string;
   sub?: string;
+  preferredRole?: UserRole;
 }): Promise<ActionResult<SessionPayload>> {
   try {
     if (!googleIdentity.email || !googleIdentity.email.includes("@")) {

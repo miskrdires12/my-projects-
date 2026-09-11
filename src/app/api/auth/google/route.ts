@@ -4,7 +4,7 @@ import { loginWithGoogle } from "@/lib/auth";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { credential, email, name, sub } = body;
+    const { credential, email, name, sub, preferredRole } = body;
 
     // 1. If Google ID Token credential was supplied by Google Identity Services
     if (credential) {
@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
               email: payload.email,
               name: payload.name || payload.given_name || payload.email.split("@")[0],
               sub: payload.sub,
+              preferredRole,
             });
 
             if (loginResult.success && loginResult.user) {
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
         email,
         name: name || email.split("@")[0],
         sub: sub || undefined,
+        preferredRole,
       });
 
       if (loginResult.success && loginResult.user) {

@@ -279,13 +279,31 @@ export async function login(credentials: {
 }
 
 /**
+ * Looks up an existing user's role by email.
+ */
+export async function lookupUserRoleByEmail(email: string): Promise<UserRole | null> {
+  try {
+    const trimmed = email.trim().toLowerCase();
+    const user = await prisma.user.findFirst({
+      where: { email: trimmed },
+      select: { role: true },
+    });
+    return (user?.role as UserRole) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Authenticates or provisions a verified Google OAuth identity.
- * Validates against database or provisions institutional role securely.
+ * Remembers and preserves the user's role across sessions:
+ * If the email is a Sender, it always logs in as Sender; if Receiver, always Receiver.
  */
 export async function loginWithGoogle(googleUser: {
   email: string;
   name?: string;
   sub?: string;
+  preferredRole?: UserRole;
 }): Promise<LoginResponse> {
   const email = googleUser.email.trim().toLowerCase();
   let user: any = null;
@@ -298,12 +316,24 @@ export async function loginWithGoogle(googleUser: {
     console.warn("Prisma error looking up Google user:", err);
   }
 
-  let role: UserRole = "SENDER";
+  let role: UserRole = googleUser.preferredRole || "SENDER";
   let userId = `google-${googleUser.sub || Math.random().toString(36).slice(2, 10)}`;
   let username = googleUser.name ? googleUser.name.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() : email.split("@")[0];
 
   if (user) {
-    role = user.role as UserRole;
+    // If a specific preferredRole was explicitly passed, update it in DB
+    if (googleUser.preferredRole && googleUser.preferredRole !== user.role) {
+      role = googleUser.preferredRole;
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { role },
+        });
+      } catch {}
+    } else {
+      // Otherwise preserve the existing assigned role permanently
+      role = user.role as UserRole;
+    }
     userId = user.id;
     username = user.username;
   } else {
