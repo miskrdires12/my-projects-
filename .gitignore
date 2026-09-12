@@ -36,9 +36,6 @@ next-env.d.ts
 # Prisma journals
 prisma/*.db-journal
 
-# Temporary scratch tests (keep repo clean)
-scratch/
-
-# Temporary uploads
-public/uploads/temp/*
-!public/uploads/temp/.gitkeep
+# Deployment artifacts
+deploy_staging/
+deploy.zip
