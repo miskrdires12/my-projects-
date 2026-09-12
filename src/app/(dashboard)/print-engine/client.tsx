@@ -315,16 +315,16 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
   };
 
   return (
-    <div className="space-y-6 bg-white text-black min-h-screen">
-      {/* View Switcher Tabs (90% White, 10% Black) */}
-      <div className="flex items-center gap-3 border-b border-neutral-200 pb-4">
+    <div className="space-y-6 bg-transparent text-[#080808] dark:text-[#f2f7f4] min-h-screen">
+      {/* View Switcher Tabs */}
+      <div className="flex items-center gap-3 border-b border-[#dce7e1] dark:border-[#223126] pb-4">
         <button
           type="button"
           onClick={() => setActiveTab("imposition")}
-          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all ${
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-mono font-bold transition-all cursor-pointer ${
             activeTab === "imposition"
-              ? "bg-black text-white shadow-sm"
-              : "border border-neutral-300 bg-white text-neutral-700 hover:text-black hover:border-black"
+              ? "bg-[#8fe617] text-[#062404] shadow-[0_0_15px_rgba(143,230,23,0.3)]"
+              : "border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] hover:border-[#8fe617]"
           }`}
         >
           <Printer className="h-4 w-4" />
@@ -334,10 +334,10 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
         <button
           type="button"
           onClick={() => setActiveTab("designer")}
-          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all ${
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-mono font-bold transition-all cursor-pointer ${
             activeTab === "designer"
-              ? "bg-black text-white shadow-sm"
-              : "border border-neutral-300 bg-white text-neutral-700 hover:text-black hover:border-black"
+              ? "bg-[#8fe617] text-[#062404] shadow-[0_0_15px_rgba(143,230,23,0.3)]"
+              : "border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] hover:border-[#8fe617]"
           }`}
         >
           <Layers className="h-4 w-4" />
@@ -348,14 +348,14 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
       {/* TAB 1: VISUAL DESIGNER */}
       {activeTab === "designer" && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-neutral-300 bg-neutral-50 p-3.5 text-xs text-black flex items-center justify-between">
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 text-xs text-[#080808] dark:text-[#f2f7f4] flex items-center justify-between font-mono">
             <span>
-              <strong>Visual Layout Customizer:</strong> Move and resize photo, QR, and text coordinates for the print engine.
+              <strong className="text-[#8fe617]">Visual Layout Customizer:</strong> Move and resize photo, QR, and text coordinates for the print engine.
             </span>
             <button
               type="button"
               onClick={() => setActiveTab("imposition")}
-              className="font-bold text-black hover:underline text-xs"
+              className="font-bold text-[#8fe617] hover:underline text-xs cursor-pointer"
             >
               Return to 8-Up Print Queue →
             </button>
@@ -380,52 +380,53 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
           {/* Left 2 Columns: Interactive A4 Imposition Sheet */}
           <div className="lg:col-span-2 space-y-6">
             {errorMessage && (
-              <div className="flex items-center gap-2.5 rounded-lg border border-red-300 bg-red-50 p-4 text-xs text-red-800">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className="flex items-center gap-2.5 rounded-2xl border border-red-300 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-4 text-xs text-red-800 dark:text-red-300 font-mono">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
             {/* Imposition Metric Banner */}
-            <div className="grid grid-cols-4 gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-xs text-xs">
-              <div>
-                <span className="font-mono text-neutral-500 uppercase text-[10px]">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-xs text-xs font-mono">
+              <div className="p-2.5 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+                <span className="text-neutral-500 dark:text-[#8a9e93] uppercase text-[10px] font-bold">
                   Card Standard
                 </span>
-                <p className="font-bold text-black font-mono mt-0.5">CR80 (85.6 × 54mm)</p>
+                <p className="font-bold text-[#080808] dark:text-[#f2f7f4] mt-0.5">CR80 (85.6 × 54mm)</p>
               </div>
-              <div>
-                <span className="font-mono text-neutral-500 uppercase text-[10px]">
+              <div className="p-2.5 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+                <span className="text-neutral-500 dark:text-[#8a9e93] uppercase text-[10px] font-bold">
                   Sheet Format
                 </span>
-                <p className="font-bold text-black font-mono mt-0.5">ISO A4 (210 × 297mm)</p>
+                <p className="font-bold text-[#080808] dark:text-[#f2f7f4] mt-0.5">ISO A4 (210 × 297mm)</p>
               </div>
-              <div>
-                <span className="font-mono text-neutral-500 uppercase text-[10px]">
-                  Active Sheet Slots
+              <div className="p-2.5 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+                <span className="text-neutral-500 dark:text-[#8a9e93] uppercase text-[10px] font-bold">
+                  Sheet Density
                 </span>
-                <p className="font-bold text-black font-mono mt-0.5">
+                <p className="font-bold text-[#8fe617] mt-0.5">
                   {impositionSlots.filter(Boolean).length} / 8 Placed
                 </p>
               </div>
-              <div>
-                <span className="font-mono text-neutral-500 uppercase text-[10px]">
-                  Est. Sheet Pages
+              <div className="p-2.5 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+                <span className="text-neutral-500 dark:text-[#8a9e93] uppercase text-[10px] font-bold">
+                  Est. Sheet Run
                 </span>
-                <p className="font-bold text-black font-mono mt-0.5">
-                  {calculatedPages} {calculatedPages === 1 ? "page" : "pages"} ({(totalCount ?? students.length).toLocaleString()} total)
+                <p className="font-bold text-[#080808] dark:text-[#f2f7f4] mt-0.5">
+                  {calculatedPages} {calculatedPages === 1 ? "sheet" : "sheets"} ({(totalCount ?? students.length).toLocaleString()} cards)
                 </p>
               </div>
             </div>
 
             {/* Visual A4 Sheet Simulation Canvas with Interactive Drag & Drop Slots */}
-            <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+            <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
                 <div>
-                  <h2 className="text-xs font-mono uppercase tracking-wider text-black font-bold">
+                  <h2 className="text-xs font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-extrabold flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
                     A4 SHEET (210 × 297mm) — 8-UP PHYSICAL IMPOSITION
                   </h2>
-                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                  <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-0.5 font-mono">
                     Drag any student card from the Queue to a slot, or drag cards between slots to rearrange positions
                   </p>
                 </div>
@@ -434,14 +435,14 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                   <button
                     type="button"
                     onClick={handleAutoFillSlots}
-                    className="px-2.5 py-1 text-[11px] font-mono font-semibold rounded border border-neutral-300 bg-white text-black hover:bg-neutral-100 transition-colors"
+                    className="px-3 py-1.5 text-xs font-mono font-bold rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] transition-all cursor-pointer shadow-xs"
                   >
                     Auto-Fill 8 Slots
                   </button>
                   <button
                     type="button"
                     onClick={handleClearAllSlots}
-                    className="px-2.5 py-1 text-[11px] font-mono rounded border border-neutral-300 bg-white text-neutral-600 hover:text-red-600 hover:border-red-300 transition-colors"
+                    className="px-3 py-1.5 text-xs font-mono font-bold rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/25 text-red-600 dark:text-red-400 hover:bg-red-100 transition-all cursor-pointer shadow-xs"
                   >
                     Clear Sheet
                   </button>
@@ -449,8 +450,8 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
               </div>
 
               {/* Scaled A4 Sheet representation */}
-              <div className="mx-auto aspect-[210/297] max-w-md rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 p-4 shadow-lg relative flex flex-col justify-between">
-                <div className="text-[9px] font-mono text-neutral-500 font-bold text-center">
+              <div className="mx-auto aspect-[210/297] max-w-md rounded-2xl border-2 border-dashed border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 shadow-xl relative flex flex-col justify-between">
+                <div className="text-[9px] font-mono text-[#6b7771] dark:text-[#8a9e93] font-bold text-center">
                   A4 SHEET (210 × 297mm) — 8-UP PHYSICAL IMPOSITION
                 </div>
 
@@ -469,24 +470,24 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                         onDragLeave={() => setHoveredSlotIndex(null)}
                         onDrop={(e) => handleSlotDrop(idx, e)}
                         onClick={() => handleSlotClick(idx)}
-                        className={`rounded-lg border text-[8px] p-2 flex flex-col justify-between transition-all relative select-none cursor-pointer ${
+                        className={`rounded-xl border text-[8px] p-2.5 flex flex-col justify-between transition-all relative select-none cursor-pointer ${
                           selectedQueueCard
-                            ? "border-black ring-2 ring-black bg-neutral-100 animate-pulse"
+                            ? "border-[#8fe617] ring-2 ring-[#8fe617] bg-[#8fe617]/10 animate-pulse"
                             : isHovered
-                            ? "border-black ring-4 ring-black/20 bg-neutral-100 scale-[1.02]"
+                            ? "border-[#8fe617] ring-4 ring-[#8fe617]/25 bg-[#8fe617]/10 scale-[1.02]"
                             : isOccupied
-                            ? "border-black bg-white text-black shadow-sm cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-black"
-                            : "border-dashed border-neutral-300 bg-white/60 text-neutral-400 hover:border-black hover:bg-white"
+                            ? "border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] shadow-xs cursor-grab active:cursor-grabbing hover:border-[#8fe617]"
+                            : "border-dashed border-[#dce7e1] dark:border-[#223126] bg-white/60 dark:bg-[#111613]/40 text-[#6b7771] dark:text-[#8a9e93] hover:border-[#8fe617]"
                         }`}
                       >
                         {/* Slot Header */}
-                        <div className="flex items-center justify-between border-b border-neutral-100 pb-1">
-                          <span className="font-mono font-bold text-black flex items-center gap-1">
+                        <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-1">
+                          <span className="font-mono font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1">
                             {isOccupied && <GripVertical className="h-3 w-3 text-neutral-400" />}
                             SLOT #{idx + 1}
                           </span>
                           <div className="flex items-center gap-1">
-                            <span className="text-[6px] text-neutral-500">85.6mm</span>
+                            <span className="text-[7px] font-mono text-[#6b7771] dark:text-[#8a9e93]">85.6mm</span>
                             {isOccupied && (
                               <button
                                 type="button"
@@ -494,10 +495,10 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                                   e.stopPropagation();
                                   handleClearSlot(idx);
                                 }}
-                                className="h-3 w-3 text-neutral-400 hover:text-red-600 ml-1"
+                                className="h-3.5 w-3.5 text-neutral-400 hover:text-red-500 ml-1 transition-colors"
                                 title="Remove from slot"
                               >
-                                <Trash2 className="h-3 w-3" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             )}
                           </div>
@@ -506,7 +507,7 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                         {/* Card Content or Empty Dropzone */}
                         {isOccupied && student ? (
                           <div className="flex gap-2 items-center my-auto py-1">
-                            <div className="h-8 w-6 shrink-0 rounded bg-neutral-100 border border-neutral-300 flex items-center justify-center text-[7px] font-mono overflow-hidden">
+                            <div className="h-8 w-6 shrink-0 rounded bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126] flex items-center justify-center text-[7px] font-mono overflow-hidden">
                               {student.photoPath ? (
                                 <img
                                   src={student.photoPath}
@@ -518,23 +519,23 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                               )}
                             </div>
                             <div className="min-w-0 truncate">
-                              <div className="font-bold truncate text-[8px] text-black">
+                              <div className="font-bold truncate text-[9px] text-[#080808] dark:text-[#f2f7f4]">
                                 {student.fullName}
                               </div>
-                              <div className="font-mono text-[7px] text-neutral-600">
+                              <div className="font-mono text-[7px] text-[#6b7771] dark:text-[#8a9e93]">
                                 {student.studentId} • {student.grade}
                               </div>
                             </div>
                           </div>
                         ) : (
-                          <div className="h-full flex flex-col items-center justify-center text-neutral-400 text-[7px] font-mono py-3">
-                            <span>Drop Card Here</span>
-                            <span className="text-[6px] text-neutral-300">(From Queue)</span>
+                          <div className="h-full flex flex-col items-center justify-center text-[#6b7771] dark:text-[#8a9e93] text-[8px] font-mono py-3">
+                            <span className="font-bold">Drop Card Here</span>
+                            <span className="text-[7px] opacity-75">(From Queue)</span>
                           </div>
                         )}
 
                         {/* Slot Footer & Crop Marks */}
-                        <div className="flex items-center justify-between text-[6px] text-neutral-400 border-t border-neutral-100 pt-0.5 font-mono">
+                        <div className="flex items-center justify-between text-[7px] text-[#6b7771] dark:text-[#8a9e93] border-t border-[#eef5f1] dark:border-[#1c261e] pt-0.5 font-mono">
                           <span>CR80</span>
                           <span>54.0mm</span>
                         </div>
@@ -542,10 +543,10 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                         {/* Guillotine Crop Marks */}
                         {includeCropMarks && (
                           <>
-                            <span className="absolute top-0 left-0 h-1.5 w-1.5 border-t border-l border-black" />
-                            <span className="absolute top-0 right-0 h-1.5 w-1.5 border-t border-r border-black" />
-                            <span className="absolute bottom-0 left-0 h-1.5 w-1.5 border-b border-l border-black" />
-                            <span className="absolute bottom-0 right-0 h-1.5 w-1.5 border-b border-r border-black" />
+                            <span className="absolute top-0 left-0 h-1.5 w-1.5 border-t border-l border-[#8fe617]" />
+                            <span className="absolute top-0 right-0 h-1.5 w-1.5 border-t border-r border-[#8fe617]" />
+                            <span className="absolute bottom-0 left-0 h-1.5 w-1.5 border-b border-l border-[#8fe617]" />
+                            <span className="absolute bottom-0 right-0 h-1.5 w-1.5 border-b border-r border-[#8fe617]" />
                           </>
                         )}
                       </div>
@@ -553,7 +554,7 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                   })}
                 </div>
 
-                <div className="text-[8px] font-mono text-neutral-500 text-center">
+                <div className="text-[8px] font-mono text-[#6b7771] dark:text-[#8a9e93] text-center">
                   Drag cards to swap slots • Precision corner crop marks rendered for trimming
                 </div>
               </div>
@@ -561,16 +562,16 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
 
             {/* Generated PDF Download Banner */}
             {generatedPdfUrl && (
-              <div className="rounded-xl border border-neutral-300 bg-neutral-50 p-5 shadow-sm flex items-center justify-between animate-in fade-in">
+              <div className="rounded-2xl border border-[#8fe617] bg-[#8fe617]/10 p-5 shadow-lg flex items-center justify-between animate-in fade-in">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-black text-white font-bold">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#8fe617] text-[#062404] font-bold">
                     <FileText className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-black">
+                    <h3 className="text-sm font-bold font-mono text-[#080808] dark:text-[#f2f7f4]">
                       8-Up A4 Print Sheet Ready
                     </h3>
-                    <p className="text-xs text-neutral-600">
+                    <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono">
                       Vector PDF ready with {impositionSlots.filter(Boolean).length || selectedCount} cards
                     </p>
                   </div>
@@ -581,7 +582,7 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                     href={generatedPdfUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-black hover:bg-neutral-100"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-3.5 py-2 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617]"
                   >
                     <Eye className="h-4 w-4" />
                     <span>Preview</span>
@@ -590,7 +591,7 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                   <a
                     href={generatedPdfUrl}
                     download={`student-id-cards-8up-${Date.now()}.pdf`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-black px-4 py-2 text-xs font-bold text-white hover:bg-neutral-800 shadow-sm"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] px-4 py-2 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] shadow-[0_0_15px_rgba(143,230,23,0.35)]"
                   >
                     <Download className="h-4 w-4" />
                     <span>Download PDF</span>
@@ -603,27 +604,27 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
           {/* Right Column: Parameters & Draggable Student Queue Selector */}
           <div className="space-y-6">
             {/* Parameters Box */}
-            <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4 shadow-xs">
-              <div className="flex items-center gap-2 text-xs font-mono uppercase text-black font-bold">
-                <Sliders className="h-4 w-4" />
+            <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 space-y-4 shadow-sm">
+              <div className="flex items-center gap-2 text-xs font-mono uppercase text-[#080808] dark:text-[#f2f7f4] font-extrabold">
+                <Sliders className="h-4 w-4 text-[#8fe617]" />
                 <span>Imposition Parameters</span>
               </div>
 
-              <div className="space-y-3 text-xs">
+              <div className="space-y-3 text-xs font-mono">
                 <div>
-                  <label className="block text-neutral-600 font-mono mb-1">Organization Header</label>
+                  <label className="block text-[#6b7771] dark:text-[#8a9e93] font-bold mb-1">Organization Header</label>
                   <input
                     type="text"
                     value={organizationName}
                     onChange={(e) => setOrganizationName(e.target.value)}
-                    className="w-full rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-1.5 text-xs text-black focus:border-black focus:bg-white focus:outline-none"
+                    className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors"
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                <div className="flex items-center justify-between rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] p-3">
                   <div>
-                    <div className="font-semibold text-black">Guillotine Cutting Marks</div>
-                    <div className="text-[10px] text-neutral-500">
+                    <div className="font-bold text-[#080808] dark:text-[#f2f7f4]">Guillotine Cutting Marks</div>
+                    <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
                       Corner crop marks for physical trimming
                     </div>
                   </div>
@@ -631,7 +632,7 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                     type="checkbox"
                     checked={includeCropMarks}
                     onChange={(e) => setIncludeCropMarks(e.target.checked)}
-                    className="rounded border-neutral-300 accent-black h-4 w-4"
+                    className="rounded border-[#dce7e1] dark:border-[#223126] accent-[#8fe617] h-4 w-4 cursor-pointer"
                   />
                 </div>
               </div>
@@ -640,11 +641,11 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                 type="button"
                 onClick={handleGeneratePdf}
                 disabled={isGenerating}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-black py-2.5 px-4 text-xs font-bold text-white uppercase tracking-wider hover:bg-neutral-800 shadow-sm disabled:opacity-50 transition-all"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#8fe617] py-3 px-4 text-xs font-mono font-black text-[#062404] uppercase tracking-wider hover:bg-[#7ecc10] shadow-[0_0_15px_rgba(143,230,23,0.35)] disabled:opacity-50 transition-all cursor-pointer"
               >
                 {isGenerating ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin text-[#062404]" />
                     <span>Rendering Vector PDF...</span>
                   </>
                 ) : (
@@ -657,13 +658,13 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
             </div>
 
             {/* Draggable Queue Selection (500/500) */}
-            <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3 shadow-xs">
+            <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 space-y-3 shadow-sm font-mono">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-mono uppercase text-black font-bold">
+                  <span className="text-xs uppercase text-[#080808] dark:text-[#f2f7f4] font-extrabold">
                     Queue Selection ({selectedCount}/{displayStudents.length})
                   </span>
-                  <p className="text-[10px] text-neutral-500">
+                  <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
                     Drag card or tap to select, then tap any A4 sheet slot
                   </p>
                 </div>
@@ -671,15 +672,15 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                   <button
                     type="button"
                     onClick={handleSelectAll}
-                    className="text-black hover:underline font-mono font-semibold"
+                    className="text-[#8fe617] hover:underline font-bold cursor-pointer"
                   >
                     All
                   </button>
-                  <span className="text-neutral-300">•</span>
+                  <span className="text-[#6b7771] dark:text-[#8a9e93]">•</span>
                   <button
                     type="button"
                     onClick={handleDeselectAll}
-                    className="text-neutral-500 hover:underline font-mono"
+                    className="text-[#6b7771] dark:text-[#8a9e93] hover:underline cursor-pointer"
                   >
                     None
                   </button>
@@ -688,17 +689,17 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
 
               {/* Mobile / Tap Selection Banner */}
               {selectedQueueCard && (
-                <div className="p-2.5 rounded-lg border-2 border-black bg-neutral-50 text-xs flex items-center justify-between animate-fadeIn">
+                <div className="p-2.5 rounded-xl border-2 border-[#8fe617] bg-[#8fe617]/10 text-xs flex items-center justify-between animate-fadeIn">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="h-2 w-2 rounded-full bg-black animate-ping" />
-                    <span className="text-neutral-700 truncate">
-                      Selected: <strong className="text-black">{selectedQueueCard.fullName}</strong> — Tap any slot on the sheet above to place
+                    <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-ping" />
+                    <span className="text-[#080808] dark:text-[#f2f7f4] truncate">
+                      Selected: <strong className="text-[#8fe617]">{selectedQueueCard.fullName}</strong> — Tap any slot on sheet
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setSelectedQueueCard(null)}
-                    className="text-[11px] font-mono underline hover:text-red-600 shrink-0 ml-2"
+                    className="text-[11px] underline hover:text-red-500 shrink-0 ml-2 cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -706,9 +707,9 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
               )}
 
               {/* Student draggable list */}
-              <div className="max-h-96 overflow-y-auto space-y-1.5 divide-y divide-neutral-100 text-xs pr-1">
+              <div className="max-h-96 overflow-y-auto space-y-1.5 divide-y divide-[#f0f5f2] dark:divide-[#162019] text-xs pr-1">
                 {displayStudents.length === 0 ? (
-                  <div className="text-center py-6 text-neutral-500 font-mono text-xs">
+                  <div className="text-center py-6 text-[#6b7771] dark:text-[#8a9e93] text-xs">
                     No student records in queue. Import students or enroll via sender.
                   </div>
                 ) : (
@@ -723,12 +724,12 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                         draggable={true}
                         onDragStart={(e) => handleQueueDragStart(e, s)}
                         onClick={() => handleQueueCardClick(s)}
-                        className={`flex items-center justify-between p-2 rounded cursor-pointer transition-all ${
+                        className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all ${
                           isSelectedForTap
-                            ? "bg-neutral-100 border-2 border-black shadow-sm ring-1 ring-black"
+                            ? "bg-[#8fe617]/15 border-2 border-[#8fe617] shadow-sm"
                             : isPlaced
-                            ? "bg-neutral-100 border border-neutral-300 hover:bg-neutral-100"
-                            : "hover:bg-neutral-50 border border-transparent"
+                            ? "bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]"
+                            : "hover:bg-[#f7faf9] dark:hover:bg-[#161d19] border border-transparent"
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0 pr-2">
@@ -736,24 +737,24 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                             type="checkbox"
                             checked={checked}
                             onChange={() => handleToggleStudent(s.id)}
-                            className="rounded h-3.5 w-3.5 text-black accent-black cursor-pointer"
+                            className="rounded h-3.5 w-3.5 accent-[#8fe617] cursor-pointer"
                             onClick={(e) => e.stopPropagation()}
                           />
                           <GripVertical className="h-4 w-4 text-neutral-400 shrink-0" />
-                          <div className="h-6 w-6 rounded bg-neutral-200 border border-neutral-300 flex items-center justify-center shrink-0 text-[8px] font-mono">
+                          <div className="h-6 w-6 rounded-lg bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126] flex items-center justify-center shrink-0 text-[8px] font-mono overflow-hidden">
                             {s.photoPath ? (
                               <img
                                 src={s.photoPath}
                                 alt=""
-                                className="h-full w-full object-cover rounded"
+                                className="h-full w-full object-cover"
                               />
                             ) : (
                               "ID"
                             )}
                           </div>
                           <div className="min-w-0 truncate">
-                            <div className="font-semibold text-black truncate">{s.fullName}</div>
-                            <div className="text-[10px] font-mono text-neutral-500">
+                            <div className="font-bold text-[#080808] dark:text-[#f2f7f4] truncate">{s.fullName}</div>
+                            <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
                               {s.studentId} • {s.grade}
                             </div>
                           </div>
@@ -761,7 +762,7 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
 
                         <div className="flex items-center gap-2 shrink-0">
                           {isPlaced && (
-                            <span className="text-[9px] font-mono font-bold text-black bg-white px-1.5 py-0.5 rounded border border-neutral-300">
+                            <span className="text-[9px] font-bold text-[#062404] bg-[#8fe617] px-1.5 py-0.5 rounded-md">
                               ON SHEET
                             </span>
                           )}
@@ -769,7 +770,6 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Find first empty slot or swap first
                               const emptyIdx = impositionSlots.findIndex((slot) => slot === null);
                               if (emptyIdx !== -1) {
                                 setImpositionSlots((prev) => {
@@ -781,10 +781,10 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
                                 alert("All 8 slots on this sheet are occupied. Drag this card directly over any slot to swap or replace it.");
                               }
                             }}
-                            className="px-2 py-1 text-[10px] font-mono font-semibold rounded border border-neutral-300 bg-white hover:bg-neutral-100 hover:border-black text-black flex items-center gap-1 transition-colors shadow-xs"
+                            className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#161d19] hover:border-[#8fe617] text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
                             title="Place into next available sheet slot"
                           >
-                            <Plus className="h-3 w-3" />
+                            <Plus className="h-3 w-3 text-[#8fe617]" />
                             <span>Slot</span>
                           </button>
                         </div>

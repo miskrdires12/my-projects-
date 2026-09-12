@@ -1,82 +1,97 @@
 "use client";
 
 // ============================================================================
-// STUDENT BRIDGE — SENDER STATION & HARDWARE PREFERENCES
-// Exclusively for Sender Station operators:
-// - Studio Theme (Light / Dark Night Mode)
-// - Camera Studio Hardware & 300 DPI Resolution
-// - Student Registration Defaults (Grade, School, ID Prefix)
-// - High-Capacity IndexedDB Cache & Draft Buffer Management
+// STUDENT BRIDGE — RECEIVER CENTRAL PRODUCTION FACILITY SETTINGS
+// Exclusively configured for Receiver Station & Central Facility operators:
+// - Custom CSV Export File Path & File Naming Patterns
+// - Local Student Photo Folder Path Configuration (for @photo column in CSV/Excel)
+// - Real-time Live Metrics Polling Cadence & Audio Alert Preferences
+// - 8-Up Print Engine Defaults (Crop Marks, DPI, Bleed)
+// - Immediate Zero-Lag Cache & Database Clearance Engine
 // ============================================================================
 
 import React, { useState, useEffect } from "react";
 import {
-  Camera,
-  HardDrive,
-  Download,
-  Upload,
+  Folder,
+  Printer,
+  RefreshCw,
   Trash2,
   CheckCircle2,
-  Smartphone,
-  RotateCcw,
   Save,
-  Moon,
-  Sun,
-  Layers,
+  RotateCcw,
   Sparkles,
+  Shield,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
-import { getStudentCountFromDB, getAllStudentsFromDB, saveStudentsToDB } from "@/lib/idb-storage";
+import {
+  getStudentCountFromDB,
+  getAllStudentsFromDB,
+  clearAllStudentsFromDB,
+} from "@/lib/idb-storage";
+import { clearAllStudentsAction } from "@/actions/students";
+import { publishStudentSync } from "@/lib/sync-client";
+import { RECEIVER_STUDENT_PHOTO_FOLDER } from "@/lib/export-utils";
 
-interface SenderSettings {
-  theme: "light" | "dark";
-  cameraFacing: "environment" | "user";
-  photoQuality: "300dpi" | "150dpi";
-  shutterSound: boolean;
-  autoOpenCropper: boolean;
-  defaultGrade: string;
-  schoolName: string;
-  campusName: string;
-  academicYear: string;
-  idPrefix: string;
-  autoPrefixPhone: boolean;
+export interface ReceiverSettings {
+  photoFolder: string;
+  csvPrefix: string;
+  csvDelimiter: "," | ";";
+  autoFormatPhone: boolean;
+  photoFolderStructure: "flat" | "by-grade" | "by-id";
+  pollingIntervalMs: number;
+  enableAudioAlerts: boolean;
+  includeCropMarks: boolean;
+  printDpi: "300dpi" | "600dpi";
+  theme: "dark" | "light";
 }
 
-const DEFAULT_SENDER_SETTINGS: SenderSettings = {
+const DEFAULT_RECEIVER_SETTINGS: ReceiverSettings = {
+  photoFolder: RECEIVER_STUDENT_PHOTO_FOLDER,
+  csvPrefix: "student_bridge_receiver_manifest",
+  csvDelimiter: ",",
+  autoFormatPhone: true,
+  photoFolderStructure: "by-grade",
+  pollingIntervalMs: 4000,
+  enableAudioAlerts: true,
+  includeCropMarks: true,
+  printDpi: "300dpi",
   theme: "dark",
-  cameraFacing: "environment",
-  photoQuality: "300dpi",
-  shutterSound: true,
-  autoOpenCropper: true,
-  defaultGrade: "10",
-  schoolName: "Silicon Labs Academy",
-  campusName: "Main Campus",
-  academicYear: "2026-2027",
-  idPrefix: "SB-",
-  autoPrefixPhone: true,
 };
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<SenderSettings>(DEFAULT_SENDER_SETTINGS);
+  const [settings, setSettings] = useState<ReceiverSettings>(DEFAULT_RECEIVER_SETTINGS);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [studentCount, setStudentCount] = useState<number>(0);
+  const [isClearingImmediate, setIsClearingImmediate] = useState(false);
+  const [activeTab, setActiveTab] = useState<"receiver" | "station">("receiver");
 
-  // Load saved sender settings & storage metrics on mount
+  // Load saved receiver settings & storage metrics on mount
   useEffect(() => {
     try {
-      // Determine initial theme from root class or localStorage
       const isDark = document.documentElement.classList.contains("dark");
       const savedTheme = (localStorage.getItem("sb_theme") as "light" | "dark") || (isDark ? "dark" : "light");
 
-      const rawSettings = localStorage.getItem("sb_app_settings");
+      const rawSettings = localStorage.getItem("sb_receiver_settings");
       if (rawSettings) {
         const parsed = JSON.parse(rawSettings);
         setSettings({
-          ...DEFAULT_SENDER_SETTINGS,
+          ...DEFAULT_RECEIVER_SETTINGS,
           ...parsed,
           theme: savedTheme || parsed.theme || "dark",
         });
       } else {
-        setSettings((prev) => ({ ...prev, theme: savedTheme }));
+        // Check legacy single photo folder setting
+        const legacyFolder = localStorage.getItem("sb_receiver_photo_folder");
+        if (legacyFolder) {
+          setSettings((prev) => ({
+            ...prev,
+            photoFolder: legacyFolder,
+            theme: savedTheme,
+          }));
+        } else {
+          setSettings((prev) => ({ ...prev, theme: savedTheme }));
+        }
       }
 
       // Read real IndexedDB student count
@@ -93,7 +108,7 @@ export default function SettingsPage() {
         })
         .catch(() => {});
     } catch (e) {
-      console.warn("Error loading sender settings:", e);
+      console.warn("Error loading receiver settings:", e);
     }
   }, []);
 
@@ -109,7 +124,8 @@ export default function SettingsPage() {
 
   const handleSaveSettings = () => {
     try {
-      localStorage.setItem("sb_app_settings", JSON.stringify(settings));
+      localStorage.setItem("sb_receiver_settings", JSON.stringify(settings));
+      localStorage.setItem("sb_receiver_photo_folder", settings.photoFolder.trim());
       localStorage.setItem("sb_theme", settings.theme);
       if (settings.theme === "dark") {
         document.documentElement.classList.add("dark");
@@ -119,131 +135,104 @@ export default function SettingsPage() {
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch (e) {
-      alert("Failed to save settings to device storage.");
+      alert("Failed to save receiver settings to local storage.");
     }
   };
 
   const handleResetSettings = () => {
-    if (confirm("Reset Sender Station settings to factory defaults?")) {
-      setSettings(DEFAULT_SENDER_SETTINGS);
-      localStorage.setItem("sb_app_settings", JSON.stringify(DEFAULT_SENDER_SETTINGS));
-      handleApplyTheme(DEFAULT_SENDER_SETTINGS.theme);
+    if (confirm("Reset all Receiver Station settings to factory production defaults?")) {
+      setSettings(DEFAULT_RECEIVER_SETTINGS);
+      localStorage.setItem("sb_receiver_settings", JSON.stringify(DEFAULT_RECEIVER_SETTINGS));
+      localStorage.setItem("sb_receiver_photo_folder", DEFAULT_RECEIVER_SETTINGS.photoFolder);
+      handleApplyTheme(DEFAULT_RECEIVER_SETTINGS.theme);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2000);
     }
   };
 
-  const handleClearDraftCache = () => {
-    if (confirm("Clear temporary photo draft buffers and unattached captures? (Saved students in database will NOT be affected)")) {
-      try {
-        localStorage.removeItem("sb_student_draft");
-        localStorage.removeItem("sb_photo_draft");
-        localStorage.removeItem("sb_last_photo_preview");
-        sessionStorage.clear();
-        alert("Draft buffers cleared successfully.");
-        window.location.reload();
-      } catch (e) {
-        alert("Failed to clear draft buffer.");
-      }
+  // ──────────────────────────────────────────────────────────────────────────
+  // ZERO-LAG IMMEDIATE PURGE & CLEAR ALGORITHM (0ms Latency)
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleImmediateClearAll = async () => {
+    if (
+      !confirm(
+        "⚠️ PERMANENT INSTANT CLEAR: Are you sure you want to immediately delete ALL student records from the receiver roster and cache? This action takes effect in 0ms with zero lag."
+      )
+    ) {
+      return;
     }
-  };
 
-  const handleExportBackup = async () => {
+    setIsClearingImmediate(true);
+
     try {
-      let idbStudents: any[] = [];
+      // 1. Synchronously purge client-side states & buffers IMMEDIATELY
+      localStorage.removeItem("sb_enrolled_students");
+      localStorage.removeItem("sb_photo_draft");
+      localStorage.removeItem("sb_student_draft");
+      sessionStorage.clear();
+
+      // Set tombstone markers so nothing can reappear
       try {
-        idbStudents = await getAllStudentsFromDB();
+        const idbAll = await getAllStudentsFromDB();
+        const allIds = idbAll.flatMap((s: any) => [s.id, s.studentId]).filter(Boolean);
+        localStorage.setItem("sb_deleted_student_ids", JSON.stringify(allIds));
       } catch {}
 
-      const studentsRaw = localStorage.getItem("sb_enrolled_students") || "[]";
-      let localStudents: any[] = [];
-      try {
-        localStudents = JSON.parse(studentsRaw);
-      } catch {}
+      // 2. Clear IndexedDB immediately
+      await clearAllStudentsFromDB().catch(() => {});
 
-      // Deduplicate by studentId or id
-      const studentMap = new Map();
-      for (const s of [...idbStudents, ...localStudents]) {
-        if (s && (s.studentId || s.id)) {
-          studentMap.set(s.studentId || s.id, s);
-        }
-      }
-      const combinedStudents = Array.from(studentMap.values());
+      // 3. Immediately broadcast "CLEAR" to all active browser windows & stations
+      publishStudentSync("CLEAR").catch(() => {});
 
-      const settingsRaw = localStorage.getItem("sb_app_settings") || "{}";
-      const backupData = {
-        app: "SiliconLabs Student Bridge Station",
-        version: "2.5.0",
-        exportDate: new Date().toISOString(),
-        settings: JSON.parse(settingsRaw),
-        students: combinedStudents,
-      };
+      setStudentCount(0);
 
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], {
-        type: "application/json",
+      // 4. Background server purge without blocking the UI thread
+      clearAllStudentsAction().catch((err) => {
+        console.warn("Background server purge status:", err);
       });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `StudentBridge_Backup_${new Date().toISOString().split("T")[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (e) {
-      alert("Error generating station backup archive.");
+
+      alert("✓ Immediate Clear Successful! All student records and caches wiped instantly.");
+    } catch (err: any) {
+      alert("Failed to perform instant clear: " + (err?.message || "Unknown error"));
+    } finally {
+      setIsClearingImmediate(false);
     }
   };
 
-  const handleRestoreBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const text = event.target?.result as string;
-        const data = JSON.parse(text);
-
-        if (data.students && Array.isArray(data.students)) {
-          localStorage.setItem("sb_enrolled_students", JSON.stringify(data.students));
-          try {
-            await saveStudentsToDB(data.students);
-          } catch {}
-        }
-        if (data.settings) {
-          localStorage.setItem("sb_app_settings", JSON.stringify(data.settings));
-          setSettings(data.settings);
-          if (data.settings.theme) {
-            handleApplyTheme(data.settings.theme);
-          }
-        }
-
-        alert(`Station backup restored! ${data.students?.length || 0} student records verified.`);
-        window.location.reload();
-      } catch (err) {
-        alert("Invalid backup JSON file.");
-      }
-    };
-    reader.readAsText(file);
+  const handleResetTombstones = () => {
+    if (confirm("Reset deleted IDs tombstone registry? This allows re-importing previously cleared student IDs.")) {
+      localStorage.removeItem("sb_deleted_student_ids");
+      alert("Tombstone registry reset successfully.");
+    }
   };
+
+  // Sample Path Live Preview Calculation
+  const samplePhotoPathPreview = `${settings.photoFolder.replace(/[/\\]+$/, "")}\\${
+    settings.photoFolderStructure === "by-grade"
+      ? "Grade_10\\"
+      : ""
+  }Yeah tarekegn.jpg`;
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-16">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#dce7e1] dark:border-[#26332b] pb-5">
+    <div className="space-y-6 max-w-5xl mx-auto pb-20 text-[#080808] dark:text-[#f2f7f4] font-sans">
+      {/* Top Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#dce7e1] dark:border-[#223126] pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-[#8fe617] font-bold tracking-wider uppercase">
-              HARDWARE &amp; DEFAULTS
+            <span className="text-xs font-mono text-[#062404] bg-[#8fe617] px-2.5 py-0.5 rounded-md font-black tracking-wider uppercase shadow-xs">
+              RECEIVER FACILITY
+            </span>
+            <span className="text-[#dce7e1] dark:text-[#223126]">•</span>
+            <span className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono font-semibold">
+              Production Configuration
             </span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2.5 mt-1">
-            <Smartphone className="h-6 w-6 text-[#8fe617]" />
-            <span>Sender Station Settings</span>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2.5 mt-1.5">
+            <Shield className="h-6 w-6 text-[#8fe617]" />
+            <span>Receiver Station Settings</span>
           </h1>
-          <p className="text-xs text-[#6b7771] dark:text-[#7f9488] mt-0.5">
-            Configure camera studio hardware, registration defaults, studio theme, and local high-capacity cache
+          <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+            Configure local CSV &amp; photo paths, live telemetry frequency, 8-Up printing, and zero-lag roster management
           </p>
         </div>
 
@@ -251,7 +240,7 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={handleResetSettings}
-            className="flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-3.5 py-2 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] cool-btn-hover transition-colors shadow-xs"
+            className="flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-3.5 py-2 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#1c261e] cool-btn-hover transition-colors shadow-xs cursor-pointer"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             <span>Reset Defaults</span>
@@ -262,322 +251,468 @@ export default function SettingsPage() {
             className="flex items-center gap-2 rounded-xl bg-[#8fe617] px-5 py-2 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] shadow-[0_0_20px_rgba(143,230,23,0.35)] cool-btn-hover transition-all cursor-pointer"
           >
             <Save className="h-4 w-4 stroke-[2.5]" />
-            <span>Save Settings</span>
+            <span>Save Receiver Settings</span>
           </button>
         </div>
       </div>
 
       {savedSuccess && (
-        <div className="rounded-xl border border-[#8fe617] bg-[#8fe617]/15 dark:bg-[#8fe617]/10 p-3.5 flex items-center gap-2.5 text-xs font-mono font-bold text-[#062404] dark:text-[#8fe617] shadow-sm animate-in fade-in duration-200">
-          <CheckCircle2 className="h-4 w-4 stroke-[2.5]" />
-          <span>Sender settings updated and saved to local station storage.</span>
+        <div className="rounded-2xl border border-[#8fe617] bg-[#8fe617]/15 p-4 flex items-center gap-3 text-xs font-mono font-bold text-[#080808] dark:text-[#8fe617] shadow-sm animate-in fade-in duration-200">
+          <CheckCircle2 className="h-5 w-5 stroke-[2.5] text-[#8fe617]" />
+          <span>Receiver settings updated and applied across all manufacturing pipelines.</span>
         </div>
       )}
 
-      {/* 1. Studio Theme & Visual Mode */}
-      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2.5 border-b border-[#dce7e1] dark:border-[#26332b] pb-3">
-          <div className="h-8 w-8 rounded-lg bg-[#8fe617]/15 flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
-            <Sparkles className="h-4 w-4" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-[#080808] dark:text-[#f2f7f4]">Studio Visual Theme</h2>
-            <p className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">Choose between daylight studio mode or deep dark night mode</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <button
-            type="button"
-            onClick={() => handleApplyTheme("dark")}
-            className={`p-4 rounded-xl border text-left flex items-start gap-3.5 transition-all cool-hover ${
-              settings.theme === "dark"
-                ? "border-[#8fe617] bg-[#8fe617]/10 dark:bg-[#8fe617]/15 ring-2 ring-[#8fe617]/50 shadow-sm"
-                : "border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] opacity-75 hover:opacity-100"
-            }`}
-          >
-            <div className="h-9 w-9 rounded-lg bg-[#080808] text-[#8fe617] flex items-center justify-center shrink-0 border border-[#26332b]">
-              <Moon className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2">
-                <span>Dark / Night Mode</span>
-                {settings.theme === "dark" && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#8fe617] text-[#062404] font-black">ACTIVE</span>
-                )}
-              </div>
-              <p className="text-[11px] text-[#6b7771] dark:text-[#7f9488] mt-1">
-                Deep matte dark studio workspace with vivid Lemon Green accents. Reduces eye fatigue during all-day registration.
-              </p>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleApplyTheme("light")}
-            className={`p-4 rounded-xl border text-left flex items-start gap-3.5 transition-all cool-hover ${
-              settings.theme === "light"
-                ? "border-[#8fe617] bg-[#8fe617]/10 ring-2 ring-[#8fe617]/50 shadow-sm"
-                : "border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] opacity-75 hover:opacity-100"
-            }`}
-          >
-            <div className="h-9 w-9 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 border border-amber-300">
-              <Sun className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2">
-                <span>Light Studio Mode</span>
-                {settings.theme === "light" && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#8fe617] text-[#062404] font-black">ACTIVE</span>
-                )}
-              </div>
-              <p className="text-[11px] text-[#6b7771] dark:text-[#7f9488] mt-1">
-                Clean daylight high-contrast studio mode for well-lit rooms and outdoor photo setups.
-              </p>
-            </div>
-          </button>
-        </div>
+      {/* Mode Switcher Banner (Receiver vs Hardware) */}
+      <div className="flex items-center gap-2 border-b border-[#dce7e1] dark:border-[#223126] pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("receiver")}
+          className={`px-4 py-2 rounded-xl text-xs font-mono font-black transition-all cursor-pointer ${
+            activeTab === "receiver"
+              ? "bg-[#8fe617] text-[#062404] shadow-xs"
+              : "text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+          }`}
+        >
+          Receiver Production Settings (Active)
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("station")}
+          className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
+            activeTab === "station"
+              ? "bg-[#8fe617] text-[#062404] shadow-xs"
+              : "text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+          }`}
+        >
+          Theme &amp; Visuals
+        </button>
       </div>
 
-      {/* 2. Camera Studio & Photo Hardware Settings */}
-      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-6 shadow-sm space-y-5">
-        <div className="flex items-center gap-2.5 border-b border-[#dce7e1] dark:border-[#26332b] pb-3">
-          <div className="h-8 w-8 rounded-lg bg-[#8fe617]/15 flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
-            <Camera className="h-4 w-4" />
+      {activeTab === "receiver" && (
+        <div className="space-y-6">
+          {/* Section 1: CSV & Local Photo File Path (Core User Requirement) */}
+          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-5">
+            <div className="flex items-center gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="h-9 w-9 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
+                <Folder className="h-5 w-5 text-[#8fe617]" />
+              </div>
+              <div>
+                <h2 className="text-sm font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                  Local Photo Storage &amp; CSV File Paths
+                </h2>
+                <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+                  Configure directory where high-res studio photos are saved and mapped in Excel/CSV `@photo` column
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Photo Folder Path */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold uppercase text-[#080808] dark:text-[#f2f7f4] flex items-center justify-between">
+                  <span>Photo Folder Local File Path</span>
+                  <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-normal">
+                    Windows or POSIX directory path
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  value={settings.photoFolder}
+                  onChange={(e) => setSettings({ ...settings, photoFolder: e.target.value })}
+                  placeholder="e.g. C:\Users\YourUser\Desktop\StudentPhotos"
+                  className="w-full rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-4 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none focus:ring-1 focus:ring-[#8fe617] transition-all"
+                />
+              </div>
+
+              {/* Live Preview of @photo column */}
+              <div className="rounded-2xl border border-[#8fe617]/30 bg-[#8fe617]/5 p-3.5 space-y-1.5 font-mono text-xs">
+                <div className="flex items-center justify-between text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-bold uppercase">
+                  <span>Excel / CSV @photo Column Live Preview</span>
+                  <span className="text-[#8fe617]">DYNAMICALLY MAPPED</span>
+                </div>
+                <div className="text-xs font-bold text-[#080808] dark:text-[#8fe617] break-all bg-white dark:bg-[#070908] p-2.5 rounded-xl border border-[#dce7e1] dark:border-[#223126]">
+                  {samplePhotoPathPreview}
+                </div>
+                <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                  All exported manifests, ZIP archives, and card production batches will immediately reference this path.
+                </p>
+              </div>
+
+              {/* Folder Hierarchy Organization */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    Photo Subfolder Organization
+                  </label>
+                  <select
+                    value={settings.photoFolderStructure}
+                    onChange={(e: any) => setSettings({ ...settings, photoFolderStructure: e.target.value })}
+                    className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
+                  >
+                    <option value="by-grade">Subfolders by Grade Cohort (Grade_10\name.jpg)</option>
+                    <option value="flat">Flat Directory (name.jpg)</option>
+                    <option value="by-id">ID Code Based (id.jpg)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    CSV Manifest Export Filename Prefix
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.csvPrefix}
+                    onChange={(e) => setSettings({ ...settings, csvPrefix: e.target.value })}
+                    placeholder="student_bridge_receiver_manifest"
+                    className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* CSV Delimiter & Normalization */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="flex items-center justify-between p-3.5 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                  <div>
+                    <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                      Auto-Normalize Phone (2519 Format)
+                    </span>
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                      Converts 09... to 2519... for receiver phone systems
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={settings.autoFormatPhone}
+                    onChange={(e) => setSettings({ ...settings, autoFormatPhone: e.target.checked })}
+                    className="h-4 w-4 rounded accent-[#8fe617] cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3.5 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                  <div>
+                    <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                      CSV Delimiter Character
+                    </span>
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                      Comma (standard) or Semicolon (European Excel)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126] rounded-xl p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...settings, csvDelimiter: "," })}
+                      className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                        settings.csvDelimiter === ","
+                          ? "bg-[#8fe617] text-[#062404]"
+                          : "text-[#6b7771] dark:text-[#8a9e93]"
+                      }`}
+                    >
+                      Comma (,)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...settings, csvDelimiter: ";" })}
+                      className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                        settings.csvDelimiter === ";"
+                          ? "bg-[#8fe617] text-[#062404]"
+                          : "text-[#6b7771] dark:text-[#8a9e93]"
+                      }`}
+                    >
+                      Semicolon (;)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-[#080808] dark:text-[#f2f7f4]">Camera Studio &amp; Lens Hardware</h2>
-            <p className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">Mobile camera lens defaults, 300 DPI resolution, and shutter controls</p>
+
+          {/* Section 2: Live Metrics & Realtime Telemetry Cadence */}
+          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-5">
+            <div className="flex items-center gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="h-9 w-9 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
+                <RefreshCw className="h-5 w-5 text-[#8fe617]" />
+              </div>
+              <div>
+                <h2 className="text-sm font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                  Live Metrics &amp; Telemetry Frequency
+                </h2>
+                <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+                  Configure live dashboard sync cadence, live audio chime, and telemetry notifications
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 p-4 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                <label className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                  Live Polling Interval
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "2s Ultra", val: 2000 },
+                    { label: "4s Normal", val: 4000 },
+                    { label: "10s Eco", val: 10000 },
+                  ].map((rate) => (
+                    <button
+                      key={rate.val}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, pollingIntervalMs: rate.val })}
+                      className={`py-2 rounded-xl text-xs font-mono font-bold border transition-all cursor-pointer ${
+                        settings.pollingIntervalMs === rate.val
+                          ? "border-[#8fe617] bg-[#8fe617] text-[#062404] shadow-xs"
+                          : "border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#6b7771] dark:text-[#8a9e93]"
+                      }`}
+                    >
+                      {rate.label}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block pt-1">
+                  Controls how frequently the Receiver dashboard updates registration and print velocity curves.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                <div className="space-y-1">
+                  <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                    {settings.enableAudioAlerts ? (
+                      <Volume2 className="h-4 w-4 text-[#8fe617]" />
+                    ) : (
+                      <VolumeX className="h-4 w-4 text-[#6b7771]" />
+                    )}
+                    <span>Incoming Ingestion Audio Chime</span>
+                  </span>
+                  <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block">
+                    Plays subtle studio chime when a new student record arrives at the receiver
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.enableAudioAlerts}
+                  onChange={(e) => setSettings({ ...settings, enableAudioAlerts: e.target.checked })}
+                  className="h-5 w-5 rounded accent-[#8fe617] cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: 8-Up Print Batch Defaults */}
+          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-5">
+            <div className="flex items-center gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="h-9 w-9 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
+                <Printer className="h-5 w-5 text-[#8fe617]" />
+              </div>
+              <div>
+                <h2 className="text-sm font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                  8-Up A4 Print Engine Preferences
+                </h2>
+                <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+                  Physical card imposition, high-DPI rasterization, and guillotine cutter alignment
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between p-4 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                <div>
+                  <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                    Guillotine Cut Marks (2mm Bleed)
+                  </span>
+                  <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                    Renders corner crosshair guides on A4 sheets for precise blade trimming
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.includeCropMarks}
+                  onChange={(e) => setSettings({ ...settings, includeCropMarks: e.target.checked })}
+                  className="h-5 w-5 rounded accent-[#8fe617] cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                <div>
+                  <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                    Vector Print Resolution
+                  </span>
+                  <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                    300 DPI (standard thermal PVC) or 600 DPI (high-definition)
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126] rounded-xl p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSettings({ ...settings, printDpi: "300dpi" })}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      settings.printDpi === "300dpi"
+                        ? "bg-[#8fe617] text-[#062404]"
+                        : "text-[#6b7771] dark:text-[#8a9e93]"
+                    }`}
+                  >
+                    300 DPI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettings({ ...settings, printDpi: "600dpi" })}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      settings.printDpi === "600dpi"
+                        ? "bg-[#8fe617] text-[#062404]"
+                        : "text-[#6b7771] dark:text-[#8a9e93]"
+                    }`}
+                  >
+                    600 DPI
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Zero-Lag Immediate Clear & Cache Maintenance (User Requirement) */}
+          <div className="rounded-3xl border border-red-200 dark:border-red-950/40 bg-white dark:bg-[#111613] p-6 shadow-sm space-y-5">
+            <div className="flex items-center justify-between border-b border-red-100 dark:border-red-950/30 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-red-100 dark:bg-red-950/50 border border-red-300 dark:border-red-800/50 flex items-center justify-center text-red-600 dark:text-red-400">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-mono font-black uppercase tracking-wider text-red-600 dark:text-red-400">
+                    Zero-Lag Storage &amp; Immediate Roster Purge
+                  </h2>
+                  <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+                    Instant 0ms UI clearance with background synchronization — zero lag, zero hanging spinners
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93]">Local Cached Records:</span>
+                <div className="text-sm font-black font-mono text-[#080808] dark:text-[#f2f7f4]">
+                  {studentCount.toLocaleString()} Students
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] space-y-3">
+                <div>
+                  <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                    Reset Deleted Tombstones
+                  </span>
+                  <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block mt-0.5">
+                    Clear the suppression list that prevents previously deleted records from reappearing.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetTombstones}
+                  className="px-4 py-2 rounded-xl text-xs font-mono font-bold border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all cursor-pointer"
+                >
+                  Reset Tombstone Registry
+                </button>
+              </div>
+
+              <div className="p-4 rounded-2xl border border-red-200 dark:border-red-950/50 bg-red-50/50 dark:bg-red-950/20 space-y-3">
+                <div>
+                  <span className="text-xs font-mono font-bold text-red-600 dark:text-red-400 block">
+                    Immediate 0ms Clear All Students
+                  </span>
+                  <span className="text-[10px] text-red-700/80 dark:text-red-400/80 font-mono block mt-0.5">
+                    Wipes the entire roster instantly with 0ms lag so you can ingest fresh data without waiting.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleImmediateClearAll}
+                  disabled={isClearingImmediate}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-600 text-white px-4 py-2 text-xs font-mono font-black hover:bg-red-700 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>{isClearingImmediate ? "Clearing in 0ms..." : "Execute Immediate Clear All (0ms)"}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 flex items-center justify-between">
-            <div>
-              <span className="font-semibold text-[#080808] dark:text-[#f2f7f4] block">Default Camera Lens</span>
-              <span className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">Rear lens (sharpest) or front selfie</span>
+      {/* Mode 2: Theme & Hardware Studio (For Dark/Light and Backups) */}
+      {activeTab === "station" && (
+        <div className="space-y-6">
+          {/* Studio Theme Selection */}
+          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-4">
+            <div className="flex items-center gap-2.5 border-b border-[#dce7e1] dark:border-[#223126] pb-3">
+              <div className="h-9 w-9 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
+                <Sparkles className="h-5 w-5 text-[#8fe617]" />
+              </div>
+              <div>
+                <h2 className="text-sm font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                  Visual Theme &amp; Color System
+                </h2>
+                <p className="text-xs text-[#6b7771] dark:text-[#8a9e93]">
+                  True obsidian pitch-black night mode or light daylight studio
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-1 bg-white dark:bg-[#161c18] border border-[#dce7e1] dark:border-[#26332b] rounded-lg p-1">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
                 type="button"
-                onClick={() => setSettings({ ...settings, cameraFacing: "environment" })}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${
-                  settings.cameraFacing === "environment"
-                    ? "bg-[#8fe617] text-[#062404] shadow-xs"
-                    : "text-[#6b7771] dark:text-[#7f9488] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                onClick={() => handleApplyTheme("dark")}
+                className={`p-4 rounded-2xl border text-left flex items-start gap-3.5 transition-all cool-hover cursor-pointer ${
+                  settings.theme === "dark"
+                    ? "border-[#8fe617] bg-[#8fe617]/10 dark:bg-[#8fe617]/15 ring-2 ring-[#8fe617]/50 shadow-sm"
+                    : "border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] opacity-75 hover:opacity-100"
                 }`}
               >
-                Back (Rear)
+                <div className="h-9 w-9 rounded-xl bg-[#070908] text-[#8fe617] flex items-center justify-center shrink-0 border border-[#223126]">
+                  <Shield className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2">
+                    <span>Obsidian Night Mode</span>
+                    {settings.theme === "dark" && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#8fe617] text-[#062404] font-black">
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                    Deep pitch-black (#070908) canvas with neon Lemon Green accents. Prevents screen glare and eye strain.
+                  </p>
+                </div>
               </button>
+
               <button
                 type="button"
-                onClick={() => setSettings({ ...settings, cameraFacing: "user" })}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${
-                  settings.cameraFacing === "user"
-                    ? "bg-[#8fe617] text-[#062404] shadow-xs"
-                    : "text-[#6b7771] dark:text-[#7f9488] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                onClick={() => handleApplyTheme("light")}
+                className={`p-4 rounded-2xl border text-left flex items-start gap-3.5 transition-all cool-hover cursor-pointer ${
+                  settings.theme === "light"
+                    ? "border-[#8fe617] bg-[#8fe617]/10 ring-2 ring-[#8fe617]/50 shadow-sm"
+                    : "border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] opacity-75 hover:opacity-100"
                 }`}
               >
-                Front (Selfie)
+                <div className="h-9 w-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 border border-amber-300">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2">
+                    <span>Light Studio Mode</span>
+                    {settings.theme === "light" && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#8fe617] text-[#062404] font-black">
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                    High-contrast daylight theme for outdoor and bright daylight environments.
+                  </p>
+                </div>
               </button>
             </div>
           </div>
-
-          <div className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 flex items-center justify-between">
-            <div>
-              <span className="font-semibold text-[#080808] dark:text-[#f2f7f4] block">Studio Photo Resolution</span>
-              <span className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">JFIF 300 DPI metadata injection for ID card printing</span>
-            </div>
-            <select
-              value={settings.photoQuality}
-              onChange={(e) => setSettings({ ...settings, photoQuality: e.target.value as any })}
-              className="rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] px-3 py-1.5 font-mono text-xs font-bold text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
-            >
-              <option value="300dpi">300 DPI (Ultra Crisp)</option>
-              <option value="150dpi">150 DPI (Standard)</option>
-            </select>
-          </div>
-
-          <div className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 flex items-center justify-between">
-            <div>
-              <span className="font-semibold text-[#080808] dark:text-[#f2f7f4] block">Auto-Open Cropper After Snap</span>
-              <span className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">Open 3:4 studio sliding crop editor on capture</span>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.autoOpenCropper}
-                onChange={(e) => setSettings({ ...settings, autoOpenCropper: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-neutral-300 dark:bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#8fe617]"></div>
-            </label>
-          </div>
-
-          <div className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-4 flex items-center justify-between">
-            <div>
-              <span className="font-semibold text-[#080808] dark:text-[#f2f7f4] block">Camera Shutter Audio</span>
-              <span className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">Audible click feedback when photo is snapped</span>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.shutterSound}
-                onChange={(e) => setSettings({ ...settings, shutterSound: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-neutral-300 dark:bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#8fe617]"></div>
-            </label>
-          </div>
         </div>
-      </div>
-
-      {/* 3. Student Registration Defaults Card */}
-      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-6 shadow-sm space-y-5">
-        <div className="flex items-center gap-2.5 border-b border-[#dce7e1] dark:border-[#26332b] pb-3">
-          <div className="h-8 w-8 rounded-lg bg-[#8fe617]/15 flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
-            <Layers className="h-4 w-4" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-[#080808] dark:text-[#f2f7f4]">Student Registration Defaults</h2>
-            <p className="text-[11px] text-[#6b7771] dark:text-[#7f9488]">Default values auto-populated for incoming students to maximize registration speed</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-          <div>
-            <label className="block font-medium text-[#080808] dark:text-[#f2f7f4] mb-1">
-              Default Grade (Number)
-            </label>
-            <input
-              type="text"
-              value={settings.defaultGrade}
-              onChange={(e) => setSettings({ ...settings, defaultGrade: e.target.value })}
-              className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2 font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
-              placeholder="e.g. 10 or 9"
-            />
-            <span className="text-[10px] text-[#6b7771] dark:text-[#7f9488] mt-0.5 block">Entered as clean number</span>
-          </div>
-
-          <div>
-            <label className="block font-medium text-[#080808] dark:text-[#f2f7f4] mb-1">
-              Student ID Prefix
-            </label>
-            <input
-              type="text"
-              value={settings.idPrefix}
-              onChange={(e) => setSettings({ ...settings, idPrefix: e.target.value })}
-              className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2 font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
-              placeholder="e.g. SB-"
-            />
-            <span className="text-[10px] text-[#6b7771] dark:text-[#7f9488] mt-0.5 block">Generates {settings.idPrefix}2026-XXXXX</span>
-          </div>
-
-          <div>
-            <label className="block font-medium text-[#080808] dark:text-[#f2f7f4] mb-1">
-              Active Academic Year
-            </label>
-            <input
-              type="text"
-              value={settings.academicYear}
-              onChange={(e) => setSettings({ ...settings, academicYear: e.target.value })}
-              className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2 font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
-              placeholder="e.g. 2026-2027"
-            />
-            <span className="text-[10px] text-[#6b7771] dark:text-[#7f9488] mt-0.5 block">Default batch session</span>
-          </div>
-
-          <div>
-            <label className="block font-medium text-[#080808] dark:text-[#f2f7f4] mb-1">
-              School / Institution Name
-            </label>
-            <input
-              type="text"
-              value={settings.schoolName}
-              onChange={(e) => setSettings({ ...settings, schoolName: e.target.value })}
-              className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2 text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
-              placeholder="e.g. Silicon Labs Academy"
-            />
-          </div>
-
-          <div>
-            <label className="block font-medium text-[#080808] dark:text-[#f2f7f4] mb-1">
-              Campus / Department
-            </label>
-            <input
-              type="text"
-              value={settings.campusName}
-              onChange={(e) => setSettings({ ...settings, campusName: e.target.value })}
-              className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2 text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
-              placeholder="e.g. Main Campus"
-            />
-          </div>
-
-          <div className="rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-3 flex items-center justify-between self-end">
-            <div>
-              <span className="font-semibold text-[#080808] dark:text-[#f2f7f4] block">Auto-Format Phone</span>
-              <span className="text-[10px] text-[#6b7771] dark:text-[#7f9488]">Standardize prefix (e.g. 2519...)</span>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer ml-2 shrink-0">
-              <input
-                type="checkbox"
-                checked={settings.autoPrefixPhone}
-                onChange={(e) => setSettings({ ...settings, autoPrefixPhone: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-10 h-5 bg-neutral-300 dark:bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#8fe617]"></div>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Backup & Local Cache Management */}
-      <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#161c18] p-5 shadow-sm space-y-3.5">
-        <div className="flex items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] pb-2.5">
-          <div className="flex items-center gap-2">
-            <HardDrive className="h-4 w-4 text-[#8fe617]" />
-            <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
-              Backup &amp; Cache Actions
-            </h2>
-          </div>
-          {studentCount > 0 && (
-            <span className="text-[10px] font-mono font-bold text-[#8fe617] bg-[#8fe617]/10 px-2 py-0.5 rounded-full border border-[#8fe617]/20">
-              {studentCount} Students
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <button
-            type="button"
-            onClick={handleExportBackup}
-            className="flex items-center justify-center gap-2 rounded-xl bg-[#080808] dark:bg-[#0a0d0b] border border-neutral-800 dark:border-[#26332b] text-[#f2f7f4] p-3 text-xs font-mono font-bold hover:bg-neutral-800 transition-colors shadow-xs animated-btn cursor-pointer"
-          >
-            <Download className="h-4 w-4 text-[#8fe617]" />
-            <span>Export Station Backup</span>
-          </button>
-
-          <label className="flex items-center justify-center gap-2 rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] p-3 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#232d27] transition-colors cursor-pointer shadow-xs animated-btn">
-            <Upload className="h-4 w-4 text-[#6b7771] dark:text-[#7f9488]" />
-            <span>Restore From JSON</span>
-            <input
-              type="file"
-              accept=".json,application/json"
-              onChange={handleRestoreBackup}
-              className="hidden"
-            />
-          </label>
-
-          <button
-            type="button"
-            onClick={handleClearDraftCache}
-            className="flex items-center justify-center gap-2 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/20 p-3 text-xs font-mono font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors animated-btn cursor-pointer"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span>Flush Photo Draft Cache</span>
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

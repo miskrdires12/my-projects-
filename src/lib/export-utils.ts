@@ -119,14 +119,57 @@ export function getStudentPhotoFileName(student: StudentPhotoIdentity): string {
 }
 
 /**
- * Generates the exact Windows local file path required for the @photo column:
- * e.g. "C:\Users\athede\Desktop\students project for 17000\Yeah tarekegn.jpg"
+ * Retrieves the currently configured receiver photo folder from localStorage,
+ * falling back to the default desktop project path.
  */
-export function getStudentPhotoLocalPath(student: StudentPhotoIdentity): string {
+export function getReceiverPhotoFolder(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const custom = localStorage.getItem("sb_receiver_photo_folder");
+      if (custom && custom.trim().length > 0) return custom.trim();
+      const rawSettings = localStorage.getItem("sb_receiver_settings");
+      if (rawSettings) {
+        const parsed = JSON.parse(rawSettings);
+        if (parsed.photoFolder && parsed.photoFolder.trim().length > 0) {
+          return parsed.photoFolder.trim();
+        }
+      }
+    } catch {}
+  }
+  return RECEIVER_STUDENT_PHOTO_FOLDER;
+}
+
+/**
+ * Retrieves the currently configured receiver CSV prefix from localStorage.
+ */
+export function getReceiverCsvPrefix(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const rawSettings = localStorage.getItem("sb_receiver_settings");
+      if (rawSettings) {
+        const parsed = JSON.parse(rawSettings);
+        if (parsed.csvPrefix && parsed.csvPrefix.trim().length > 0) {
+          return parsed.csvPrefix.trim();
+        }
+      }
+    } catch {}
+  }
+  return "student_bridge_receiver_manifest";
+}
+
+/**
+ * Generates the exact local file path required for the @photo column:
+ * e.g. "C:\Users\athede\Desktop\students project for 17000\Yeah tarekegn.jpg"
+ * Dynamically respects custom folder set in Receiver Settings.
+ */
+export function getStudentPhotoLocalPath(student: StudentPhotoIdentity, folderOverride?: string): string {
   if (!student.photoPath) return "";
   const fileName = getStudentPhotoFileName(student);
   if (!fileName) return "";
-  return `${RECEIVER_STUDENT_PHOTO_FOLDER}\\${fileName}`;
+  const folder = folderOverride || getReceiverPhotoFolder();
+  const sep = folder.includes("/") ? "/" : "\\";
+  const cleanFolder = folder.endsWith("/") || folder.endsWith("\\") ? folder.slice(0, -1) : folder;
+  return `${cleanFolder}${sep}${fileName}`;
 }
 
 /**

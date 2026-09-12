@@ -76,12 +76,12 @@ export default function DashboardShell({ session, children }: DashboardShellProp
   const closeMenu = () => setMenuOpen(false);
 
   const navContent = (
-    <div className="flex flex-col h-full justify-between bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4] font-sans transition-colors duration-200">
+    <div className="flex flex-col h-full justify-between bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] font-sans transition-colors duration-200">
       <div>
         {/* Brand Header with Silicon Labs Logo */}
-        <div className="flex h-16 items-center justify-between border-b border-[#dce7e1] dark:border-[#26332b] px-5 bg-white dark:bg-[#161c18]">
+        <div className="flex h-16 items-center justify-between border-b border-[#dce7e1] dark:border-[#223126] px-5 bg-white dark:bg-[#111613]">
           <Link href={isSender ? "/register" : "/dashboard"} onClick={closeMenu} className="flex items-center gap-3 group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f7faf9] dark:bg-[#1c2420] border border-[#dce7e1] dark:border-[#26332b] p-1 shadow-xs group-hover:border-[#8fe617] transition-all">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126] p-1 shadow-xs group-hover:border-[#8fe617] transition-all">
               <img
                 src="/logo.png"
                 alt="Silicon Labs Logo"
@@ -115,7 +115,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
           {/* SENDER ENVIRONMENT — Registration & System Settings */}
           {isSender && (
             <div className="space-y-1.5">
-              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] dark:border-[#26332b] pb-1.5">
+              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] dark:border-[#223126] pb-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
                 <span>Sender Workstation</span>
               </div>
@@ -126,7 +126,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/register"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <UserPlus className="h-4 w-4 shrink-0" />
@@ -139,7 +139,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/settings"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Settings className="h-4 w-4 shrink-0" />
@@ -151,7 +151,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
           {/* RECEIVER ENVIRONMENT */}
           {isReceiver && (
             <div className="space-y-1.5">
-              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] dark:border-[#26332b] pb-1.5">
+              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 border-b border-[#dce7e1] dark:border-[#223126] pb-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
                 <span>Receiver Station</span>
               </div>
@@ -162,7 +162,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/dashboard"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <LayoutDashboard className="h-4 w-4 shrink-0" />
@@ -175,7 +175,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/students"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Users className="h-4 w-4 shrink-0" />
@@ -188,7 +188,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/print-engine"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Printer className="h-4 w-4 shrink-0" />
@@ -201,7 +201,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/designer"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Sparkles className="h-4 w-4 shrink-0" />
@@ -214,7 +214,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/settings"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Settings className="h-4 w-4 shrink-0" />
@@ -225,7 +225,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
           {/* ADMIN ENVIRONMENT */}
           {isAdmin && (
-            <div className="space-y-1.5 pt-2 border-t border-[#dce7e1] dark:border-[#26332b]">
+            <div className="space-y-1.5 pt-2 border-t border-[#dce7e1] dark:border-[#223126]">
               <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 pb-1">
                 <Shield className="h-3 w-3 text-[#8fe617]" />
                 <span>Administrator</span>
@@ -237,7 +237,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/dashboard"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <LayoutDashboard className="h-4 w-4 shrink-0" />
@@ -250,7 +250,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/admin/users"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Shield className="h-4 w-4 shrink-0" />
@@ -263,7 +263,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/admin/database"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Database className="h-4 w-4 shrink-0" />
@@ -276,7 +276,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
                   pathname === "/settings"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#1c2420] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
                 <Settings className="h-4 w-4 shrink-0" />
@@ -288,7 +288,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
       </div>
 
       {/* User Profile & Sign Out Footer in Drawer */}
-      <div className="border-t border-[#dce7e1] dark:border-[#26332b] p-4 bg-[#f7faf9] dark:bg-[#1c2420]">
+      <div className="border-t border-[#dce7e1] dark:border-[#223126] p-4 bg-[#f7faf9] dark:bg-[#161d19]">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-xs font-bold font-mono text-[#080808] dark:text-[#f2f7f4] leading-tight truncate max-w-[130px]">
