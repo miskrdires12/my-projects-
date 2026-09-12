@@ -128,17 +128,14 @@ export { setJpeg300Dpi, convertBlobTo300Dpi } from "./jpeg-dpi";
  */
 export function generateSafePhotoFilename(
   realName: string,
-  studentId: string,
-  isDuplicateOrAllNames: boolean | string[] = false,
+  _studentId?: string,
+  _isDuplicateOrAllNames: boolean | string[] = false,
   extension: string = "jpg"
 ): string {
+  const cleanExt = extension.replace(/^\./, "");
   if (!realName || !realName.trim()) {
-    return `${studentId}.${extension}`;
+    return `photo.${cleanExt}`;
   }
-
-  const isDuplicate = Array.isArray(isDuplicateOrAllNames)
-    ? isDuplicateOrAllNames.filter((n) => n.trim().toLowerCase() === realName.trim().toLowerCase()).length > 1
-    : Boolean(isDuplicateOrAllNames);
 
   // Replace illegal filesystem characters: / \ : * ? " < > | and control chars
   let safeName = realName
@@ -154,13 +151,7 @@ export function generateSafePhotoFilename(
   safeName = safeName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "");
 
   if (!safeName) {
-    safeName = studentId;
-  }
-
-  const cleanExt = extension.replace(/^\./, "");
-
-  if (isDuplicate) {
-    return `${safeName} - ${studentId}.${cleanExt}`;
+    safeName = "photo";
   }
 
   return `${safeName}.${cleanExt}`;

@@ -464,7 +464,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           .replace(/\s+/g, " ")
           .trim();
         cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
-        const photoFileName = `${cleanName} - ${sId}.jpg`;
+        const photoFileName = `${cleanName}.jpg`;
 
         // Organize strictly into Grade Folders
         const gradeStr = (student.grade || "General").trim() || "General";

@@ -4,17 +4,17 @@ import { getSession } from "@/lib/auth";
 import { SettingsClient } from "./client";
 
 export const metadata = {
-  title: "Admin System & Production Settings | SILICON LABS",
-  description: "Administrative control console for CSV schemas, local photo directories, and central database maintenance",
+  title: "Station & Production Settings | SILICON LABS",
+  description: "Workstation preferences for Sender intake, Receiver production, and Admin maintenance",
 };
 
 export default async function SettingsPage() {
   const session = await getSession();
 
-  // Strict server-side RBAC guard: Only administrators can access system settings
-  if (!session || session.role !== "ADMIN") {
-    redirect("/dashboard?error=forbidden");
+  // If unauthenticated, redirect to login
+  if (!session) {
+    redirect("/login");
   }
 
-  return <SettingsClient />;
+  return <SettingsClient userRole={session.role} username={session.username} />;
 }

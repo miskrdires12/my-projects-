@@ -186,7 +186,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 }`}
               >
                 <Settings className="h-4 w-4 shrink-0" />
-                <span>Station Settings</span>
+                <span>Sender Settings</span>
               </Link>
             </div>
           )}
@@ -249,6 +249,19 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               >
                 <Sparkles className="h-4 w-4 shrink-0" />
                 <span>Badge Designer</span>
+              </Link>
+
+              <Link
+                href="/settings"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/settings"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                <span>Receiver Settings</span>
               </Link>
             </div>
           )}

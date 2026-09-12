@@ -22,6 +22,7 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionAction[]> = {
     "student:delete",
     "student:export",
     "print:generate",
+    "settings:update",
   ],
   RECEIVER: [
     "dashboard:view",
@@ -35,6 +36,7 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionAction[]> = {
     "student:qr_scan",       // External QR image import & matching
     "print:generate",
     "print:template_edit",   // ID card designer & template versioning
+    "settings:update",
   ],
   ADMIN: [
     "dashboard:view",
@@ -103,8 +105,8 @@ export function canAccessRoute(role: UserRole | undefined | null, pathname: stri
   }
 
   // ── ADMIN-ONLY routes ─────────────────────────────────────────────────
-  // Admin center and system-wide institutional settings
-  if (pathname.startsWith("/admin") || pathname.startsWith("/settings")) {
+  // Admin center (User & RBAC management, database telemetry)
+  if (pathname.startsWith("/admin")) {
     return false; // Since Admin was handled above (role === "ADMIN" returns true), all others denied
   }
 
@@ -126,11 +128,12 @@ export function canAccessRoute(role: UserRole | undefined | null, pathname: stri
   }
 
   // ── SHARED AUTHENTICATED routes ────────────────────────────────────────
-  // Dashboard & Student Directory — all operational roles have access
+  // Dashboard, Student Directory, & Settings — all operational roles have access to their scoped view
   if (
     pathname === "/" ||
     pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/students")
+    pathname.startsWith("/students") ||
+    pathname.startsWith("/settings")
   ) {
     return true;
   }

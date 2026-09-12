@@ -104,17 +104,6 @@ export function getStudentPhotoFileName(student: StudentPhotoIdentity): string {
     }
   }
 
-  // 3. Fallback to student ID (e.g. "SB-2026-0001" -> "SB-2026-0001.jpg")
-  if (student.studentId && student.studentId.trim()) {
-    const safeId = student.studentId
-      .replace(/[/\\]/g, " - ")
-      .replace(/[:*?"<>|]/g, "")
-      .trim();
-    if (safeId.length > 0) {
-      return `${safeId}.jpg`;
-    }
-  }
-
   return "photo.jpg";
 }
 
