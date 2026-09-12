@@ -206,10 +206,10 @@ export default function SettingsPage() {
     }
   };
 
-  const handleResetTombstones = () => {
-    if (confirm("Reset deleted IDs tombstone registry? This allows re-importing previously cleared student IDs.")) {
+  const handleResetSuppressionRegistry = () => {
+    if (confirm("Reset the Deletion Suppression Registry? This allows re-importing previously cleared student IDs.")) {
       localStorage.removeItem("sb_deleted_student_ids");
-      alert("Tombstone registry reset successfully.");
+      alert("Deletion Suppression Registry reset successfully.");
     }
   };
 
@@ -603,18 +603,18 @@ export default function SettingsPage() {
               <div className="p-4 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] space-y-3">
                 <div>
                   <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
-                    Reset Deleted Tombstones
+                    Reset Deletion Suppression Registry
                   </span>
                   <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block mt-0.5">
-                    Clear the suppression list that prevents previously deleted records from reappearing.
+                    Clear the record suppression registry that prevents previously purged student IDs from re-importing.
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={handleResetTombstones}
+                  onClick={handleResetSuppressionRegistry}
                   className="px-4 py-2 rounded-xl text-xs font-mono font-bold border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all cursor-pointer"
                 >
-                  Reset Tombstone Registry
+                  Reset Suppression Registry
                 </button>
               </div>
 

@@ -15,6 +15,7 @@ import {
   X,
   Sun,
   LogOut,
+  Bell,
 } from "lucide-react";
 import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
 import { logoutAction } from "@/actions/auth";
@@ -59,6 +60,48 @@ export default function DashboardShell({ session, children }: DashboardShellProp
   };
 
   const [isSigningOut, setIsSigningOut] = useState(false);
+
+  // Global Header Real-Time Notifications
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(1);
+  const [headerNotifications, setHeaderNotifications] = useState<
+    Array<{ id: string; title: string; desc: string; time: string; type: string }>
+  >([
+    {
+      id: "sys-init-1",
+      title: "Realtime Telemetry Online",
+      desc: "Live Cloud Ingestion & Local Cache running with 0ms latency.",
+      time: "Live",
+      type: "success",
+    },
+    {
+      id: "sys-init-2",
+      title: "8-Up Engine Configured",
+      desc: "Ready for high-speed A4 production with 2mm perimeter bleed.",
+      time: "Ready",
+      type: "info",
+    },
+  ]);
+
+  useEffect(() => {
+    const handleNotification = (e: any) => {
+      if (e?.detail) {
+        setHeaderNotifications((prev) => [
+          {
+            id: `notif-${Date.now()}`,
+            title: e.detail.title || "Live Alert",
+            desc: e.detail.desc || e.detail.message || "New event received",
+            time: "Just now",
+            type: e.detail.type || "info",
+          },
+          ...prev.slice(0, 19),
+        ]);
+        setUnreadCount((c) => c + 1);
+      }
+    };
+    window.addEventListener("siliconlabs_notification", handleNotification);
+    return () => window.removeEventListener("siliconlabs_notification", handleNotification);
+  }, []);
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -397,49 +440,96 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               />
             </button>
 
-            {/* Sender New Registration Action Button (No 'Enroll') */}
-            {isSender && (
-              <Link
-                href="/register"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3.5 py-1.5 text-xs font-bold hover:bg-[#7ecc10] transition-all shadow-[0_0_15px_rgba(143,230,23,0.35)] cool-btn-hover active:scale-95"
-              >
-                <UserPlus className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span className="hidden sm:inline">Register Student</span>
-                <span className="sm:hidden">Register</span>
-              </Link>
-            )}
-
-            {isReceiver && (
-              <Link
-                href="/print-engine"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3.5 py-1.5 text-xs font-bold hover:bg-[#7ecc10] transition-all shadow-[0_0_15px_rgba(143,230,23,0.35)] cool-btn-hover active:scale-95"
-              >
-                <Printer className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span className="hidden sm:inline">8-Up Print Engine</span>
-                <span className="sm:hidden">Print</span>
-              </Link>
-            )}
-
-            {/* Header User Identity & Active Status Indicator */}
-            <div className="flex items-center gap-2 border-l border-[#dce7e1] dark:border-[#223126] pl-2.5">
-              <div className="flex items-center gap-1.5 text-right bg-[#f7faf9] dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126] px-3 py-1.5 rounded-xl shadow-2xs">
-                <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
-                <span className="text-xs font-bold font-mono text-[#080808] dark:text-[#f2f7f4] leading-tight truncate max-w-[140px]">
-                  {session.username}
-                </span>
-              </div>
-
-              {/* Sign Out Button in Header Bar */}
+            {/* Real-Time Notification Bell (Positioned near the theme toggle, 8-Up Print Engine removed as it is in menu) */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={handleSignOut}
-                disabled={isSigningOut}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/70 dark:bg-red-950/25 px-2.5 py-1.5 text-xs font-mono font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cool-btn-hover transition-all cursor-pointer disabled:opacity-50 shrink-0"
-                title="Sign Out of Workstation"
+                onClick={() => {
+                  setNotificationsOpen((prev) => !prev);
+                  if (!notificationsOpen) setUnreadCount(0);
+                }}
+                className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all duration-300 animated-icon-btn cursor-pointer relative ${
+                  notificationsOpen
+                    ? "border-[#8fe617] bg-[#8fe617]/15 text-[#8fe617] shadow-[0_0_15px_rgba(143,230,23,0.3)]"
+                    : "border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:border-[#8fe617]"
+                }`}
+                title="Real-Time System Notifications"
+                aria-label="System Notifications"
               >
-                <LogOut className="h-3.5 w-3.5 stroke-[2.5]" />
-                <span className="hidden sm:inline">{isSigningOut ? "..." : "Sign Out"}</span>
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-[#8fe617] text-[10px] font-mono font-black text-[#062404] animate-bounce">
+                    {unreadCount}
+                  </span>
+                )}
               </button>
+
+              {/* Outside backdrop when notifications are open */}
+              {notificationsOpen && (
+                <div
+                  className="fixed inset-0 z-40 bg-transparent"
+                  onClick={() => setNotificationsOpen(false)}
+                />
+              )}
+
+              {/* Real-time Notifications Flyout Dropdown */}
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white/95 dark:bg-[#0c110e]/95 backdrop-blur-xl border border-[#dce7e1] dark:border-[#223126] shadow-2xl p-4 z-50 space-y-3 text-xs font-mono animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-[#eef5f1] dark:border-[#1c261e]">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-ping" />
+                      <span className="font-extrabold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                        Real-Time Notifications
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeaderNotifications([]);
+                          setUnreadCount(0);
+                        }}
+                        className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] hover:text-red-500 font-bold transition-colors cursor-pointer"
+                      >
+                        Clear Feed
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNotificationsOpen(false)}
+                        className="text-[#6b7771] hover:text-[#080808] dark:hover:text-[#f2f7f4] font-bold text-xs p-1"
+                        aria-label="Close notifications"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-2 divide-y divide-[#f0f5f2] dark:divide-[#162019] pr-1">
+                    {headerNotifications.length === 0 ? (
+                      <div className="text-center py-6 text-[#6b7771] dark:text-[#8a9e93] text-[11px]">
+                        No active notifications. System operating normally.
+                      </div>
+                    ) : (
+                      headerNotifications.map((notif) => (
+                        <div key={notif.id} className="pt-2 first:pt-0 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
+                              {notif.title}
+                            </span>
+                            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                              {notif.time}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] pl-3 leading-relaxed">
+                            {notif.desc}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

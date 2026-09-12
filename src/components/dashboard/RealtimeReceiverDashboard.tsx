@@ -261,7 +261,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           };
         });
 
-        // Trigger Live Audio Chime & Notification in Live Metrics Section
+        // Trigger Live Audio Chime & Notification in Live Metrics Section & Global Header
         playAudioChime();
         setMetricsNotifications((prev) => [
           {
@@ -274,6 +274,18 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           ...prev.slice(0, 9),
         ]);
         setUnreadMetricsCount((c) => c + 1);
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("siliconlabs_notification", {
+              detail: {
+                title: "Student Ingested",
+                desc: `${newStudent.fullName || "Student"} (${newStudent.studentId || ""}) • Grade ${newStudent.grade || "General"}`,
+                type: "success",
+              },
+            })
+          );
+        }
 
         setLastUpdated(new Date().toLocaleTimeString());
       },
@@ -516,6 +528,18 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
       setIsAuditing(false);
       setAuditModalOpen(true);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("siliconlabs_notification", {
+            detail: {
+              title: "Pre-Flight Audit Complete",
+              desc: `Scanned ${total} records: ${verified} (${readinessRate}%) ready for 8-Up production.`,
+              type: "info",
+            },
+          })
+        );
+      }
     }, 350);
   }, [allStudentsList, data.recentStudents]);
 
@@ -848,42 +872,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         </div>
       )}
 
-      {/* Professional Top Header with Circular Logo */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#dce7e1] dark:border-[#223126] pb-5">
-        <div className="flex items-center gap-3.5">
-          <div className="h-12 w-12 rounded-full border-2 border-[#8fe617] bg-[#f7faf9] dark:bg-[#070908] p-1.5 shadow-[0_0_15px_rgba(143,230,23,0.3)] overflow-hidden shrink-0 flex items-center justify-center">
-            <img src="/logo.png" alt="Silicon Labs Logo" className="h-full w-full object-cover rounded-full" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-[#062404] bg-[#8fe617] px-2.5 py-0.5 rounded-md font-black tracking-wider uppercase shadow-xs">
-                RECEIVER WORKSTATION
-              </span>
-              <span className="text-[#dce7e1] dark:text-[#223126]">•</span>
-              <span className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono font-semibold">
-                Central Production Facility
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#080808] dark:text-[#f2f7f4] mt-1">
-              ID Card Production &amp; Asset Matching Center
-            </h1>
-            <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
-              Ingestion telemetry, photo asset verification, and high-speed 8-Up batch printing
-            </p>
-          </div>
-        </div>
-
-        {/* Essential Primary Action Only (No duplicate nav buttons!) */}
-        <div className="flex items-center gap-3 shrink-0">
-          <Link
-            href="/print-engine"
-            className="inline-flex items-center gap-2.5 rounded-xl bg-[#8fe617] px-5 py-2.5 text-xs font-mono font-black text-[#062404] hover:bg-[#7ed112] transition-all shadow-[0_0_18px_rgba(143,230,23,0.35)] active:scale-95 cursor-pointer"
-          >
-            <Printer className="h-4 w-4 stroke-[2.5]" />
-            <span>Launch 8-Up Print Engine</span>
-          </Link>
-        </div>
-      </div>
 
       {/* Live Stream Telemetry Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-4 py-2.5 rounded-2xl text-xs shadow-xs">
@@ -1717,17 +1705,40 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         )}
       </div>
 
-      {/* Row 3: Professional Split Deck (Left 65% Ingestion Roster • Right 35% Production Operations) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column (65%): Live Ingested Student Stream (Newest First) */}
-        <div className="lg:col-span-8 rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-[#8fe617]" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-mono">
-                Live Ingested Stream ({filteredStudents.length})
-              </h2>
-            </div>
+      {/* Live Ingested Student Stream (Newest First) - Full Width */}
+      <div className="w-full rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-[#8fe617]" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-mono">
+              Live Ingested Stream ({filteredStudents.length})
+            </h2>
+          </div>
+
+          {/* Table Actions & Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={runPreflightAudit}
+              disabled={isAuditing}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3 py-1.5 text-xs font-mono font-bold hover:bg-[#7ed112] transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+              title="Run Pre-Flight Audit"
+            >
+              <Sparkles className={`h-3.5 w-3.5 ${isAuditing ? "animate-spin" : ""}`} />
+              <span>{isAuditing ? "Auditing..." : "Pre-Flight Audit"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportManifest}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] px-3 py-1.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all cursor-pointer active:scale-95"
+              title="Export Production Manifest (CSV)"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Export Manifest (CSV)</span>
+            </button>
+
+            <div className="h-4 w-px bg-[#dce7e1] dark:bg-[#223126] hidden sm:block mx-0.5" />
 
             {/* Quick Filter Tabs */}
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1766,6 +1777,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               </button>
             </div>
           </div>
+        </div>
 
           {/* Search Bar with Animated Borderless X Clear Button */}
           <div className="relative">
@@ -1890,128 +1902,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           </div>
         </div>
 
-        {/* Right Column (35%): Production Operations & Asset Verification */}
-        <div className="lg:col-span-4 space-y-4">
-          {/* Pre-Flight & Manifest Actions Card */}
-          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 shadow-sm space-y-4">
-            <div className="border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
-              <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
-                Production Operations
-              </h3>
-              <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
-                Batch auditing and production manifest generation
-              </p>
-            </div>
 
-            <div className="space-y-2.5">
-              <button
-                type="button"
-                onClick={runPreflightAudit}
-                disabled={isAuditing}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#8fe617] px-4 py-2.5 text-xs font-mono font-black text-[#062404] hover:bg-[#7ed112] transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-              >
-                <Sparkles className={`h-4 w-4 ${isAuditing ? "animate-spin" : ""}`} />
-                <span>{isAuditing ? "Running Audit..." : "Run Pre-Flight Audit"}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportManifest}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] px-4 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all cursor-pointer active:scale-95"
-              >
-                <Download className="h-4 w-4" />
-                <span>Export Production Manifest (CSV)</span>
-              </button>
-            </div>
-
-            {/* Verification Breakdown Progress Bars */}
-            <div className="pt-2 space-y-3 border-t border-[#eef5f1] dark:border-[#1c261e]">
-              <div className="space-y-1 text-xs font-mono">
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Photo Matching</span>
-                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
-                    {data.totalStudents > 0 ? Math.round((data.photosCount / data.totalStudents) * 100) : 0}%
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-[#f7faf9] dark:bg-[#1c261e] overflow-hidden">
-                  <div
-                    className="h-full bg-[#8fe617] transition-all duration-500"
-                    style={{ width: `${data.totalStudents > 0 ? (data.photosCount / data.totalStudents) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1 text-xs font-mono">
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Grade Cohort Classified</span>
-                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
-                    100%
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-[#f7faf9] dark:bg-[#1c261e] overflow-hidden">
-                  <div
-                    className="h-full bg-[#8fe617] transition-all duration-500"
-                    style={{ width: "100%" }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1 text-xs font-mono">
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-[#6b7771] dark:text-[#8a9e93]">8-Up Print Ready</span>
-                  <span className="font-bold text-[#8fe617]">
-                    {data.totalStudents > 0 ? Math.round((data.readyForPrintCount / data.totalStudents) * 100) : 0}%
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-[#f7faf9] dark:bg-[#1c261e] overflow-hidden">
-                  <div
-                    className="h-full bg-[#8fe617] transition-all duration-500"
-                    style={{ width: `${data.totalStudents > 0 ? (data.readyForPrintCount / data.totalStudents) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Missing Assets Triage Card */}
-          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 shadow-sm space-y-3">
-            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
-              <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
-                Attention Required ({data.missingPhotos.length})
-              </h3>
-              <Link
-                href="/students?photoStatus=MISSING_PHOTO"
-                className="text-[11px] font-mono text-[#8fe617] hover:underline"
-              >
-                View
-              </Link>
-            </div>
-
-            {data.missingPhotos.length === 0 ? (
-              <div className="text-center py-6 text-xs text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                ✓ 100% of student records have verified studio portraits!
-              </div>
-            ) : (
-              <div className="space-y-2 text-xs font-mono">
-                {data.missingPhotos.slice(0, 5).map((s) => (
-                  <div
-                    key={`photo-${s.id}`}
-                    className="flex items-center justify-between p-2 rounded-xl bg-[#f7faf9] dark:bg-[#161d19]"
-                  >
-                    <div className="truncate pr-2">
-                      <div className="font-bold text-[#080808] dark:text-[#f2f7f4] truncate">{s.fullName}</div>
-                      <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">{s.studentId} • Grade {s.grade}</div>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-bold shrink-0">
-                      NO PHOTO
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Pre-Flight Verification Audit Modal */}
       {auditModalOpen && auditResults && (
