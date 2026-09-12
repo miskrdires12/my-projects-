@@ -968,7 +968,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   }, [sortedStudents, activePage, activePageSize]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-28">
       {/* Grade Cohort Tabs (Clean, Sleek, Instant Filtering) */}
       {grades.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">

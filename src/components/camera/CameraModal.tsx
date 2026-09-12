@@ -545,16 +545,16 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
         {/* Camera Selector Bar (If multiple devices available) */}
         {devices.length > 1 && cameraState !== "captured" && (
-          <div className="flex items-center justify-between px-5 py-2 bg-neutral-50 border-b border-neutral-200 text-xs">
-            <span className="text-neutral-600 font-mono text-[11px]">Webcam Device:</span>
+          <div className="flex items-center justify-between px-5 py-2 bg-neutral-50 dark:bg-[#161c18] border-b border-neutral-200 dark:border-[#26332b] text-xs">
+            <span className="text-neutral-600 dark:text-[#a4b8ad] font-mono text-[11px]">Webcam Device:</span>
             <select
               value={selectedDeviceId}
               onChange={handleDeviceChange}
-              className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs text-black font-mono focus:outline-none focus:border-black"
+              className="rounded-lg border border-neutral-300 dark:border-[#26332b] bg-white dark:bg-[#1c2420] px-2.5 py-1 text-xs text-black dark:text-[#f2f7f4] font-mono focus:outline-none focus:border-[#8fe617]"
             >
-              <option value="">Default High-Res Camera</option>
+              <option value="" className="bg-white dark:bg-[#161c18] text-black dark:text-[#f2f7f4]">Default High-Res Camera</option>
               {devices.map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>
+                <option key={d.deviceId} value={d.deviceId} className="bg-white dark:bg-[#161c18] text-black dark:text-[#f2f7f4]">
                   {d.label}
                 </option>
               ))}
@@ -666,7 +666,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center justify-center gap-2 rounded bg-white px-3 py-2 text-xs font-mono font-bold text-black hover:bg-neutral-200 transition-colors"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#8fe617] px-3 py-2 text-xs font-mono font-bold text-[#062404] hover:brightness-105 transition-all"
                 >
                   <Upload className="h-3.5 w-3.5" />
                   Upload Photo (Auto 3:4 & 300 DPI)

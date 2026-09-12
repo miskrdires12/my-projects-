@@ -403,7 +403,7 @@ export default function RegisterPage() {
           bloodType: payload.bloodType || null,
           nationality: payload.nationality || null,
           photoPath: officialPhotoPath,
-          qrCodeData: `STUDENT:${payload.studentId}`,
+          qrCodeData: null,
           status: payload.status || "ACTIVE",
           createdAt: new Date().toISOString(),
           customValues: Object.entries(customFieldValues).map(([k, v]) => ({

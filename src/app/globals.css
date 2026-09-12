@@ -16,16 +16,29 @@
 }
 
 .dark {
-  --background: #0d120f;
-  --surface: #161c18;
-  --surface-secondary: #1c2420;
-  --surface-tertiary: #232d27;
+  --background: #070908;
+  --surface: #101512;
+  --surface-secondary: #161e19;
+  --surface-tertiary: #1e2822;
   --accent: #8fe617;
   --accent-hover: #7ecc10;
   --foreground: #f2f7f4;
-  --foreground-muted: #a4b8ad;
-  --foreground-subtle: #708477;
-  --border: #26332b;
+  --foreground-muted: #9eb2a6;
+  --foreground-subtle: #6c8074;
+  --border: #1f2b23;
+}
+
+/* Distinctive Form Card Elevation for Dark Mode */
+.dark-form-card {
+  background-color: #ffffff;
+  border: 1px solid #dce7e1;
+}
+
+.dark .dark-form-card {
+  background-color: #111713;
+  border: 1px solid #223126;
+  border-top: 2px solid #8fe617;
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.9), 0 0 25px -4px rgba(143, 230, 23, 0.1);
 }
 
 * {

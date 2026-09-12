@@ -18,7 +18,7 @@ export default async function DashboardPage({
   const isSender = role === "SENDER";
 
   // ──────────────────────────────────────────────────────────────────────────
-  // SENDER PLATFORM REDIRECT (Requirement 11: Only Registration & Settings)
+  // SENDER PLATFORM REDIRECT (Only Registration & Settings)
   // ──────────────────────────────────────────────────────────────────────────
   if (isSender) {
     redirect("/register");
@@ -26,66 +26,92 @@ export default async function DashboardPage({
 
   // ──────────────────────────────────────────────────────────────────────────
   // RECEIVER & ADMIN DASHBOARD VIEW (20,000+ CAPACITY PRODUCTION FACILITY)
+  // Pure Student Management • 8-Up Print Readiness • Detailed Data Analytics
   // ──────────────────────────────────────────────────────────────────────────
   const [
     totalStudents,
     photosCount,
-    qrCount,
-    readyForPrintCount,
     recentStudents,
     missingPhotos,
-    missingQRs,
     activeJobsCount,
+    gradeGroups,
+    sexGroups,
   ] = await Promise.all([
     prisma.student.count(),
     prisma.student.count({ where: { photoPath: { not: null } } }),
-    prisma.student.count({ where: { qrCodeData: { not: null } } }),
-    prisma.student.count({
-      where: {
-        AND: [{ photoPath: { not: null } }, { qrCodeData: { not: null } }],
-      },
-    }),
     prisma.student.findMany({
-      take: 6,
+      take: 8,
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
         studentId: true,
         fullName: true,
         grade: true,
-        department: true,
+        sex: true,
+        phone: true,
         photoPath: true,
-        qrCodeData: true,
         createdAt: true,
       },
     }),
     prisma.student.findMany({
       where: { photoPath: null },
-      take: 5,
-      select: { id: true, studentId: true, fullName: true, grade: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.student.findMany({
-      where: { qrCodeData: null },
-      take: 5,
-      select: { id: true, studentId: true, fullName: true, grade: true },
+      take: 6,
+      select: { id: true, studentId: true, fullName: true, grade: true, phone: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.bulkGenerationJob.count({
       where: { status: { in: ["QUEUED", "PROCESSING"] } },
     }),
+    prisma.student.groupBy({
+      by: ["grade"],
+      _count: { id: true },
+      orderBy: { grade: "asc" },
+    }),
+    prisma.student.groupBy({
+      by: ["sex"],
+      _count: { id: true },
+    }),
   ]);
 
+  // A student is 100% Print Ready when they have an attached 3:4 studio portrait
+  const readyForPrintCount = photosCount;
   const pendingVerification = Math.max(0, totalStudents - readyForPrintCount);
 
-  // Compute Timeline Analytics for Server-Side Graph Rendering
+  // Compute Grade Cohort Distribution Analysis with 8-Up A4 Sheets Calculation
+  const gradeBreakdown = gradeGroups.map((g) => {
+    const count = g._count.id;
+    return {
+      grade: g.grade || "Unassigned",
+      count,
+      percent: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+      a4Sheets: Math.ceil(count / 8),
+    };
+  });
+  // Sort grades naturally (KG, 1, 2, ..., 12)
+  gradeBreakdown.sort((a, b) => a.grade.localeCompare(b.grade, undefined, { numeric: true, sensitivity: "base" }));
+
+  // Demographics Analysis (Male vs Female)
+  let maleCount = 0;
+  let femaleCount = 0;
+  sexGroups.forEach((s) => {
+    const sLower = (s.sex || "").toLowerCase();
+    if (sLower === "female") femaleCount += s._count.id;
+    else maleCount += s._count.id;
+  });
+  const malePercent = totalStudents > 0 ? Math.round((maleCount / totalStudents) * 100) : 0;
+  const femalePercent = totalStudents > 0 ? Math.round((femaleCount / totalStudents) * 100) : 0;
+
+  // Print Batch Planning
+  const totalA4SheetsNeeded = Math.ceil(readyForPrintCount / 8);
+
+  // Timeline Analytics for Server-Side Graph Rendering
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
   const recentTimeRecords = await prisma.student.findMany({
     where: { createdAt: { gte: sevenDaysAgo } },
-    select: { createdAt: true, photoPath: true, qrCodeData: true },
+    select: { createdAt: true, photoPath: true },
   });
 
   const hourlyLabels = [
@@ -104,7 +130,6 @@ export default async function DashboardPage({
 
     const count = inHour.length;
     const photos = inHour.filter((r) => Boolean(r.photoPath)).length;
-    const qr = inHour.filter((r) => Boolean(r.qrCodeData)).length;
     const baseline = Math.max(count, Math.round(totalStudents > 0 ? (totalStudents / 12) * ((hourNum >= 10 && hourNum <= 16) ? 1.4 : 0.8) : 0));
     const effectiveCount = count > 0 ? count : baseline;
 
@@ -113,7 +138,7 @@ export default async function DashboardPage({
       label: `${hourNum > 12 ? hourNum - 12 : hourNum} ${hourNum >= 12 ? "PM" : "AM"}`,
       count: effectiveCount,
       photos: count > 0 ? photos : Math.round(effectiveCount * (totalStudents > 0 ? photosCount / totalStudents : 0.9)),
-      qr: count > 0 ? qr : Math.round(effectiveCount * (totalStudents > 0 ? qrCount / totalStudents : 0.95)),
+      readiness: count > 0 ? photos : Math.round(effectiveCount * (totalStudents > 0 ? photosCount / totalStudents : 0.9)),
       throughput: Math.round(effectiveCount * 12),
     };
   });
@@ -131,7 +156,6 @@ export default async function DashboardPage({
 
     const count = dayRecords.length;
     const photos = dayRecords.filter((r) => Boolean(r.photoPath)).length;
-    const qr = dayRecords.filter((r) => Boolean(r.qrCodeData)).length;
     const baseline = Math.max(count, Math.round(totalStudents > 0 ? (totalStudents / 7) * (idx === 6 ? 1.2 : 0.9) : 0));
     const effectiveCount = count > 0 ? count : baseline;
 
@@ -140,16 +164,16 @@ export default async function DashboardPage({
       label: dayLabel,
       count: effectiveCount,
       photos: count > 0 ? photos : Math.round(effectiveCount * (totalStudents > 0 ? photosCount / totalStudents : 0.9)),
-      qr: count > 0 ? qr : Math.round(effectiveCount * (totalStudents > 0 ? qrCount / totalStudents : 0.95)),
+      readiness: count > 0 ? photos : Math.round(effectiveCount * (totalStudents > 0 ? photosCount / totalStudents : 0.9)),
       throughput: effectiveCount * 8,
     };
   });
 
   const trend30Days = [
-    { label: "Wk 1", count: Math.round(totalStudents * 0.18), photos: Math.round(photosCount * 0.18), qr: Math.round(qrCount * 0.18) },
-    { label: "Wk 2", count: Math.round(totalStudents * 0.24), photos: Math.round(photosCount * 0.24), qr: Math.round(qrCount * 0.24) },
-    { label: "Wk 3", count: Math.round(totalStudents * 0.28), photos: Math.round(photosCount * 0.28), qr: Math.round(qrCount * 0.28) },
-    { label: "Wk 4", count: Math.round(totalStudents * 0.30), photos: Math.round(photosCount * 0.30), qr: Math.round(qrCount * 0.30) },
+    { label: "Wk 1", count: Math.round(totalStudents * 0.18), photos: Math.round(photosCount * 0.18), readiness: Math.round(photosCount * 0.18) },
+    { label: "Wk 2", count: Math.round(totalStudents * 0.24), photos: Math.round(photosCount * 0.24), readiness: Math.round(photosCount * 0.24) },
+    { label: "Wk 3", count: Math.round(totalStudents * 0.28), photos: Math.round(photosCount * 0.28), readiness: Math.round(photosCount * 0.28) },
+    { label: "Wk 4", count: Math.round(totalStudents * 0.30), photos: Math.round(photosCount * 0.30), readiness: Math.round(photosCount * 0.30) },
   ];
 
   return (
@@ -157,14 +181,23 @@ export default async function DashboardPage({
       initialData={{
         totalStudents,
         photosCount,
-        qrCount,
         readyForPrintCount,
         pendingVerification,
         activeJobsCount,
         recentStudents,
         recentBatches: [],
         missingPhotos,
-        missingQRs,
+        gradeBreakdown,
+        demographics: {
+          maleCount,
+          femaleCount,
+          malePercent,
+          femalePercent,
+        },
+        batchPlanning: {
+          totalReadyForPrint: readyForPrintCount,
+          totalA4Sheets: totalA4SheetsNeeded,
+        },
         timeline: {
           hourlyToday,
           daily7Days,

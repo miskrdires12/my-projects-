@@ -3,6 +3,7 @@
 // ============================================================================
 // STUDENT BRIDGE — AUTHENTICATION PORTAL
 // Silicon Labs Hexagonal Emblem • Workstation Role Selection • Privacy-First
+// True Obsidian Dark Mode Support • Instant Sun Turning Theme Toggle
 // ============================================================================
 
 import React, { useState, useTransition, useEffect } from "react";
@@ -15,6 +16,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Check,
+  Sun,
 } from "lucide-react";
 import { loginAction, quickRoleLoginAction } from "@/actions/auth";
 import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
@@ -62,9 +64,22 @@ export default function LoginPage() {
   const [selectedRole, setSelectedRole] = useState<WorkstationRole | null>(null);
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Privacy & Performance initialization on mount
+  // Theme & Storage initialization on mount
   useEffect(() => {
+    try {
+      const isDark =
+        document.documentElement.classList.contains("dark") ||
+        localStorage.getItem("sb_theme") === "dark";
+      setIsDarkMode(isDark);
+      if (isDark) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    } catch {}
+
     // Wipe client-side storage & caches on login screen for privacy
     purgeSensitiveClientStorage().catch(() => {});
 
@@ -74,6 +89,18 @@ export default function LoginPage() {
     router.prefetch("/print-engine");
     router.prefetch("/students");
   }, [router]);
+
+  const toggleTheme = () => {
+    const nextDark = !isDarkMode;
+    setIsDarkMode(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("sb_theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("sb_theme", "light");
+    }
+  };
 
   // When user clicks a workstation option, populate it inside the signin box
   const handleSelectRole = (role: WorkstationRole) => {
@@ -134,12 +161,30 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 selection:bg-[#8fe617] selection:text-[#080808] bg-[#d7dbde] overflow-hidden">
+    <div className="relative min-h-screen flex items-center justify-center p-4 selection:bg-[#8fe617] selection:text-[#080808] bg-[#d7dbde] dark:bg-[#070908] transition-colors duration-200 overflow-hidden">
       {/* Soft Studio Background Radial Glow */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,#eef2f4_0%,#cfd4d8_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,#eef2f4_0%,#cfd4d8_100%)] dark:bg-[radial-gradient(circle_at_50%_38%,#131c16_0%,#070908_100%)] transition-colors duration-200" />
+
+      {/* Top Right Animated Turning Sun Mode Toggle */}
+      <div className="absolute top-4 right-4 z-50">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white/85 dark:bg-[#111713]/85 backdrop-blur-md shadow-sm hover:border-[#8fe617] transition-all cool-btn-hover cursor-pointer"
+          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+        >
+          <Sun
+            className={`h-5 w-5 sun-turn-icon ${
+              isDarkMode
+                ? "text-neutral-400 rotate-180 hover:text-[#8fe617]"
+                : "text-amber-500 rotate-0 hover:rotate-90 fill-amber-500/20"
+            }`}
+          />
+        </button>
+      </div>
 
       {/* Main Authentication Card */}
-      <div className="relative w-full max-w-[440px] rounded-[32px] bg-white border border-white/80 p-7 sm:p-9 shadow-[0_35px_70px_-15px_rgba(0,0,0,0.14),0_15px_30px_-10px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.03)] backdrop-blur-sm">
+      <div className="relative w-full max-w-[440px] rounded-[32px] bg-white dark:bg-[#111713] border border-white/80 dark:border-[#223126] dark:border-t-2 dark:border-t-[#8fe617] p-7 sm:p-9 shadow-[0_35px_70px_-15px_rgba(0,0,0,0.14),0_15px_30px_-10px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.03)] dark:shadow-[0_25px_60px_rgba(0,0,0,0.9),0_0_25px_rgba(143,230,23,0.08)] backdrop-blur-sm transition-colors duration-200">
         
         {/* Top Silicon Labs Hexagonal Logo */}
         <div className="flex flex-col items-center justify-center mb-5">
@@ -154,17 +199,17 @@ export default function LoginPage() {
 
         {/* Header Title: Strictly 'SignIn' */}
         <div className="mb-5 text-center">
-          <h1 className="text-2xl font-black text-[#111814] tracking-tight">
+          <h1 className="text-2xl font-black text-[#111814] dark:text-[#f2f7f4] tracking-tight">
             SignIn
           </h1>
-          <p className="text-xs text-[#6b7771] mt-0.5">
+          <p className="text-xs text-[#6b7771] dark:text-[#9eb2a6] mt-0.5">
             Select your workstation or enter operator credentials
           </p>
         </div>
 
         {/* Error Alert */}
         {errorMessage && (
-          <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-red-500/30 bg-red-50 p-3 text-xs text-red-600 animate-in fade-in">
+          <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-red-500/30 bg-red-50 dark:bg-red-950/40 p-3 text-xs text-red-600 dark:text-red-400 animate-in fade-in">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -172,8 +217,8 @@ export default function LoginPage() {
 
         {/* Success Alert */}
         {successRole && (
-          <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-[#8fe617] bg-[#f2fcee] p-3 text-xs text-[#080808] font-bold animate-in fade-in">
-            <CheckCircle2 className="h-4 w-4 text-[#5cb811] shrink-0" />
+          <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-[#8fe617] bg-[#f2fcee] dark:bg-[#8fe617]/15 p-3 text-xs text-[#080808] dark:text-[#f2f7f4] font-bold animate-in fade-in">
+            <CheckCircle2 className="h-4 w-4 text-[#5cb811] dark:text-[#8fe617] shrink-0" />
             <span>
               Identified as <strong>{successRole}</strong>. Launching workstation...
             </span>
@@ -184,7 +229,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {/* Active Selected Workstation Pill inside the signin box */}
           {selectedRole && (
-            <div className="flex items-center justify-between p-2.5 rounded-2xl bg-[#8fe617]/15 border border-[#8fe617] text-xs font-bold text-[#062404] animate-in fade-in duration-200">
+            <div className="flex items-center justify-between p-2.5 rounded-2xl bg-[#8fe617]/15 dark:bg-[#8fe617]/20 border border-[#8fe617] text-xs font-bold text-[#062404] dark:text-[#8fe617] animate-in fade-in duration-200">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
                 <span>
@@ -199,11 +244,11 @@ export default function LoginPage() {
 
           {/* Username Field */}
           <div>
-            <label className="block text-[10px] font-bold text-[#38433d] uppercase tracking-wider mb-1.5 font-mono">
+            <label className="block text-[10px] font-bold text-[#38433d] dark:text-[#9eb2a6] uppercase tracking-wider mb-1.5 font-mono">
               Username or Email
             </label>
             <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#7d8b83]">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#7d8b83] dark:text-[#6c8074]">
                 <User className="h-4 w-4 stroke-[1.8]" />
               </div>
               <input
@@ -215,18 +260,18 @@ export default function LoginPage() {
                   setSelectedRole(null);
                 }}
                 placeholder="operator@studentbridge.internal"
-                className="w-full rounded-2xl border border-[#d2dad5] bg-[#edf2ef] py-3 pl-10 pr-3.5 text-xs font-semibold text-[#111814] placeholder:text-[#88968e] focus:bg-white focus:border-[#8fe617] focus:outline-none focus:ring-2 focus:ring-[#8fe617]/30 transition-all shadow-inner"
+                className="w-full rounded-2xl border border-[#d2dad5] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#18221b] py-3 pl-10 pr-3.5 text-xs font-semibold text-[#111814] dark:text-[#f2f7f4] placeholder:text-[#88968e] dark:placeholder:text-[#6c8074] focus:bg-white dark:focus:bg-[#1c2820] focus:border-[#8fe617] focus:outline-none focus:ring-2 focus:ring-[#8fe617]/30 transition-all shadow-inner"
               />
             </div>
           </div>
 
           {/* Password Field */}
           <div>
-            <label className="block text-[10px] font-bold text-[#38433d] uppercase tracking-wider mb-1.5 font-mono">
+            <label className="block text-[10px] font-bold text-[#38433d] dark:text-[#9eb2a6] uppercase tracking-wider mb-1.5 font-mono">
               Password
             </label>
             <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#7d8b83]">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#7d8b83] dark:text-[#6c8074]">
                 <Key className="h-4 w-4 stroke-[1.8]" />
               </div>
               <input
@@ -238,7 +283,7 @@ export default function LoginPage() {
                   setSelectedRole(null);
                 }}
                 placeholder="••••••••••••"
-                className="w-full rounded-2xl border border-[#d2dad5] bg-[#edf2ef] py-3 pl-10 pr-3.5 text-xs font-semibold text-[#111814] placeholder:text-[#88968e] focus:bg-white focus:border-[#8fe617] focus:outline-none focus:ring-2 focus:ring-[#8fe617]/30 transition-all shadow-inner"
+                className="w-full rounded-2xl border border-[#d2dad5] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#18221b] py-3 pl-10 pr-3.5 text-xs font-semibold text-[#111814] dark:text-[#f2f7f4] placeholder:text-[#88968e] dark:placeholder:text-[#6c8074] focus:bg-white dark:focus:bg-[#1c2820] focus:border-[#8fe617] focus:outline-none focus:ring-2 focus:ring-[#8fe617]/30 transition-all shadow-inner"
               />
             </div>
           </div>
@@ -266,12 +311,12 @@ export default function LoginPage() {
         </form>
 
         {/* Operational Role Selectors without Left Icons */}
-        <div className="mt-6 pt-5 border-t border-[#e2e7e4] space-y-2.5">
+        <div className="mt-6 pt-5 border-t border-[#e2e7e4] dark:border-[#223126] space-y-2.5">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-[#38433d] uppercase tracking-wider font-mono">
+            <p className="text-xs font-bold text-[#38433d] dark:text-[#9eb2a6] uppercase tracking-wider font-mono">
               Select Workstation:
             </p>
-            <span className="text-[10px] font-mono font-bold text-[#6b7771]">Fills Sign In Box</span>
+            <span className="text-[10px] font-mono font-bold text-[#6b7771] dark:text-[#6c8074]">Fills Sign In Box</span>
           </div>
 
           <div className="grid grid-cols-1 gap-2.5">
@@ -282,16 +327,16 @@ export default function LoginPage() {
               className={`relative overflow-hidden rounded-2xl p-3.5 text-left transition-all group cursor-pointer shadow-xs active:scale-[0.99] ${
                 selectedRole === "SENDER"
                   ? "border-2 border-[#8fe617] bg-[#8fe617]/10 ring-2 ring-[#8fe617]/40 shadow-[0_4px_16px_rgba(143,230,23,0.22)]"
-                  : "border border-[#d6ddd8] bg-[#edf2ef] hover:border-[#8fe617]"
+                  : "border border-[#d6ddd8] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#161f19] hover:border-[#8fe617]"
               }`}
             >
               <span className="absolute inset-0 bg-gradient-to-r from-[#8fe617]/15 via-[#8fe617]/25 to-transparent -translate-x-full group-hover:translate-x-0 transition-transform duration-300 ease-out pointer-events-none" />
               <div className="relative z-10 flex items-center justify-between">
                 <div>
-                  <span className="text-sm font-bold text-[#111814] block">
+                  <span className="text-sm font-bold text-[#111814] dark:text-[#f2f7f4] block">
                     Sender Station
                   </span>
-                  <p className="text-[10px] text-[#6b7771] mt-0.5">
+                  <p className="text-[10px] text-[#6b7771] dark:text-[#9eb2a6] mt-0.5">
                     300 DPI Studio • Fast Registration • ID Generation
                   </p>
                 </div>
@@ -301,7 +346,7 @@ export default function LoginPage() {
                     <span>Selected</span>
                   </div>
                 ) : (
-                  <ArrowRight className="h-4 w-4 text-[#5c6b63] group-hover:text-[#062404] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-[#5c6b63] dark:text-[#9eb2a6] group-hover:text-[#062404] dark:group-hover:text-[#8fe617] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
                 )}
               </div>
             </button>
@@ -313,16 +358,16 @@ export default function LoginPage() {
               className={`relative overflow-hidden rounded-2xl p-3.5 text-left transition-all group cursor-pointer shadow-xs active:scale-[0.99] ${
                 selectedRole === "RECEIVER"
                   ? "border-2 border-[#8fe617] bg-[#8fe617]/10 ring-2 ring-[#8fe617]/40 shadow-[0_4px_16px_rgba(143,230,23,0.22)]"
-                  : "border border-[#d6ddd8] bg-[#edf2ef] hover:border-[#8fe617]"
+                  : "border border-[#d6ddd8] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#161f19] hover:border-[#8fe617]"
               }`}
             >
               <span className="absolute inset-0 bg-gradient-to-r from-[#8fe617]/15 via-[#8fe617]/25 to-transparent -translate-x-full group-hover:translate-x-0 transition-transform duration-300 ease-out pointer-events-none" />
               <div className="relative z-10 flex items-center justify-between">
                 <div>
-                  <span className="text-sm font-bold text-[#111814] block">
+                  <span className="text-sm font-bold text-[#111814] dark:text-[#f2f7f4] block">
                     Receiver Workstation
                   </span>
-                  <p className="text-[10px] text-[#6b7771] mt-0.5">
+                  <p className="text-[10px] text-[#6b7771] dark:text-[#9eb2a6] mt-0.5">
                     Batch Review • 8-Up Print Engine • Student Directory
                   </p>
                 </div>
@@ -332,7 +377,7 @@ export default function LoginPage() {
                     <span>Selected</span>
                   </div>
                 ) : (
-                  <ArrowRight className="h-4 w-4 text-[#5c6b63] group-hover:text-[#062404] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-[#5c6b63] dark:text-[#9eb2a6] group-hover:text-[#062404] dark:group-hover:text-[#8fe617] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
                 )}
               </div>
             </button>
@@ -344,16 +389,16 @@ export default function LoginPage() {
               className={`relative overflow-hidden rounded-2xl p-3.5 text-left transition-all group cursor-pointer shadow-xs active:scale-[0.99] ${
                 selectedRole === "ADMIN"
                   ? "border-2 border-[#8fe617] bg-[#8fe617]/10 ring-2 ring-[#8fe617]/40 shadow-[0_4px_16px_rgba(143,230,23,0.22)]"
-                  : "border border-[#d6ddd8] bg-[#edf2ef] hover:border-[#8fe617]"
+                  : "border border-[#d6ddd8] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#161f19] hover:border-[#8fe617]"
               }`}
             >
               <span className="absolute inset-0 bg-gradient-to-r from-[#8fe617]/15 via-[#8fe617]/25 to-transparent -translate-x-full group-hover:translate-x-0 transition-transform duration-300 ease-out pointer-events-none" />
               <div className="relative z-10 flex items-center justify-between">
                 <div>
-                  <span className="text-sm font-bold text-[#111814] block">
+                  <span className="text-sm font-bold text-[#111814] dark:text-[#f2f7f4] block">
                     Administrator Portal
                   </span>
-                  <p className="text-[10px] text-[#6b7771] mt-0.5">
+                  <p className="text-[10px] text-[#6b7771] dark:text-[#9eb2a6] mt-0.5">
                     Security Roles • System Settings • Database Sync
                   </p>
                 </div>
@@ -363,7 +408,7 @@ export default function LoginPage() {
                     <span>Selected</span>
                   </div>
                 ) : (
-                  <ArrowRight className="h-4 w-4 text-[#5c6b63] group-hover:text-[#062404] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-[#5c6b63] dark:text-[#9eb2a6] group-hover:text-[#062404] dark:group-hover:text-[#8fe617] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
                 )}
               </div>
             </button>

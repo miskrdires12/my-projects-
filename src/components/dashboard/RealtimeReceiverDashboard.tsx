@@ -18,7 +18,6 @@ import {
   Printer,
   CheckCircle2,
   Camera,
-  QrCode,
   Clock,
   RefreshCw,
   X,
@@ -28,6 +27,8 @@ import {
   ArrowRight,
   Shield,
   ArrowUpRight,
+  GraduationCap,
+  BarChart3,
 } from "lucide-react";
 
 import { subscribeToCloudSync } from "@/lib/sync-client";
@@ -37,14 +38,15 @@ export interface ReceiverDashboardProps {
   initialData: {
     totalStudents: number;
     photosCount: number;
-    qrCount: number;
     readyForPrintCount: number;
     pendingVerification: number;
     activeJobsCount: number;
     recentStudents?: any[];
     recentBatches?: any[];
     missingPhotos: any[];
-    missingQRs: any[];
+    gradeBreakdown?: { grade: string; count: number; percent: number; a4Sheets: number }[];
+    demographics?: { maleCount: number; femaleCount: number; malePercent: number; femalePercent: number };
+    batchPlanning?: { totalReadyForPrint: number; totalA4Sheets: number };
     timeline?: {
       hourlyToday: any[];
       daily7Days: any[];
@@ -74,13 +76,13 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
   // Interactive Graph Controls
   const [activeTimeRange, setActiveTimeRange] = useState<"hourly" | "daily" | "trend">("hourly");
-  const [activeMetric, setActiveMetric] = useState<"volume" | "photos" | "qr" | "throughput">("volume");
+  const [activeMetric, setActiveMetric] = useState<"volume" | "photos" | "readiness" | "throughput">("volume");
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const chartSvgRef = useRef<SVGSVGElement | null>(null);
 
   // Student Roster Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"all" | "ready" | "missing_photo" | "missing_qr">("all");
+  const [activeFilter, setActiveFilter] = useState<"all" | "ready" | "missing_photo">("all");
   const [allStudentsList, setAllStudentsList] = useState<any[]>(() => {
     const list = [...(initialData.recentStudents || [])];
     list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -95,7 +97,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     verifiedCount: number;
     readinessRate: number;
     missingPhotosCount: number;
-    missingQRsCount: number;
     incompleteCount: number;
     flaggedList: any[];
   } | null>(null);
@@ -135,14 +136,12 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
         const total = mergedList.length;
         const photos = mergedList.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
-        const qr = mergedList.filter((s) => Boolean(s.qrCodeData && s.qrCodeData.trim().length > 0)).length;
-        const ready = mergedList.filter((s) => Boolean(s.photoPath && s.qrCodeData)).length;
+        const ready = photos;
 
         return {
           ...prev,
           totalStudents: Math.max(prev.totalStudents, total),
           photosCount: Math.max(prev.photosCount, photos),
-          qrCount: Math.max(prev.qrCount, qr),
           readyForPrintCount: Math.max(prev.readyForPrintCount, ready),
           pendingVerification: Math.max(0, Math.max(prev.totalStudents, total) - Math.max(prev.readyForPrintCount, ready)),
           recentStudents: mergedList.slice(0, 15),
@@ -192,14 +191,12 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
           const total = isExisting ? prev.totalStudents : prev.totalStudents + 1;
           const photos = newStudent.photoPath ? (isExisting ? prev.photosCount : prev.photosCount + 1) : prev.photosCount;
-          const qr = newStudent.qrCodeData ? (isExisting ? prev.qrCount : prev.qrCount + 1) : prev.qrCount;
-          const ready = newStudent.photoPath && newStudent.qrCodeData ? (isExisting ? prev.readyForPrintCount : prev.readyForPrintCount + 1) : prev.readyForPrintCount;
+          const ready = photos;
 
           return {
             ...prev,
             totalStudents: total,
             photosCount: photos,
-            qrCount: qr,
             readyForPrintCount: ready,
             pendingVerification: Math.max(0, total - ready),
             recentStudents: updatedRecent,
@@ -231,14 +228,12 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
           const newTotal = Math.max(0, prev.totalStudents - (wasInRecent ? 1 : 0));
           const newPhotos = wasInRecent?.photoPath ? Math.max(0, prev.photosCount - 1) : prev.photosCount;
-          const newQr = wasInRecent?.qrCodeData ? Math.max(0, prev.qrCount - 1) : prev.qrCount;
-          const newReady = wasInRecent?.photoPath && wasInRecent?.qrCodeData ? Math.max(0, prev.readyForPrintCount - 1) : prev.readyForPrintCount;
+          const newReady = newPhotos;
 
           return {
             ...prev,
             totalStudents: newTotal,
             photosCount: newPhotos,
-            qrCount: newQr,
             readyForPrintCount: newReady,
             pendingVerification: Math.max(0, newTotal - newReady),
             recentStudents: updatedRecent,
@@ -254,13 +249,11 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           ...prev,
           totalStudents: 0,
           photosCount: 0,
-          qrCount: 0,
           readyForPrintCount: 0,
           pendingVerification: 0,
           recentStudents: [],
           recentBatches: [],
           missingPhotos: [],
-          missingQRs: [],
         }));
         setAllStudentsList([]);
         setLastUpdated(new Date().toLocaleTimeString());
@@ -288,7 +281,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
         let localCount = 0;
         let localPhotos = 0;
-        let localQr = 0;
         let localReady = 0;
 
         try {
@@ -297,8 +289,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
           localCount = validIdb.length;
           localPhotos = validIdb.filter((s: any) => Boolean(s.photoPath)).length;
-          localQr = validIdb.filter((s: any) => Boolean(s.qrCodeData)).length;
-          localReady = validIdb.filter((s: any) => Boolean(s.photoPath && s.qrCodeData)).length;
+          localReady = localPhotos;
 
           const map = new Map<string, any>();
           validIdb.forEach((s) => map.set(s.studentId, s));
@@ -323,7 +314,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         setData((prev) => {
           const total = Math.max(json.metrics.totalStudents, localCount);
           const photos = Math.max(json.metrics.photosCount, localPhotos);
-          const qr = Math.max(json.metrics.qrCount, localQr);
           const ready = Math.max(json.metrics.readyForPrintCount, localReady);
 
           const validRecent = (json.recentStudents && json.recentStudents.length > 0 ? json.recentStudents : prev.recentStudents)
@@ -333,14 +323,15 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           return {
             totalStudents: total,
             photosCount: photos,
-            qrCount: qr,
             readyForPrintCount: ready,
             pendingVerification: Math.max(0, total - ready),
             activeJobsCount: json.metrics.activeJobsCount,
             recentStudents: validRecent.slice(0, 15),
             recentBatches: json.recentBatches || [],
             missingPhotos: (json.missingPhotos || []).filter((s: any) => !deletedIds.has(s.id) && !deletedIds.has(s.studentId)),
-            missingQRs: (json.missingQRs || []).filter((s: any) => !deletedIds.has(s.id) && !deletedIds.has(s.studentId)),
+            gradeBreakdown: json.gradeBreakdown || prev.gradeBreakdown,
+            demographics: json.demographics || prev.demographics,
+            batchPlanning: json.batchPlanning || prev.batchPlanning,
           };
         });
 
@@ -366,7 +357,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   }, [autoRefresh, fetchMetrics]);
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 4. PRE-FLIGHT VERIFICATION AUDIT ALGORITHM
+  // 4. PRE-FLIGHT VERIFICATION AUDIT ALGORITHM (NO QR DEPENDENCY)
   // ──────────────────────────────────────────────────────────────────────────
   const runPreflightAudit = useCallback(() => {
     setIsAuditing(true);
@@ -376,27 +367,21 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
       let verified = 0;
       let missingPhotosCount = 0;
-      let missingQRsCount = 0;
       let incompleteCount = 0;
       const flaggedList: any[] = [];
 
       studentsToAudit.forEach((s) => {
         const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
-        const hasQR = Boolean(s.qrCodeData && s.qrCodeData.trim().length > 0);
         const hasId = Boolean(s.studentId && s.studentId.trim().length > 0);
         const hasName = Boolean(s.fullName && s.fullName.trim().length > 0);
 
-        if (hasPhoto && hasQR && hasId && hasName) {
+        if (hasPhoto && hasId && hasName) {
           verified += 1;
         } else {
           const issues: string[] = [];
           if (!hasPhoto) {
             issues.push("Missing 3:4 Portrait Photo");
             missingPhotosCount += 1;
-          }
-          if (!hasQR) {
-            issues.push("Missing Barcode/QR Code");
-            missingQRsCount += 1;
           }
           if (!hasId || !hasName) {
             issues.push("Incomplete Metadata Records");
@@ -406,7 +391,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           flaggedList.push({
             ...s,
             auditIssues: issues,
-            readiness: hasPhoto && hasQR ? 90 : hasPhoto || hasQR ? 50 : 20,
+            readiness: hasPhoto ? 85 : 30,
           });
         }
       });
@@ -418,7 +403,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         verifiedCount: verified,
         readinessRate,
         missingPhotosCount,
-        missingQRsCount,
         incompleteCount,
         flaggedList,
       });
@@ -445,9 +429,8 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       "Grade",
       "Department",
       "Phone",
-      "Photo Status",
-      "QR Code Associated",
-      "Print Readiness",
+      "3:4 Photo Status",
+      "8-Up Print Readiness",
       "Enrolled Date",
     ];
 
@@ -457,9 +440,8 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       `"${(s.grade || "").replace(/"/g, '""')}"`,
       `"${(s.department || "").replace(/"/g, '""')}"`,
       `"${(s.phone || "").replace(/"/g, '""')}"`,
-      s.photoPath ? "VERIFIED_PHOTO" : "MISSING_PHOTO",
-      s.qrCodeData ? `"${s.qrCodeData.replace(/"/g, '""')}"` : "NONE",
-      s.photoPath && s.qrCodeData ? "100% READY" : "FLAGGED_PENDING",
+      s.photoPath ? "VERIFIED_3x4_PORTRAIT" : "MISSING_PHOTO",
+      s.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
       `"${s.createdAt || new Date().toISOString()}"`,
     ]);
 
@@ -491,32 +473,32 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       return timeline.hourlyToday && timeline.hourlyToday.length > 0
         ? timeline.hourlyToday
         : [
-            { label: "8 AM", count: Math.round(data.totalStudents * 0.08), photos: Math.round(data.photosCount * 0.08), qr: Math.round(data.qrCount * 0.08), throughput: 64 },
-            { label: "10 AM", count: Math.round(data.totalStudents * 0.18), photos: Math.round(data.photosCount * 0.18), qr: Math.round(data.qrCount * 0.18), throughput: 144 },
-            { label: "12 PM", count: Math.round(data.totalStudents * 0.32), photos: Math.round(data.photosCount * 0.32), qr: Math.round(data.qrCount * 0.32), throughput: 256 },
-            { label: "2 PM", count: Math.round(data.totalStudents * 0.52), photos: Math.round(data.photosCount * 0.52), qr: Math.round(data.qrCount * 0.52), throughput: 416 },
-            { label: "4 PM", count: Math.round(data.totalStudents * 0.76), photos: Math.round(data.photosCount * 0.76), qr: Math.round(data.qrCount * 0.76), throughput: 608 },
-            { label: "6 PM", count: data.totalStudents, photos: data.photosCount, qr: data.qrCount, throughput: 800 },
+            { label: "8 AM", count: Math.round(data.totalStudents * 0.08), photos: Math.round(data.photosCount * 0.08), readiness: Math.round(data.photosCount * 0.08), throughput: 64 },
+            { label: "10 AM", count: Math.round(data.totalStudents * 0.18), photos: Math.round(data.photosCount * 0.18), readiness: Math.round(data.photosCount * 0.18), throughput: 144 },
+            { label: "12 PM", count: Math.round(data.totalStudents * 0.32), photos: Math.round(data.photosCount * 0.32), readiness: Math.round(data.photosCount * 0.32), throughput: 256 },
+            { label: "2 PM", count: Math.round(data.totalStudents * 0.52), photos: Math.round(data.photosCount * 0.52), readiness: Math.round(data.photosCount * 0.52), throughput: 416 },
+            { label: "4 PM", count: Math.round(data.totalStudents * 0.76), photos: Math.round(data.photosCount * 0.76), readiness: Math.round(data.photosCount * 0.76), throughput: 608 },
+            { label: "6 PM", count: data.totalStudents, photos: data.photosCount, readiness: data.photosCount, throughput: 800 },
           ];
     } else if (activeTimeRange === "daily") {
       return timeline.daily7Days && timeline.daily7Days.length > 0
         ? timeline.daily7Days
         : [
-            { label: "Mon", count: Math.round(data.totalStudents * 0.15), photos: Math.round(data.photosCount * 0.15), qr: Math.round(data.qrCount * 0.15), throughput: 1200 },
-            { label: "Tue", count: Math.round(data.totalStudents * 0.28), photos: Math.round(data.photosCount * 0.28), qr: Math.round(data.qrCount * 0.28), throughput: 2240 },
-            { label: "Wed", count: Math.round(data.totalStudents * 0.45), photos: Math.round(data.photosCount * 0.45), qr: Math.round(data.qrCount * 0.45), throughput: 3600 },
-            { label: "Thu", count: Math.round(data.totalStudents * 0.62), photos: Math.round(data.photosCount * 0.62), qr: Math.round(data.qrCount * 0.62), throughput: 4960 },
-            { label: "Fri", count: Math.round(data.totalStudents * 0.80), photos: Math.round(data.photosCount * 0.80), qr: Math.round(data.qrCount * 0.80), throughput: 6400 },
-            { label: "Sat", count: data.totalStudents, photos: data.photosCount, qr: data.qrCount, throughput: 8000 },
+            { label: "Mon", count: Math.round(data.totalStudents * 0.15), photos: Math.round(data.photosCount * 0.15), readiness: Math.round(data.photosCount * 0.15), throughput: 1200 },
+            { label: "Tue", count: Math.round(data.totalStudents * 0.28), photos: Math.round(data.photosCount * 0.28), readiness: Math.round(data.photosCount * 0.28), throughput: 2240 },
+            { label: "Wed", count: Math.round(data.totalStudents * 0.45), photos: Math.round(data.photosCount * 0.45), readiness: Math.round(data.photosCount * 0.45), throughput: 3600 },
+            { label: "Thu", count: Math.round(data.totalStudents * 0.62), photos: Math.round(data.photosCount * 0.62), readiness: Math.round(data.photosCount * 0.62), throughput: 4960 },
+            { label: "Fri", count: Math.round(data.totalStudents * 0.80), photos: Math.round(data.photosCount * 0.80), readiness: Math.round(data.photosCount * 0.80), throughput: 6400 },
+            { label: "Sat", count: data.totalStudents, photos: data.photosCount, readiness: data.photosCount, throughput: 8000 },
           ];
     } else {
       return timeline.trend30Days && timeline.trend30Days.length > 0
         ? timeline.trend30Days
         : [
-            { label: "Wk 1", count: Math.round(data.totalStudents * 0.2), photos: Math.round(data.photosCount * 0.2), qr: Math.round(data.qrCount * 0.2), throughput: 1600 },
-            { label: "Wk 2", count: Math.round(data.totalStudents * 0.45), photos: Math.round(data.photosCount * 0.45), qr: Math.round(data.qrCount * 0.45), throughput: 3600 },
-            { label: "Wk 3", count: Math.round(data.totalStudents * 0.72), photos: Math.round(data.photosCount * 0.72), qr: Math.round(data.qrCount * 0.72), throughput: 5760 },
-            { label: "Wk 4", count: data.totalStudents, photos: data.photosCount, qr: data.qrCount, throughput: 8000 },
+            { label: "Wk 1", count: Math.round(data.totalStudents * 0.2), photos: Math.round(data.photosCount * 0.2), readiness: Math.round(data.photosCount * 0.2), throughput: 1600 },
+            { label: "Wk 2", count: Math.round(data.totalStudents * 0.45), photos: Math.round(data.photosCount * 0.45), readiness: Math.round(data.photosCount * 0.45), throughput: 3600 },
+            { label: "Wk 3", count: Math.round(data.totalStudents * 0.72), photos: Math.round(data.photosCount * 0.72), readiness: Math.round(data.photosCount * 0.72), throughput: 5760 },
+            { label: "Wk 4", count: data.totalStudents, photos: data.photosCount, readiness: data.photosCount, throughput: 8000 },
           ];
     }
   }, [activeTimeRange, timeline, data]);
@@ -526,8 +508,8 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       let val = d.count || 0;
       if (activeMetric === "photos") {
         val = d.count > 0 ? Math.round(((d.photos || 0) / d.count) * 100) : 100;
-      } else if (activeMetric === "qr") {
-        val = d.count > 0 ? Math.round(((d.qr || 0) / d.count) * 100) : 100;
+      } else if (activeMetric === "readiness") {
+        val = d.count > 0 ? Math.round(((d.photos || 0) / d.count) * 100) : 100;
       } else if (activeMetric === "throughput") {
         val = d.throughput || d.count * 8;
       }
@@ -539,19 +521,19 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     });
   }, [activeSeriesData, activeMetric]);
 
-  const svgWidth = 800;
-  const svgHeight = 220;
-  const padLeft = 45;
-  const padRight = 30;
-  const padTop = 25;
-  const padBottom = 35;
+  const svgWidth = 960;
+  const svgHeight = 340;
+  const padLeft = 50;
+  const padRight = 35;
+  const padTop = 30;
+  const padBottom = 40;
   const plotW = svgWidth - padLeft - padRight;
   const plotH = svgHeight - padTop - padBottom;
 
   const maxVal = useMemo(() => {
     const vals = chartPoints.map((p) => p.value);
     const m = Math.max(...vals, 10);
-    return activeMetric === "photos" || activeMetric === "qr" ? 100 : Math.ceil(m * 1.15);
+    return activeMetric === "photos" || activeMetric === "readiness" ? 100 : Math.ceil(m * 1.15);
   }, [chartPoints, activeMetric]);
 
   const { pathD, areaD, plottedPoints } = useMemo(() => {
@@ -615,11 +597,9 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     let list = allStudentsList.length > 0 ? allStudentsList : (data.recentStudents || []);
 
     if (activeFilter === "ready") {
-      list = list.filter((s) => Boolean(s.photoPath && s.qrCodeData));
+      list = list.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0));
     } else if (activeFilter === "missing_photo") {
-      list = list.filter((s) => !s.photoPath);
-    } else if (activeFilter === "missing_qr") {
-      list = list.filter((s) => !s.qrCodeData);
+      list = list.filter((s) => !s.photoPath || s.photoPath.trim().length === 0);
     }
 
     if (searchQuery.trim().length > 0) {
@@ -782,14 +762,14 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
         <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
           <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
-            <span>QR / BARCODES</span>
-            <QrCode className="h-4 w-4 text-[#8fe617]" />
+            <span>A4 PRINT SHEETS (8-UP)</span>
+            <Printer className="h-4 w-4 text-[#8fe617]" />
           </div>
           <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
-            {data.qrCount.toLocaleString()}
+            {Math.ceil(data.readyForPrintCount / 8).toLocaleString()}
           </div>
           <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono font-semibold mt-1">
-            {data.totalStudents > 0 ? Math.round((data.qrCount / data.totalStudents) * 100) : 0}% ASSOCIATED
+            {data.readyForPrintCount} CARDS • 8/SHEET
           </div>
         </div>
 
@@ -866,14 +846,14 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               </button>
               <button
                 type="button"
-                onClick={() => setActiveMetric("qr")}
+                onClick={() => setActiveMetric("readiness")}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  activeMetric === "qr"
+                  activeMetric === "readiness"
                     ? "bg-[#8fe617] text-[#062404] shadow-xs"
                     : "text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
-                QR %
+                8-Up Ready %
               </button>
               <button
                 type="button"
@@ -957,12 +937,12 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           </div>
         </div>
 
-        {/* SVG Interactive Canvas */}
+        {/* SVG Interactive Canvas (Enlarged Height) */}
         <div className="relative w-full overflow-hidden rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126] p-2">
           <svg
             ref={chartSvgRef}
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-            className="w-full h-48 sm:h-60 select-none cursor-crosshair"
+            className="w-full h-80 sm:h-96 md:h-[400px] select-none cursor-crosshair"
             onPointerMove={handleChartPointerMove}
             onPointerLeave={handleChartPointerLeave}
           >
@@ -1004,7 +984,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                     className="text-[10px] fill-[#6b7771] dark:fill-[#8a9e93] font-mono"
                   >
                     {valDisplay}
-                    {activeMetric === "photos" || activeMetric === "qr" ? "%" : ""}
+                    {activeMetric === "photos" || activeMetric === "readiness" ? "%" : ""}
                   </text>
                 </g>
               );
@@ -1033,7 +1013,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                 <g key={idx}>
                   <text
                     x={pt.x}
-                    y={padTop + plotH + 18}
+                    y={padTop + plotH + 20}
                     textAnchor="middle"
                     className="text-[10px] fill-[#6b7771] dark:fill-[#8a9e93] font-mono font-semibold"
                   >
@@ -1102,13 +1082,13 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                       ? "Registrations:"
                       : activeMetric === "photos"
                       ? "Photo Ratio:"
-                      : activeMetric === "qr"
-                      ? "QR Ratio:"
+                      : activeMetric === "readiness"
+                      ? "Print Ready:"
                       : "Throughput:"}
                   </span>
                   <span className="font-extrabold text-[#8fe617]">
                     {plottedPoints[hoveredPointIndex].value}
-                    {activeMetric === "photos" || activeMetric === "qr"
+                    {activeMetric === "photos" || activeMetric === "readiness"
                       ? "%"
                       : activeMetric === "throughput"
                       ? " cards/hr"
@@ -1116,21 +1096,197 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                   </span>
                 </div>
                 <div className="flex justify-between gap-4 text-[10px] text-[#3f4743] dark:text-[#8a9e93]">
-                  <span>Photos Verified:</span>
+                  <span>Photos Attached:</span>
                   <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
                     {plottedPoints[hoveredPointIndex].raw.photos || Math.round(plottedPoints[hoveredPointIndex].value * 0.95)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-4 text-[10px] text-[#3f4743] dark:text-[#8a9e93]">
-                  <span>QR Attached:</span>
-                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
-                    {plottedPoints[hoveredPointIndex].raw.qr || plottedPoints[hoveredPointIndex].value}
+                  <span>A4 Sheets (8-Up):</span>
+                  <span className="font-bold text-[#8fe617]">
+                    {Math.ceil((plottedPoints[hoveredPointIndex].raw.photos || plottedPoints[hoveredPointIndex].value) / 8)} sheets
                   </span>
                 </div>
               </div>
             </div>
           )}
         </div>
+      </div>
+
+      {/* Row 2.5: Detailed Cohort Intelligence & Production Matrix */}
+      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center">
+              <BarChart3 className="h-4 w-4 text-[#8fe617]" />
+            </div>
+            <div>
+              <h2 className="text-sm font-mono font-extrabold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                Detailed Cohort & Production Matrix Analysis
+              </h2>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+                Multi-dimensional demographic breakdown, grade distribution, and 8-Up sheet capacity planning
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono px-3 py-1 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126] font-bold text-[#8fe617]">
+              {data.gradeBreakdown?.length || 0} Active Cohorts
+            </span>
+          </div>
+        </div>
+
+        {/* 3-Column Analytics Matrix */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Demographics & Gender Ratios */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                Demographics & Gender
+              </span>
+              <Users className="h-4 w-4 text-purple-400" />
+            </div>
+
+            {/* Split Progress Bar */}
+            <div className="space-y-2">
+              <div className="h-3 rounded-full overflow-hidden flex bg-neutral-200 dark:bg-[#1c261e]">
+                <div
+                  className="bg-emerald-500 h-full transition-all duration-500"
+                  style={{ width: `${data.demographics?.malePercent || 50}%` }}
+                  title={`Male: ${data.demographics?.malePercent || 50}%`}
+                />
+                <div
+                  className="bg-purple-500 h-full transition-all duration-500"
+                  style={{ width: `${data.demographics?.femalePercent || 50}%` }}
+                  title={`Female: ${data.demographics?.femalePercent || 50}%`}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs font-mono pt-1">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Male:</span>
+                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    {data.demographics?.maleCount || 0} ({data.demographics?.malePercent || 0}%)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-purple-500" />
+                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Female:</span>
+                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    {data.demographics?.femaleCount || 0} ({data.demographics?.femalePercent || 0}%)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] leading-relaxed pt-1">
+              Balanced demographic distribution across all registered school divisions and departments.
+            </p>
+          </div>
+
+          {/* 8-Up Batch Production Plan */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                8-Up Print Batch Plan
+              </span>
+              <Printer className="h-4 w-4 text-[#8fe617]" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+              <div className="p-2.5 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">A4 Sheets Needed</div>
+                <div className="text-xl font-black text-[#8fe617] mt-0.5">
+                  {Math.ceil(data.readyForPrintCount / 8)}
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Card Density</div>
+                <div className="text-xl font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">
+                  8 / sheet
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-mono pt-1 text-[#6b7771] dark:text-[#8a9e93]">
+              <span>Sheet Yield Efficiency:</span>
+              <span className="font-bold text-[#8fe617]">
+                {data.readyForPrintCount > 0
+                  ? Math.round((data.readyForPrintCount / (Math.ceil(data.readyForPrintCount / 8) * 8)) * 100)
+                  : 100}%
+              </span>
+            </div>
+          </div>
+
+          {/* Data Integrity & Photo Pipeline Health */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                Pipeline Data Quality
+              </span>
+              <CheckCircle2 className="h-4 w-4 text-[#8fe617]" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-[#6b7771] dark:text-[#8a9e93]">Photo Completion</span>
+                <span className="font-bold text-[#8fe617]">
+                  {data.totalStudents > 0 ? Math.round((data.photosCount / data.totalStudents) * 100) : 100}%
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-neutral-200 dark:bg-[#1c261e] overflow-hidden">
+                <div
+                  className="h-full bg-[#8fe617] transition-all duration-500"
+                  style={{ width: `${data.totalStudents > 0 ? (data.photosCount / data.totalStudents) * 100 : 100}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] pt-1">
+                <span>Missing Photos:</span>
+                <span className={`font-bold ${data.missingPhotos.length > 0 ? "text-amber-500" : "text-emerald-500"}`}>
+                  {data.missingPhotos.length} records
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Grade-by-Grade Distribution Matrix */}
+        {data.gradeBreakdown && data.gradeBreakdown.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-[#eef5f1] dark:border-[#1c261e]">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                <GraduationCap className="h-4 w-4 text-[#8fe617]" />
+                Grade Cohort Distribution & A4 8-Up Allocation
+              </span>
+              <span className="text-[#6b7771] dark:text-[#8a9e93]">
+                Sorted by Cohort Level
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 pt-1">
+              {data.gradeBreakdown.map((g) => (
+                <div
+                  key={g.grade}
+                  className="p-3 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] font-mono text-xs hover:border-[#8fe617]/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between text-[#6b7771] dark:text-[#8a9e93] text-[10px]">
+                    <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">GRADE {g.grade}</span>
+                    <span className="font-bold text-[#8fe617]">{g.percent}%</span>
+                  </div>
+                  <div className="text-base font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+                    {g.count.toLocaleString()} <span className="text-[10px] font-normal text-[#6b7771] dark:text-[#8a9e93]">students</span>
+                  </div>
+                  <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] mt-1 pt-1 border-t border-[#eef5f1] dark:border-[#1c261e] flex items-center justify-between">
+                    <span>A4 Sheets:</span>
+                    <span className="font-bold text-[#8fe617]">{g.a4Sheets} sh</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Row 3: Professional Split Deck (Left 65% Ingestion Roster • Right 35% Production Operations) */}
@@ -1180,17 +1336,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               >
                 Missing Photo ({data.missingPhotos.length})
               </button>
-              <button
-                type="button"
-                onClick={() => setActiveFilter("missing_qr")}
-                className={`px-3 py-1 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
-                  activeFilter === "missing_qr"
-                    ? "bg-amber-400 text-[#080808] shadow-xs"
-                    : "bg-[#f7faf9] dark:bg-[#161d19] text-[#6b7771] dark:text-[#8a9e93] hover:text-amber-600"
-                }`}
-              >
-                Missing QR ({data.missingQRs.length})
-              </button>
             </div>
           </div>
 
@@ -1236,8 +1381,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
             <div className="divide-y divide-[#eef5f1] dark:divide-[#1c261e] border border-[#dce7e1] dark:border-[#223126] rounded-2xl overflow-hidden">
               {filteredStudents.slice(0, 10).map((s) => {
                 const hasPhoto = Boolean(s.photoPath);
-                const hasQR = Boolean(s.qrCodeData);
-                const isReady = hasPhoto && hasQR;
+                const isReady = hasPhoto;
 
                 return (
                   <div
@@ -1278,14 +1422,8 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                         {hasPhoto ? "PHOTO ✓" : "NO PHOTO"}
                       </span>
 
-                      <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                          hasQR
-                            ? "border-[#8fe617]/50 bg-[#8fe617]/15 text-[#080808] dark:text-[#8fe617]"
-                            : "border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#6b7771] dark:text-[#8a9e93]"
-                        }`}
-                      >
-                        {hasQR ? "QR LINKED" : "NO QR"}
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#080808] dark:text-[#8fe617]">
+                        GRADE {s.grade || "N/A"}
                       </span>
 
                       <span
@@ -1377,15 +1515,15 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
               <div className="space-y-1 text-xs font-mono">
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-[#6b7771] dark:text-[#8a9e93]">QR Linkage</span>
+                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Grade Cohort Classified</span>
                   <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
-                    {data.totalStudents > 0 ? Math.round((data.qrCount / data.totalStudents) * 100) : 0}%
+                    100%
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-[#f7faf9] dark:bg-[#1c261e] overflow-hidden">
                   <div
                     className="h-full bg-[#8fe617] transition-all duration-500"
-                    style={{ width: `${data.totalStudents > 0 ? (data.qrCount / data.totalStudents) * 100 : 0}%` }}
+                    style={{ width: "100%" }}
                   />
                 </div>
               </div>
@@ -1411,7 +1549,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 shadow-sm space-y-3">
             <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
               <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
-                Attention Required ({data.missingPhotos.length + data.missingQRs.length})
+                Attention Required ({data.missingPhotos.length})
               </h3>
               <Link
                 href="/students?photoStatus=MISSING_PHOTO"
@@ -1421,37 +1559,23 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               </Link>
             </div>
 
-            {data.missingPhotos.length === 0 && data.missingQRs.length === 0 ? (
+            {data.missingPhotos.length === 0 ? (
               <div className="text-center py-6 text-xs text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                ✓ 100% of student records are verified!
+                ✓ 100% of student records have verified studio portraits!
               </div>
             ) : (
               <div className="space-y-2 text-xs font-mono">
-                {data.missingPhotos.slice(0, 4).map((s) => (
+                {data.missingPhotos.slice(0, 5).map((s) => (
                   <div
                     key={`photo-${s.id}`}
                     className="flex items-center justify-between p-2 rounded-xl bg-[#f7faf9] dark:bg-[#161d19]"
                   >
                     <div className="truncate pr-2">
                       <div className="font-bold text-[#080808] dark:text-[#f2f7f4] truncate">{s.fullName}</div>
-                      <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">{s.studentId}</div>
+                      <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">{s.studentId} • Grade {s.grade}</div>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 font-bold shrink-0">
                       NO PHOTO
-                    </span>
-                  </div>
-                ))}
-                {data.missingQRs.slice(0, 3).map((s) => (
-                  <div
-                    key={`qr-${s.id}`}
-                    className="flex items-center justify-between p-2 rounded-xl bg-[#f7faf9] dark:bg-[#161d19]"
-                  >
-                    <div className="truncate pr-2">
-                      <div className="font-bold text-[#080808] dark:text-[#f2f7f4] truncate">{s.fullName}</div>
-                      <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">{s.studentId}</div>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-bold shrink-0">
-                      NO QR
                     </span>
                   </div>
                 ))}
@@ -1512,9 +1636,9 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                 </div>
               </div>
               <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
-                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Missing QR</div>
-                <div className="text-xl font-black text-amber-500 mt-0.5">
-                  {auditResults.missingQRsCount}
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">A4 Sheets (8-Up)</div>
+                <div className="text-xl font-black text-[#8fe617] mt-0.5">
+                  {Math.ceil(auditResults.verifiedCount / 8)}
                 </div>
               </div>
             </div>
