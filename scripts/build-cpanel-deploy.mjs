@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 
 const standaloneDir = path.join(projectRoot, ".next", "standalone");
-const stagingDir = path.join(projectRoot, "deploy_staging");
+const stagingDir = path.join(projectRoot, "cpanel_staging");
 const zipPath = path.join(projectRoot, "deploy.zip");
 
 console.log("🚀 Starting cPanel Deployment Package Assembly...");
@@ -93,11 +93,25 @@ if (fs.existsSync(rootPrismaDir)) {
   console.log("✅ Prisma schema and database copied successfully.");
 }
 
+// Ensure staging prisma/dev.db has read/write permissions
+const stagingDevDb = path.join(stagingPrismaDir, "dev.db");
+if (fs.existsSync(stagingDevDb)) {
+  try {
+    fs.chmodSync(stagingDevDb, 0o666);
+    console.log("🔒 Ensured prisma/dev.db has read/write permissions (0o666).");
+  } catch (err) {
+    console.warn("Permission flag note:", err.message);
+  }
+}
+
 // Also ensure a root dev.db exists in staging for fallback resolution
 const devDbSrc = path.join(rootPrismaDir, "dev.db");
 if (fs.existsSync(devDbSrc)) {
   fs.copyFileSync(devDbSrc, path.join(stagingDir, "dev.db"));
-  console.log("✅ Root dev.db fallback copied.");
+  try {
+    fs.chmodSync(path.join(stagingDir, "dev.db"), 0o666);
+  } catch (e) {}
+  console.log("✅ Root dev.db fallback copied with read/write access.");
 }
 
 // 6. Write production .env file
@@ -123,19 +137,24 @@ const archive = new ZipArchive({
 });
 
 output.on("close", () => {
-  const totalBytes = archive.pointer();
+  // Clean up the staging folder
+  console.log("🧹 Cleaning up staging folder (cpanel_staging/)...");
+  try {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    console.log("✅ cpanel_staging/ cleaned up successfully.");
+  } catch (cleanErr) {
+    console.warn("⚠️ Note cleaning staging:", cleanErr.message);
+  }
+
+  const stat = fs.statSync(zipPath);
+  const totalBytes = stat.size;
   const mb = (totalBytes / (1024 * 1024)).toFixed(2);
-  console.log(`\n🎉 SUCCESS! deploy.zip generated successfully.`);
-  console.log(`📦 Archive Size: ${mb} MB (${totalBytes.toLocaleString()} bytes)`);
-  console.log(`📍 Location: ${zipPath}`);
-  console.log(`\nDeployment Instructions for cPanel (Yegara Hosting):`);
-  console.log(`1. Upload deploy.zip to your application directory in cPanel File Manager.`);
-  console.log(`2. Extract deploy.zip (server.js will sit directly at the root).`);
-  console.log(`3. In cPanel > Setup Node.js App:`);
-  console.log(`   - Node.js version: 20.x`);
-  console.log(`   - Application mode: Production`);
-  console.log(`   - Application startup file: server.js`);
-  console.log(`4. Click 'Start App' or 'Restart'.`);
+  console.log(`\n======================================================`);
+  console.log(`🎉 DEPLOYMENT BUNDLE READY FOR CPANEL PASSENGER`);
+  console.log(`======================================================`);
+  console.log(`📍 Exact Absolute Path: ${path.resolve(zipPath)}`);
+  console.log(`📦 Exact File Size: ${totalBytes} bytes (${mb} MB)`);
+  console.log(`======================================================\n`);
 });
 
 archive.on("error", (err) => {

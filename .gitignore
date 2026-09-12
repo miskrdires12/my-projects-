@@ -38,4 +38,5 @@ prisma/*.db-journal
 
 # Deployment artifacts
 deploy_staging/
+cpanel_staging/
 deploy.zip
