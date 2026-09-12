@@ -10,17 +10,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "#f7faf9",
+        background: "var(--background, #f7faf9)",
         surface: {
-          DEFAULT: "#ffffff",
-          secondary: "#eef5f1",
-          tertiary: "#e2ede6",
-          card: "#ffffff",
+          DEFAULT: "var(--surface, #ffffff)",
+          secondary: "var(--surface-secondary, #eef5f1)",
+          tertiary: "var(--surface-tertiary, #e2ede6)",
+          card: "var(--surface, #ffffff)",
         },
         border: {
-          DEFAULT: "#dce7e1",
-          subtle: "#e9f1ed",
-          strong: "#080808",
+          DEFAULT: "var(--border, #dce7e1)",
+          subtle: "var(--border, #e9f1ed)",
+          strong: "var(--foreground, #080808)",
         },
         accent: {
           DEFAULT: "#8fe617",
@@ -31,9 +31,9 @@ const config: Config = {
           dim: "rgba(143, 230, 23, 0.14)",
         },
         foreground: {
-          DEFAULT: "#080808",
-          muted: "#3f4743",
-          subtle: "#6b7771",
+          DEFAULT: "var(--foreground, #080808)",
+          muted: "var(--foreground-muted, #3f4743)",
+          subtle: "var(--foreground-subtle, #6b7771)",
         },
         status: {
           active: "#8fe617",

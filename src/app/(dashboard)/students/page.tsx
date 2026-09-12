@@ -114,7 +114,7 @@ export default async function StudentsPage({
       <div className="flex items-center justify-between pt-1">
         <Link
           href="/dashboard"
-          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl border border-border bg-surface text-foreground font-semibold text-sm shadow-xs hover:border-[#8fe617] hover:bg-[#8fe617]/10 hover:text-[#8fe617] transition-all group"
+          className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] text-foreground dark:text-[#f2f7f4] font-semibold text-sm shadow-xs hover:border-[#8fe617] hover:bg-[#8fe617]/10 hover:text-[#8fe617] transition-all group"
         >
           <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-1 text-[#8fe617]" />
           <span>Back to Dashboard</span>

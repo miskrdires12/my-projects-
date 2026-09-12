@@ -830,16 +830,16 @@ export default function CanvaDesignerPage() {
   const currentStudent = sampleStudents[previewStudentIndex] || null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] -m-6 bg-white text-black select-none overflow-hidden font-sans">
+    <div className="flex flex-col h-[calc(100vh-4rem)] -m-6 bg-white dark:bg-[#070908] text-[#080808] dark:text-[#f2f7f4] select-none overflow-hidden font-sans">
       {/* ────────────────────────────────────────────────────────────────────────── */}
       {/* TOP CANVA TOOLBAR (90% WHITE, 10% BLACK)                                   */}
       {/* ────────────────────────────────────────────────────────────────────────── */}
-      <header className="h-14 border-b border-neutral-200 bg-white px-4 flex items-center justify-between shrink-0 z-30 shadow-xs">
+      <header className="h-14 border-b border-neutral-200 dark:border-[#223126] bg-white dark:bg-[#111613] px-4 flex items-center justify-between shrink-0 z-30 shadow-xs text-[#080808] dark:text-[#f2f7f4]">
         <div className="flex items-center gap-3">
           {/* Back Button */}
           <Link
             href="/dashboard"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-300 bg-neutral-50 text-xs font-semibold text-neutral-800 hover:text-black hover:border-black transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] text-xs font-semibold text-neutral-800 dark:text-[#f2f7f4] hover:text-black dark:hover:text-[#8fe617] hover:border-black dark:hover:border-[#8fe617] transition-colors cursor-pointer"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Dashboard</span>
@@ -852,12 +852,12 @@ export default function CanvaDesignerPage() {
             type="text"
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
-            className="bg-transparent border-b border-transparent hover:border-neutral-300 focus:border-black px-1.5 py-0.5 text-xs font-bold text-black focus:outline-none w-48 truncate"
+            className="bg-transparent border-b border-transparent hover:border-neutral-300 dark:hover:border-[#223126] focus:border-black dark:focus:border-[#8fe617] px-1.5 py-0.5 text-xs font-bold text-black dark:text-[#f2f7f4] dark:text-[#f2f7f4] focus:outline-none w-48 truncate"
             title="Click to rename design"
           />
 
           {/* FRONT / BACK SIDE SWITCHER (FRONT IS DEFAULT) */}
-          <div className="flex items-center gap-1 bg-neutral-100 border border-neutral-300 rounded-lg p-0.5 text-xs">
+          <div className="flex items-center gap-1 bg-neutral-100 dark:bg-[#161d19] border border-neutral-300 dark:border-[#223126] rounded-lg p-0.5 text-xs">
             <button
               type="button"
               onClick={() => {
@@ -866,8 +866,8 @@ export default function CanvaDesignerPage() {
               }}
               className={`px-3 py-1 rounded text-xs font-mono font-bold transition-all ${
                 activeSide === "FRONT"
-                  ? "bg-black text-white shadow-xs"
-                  : "text-neutral-600 hover:text-black"
+                  ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] shadow-xs"
+                  : "text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
               }`}
             >
               Card Front [Default]
@@ -880,8 +880,8 @@ export default function CanvaDesignerPage() {
               }}
               className={`px-3 py-1 rounded text-xs font-mono font-bold transition-all ${
                 activeSide === "BACK"
-                  ? "bg-black text-white shadow-xs"
-                  : "text-neutral-600 hover:text-black"
+                  ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] shadow-xs"
+                  : "text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
               }`}
             >
               Card Back
@@ -889,7 +889,7 @@ export default function CanvaDesignerPage() {
           </div>
 
           {/* ORIENTATION TOGGLE (LANDSCAPE / PORTRAIT) */}
-          <div className="flex items-center gap-1 bg-neutral-100 border border-neutral-300 rounded-lg p-0.5 text-xs">
+          <div className="flex items-center gap-1 bg-neutral-100 dark:bg-[#161d19] border border-neutral-300 dark:border-[#223126] rounded-lg p-0.5 text-xs">
             <button
               type="button"
               onClick={() => {
@@ -899,8 +899,8 @@ export default function CanvaDesignerPage() {
               }}
               className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-all ${
                 orientation === "LANDSCAPE"
-                  ? "bg-black text-white shadow-xs"
-                  : "text-neutral-600 hover:text-black"
+                  ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] shadow-xs"
+                  : "text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
               }`}
               title={`Landscape: ${widthMm} × ${heightMm}mm`}
             >
@@ -915,8 +915,8 @@ export default function CanvaDesignerPage() {
               }}
               className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-all ${
                 orientation === "PORTRAIT"
-                  ? "bg-black text-white shadow-xs"
-                  : "text-neutral-600 hover:text-black"
+                  ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] shadow-xs"
+                  : "text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
               }`}
               title={`Portrait: ${heightMm} × ${widthMm}mm`}
             >
@@ -928,7 +928,7 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={handleMirrorDesign}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-300 bg-neutral-50 text-xs font-mono font-bold text-black hover:bg-neutral-100 hover:border-black transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] text-xs font-mono font-bold text-black dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#1f2a22] hover:border-black dark:hover:border-[#8fe617] transition-colors cursor-pointer"
             title="Mirror design horizontally (Flip X for reverse printing)"
           >
             <FlipHorizontal className="h-3.5 w-3.5" />
@@ -945,12 +945,12 @@ export default function CanvaDesignerPage() {
           )}
 
           {/* Undo / Redo */}
-          <div className="flex items-center gap-1 border border-neutral-300 rounded-lg p-1 bg-neutral-50">
+          <div className="flex items-center gap-1 border border-neutral-300 dark:border-[#223126] rounded-lg p-1 bg-neutral-50 dark:bg-[#161d19]">
             <button
               type="button"
               onClick={handleUndo}
               disabled={historyIndex <= 0}
-              className="p-1 rounded text-neutral-600 hover:text-black disabled:opacity-30"
+              className="p-1 rounded text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4] disabled:opacity-30"
               title="Undo"
             >
               <Undo2 className="h-3.5 w-3.5" />
@@ -959,7 +959,7 @@ export default function CanvaDesignerPage() {
               type="button"
               onClick={handleRedo}
               disabled={historyIndex >= history.length - 1}
-              className="p-1 rounded text-neutral-600 hover:text-black disabled:opacity-30"
+              className="p-1 rounded text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4] disabled:opacity-30"
               title="Redo"
             >
               <Redo2 className="h-3.5 w-3.5" />
@@ -967,19 +967,19 @@ export default function CanvaDesignerPage() {
           </div>
 
           {/* Zoom */}
-          <div className="flex items-center gap-1 border border-neutral-300 rounded-lg p-1 bg-neutral-50 text-xs font-mono">
+          <div className="flex items-center gap-1 border border-neutral-300 dark:border-[#223126] rounded-lg p-1 bg-neutral-50 dark:bg-[#161d19] text-xs font-mono">
             <button
               type="button"
               onClick={() => setZoom((z) => Math.max(0.8, z - 0.2))}
-              className="p-1 text-neutral-600 hover:text-black"
+              className="p-1 text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
             >
               <ZoomOut className="h-3.5 w-3.5" />
             </button>
-            <span className="px-1 text-[11px] font-bold text-black">{Math.round(zoom * 100)}%</span>
+            <span className="px-1 text-[11px] font-bold text-black dark:text-[#f2f7f4]">{Math.round(zoom * 100)}%</span>
             <button
               type="button"
               onClick={() => setZoom((z) => Math.min(2.8, z + 0.2))}
-              className="p-1 text-neutral-600 hover:text-black"
+              className="p-1 text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
             >
               <ZoomIn className="h-3.5 w-3.5" />
             </button>
@@ -989,7 +989,7 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={handleClearAllExamples}
-            className="px-3 py-1.5 rounded-lg border border-neutral-300 bg-white text-xs font-mono text-neutral-700 hover:text-black hover:border-black transition-colors"
+            className="px-3 py-1.5 rounded-lg border border-neutral-300 dark:border-[#223126] bg-white dark:bg-[#161d19] text-xs font-mono text-neutral-700 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4] hover:border-black dark:hover:border-[#8fe617] transition-colors cursor-pointer"
             title="Clear all example elements to start blank"
           >
             Clear Examples
@@ -999,7 +999,7 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={handleSaveTemplate}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-neutral-300 bg-white text-xs font-bold text-black hover:bg-neutral-100 transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-neutral-300 dark:border-[#223126] bg-white dark:bg-[#161d19] text-xs font-bold text-black dark:text-[#f2f7f4] dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors cursor-pointer"
           >
             <Save className="h-3.5 w-3.5" />
             <span>Save Design</span>
@@ -1009,7 +1009,7 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={handleSendToBulker}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-black text-xs font-bold text-white hover:bg-neutral-800 transition-all shadow-sm"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-black dark:bg-[#8fe617] text-xs font-bold text-white dark:text-[#062404] hover:bg-neutral-800 dark:hover:bg-[#7ecc10] transition-all shadow-sm cursor-pointer"
           >
             <span>Next: Send to Bulker</span>
             <ArrowRight className="h-3.5 w-3.5 stroke-[2.5]" />
@@ -1022,14 +1022,14 @@ export default function CanvaDesignerPage() {
       {/* ────────────────────────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
         {/* SLIM LEFT CANVA ICON DOCK */}
-        <nav className="w-16 border-r border-neutral-200 bg-neutral-50 flex flex-col items-center py-3 gap-1 shrink-0 z-20">
+        <nav className="w-16 border-r border-neutral-200 dark:border-[#223126] bg-neutral-50 dark:bg-[#0c110e] flex flex-col items-center py-3 gap-1 shrink-0 z-20">
           <button
             type="button"
             onClick={() => setActiveTab("uploads")}
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors ${
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors cursor-pointer ${
               activeTab === "uploads"
-                ? "bg-black text-white font-bold shadow-xs"
-                : "text-neutral-600 hover:bg-neutral-200 hover:text-black"
+                ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold shadow-xs"
+                : "text-neutral-600 dark:text-[#8a9e93] hover:bg-neutral-200 dark:hover:bg-[#161e19] hover:text-black dark:hover:text-[#f2f7f4]"
             }`}
           >
             <Upload className="h-4 w-4 mb-0.5" />
@@ -1039,10 +1039,10 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={() => setActiveTab("layouts")}
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors ${
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors cursor-pointer ${
               activeTab === "layouts"
-                ? "bg-black text-white font-bold shadow-xs"
-                : "text-neutral-600 hover:bg-neutral-200 hover:text-black"
+                ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold shadow-xs"
+                : "text-neutral-600 dark:text-[#8a9e93] hover:bg-neutral-200 dark:hover:bg-[#161e19] hover:text-black dark:hover:text-[#f2f7f4]"
             }`}
           >
             <LayoutGrid className="h-4 w-4 mb-0.5" />
@@ -1052,10 +1052,10 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={() => setActiveTab("text")}
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors ${
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors cursor-pointer ${
               activeTab === "text"
-                ? "bg-black text-white font-bold shadow-xs"
-                : "text-neutral-600 hover:bg-neutral-200 hover:text-black"
+                ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold shadow-xs"
+                : "text-neutral-600 dark:text-[#8a9e93] hover:bg-neutral-200 dark:hover:bg-[#161e19] hover:text-black dark:hover:text-[#f2f7f4]"
             }`}
           >
             <Type className="h-4 w-4 mb-0.5" />
@@ -1065,10 +1065,10 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={() => setActiveTab("photo")}
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors ${
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors cursor-pointer ${
               activeTab === "photo"
-                ? "bg-black text-white font-bold shadow-xs"
-                : "text-neutral-600 hover:bg-neutral-200 hover:text-black"
+                ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold shadow-xs"
+                : "text-neutral-600 dark:text-[#8a9e93] hover:bg-neutral-200 dark:hover:bg-[#161e19] hover:text-black dark:hover:text-[#f2f7f4]"
             }`}
           >
             <Camera className="h-4 w-4 mb-0.5" />
@@ -1078,10 +1078,10 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={() => setActiveTab("qr")}
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors ${
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors cursor-pointer ${
               activeTab === "qr"
-                ? "bg-black text-white font-bold shadow-xs"
-                : "text-neutral-600 hover:bg-neutral-200 hover:text-black"
+                ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold shadow-xs"
+                : "text-neutral-600 dark:text-[#8a9e93] hover:bg-neutral-200 dark:hover:bg-[#161e19] hover:text-black dark:hover:text-[#f2f7f4]"
             }`}
           >
             <QrCode className="h-4 w-4 mb-0.5" />
@@ -1091,10 +1091,10 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={() => setActiveTab("elements")}
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors ${
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors cursor-pointer ${
               activeTab === "elements"
-                ? "bg-black text-white font-bold shadow-xs"
-                : "text-neutral-600 hover:bg-neutral-200 hover:text-black"
+                ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold shadow-xs"
+                : "text-neutral-600 dark:text-[#8a9e93] hover:bg-neutral-200 dark:hover:bg-[#161e19] hover:text-black dark:hover:text-[#f2f7f4]"
             }`}
           >
             <Square className="h-4 w-4 mb-0.5" />
@@ -1104,10 +1104,10 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={() => setActiveTab("mirror")}
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors ${
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors cursor-pointer ${
               activeTab === "mirror"
-                ? "bg-black text-white font-bold shadow-xs"
-                : "text-neutral-600 hover:bg-neutral-200 hover:text-black"
+                ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold shadow-xs"
+                : "text-neutral-600 dark:text-[#8a9e93] hover:bg-neutral-200 dark:hover:bg-[#161e19] hover:text-black dark:hover:text-[#f2f7f4]"
             }`}
           >
             <FlipHorizontal className="h-4 w-4 mb-0.5" />
@@ -1117,10 +1117,10 @@ export default function CanvaDesignerPage() {
           <button
             type="button"
             onClick={() => setActiveTab("layers")}
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors ${
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg text-[10px] transition-colors cursor-pointer ${
               activeTab === "layers"
-                ? "bg-black text-white font-bold shadow-xs"
-                : "text-neutral-600 hover:bg-neutral-200 hover:text-black"
+                ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold shadow-xs"
+                : "text-neutral-600 dark:text-[#8a9e93] hover:bg-neutral-200 dark:hover:bg-[#161e19] hover:text-black dark:hover:text-[#f2f7f4]"
             }`}
           >
             <Layers className="h-4 w-4 mb-0.5" />
@@ -1129,27 +1129,27 @@ export default function CanvaDesignerPage() {
         </nav>
 
         {/* CANVA SECONDARY DRAWER */}
-        <aside className="w-72 border-r border-neutral-200 bg-white p-4 flex flex-col gap-4 overflow-y-auto shrink-0 shadow-xs">
+        <aside className="w-72 border-r border-neutral-200 dark:border-[#223126] bg-white dark:bg-[#111613] p-4 flex flex-col gap-4 overflow-y-auto shrink-0 shadow-xs text-[#080808] dark:text-[#f2f7f4]">
           {/* UPLOADS TAB */}
           {activeTab === "uploads" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xs font-bold tracking-wider uppercase text-black font-mono">
+                <h3 className="text-xs font-bold tracking-wider uppercase text-black dark:text-[#f2f7f4] font-mono">
                   Import Canva Template
                 </h3>
-                <p className="text-[11px] text-neutral-600 mt-1">
+                <p className="text-[11px] text-neutral-600 dark:text-[#8a9e93] mt-1">
                   Drop your exported Canva design (PNG, JPG, SVG) to wrap this card.
                 </p>
               </div>
 
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-neutral-300 hover:border-black bg-neutral-50 hover:bg-neutral-100 rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group"
+                className="border-2 border-dashed border-neutral-300 dark:border-[#223126] hover:border-black dark:hover:border-[#8fe617] bg-neutral-50 dark:bg-[#161d19] hover:bg-neutral-100 dark:hover:bg-[#1f2a22] rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group"
               >
                 <div className="h-10 w-10 rounded-full bg-black text-white flex items-center justify-center shadow-xs">
                   <Upload className="h-5 w-5" />
                 </div>
-                <div className="text-xs font-bold text-black">Click to Drop Canva File</div>
+                <div className="text-xs font-bold text-black dark:text-[#f2f7f4]">Click to Drop Canva File</div>
                 <div className="text-[10px] text-neutral-500 font-mono">PNG, JPG, SVG</div>
               </div>
               <input
@@ -1161,8 +1161,8 @@ export default function CanvaDesignerPage() {
               />
 
               {currentBg.url && (
-                <div className="border border-neutral-200 rounded-lg p-3 space-y-2 bg-neutral-50">
-                  <div className="text-[11px] font-mono text-neutral-700 flex items-center justify-between">
+                <div className="border border-neutral-200 dark:border-[#223126] rounded-lg p-3 space-y-2 bg-neutral-50 dark:bg-[#161d19]">
+                  <div className="text-[11px] font-mono text-neutral-700 dark:text-[#8a9e93] flex items-center justify-between">
                     <span>Active Background ({activeSide}):</span>
                     <button
                       type="button"
@@ -1170,12 +1170,12 @@ export default function CanvaDesignerPage() {
                         if (activeSide === "FRONT") setFrontBg({ color: "#ffffff", url: null });
                         else setBackBg({ color: "#ffffff", url: null });
                       }}
-                      className="text-neutral-500 hover:text-black text-[10px]"
+                      className="text-neutral-500 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4] text-[10px] cursor-pointer"
                     >
                       Remove
                     </button>
                   </div>
-                  <div className="h-24 rounded border border-neutral-300 overflow-hidden bg-white flex items-center justify-center">
+                  <div className="h-24 rounded border border-neutral-300 dark:border-[#223126] overflow-hidden bg-white dark:bg-[#111613] flex items-center justify-center">
                     <img src={currentBg.url} alt="" className="h-full w-full object-contain" />
                   </div>
                 </div>
@@ -1187,10 +1187,10 @@ export default function CanvaDesignerPage() {
           {activeTab === "layouts" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xs font-bold tracking-wider uppercase text-black font-mono">
+                <h3 className="text-xs font-bold tracking-wider uppercase text-black dark:text-[#f2f7f4] font-mono">
                   Card Layouts & Sides
                 </h3>
-                <p className="text-[11px] text-neutral-600 mt-1">
+                <p className="text-[11px] text-neutral-600 dark:text-[#8a9e93] mt-1">
                   Managing Front and Back sides independently.
                 </p>
               </div>
@@ -1199,10 +1199,10 @@ export default function CanvaDesignerPage() {
               <button
                 type="button"
                 onClick={handleCopyFrontToBack}
-                className="w-full text-left p-3 rounded-lg border border-neutral-300 hover:border-black bg-neutral-50 hover:bg-white transition-all space-y-1"
+                className="w-full text-left p-3 rounded-lg border border-neutral-300 dark:border-[#223126] hover:border-black dark:hover:border-[#8fe617] bg-neutral-50 dark:bg-[#161d19] hover:bg-white dark:hover:bg-[#1f2a22] transition-all space-y-1 cursor-pointer"
               >
-                <div className="text-xs font-bold text-black">Copy Front to Back</div>
-                <p className="text-[11px] text-neutral-500">
+                <div className="text-xs font-bold text-black dark:text-[#f2f7f4]">Copy Front to Back</div>
+                <p className="text-[11px] text-neutral-500 dark:text-[#8a9e93]">
                   Duplicate layout structure from Front side onto Back side.
                 </p>
               </button>
@@ -1211,10 +1211,10 @@ export default function CanvaDesignerPage() {
               <button
                 type="button"
                 onClick={handleClearAllExamples}
-                className="w-full text-left p-3 rounded-lg border border-neutral-300 hover:border-black bg-neutral-50 hover:bg-white transition-all space-y-1"
+                className="w-full text-left p-3 rounded-lg border border-neutral-300 dark:border-[#223126] hover:border-black dark:hover:border-[#8fe617] bg-neutral-50 dark:bg-[#161d19] hover:bg-white dark:hover:bg-[#1f2a22] transition-all space-y-1 cursor-pointer"
               >
-                <div className="text-xs font-bold text-black">Start Blank Canvas</div>
-                <p className="text-[11px] text-neutral-500">
+                <div className="text-xs font-bold text-black dark:text-[#f2f7f4]">Start Blank Canvas</div>
+                <p className="text-[11px] text-neutral-500 dark:text-[#8a9e93]">
                   Clear all layers on {activeSide} and add your own artwork.
                 </p>
               </button>
@@ -1225,7 +1225,7 @@ export default function CanvaDesignerPage() {
           {activeTab === "text" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xs font-bold tracking-wider uppercase text-black font-mono">
+                <h3 className="text-xs font-bold tracking-wider uppercase text-black dark:text-[#f2f7f4] font-mono">
                   Add Text & Student Tokens
                 </h3>
               </div>
@@ -1241,9 +1241,9 @@ export default function CanvaDesignerPage() {
                       fontWeight: "bold",
                     })
                   }
-                  className="w-full p-2.5 rounded-lg border border-neutral-300 bg-neutral-50 text-left hover:bg-white hover:border-black transition-colors"
+                  className="w-full p-2.5 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] text-left hover:bg-white dark:hover:bg-[#1f2a22] hover:border-black dark:hover:border-[#8fe617] transition-colors cursor-pointer"
                 >
-                  <span className="text-sm font-bold text-black">Add a Heading</span>
+                  <span className="text-sm font-bold text-black dark:text-[#f2f7f4]">Add a Heading</span>
                 </button>
 
                 <button
@@ -1257,9 +1257,9 @@ export default function CanvaDesignerPage() {
                       color: "#444444",
                     })
                   }
-                  className="w-full p-2.5 rounded-lg border border-neutral-300 bg-neutral-50 text-left hover:bg-white hover:border-black transition-colors"
+                  className="w-full p-2.5 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] text-left hover:bg-white dark:hover:bg-[#1f2a22] hover:border-black dark:hover:border-[#8fe617] transition-colors cursor-pointer"
                 >
-                  <span className="text-xs font-semibold text-neutral-800">Add a Subheading</span>
+                  <span className="text-xs font-semibold text-neutral-800 dark:text-[#f2f7f4]">Add a Subheading</span>
                 </button>
 
                 <button
@@ -1272,15 +1272,15 @@ export default function CanvaDesignerPage() {
                       color: "#666666",
                     })
                   }
-                  className="w-full p-2.5 rounded-lg border border-neutral-300 bg-neutral-50 text-left hover:bg-white hover:border-black transition-colors"
+                  className="w-full p-2.5 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] text-left hover:bg-white dark:hover:bg-[#1f2a22] hover:border-black dark:hover:border-[#8fe617] transition-colors cursor-pointer"
                 >
-                  <span className="text-[11px] text-neutral-700">Add Body Text</span>
+                  <span className="text-[11px] text-neutral-700 dark:text-[#8a9e93]">Add Body Text</span>
                 </button>
               </div>
 
               {/* Dynamic Tokens */}
-              <div className="pt-3 border-t border-neutral-200 space-y-2">
-                <div className="text-xs font-mono font-bold text-black uppercase">
+              <div className="pt-3 border-t border-neutral-200 dark:border-[#223126] space-y-2">
+                <div className="text-xs font-mono font-bold text-black dark:text-[#f2f7f4] uppercase">
                   Dynamic Student Tokens
                 </div>
                 {[
@@ -1301,10 +1301,10 @@ export default function CanvaDesignerPage() {
                         fontWeight: "bold",
                       })
                     }
-                    className="w-full flex items-center justify-between p-2 rounded border border-neutral-300 bg-neutral-50 text-xs hover:border-black hover:bg-white text-black transition-colors font-mono"
+                    className="w-full flex items-center justify-between p-2 rounded border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] text-xs hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] text-black dark:text-[#f2f7f4] transition-colors font-mono cursor-pointer"
                   >
                     <span>{t.label}</span>
-                    <span className="text-[10px] text-neutral-500 font-bold">+ Insert</span>
+                    <span className="text-[10px] text-neutral-500 dark:text-[#8a9e93] font-bold">+ Insert</span>
                   </button>
                 ))}
               </div>
@@ -1315,7 +1315,7 @@ export default function CanvaDesignerPage() {
           {activeTab === "photo" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xs font-bold tracking-wider uppercase text-black font-mono">
+                <h3 className="text-xs font-bold tracking-wider uppercase text-black dark:text-[#f2f7f4] font-mono">
                   Student Photo Frame
                 </h3>
               </div>
@@ -1324,7 +1324,7 @@ export default function CanvaDesignerPage() {
               <button
                 type="button"
                 onClick={() => setIsWebcamModalOpen(true)}
-                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-black bg-black text-white hover:bg-neutral-800 text-xs font-mono font-bold transition-all shadow-sm"
+                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-black dark:border-[#8fe617] bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] hover:bg-neutral-800 dark:hover:bg-[#7ecc10] text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
               >
                 <Camera className="h-4 w-4" />
                 <span>Shoot Webcam Portrait</span>
@@ -1344,13 +1344,13 @@ export default function CanvaDesignerPage() {
                     borderRadius: 4,
                   })
                 }
-                className="w-full flex flex-col items-center justify-center p-5 rounded-xl border border-neutral-300 bg-neutral-50 hover:border-black hover:bg-white text-center transition-all group"
+                className="w-full flex flex-col items-center justify-center p-5 rounded-xl border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] text-center transition-all group cursor-pointer"
               >
-                <Camera className="h-7 w-7 text-black mb-1.5" />
-                <span className="text-xs font-bold text-black font-mono">
+                <Camera className="h-7 w-7 text-black dark:text-[#8fe617] mb-1.5" />
+                <span className="text-xs font-bold text-black dark:text-[#f2f7f4] font-mono">
                   + Add 3:4 ID Photo Frame
                 </span>
-                <span className="text-[10px] text-neutral-500 mt-0.5">
+                <span className="text-[10px] text-neutral-500 dark:text-[#8a9e93] mt-0.5">
                   Dynamic passport spec placeholder
                 </span>
               </button>
@@ -1361,7 +1361,7 @@ export default function CanvaDesignerPage() {
           {activeTab === "qr" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xs font-bold tracking-wider uppercase text-black font-mono">
+                <h3 className="text-xs font-bold tracking-wider uppercase text-black dark:text-[#f2f7f4] font-mono">
                   External QR Frame
                 </h3>
               </div>
@@ -1380,13 +1380,13 @@ export default function CanvaDesignerPage() {
                     borderRadius: 4,
                   })
                 }
-                className="w-full flex flex-col items-center justify-center p-6 rounded-xl border border-neutral-300 bg-neutral-50 hover:border-black hover:bg-white text-center transition-all group"
+                className="w-full flex flex-col items-center justify-center p-6 rounded-xl border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] text-center transition-all group cursor-pointer"
               >
-                <QrCode className="h-8 w-8 text-black mb-2" />
-                <span className="text-xs font-bold text-black font-mono">
+                <QrCode className="h-8 w-8 text-black dark:text-[#8fe617] mb-2" />
+                <span className="text-xs font-bold text-black dark:text-[#f2f7f4] font-mono">
                   + Add External QR Frame
                 </span>
-                <span className="text-[10px] text-neutral-500 mt-0.5">
+                <span className="text-[10px] text-neutral-500 dark:text-[#8a9e93] mt-0.5">
                   Links to imported barcode images
                 </span>
               </button>
@@ -1397,7 +1397,7 @@ export default function CanvaDesignerPage() {
           {activeTab === "elements" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xs font-bold tracking-wider uppercase text-black font-mono">
+                <h3 className="text-xs font-bold tracking-wider uppercase text-black dark:text-[#f2f7f4] font-mono">
                   Shapes & Panels
                 </h3>
               </div>
@@ -1416,10 +1416,10 @@ export default function CanvaDesignerPage() {
                       borderRadius: 4,
                     })
                   }
-                  className="flex flex-col items-center p-3 rounded-lg border border-neutral-300 bg-neutral-50 hover:border-black hover:bg-white transition-colors"
+                  className="flex flex-col items-center p-3 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] transition-colors cursor-pointer"
                 >
-                  <Square className="h-5 w-5 mb-1 text-black" />
-                  <span className="text-[11px] text-black">Rectangle</span>
+                  <Square className="h-5 w-5 mb-1 text-black dark:text-[#8fe617]" />
+                  <span className="text-[11px] text-black dark:text-[#f2f7f4]">Rectangle</span>
                 </button>
 
                 <button
@@ -1437,10 +1437,10 @@ export default function CanvaDesignerPage() {
                       borderRadius: 0,
                     })
                   }
-                  className="flex flex-col items-center p-3 rounded-lg border border-neutral-300 bg-neutral-50 hover:border-black hover:bg-white transition-colors"
+                  className="flex flex-col items-center p-3 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] transition-colors cursor-pointer"
                 >
-                  <div className="h-5 w-8 bg-black rounded-xs mb-1" />
-                  <span className="text-[11px] text-black">Header Bar</span>
+                  <div className="h-5 w-8 bg-black dark:bg-[#8fe617] rounded-xs mb-1" />
+                  <span className="text-[11px] text-black dark:text-[#f2f7f4]">Header Bar</span>
                 </button>
 
                 <button
@@ -1456,10 +1456,10 @@ export default function CanvaDesignerPage() {
                       borderRadius: 50,
                     })
                   }
-                  className="flex flex-col items-center p-3 rounded-lg border border-neutral-300 bg-neutral-50 hover:border-black hover:bg-white transition-colors"
+                  className="flex flex-col items-center p-3 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] transition-colors cursor-pointer"
                 >
-                  <Circle className="h-5 w-5 mb-1 text-black" />
-                  <span className="text-[11px] text-black">Circle Badge</span>
+                  <Circle className="h-5 w-5 mb-1 text-black dark:text-[#8fe617]" />
+                  <span className="text-[11px] text-black dark:text-[#f2f7f4]">Circle Badge</span>
                 </button>
 
                 <button
@@ -1473,10 +1473,10 @@ export default function CanvaDesignerPage() {
                       borderColor: "transparent",
                     })
                   }
-                  className="flex flex-col items-center p-3 rounded-lg border border-neutral-300 bg-neutral-50 hover:border-black hover:bg-white transition-colors"
+                  className="flex flex-col items-center p-3 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] transition-colors cursor-pointer"
                 >
-                  <div className="h-0.5 w-8 bg-black my-2.5" />
-                  <span className="text-[11px] text-black">Divider Line</span>
+                  <div className="h-0.5 w-8 bg-black dark:bg-[#8fe617] my-2.5" />
+                  <span className="text-[11px] text-black dark:text-[#f2f7f4]">Divider Line</span>
                 </button>
               </div>
             </div>
@@ -1486,10 +1486,10 @@ export default function CanvaDesignerPage() {
           {activeTab === "mirror" && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xs font-bold tracking-wider uppercase text-black font-mono">
+                <h3 className="text-xs font-bold tracking-wider uppercase text-black dark:text-[#f2f7f4] font-mono">
                   Mirror & Reverse Print
                 </h3>
-                <p className="text-[11px] text-neutral-600 mt-1">
+                <p className="text-[11px] text-neutral-600 dark:text-[#8a9e93] mt-1">
                   Mirror your card design for reverse-image transfer, transparent PVC, or back printing.
                 </p>
               </div>
@@ -1498,35 +1498,35 @@ export default function CanvaDesignerPage() {
                 <button
                   type="button"
                   onClick={handleMirrorDesign}
-                  className="w-full flex items-center justify-between p-3 rounded-lg border border-neutral-300 bg-neutral-50 hover:border-black hover:bg-white transition-all text-xs font-bold text-black"
+                  className="w-full flex items-center justify-between p-3 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] transition-all text-xs font-bold text-black dark:text-[#f2f7f4] cursor-pointer"
                 >
                   <div className="flex items-center gap-2">
-                    <FlipHorizontal className="h-4 w-4" />
+                    <FlipHorizontal className="h-4 w-4 text-black dark:text-[#8fe617]" />
                     <span>Flip Horizontal (X-Axis)</span>
                   </div>
-                  <span className="text-[10px] font-mono text-neutral-500">Mirror</span>
+                  <span className="text-[10px] font-mono text-neutral-500 dark:text-[#8a9e93]">Mirror</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleFlipVertical}
-                  className="w-full flex items-center justify-between p-3 rounded-lg border border-neutral-300 bg-neutral-50 hover:border-black hover:bg-white transition-all text-xs font-bold text-black"
+                  className="w-full flex items-center justify-between p-3 rounded-lg border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#161d19] hover:border-black dark:hover:border-[#8fe617] hover:bg-white dark:hover:bg-[#1f2a22] transition-all text-xs font-bold text-black dark:text-[#f2f7f4] cursor-pointer"
                 >
                   <div className="flex items-center gap-2">
-                    <FlipVertical className="h-4 w-4" />
+                    <FlipVertical className="h-4 w-4 text-black dark:text-[#8fe617]" />
                     <span>Flip Vertical (Y-Axis)</span>
                   </div>
-                  <span className="text-[10px] font-mono text-neutral-500">Invert</span>
+                  <span className="text-[10px] font-mono text-neutral-500 dark:text-[#8a9e93]">Invert</span>
                 </button>
 
-                <div className="pt-2 border-t border-neutral-200">
+                <div className="pt-2 border-t border-neutral-200 dark:border-[#223126]">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono text-neutral-700">Live Mirror Preview:</span>
+                    <span className="font-mono text-neutral-700 dark:text-[#8a9e93]">Live Mirror Preview:</span>
                     <input
                       type="checkbox"
                       checked={isMirrored}
                       onChange={(e) => setIsMirrored(e.target.checked)}
-                      className="accent-black h-4 w-4 rounded"
+                      className="accent-black dark:accent-[#8fe617] h-4 w-4 rounded cursor-pointer"
                     />
                   </div>
                 </div>
@@ -1537,7 +1537,7 @@ export default function CanvaDesignerPage() {
           {/* LAYERS TAB */}
           {activeTab === "layers" && (
             <div className="space-y-4">
-              <h3 className="text-xs font-bold tracking-wider uppercase text-black font-mono">
+              <h3 className="text-xs font-bold tracking-wider uppercase text-black dark:text-[#f2f7f4] font-mono">
                 {activeSide} Layers ({currentElements.length})
               </h3>
 
@@ -1551,8 +1551,8 @@ export default function CanvaDesignerPage() {
                       onClick={() => setSelectedElementId(elem.id)}
                       className={`flex items-center justify-between p-2 rounded border text-xs cursor-pointer transition-colors ${
                         selectedElementId === elem.id
-                          ? "border-black bg-neutral-100 text-black font-semibold"
-                          : "border-neutral-200 bg-white text-neutral-700 hover:text-black"
+                          ? "border-black dark:border-[#8fe617] bg-neutral-100 dark:bg-[#1f2a22] text-black dark:text-[#f2f7f4] font-semibold"
+                          : "border-neutral-200 dark:border-[#223126] bg-white dark:bg-[#161d19] text-neutral-700 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
                       }`}
                     >
                       <div className="truncate pr-2">{elem.name}</div>
@@ -1560,7 +1560,7 @@ export default function CanvaDesignerPage() {
                         <button
                           type="button"
                           onClick={() => handleLayerOrder(elem.id, "up")}
-                          className="p-1 hover:text-black"
+                          className="p-1 text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#8fe617]"
                           title="Move Up"
                         >
                           <MoveUp className="h-3 w-3" />
@@ -1568,7 +1568,7 @@ export default function CanvaDesignerPage() {
                         <button
                           type="button"
                           onClick={() => handleLayerOrder(elem.id, "down")}
-                          className="p-1 hover:text-black"
+                          className="p-1 text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#8fe617]"
                           title="Move Down"
                         >
                           <MoveDown className="h-3 w-3" />
@@ -1576,7 +1576,7 @@ export default function CanvaDesignerPage() {
                         <button
                           type="button"
                           onClick={() => handleDeleteElement(elem.id)}
-                          className="p-1 hover:text-red-600"
+                          className="p-1 text-neutral-600 dark:text-[#8a9e93] hover:text-red-600"
                           title="Delete"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -1593,7 +1593,7 @@ export default function CanvaDesignerPage() {
         {/* CENTER INTERACTIVE WORKSPACE CANVAS (90% WHITE)                            */}
         {/* ────────────────────────────────────────────────────────────────────────── */}
         <main
-          className="flex-1 bg-neutral-100 relative overflow-auto flex flex-col items-center justify-center p-4 sm:p-8 transition-colors"
+          className="flex-1 bg-neutral-100 dark:bg-[#070908] relative overflow-auto flex flex-col items-center justify-center p-4 sm:p-8 transition-colors"
           onMouseMove={handleCanvasMouseMove}
           onMouseUp={handleCanvasMouseUp}
           onTouchMove={(e) => {
@@ -1614,10 +1614,10 @@ export default function CanvaDesignerPage() {
           {/* FLOATING CONTEXTUAL TOOLBAR FOR SELECTED ELEMENT */}
           {selectedElement && (
             <div
-              className="absolute top-4 z-20 flex items-center gap-2 bg-white border border-neutral-300 rounded-xl px-3 py-2 shadow-lg text-xs max-w-[95vw] overflow-x-auto"
+              className="absolute top-4 z-20 flex items-center gap-2 bg-white dark:bg-[#111613] border border-neutral-300 dark:border-[#223126] rounded-xl px-3 py-2 shadow-lg text-xs max-w-[95vw] overflow-x-auto text-[#080808] dark:text-[#f2f7f4]"
               onClick={(e) => e.stopPropagation()}
             >
-              <span className="font-mono text-[11px] font-bold text-black pr-2 border-r border-neutral-200">
+              <span className="font-mono text-[11px] font-bold text-black dark:text-[#f2f7f4] pr-2 border-r border-neutral-200 dark:border-[#223126]">
                 {selectedElement.name}
               </span>
 
@@ -1628,7 +1628,7 @@ export default function CanvaDesignerPage() {
                   <select
                     value={selectedElement.fontFamily || "Inter"}
                     onChange={(e) => updateSelected({ fontFamily: e.target.value })}
-                    className="rounded border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs text-black font-mono focus:outline-none"
+                    className="rounded border border-neutral-300 dark:border-[#223126] bg-neutral-50 dark:bg-[#070908] px-2 py-1 text-xs text-black dark:text-[#f2f7f4] font-mono focus:outline-none"
                   >
                     <option value="Inter">Inter</option>
                     <option value="Courier New">Courier New</option>
@@ -1638,7 +1638,7 @@ export default function CanvaDesignerPage() {
                   </select>
 
                   {/* Font Size */}
-                  <div className="flex items-center border border-neutral-300 rounded">
+                  <div className="flex items-center border border-neutral-300 dark:border-[#223126] rounded bg-neutral-50 dark:bg-[#070908]">
                     <button
                       type="button"
                       onClick={() =>
@@ -1646,11 +1646,11 @@ export default function CanvaDesignerPage() {
                           fontSize: Math.max(8, (selectedElement.fontSize || 12) - 1),
                         })
                       }
-                      className="px-1.5 py-0.5 text-neutral-600 hover:text-black font-bold"
+                      className="px-1.5 py-0.5 text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4] font-bold cursor-pointer"
                     >
                       -
                     </button>
-                    <span className="font-mono text-[11px] px-1 font-bold text-black">
+                    <span className="font-mono text-[11px] px-1 font-bold text-black dark:text-[#f2f7f4]">
                       {selectedElement.fontSize || 12}
                     </span>
                     <button
@@ -1660,7 +1660,7 @@ export default function CanvaDesignerPage() {
                           fontSize: Math.min(48, (selectedElement.fontSize || 12) + 1),
                         })
                       }
-                      className="px-1.5 py-0.5 text-neutral-600 hover:text-black font-bold"
+                      className="px-1.5 py-0.5 text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4] font-bold cursor-pointer"
                     >
                       +
                     </button>
@@ -1675,24 +1675,24 @@ export default function CanvaDesignerPage() {
                           selectedElement.fontWeight === "bold" ? "normal" : "bold",
                       })
                     }
-                    className={`p-1.5 rounded border transition-colors ${
+                    className={`p-1.5 rounded border transition-colors cursor-pointer ${
                       selectedElement.fontWeight === "bold"
-                        ? "border-black bg-black text-white font-bold"
-                        : "border-neutral-300 text-neutral-600 hover:text-black"
+                        ? "border-black dark:border-[#8fe617] bg-black dark:bg-[#8fe617] text-white dark:text-[#062404] font-bold"
+                        : "border-neutral-300 dark:border-[#223126] text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
                     }`}
                   >
                     <Bold className="h-3.5 w-3.5" />
                   </button>
 
                   {/* Align */}
-                  <div className="flex items-center border border-neutral-300 rounded">
+                  <div className="flex items-center border border-neutral-300 dark:border-[#223126] rounded">
                     <button
                       type="button"
                       onClick={() => updateSelected({ textAlign: "left" })}
-                      className={`p-1 ${
+                      className={`p-1 cursor-pointer ${
                         selectedElement.textAlign === "left"
-                          ? "bg-black text-white"
-                          : "text-neutral-600 hover:text-black"
+                          ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404]"
+                          : "text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
                       }`}
                     >
                       <AlignLeft className="h-3 w-3" />
@@ -1700,10 +1700,10 @@ export default function CanvaDesignerPage() {
                     <button
                       type="button"
                       onClick={() => updateSelected({ textAlign: "center" })}
-                      className={`p-1 ${
+                      className={`p-1 cursor-pointer ${
                         selectedElement.textAlign === "center"
-                          ? "bg-black text-white"
-                          : "text-neutral-600 hover:text-black"
+                          ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404]"
+                          : "text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
                       }`}
                     >
                       <AlignCenter className="h-3 w-3" />
@@ -1711,10 +1711,10 @@ export default function CanvaDesignerPage() {
                     <button
                       type="button"
                       onClick={() => updateSelected({ textAlign: "right" })}
-                      className={`p-1 ${
+                      className={`p-1 cursor-pointer ${
                         selectedElement.textAlign === "right"
-                          ? "bg-black text-white"
-                          : "text-neutral-600 hover:text-black"
+                          ? "bg-black dark:bg-[#8fe617] text-white dark:text-[#062404]"
+                          : "text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4]"
                       }`}
                     >
                       <AlignRight className="h-3 w-3" />
@@ -1724,11 +1724,11 @@ export default function CanvaDesignerPage() {
               )}
 
               {/* Align to Card Center/Middle */}
-              <div className="flex items-center gap-1 border-l border-neutral-200 pl-2">
+              <div className="flex items-center gap-1 border-l border-neutral-200 dark:border-[#223126] pl-2">
                 <button
                   type="button"
                   onClick={() => handleAlign("center")}
-                  className="px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border border-neutral-200 hover:bg-neutral-100 text-neutral-700"
+                  className="px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border border-neutral-200 dark:border-[#223126] hover:bg-neutral-100 dark:hover:bg-[#1f2a22] text-neutral-700 dark:text-[#f2f7f4] cursor-pointer"
                   title="Center Horizontally on Card"
                 >
                   H-Center
@@ -1736,7 +1736,7 @@ export default function CanvaDesignerPage() {
                 <button
                   type="button"
                   onClick={() => handleAlign("middle")}
-                  className="px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border border-neutral-200 hover:bg-neutral-100 text-neutral-700"
+                  className="px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border border-neutral-200 dark:border-[#223126] hover:bg-neutral-100 dark:hover:bg-[#1f2a22] text-neutral-700 dark:text-[#f2f7f4] cursor-pointer"
                   title="Center Vertically on Card"
                 >
                   V-Center
@@ -1744,8 +1744,8 @@ export default function CanvaDesignerPage() {
               </div>
 
               {/* Opacity Slider */}
-              <div className="flex items-center gap-1 border-l border-neutral-200 pl-2">
-                <span className="text-[10px] font-mono text-neutral-500">Opacity:</span>
+              <div className="flex items-center gap-1 border-l border-neutral-200 dark:border-[#223126] pl-2">
+                <span className="text-[10px] font-mono text-neutral-500 dark:text-[#8a9e93]">Opacity:</span>
                 <input
                   type="range"
                   min="0.1"
@@ -1753,7 +1753,7 @@ export default function CanvaDesignerPage() {
                   step="0.05"
                   value={selectedElement.opacity ?? 1}
                   onChange={(e) => updateSelected({ opacity: parseFloat(e.target.value) })}
-                  className="w-16 accent-black cursor-pointer"
+                  className="w-16 accent-black dark:accent-[#8fe617] cursor-pointer"
                 />
               </div>
 
@@ -1761,7 +1761,7 @@ export default function CanvaDesignerPage() {
               <button
                 type="button"
                 onClick={() => updateSelected({ rotation: ((selectedElement.rotation || 0) + 90) % 360 })}
-                className="p-1 rounded text-neutral-700 hover:text-black flex items-center gap-1 text-[10px] font-mono border-l border-neutral-200 pl-2"
+                className="p-1 rounded text-neutral-700 dark:text-[#f2f7f4] hover:text-black dark:hover:text-[#8fe617] flex items-center gap-1 text-[10px] font-mono border-l border-neutral-200 dark:border-[#223126] pl-2 cursor-pointer"
                 title="Rotate 90°"
               >
                 <RotateCw className="h-3 w-3" />
@@ -1772,11 +1772,11 @@ export default function CanvaDesignerPage() {
               <button
                 type="button"
                 onClick={() => handleToggleLock(selectedElement.id)}
-                className="p-1.5 rounded text-neutral-600 hover:text-black"
+                className="p-1.5 rounded text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4] cursor-pointer"
                 title={selectedElement.isLocked ? "Unlock element" : "Lock element"}
               >
                 {selectedElement.isLocked ? (
-                  <Lock className="h-3.5 w-3.5 text-black" />
+                  <Lock className="h-3.5 w-3.5 text-black dark:text-[#8fe617]" />
                 ) : (
                   <Unlock className="h-3.5 w-3.5" />
                 )}
@@ -1786,7 +1786,7 @@ export default function CanvaDesignerPage() {
               <button
                 type="button"
                 onClick={() => handleDuplicateElement(selectedElement.id)}
-                className="p-1.5 rounded text-neutral-600 hover:text-black"
+                className="p-1.5 rounded text-neutral-600 dark:text-[#8a9e93] hover:text-black dark:hover:text-[#f2f7f4] cursor-pointer"
                 title="Duplicate (Ctrl+D)"
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -1796,7 +1796,7 @@ export default function CanvaDesignerPage() {
               <button
                 type="button"
                 onClick={() => handleDeleteElement(selectedElement.id)}
-                className="p-1.5 rounded text-neutral-600 hover:text-red-600"
+                className="p-1.5 rounded text-neutral-600 dark:text-[#8a9e93] hover:text-red-600 cursor-pointer"
                 title="Delete"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -1942,8 +1942,8 @@ export default function CanvaDesignerPage() {
 
           {/* Student Live Preview Switcher */}
           {sampleStudents.length > 0 && (
-            <div className="mt-6 flex items-center gap-3 bg-white border border-neutral-300 rounded-xl px-4 py-2 text-xs font-mono text-neutral-600 shadow-sm">
-              <span className="text-black font-bold">DATA PREVIEW:</span>
+            <div className="mt-6 flex items-center gap-3 bg-white dark:bg-[#111613] border border-neutral-300 dark:border-[#223126] rounded-xl px-4 py-2 text-xs font-mono text-neutral-600 dark:text-[#8a9e93] shadow-sm">
+              <span className="text-black dark:text-[#f2f7f4] font-bold">DATA PREVIEW:</span>
               <button
                 type="button"
                 onClick={() =>
@@ -1975,7 +1975,7 @@ export default function CanvaDesignerPage() {
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-[100] w-52 rounded-xl border-2 border-black bg-white shadow-2xl py-1.5 text-xs text-black animate-in fade-in zoom-in-95 duration-100 font-mono select-none"
+          className="fixed z-[100] w-52 rounded-xl border-2 border-black dark:border-[#8fe617] bg-white dark:bg-[#111613] shadow-2xl py-1.5 text-xs text-black dark:text-[#f2f7f4] animate-in fade-in zoom-in-95 duration-100 font-mono select-none"
           style={{
             top: `${contextMenu.y}px`,
             left: `${contextMenu.x}px`,
@@ -1984,7 +1984,7 @@ export default function CanvaDesignerPage() {
         >
           {contextMenu.elementId ? (
             <>
-              <div className="px-3 py-1 text-[10px] text-neutral-400 uppercase tracking-wider border-b border-neutral-100 font-bold">
+              <div className="px-3 py-1 text-[10px] text-neutral-400 dark:text-[#8a9e93] uppercase tracking-wider border-b border-neutral-100 dark:border-[#223126] font-bold">
                 Element Actions
               </div>
               <button
@@ -1993,12 +1993,12 @@ export default function CanvaDesignerPage() {
                   handleDuplicateElement(contextMenu.elementId!);
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
                 <span className="flex items-center gap-2">
-                  <Copy className="h-3.5 w-3.5" /> Duplicate
+                  <Copy className="h-3.5 w-3.5 text-[#8fe617]" /> Duplicate
                 </span>
-                <span className="text-[10px] text-neutral-400">Ctrl+D</span>
+                <span className="text-[10px] text-neutral-400 dark:text-[#8a9e93]">Ctrl+D</span>
               </button>
               <button
                 type="button"
@@ -2006,7 +2006,7 @@ export default function CanvaDesignerPage() {
                   handleBringToFront(contextMenu.elementId!);
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
                 <MoveUp className="h-3.5 w-3.5" /> Bring to Front
               </button>
@@ -2016,7 +2016,7 @@ export default function CanvaDesignerPage() {
                   handleSendToBack(contextMenu.elementId!);
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
                 <MoveDown className="h-3.5 w-3.5" /> Send to Back
               </button>
@@ -2026,9 +2026,9 @@ export default function CanvaDesignerPage() {
                   handleMirrorSingleElement(contextMenu.elementId!);
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
-                <FlipHorizontal className="h-3.5 w-3.5" /> Mirror Horizontally
+                <FlipHorizontal className="h-3.5 w-3.5 text-[#8fe617]" /> Mirror Horizontally
               </button>
               <button
                 type="button"
@@ -2036,7 +2036,7 @@ export default function CanvaDesignerPage() {
                   handleAlign("center");
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
                 <span>Align H-Center</span>
               </button>
@@ -2046,7 +2046,7 @@ export default function CanvaDesignerPage() {
                   handleAlign("middle");
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
                 <span>Align V-Center</span>
               </button>
@@ -2056,7 +2056,7 @@ export default function CanvaDesignerPage() {
                   handleToggleLock(contextMenu.elementId!);
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
                 {currentElements.find((e) => e.id === contextMenu.elementId)?.isLocked ? (
                   <>
@@ -2064,18 +2064,18 @@ export default function CanvaDesignerPage() {
                   </>
                 ) : (
                   <>
-                    <Lock className="h-3.5 w-3.5" /> Lock Layer
+                    <Lock className="h-3.5 w-3.5 text-[#8fe617]" /> Lock Layer
                   </>
                 )}
               </button>
-              <div className="border-t border-neutral-100 my-1" />
+              <div className="border-t border-neutral-100 dark:border-[#223126] my-1" />
               <button
                 type="button"
                 onClick={() => {
                   handleDeleteElement(contextMenu.elementId!);
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-red-50 text-red-600 transition-colors text-left"
+                className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 transition-colors text-left cursor-pointer"
               >
                 <span className="flex items-center gap-2">
                   <Trash2 className="h-3.5 w-3.5" /> Delete
@@ -2085,7 +2085,7 @@ export default function CanvaDesignerPage() {
             </>
           ) : (
             <>
-              <div className="px-3 py-1 text-[10px] text-neutral-400 uppercase tracking-wider border-b border-neutral-100 font-bold">
+              <div className="px-3 py-1 text-[10px] text-neutral-400 dark:text-[#8a9e93] uppercase tracking-wider border-b border-neutral-100 dark:border-[#223126] font-bold">
                 Canvas Options
               </div>
               <button
@@ -2094,9 +2094,9 @@ export default function CanvaDesignerPage() {
                   setIsWebcamModalOpen(true);
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
-                <Camera className="h-3.5 w-3.5" /> Shoot Webcam Portrait
+                <Camera className="h-3.5 w-3.5 text-[#8fe617]" /> Shoot Webcam Portrait
               </button>
               <button
                 type="button"
@@ -2104,9 +2104,9 @@ export default function CanvaDesignerPage() {
                   handleMirrorDesign();
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
-                <FlipHorizontal className="h-3.5 w-3.5" /> Mirror Full Card
+                <FlipHorizontal className="h-3.5 w-3.5 text-[#8fe617]" /> Mirror Full Card
               </button>
               <button
                 type="button"
@@ -2114,9 +2114,9 @@ export default function CanvaDesignerPage() {
                   handleClearAllExamples();
                   setContextMenu(null);
                 }}
-                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 transition-colors text-left text-neutral-900"
+                className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-[#1f2a22] transition-colors text-left text-neutral-900 dark:text-[#f2f7f4] cursor-pointer"
               >
-                <Trash2 className="h-3.5 w-3.5" /> Clear All (Blank Canvas)
+                <Trash2 className="h-3.5 w-3.5 text-red-500" /> Clear All (Blank Canvas)
               </button>
             </>
           )}

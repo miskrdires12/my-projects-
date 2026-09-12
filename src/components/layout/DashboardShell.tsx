@@ -81,11 +81,11 @@ export default function DashboardShell({ session, children }: DashboardShellProp
         {/* Brand Header with Silicon Labs Logo */}
         <div className="flex h-16 items-center justify-between border-b border-[#dce7e1] dark:border-[#223126] px-5 bg-white dark:bg-[#111613]">
           <Link href={isSender ? "/register" : "/dashboard"} onClick={closeMenu} className="flex items-center gap-3 group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126] p-1 shadow-xs group-hover:border-[#8fe617] transition-all">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f7faf9] dark:bg-[#070908] border-2 border-[#dce7e1] dark:border-[#223126] p-1.5 shadow-xs group-hover:border-[#8fe617] group-hover:shadow-[0_0_15px_rgba(143,230,23,0.35)] transition-all overflow-hidden shrink-0">
               <img
                 src="/logo.png"
                 alt="Silicon Labs Logo"
-                className="h-full w-full object-contain"
+                className="h-full w-full object-cover rounded-full"
               />
             </div>
             <div>
@@ -354,6 +354,25 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               <span className="h-0.5 w-5 rounded-full bg-[#8fe617] group-hover:scale-x-110 transition-all duration-300" />
               <span className="h-0.5 w-5 rounded-full bg-[#080808] dark:bg-[#f2f7f4] group-hover:bg-[#8fe617] group-hover:w-3.5 group-hover:translate-x-0.5 transition-all duration-300" />
             </button>
+
+            {/* Circular Logo in Receiver Station */}
+            <Link
+              href={isSender ? "/register" : "/dashboard"}
+              className="flex items-center gap-2.5 group"
+              title="Silicon Labs Platform"
+            >
+              <div className="h-9 w-9 rounded-full bg-[#f7faf9] dark:bg-[#070908] border-2 border-[#dce7e1] dark:border-[#223126] p-1 shadow-xs flex items-center justify-center overflow-hidden group-hover:border-[#8fe617] group-hover:shadow-[0_0_12px_rgba(143,230,23,0.35)] transition-all shrink-0">
+                <img
+                  src="/logo.png"
+                  alt="Silicon Labs"
+                  className="h-full w-full object-cover rounded-full"
+                />
+              </div>
+              <div className="hidden md:flex items-center gap-1 font-mono text-xs font-extrabold tracking-tight text-[#080808] dark:text-[#f2f7f4]">
+                <span>SILICON</span>
+                <span className="text-[#080808] bg-[#8fe617] px-1 rounded text-[10px] font-black">LABS</span>
+              </div>
+            </Link>
           </div>
 
           <div className="flex items-center gap-2.5">

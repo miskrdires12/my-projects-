@@ -64,7 +64,6 @@ export default function SettingsPage() {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [studentCount, setStudentCount] = useState<number>(0);
   const [isClearingImmediate, setIsClearingImmediate] = useState(false);
-  const [activeTab, setActiveTab] = useState<"receiver" | "station">("receiver");
 
   // Load saved receiver settings & storage metrics on mount
   useEffect(() => {
@@ -124,14 +123,19 @@ export default function SettingsPage() {
 
   const handleSaveSettings = () => {
     try {
-      localStorage.setItem("sb_receiver_settings", JSON.stringify(settings));
-      localStorage.setItem("sb_receiver_photo_folder", settings.photoFolder.trim());
+      const cleanFolder = settings.photoFolder.trim() || "C:\\Users\\athede\\Desktop\\students project for 17000";
+      const updated = { ...settings, photoFolder: cleanFolder };
+      setSettings(updated);
+      localStorage.setItem("sb_receiver_settings", JSON.stringify(updated));
+      localStorage.setItem("sb_receiver_photo_folder", cleanFolder);
       localStorage.setItem("sb_theme", settings.theme);
       if (settings.theme === "dark") {
         document.documentElement.classList.add("dark");
       } else {
         document.documentElement.classList.remove("dark");
       }
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new CustomEvent("receiver_settings_updated", { detail: updated }));
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch (e) {
@@ -145,6 +149,7 @@ export default function SettingsPage() {
       localStorage.setItem("sb_receiver_settings", JSON.stringify(DEFAULT_RECEIVER_SETTINGS));
       localStorage.setItem("sb_receiver_photo_folder", DEFAULT_RECEIVER_SETTINGS.photoFolder);
       handleApplyTheme(DEFAULT_RECEIVER_SETTINGS.theme);
+      window.dispatchEvent(new Event("storage"));
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2000);
     }
@@ -183,6 +188,8 @@ export default function SettingsPage() {
 
       // 3. Immediately broadcast "CLEAR" to all active browser windows & stations
       publishStudentSync("CLEAR").catch(() => {});
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new CustomEvent("students_cleared"));
 
       setStudentCount(0);
 
@@ -191,7 +198,7 @@ export default function SettingsPage() {
         console.warn("Background server purge status:", err);
       });
 
-      alert("✓ Immediate Clear Successful! All student records and caches wiped instantly.");
+      alert("✓ Immediate Clear Successful! All student records and caches wiped in 0ms.");
     } catch (err: any) {
       alert("Failed to perform instant clear: " + (err?.message || "Unknown error"));
     } finally {
@@ -263,81 +270,80 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Mode Switcher Banner (Receiver vs Hardware) */}
-      <div className="flex items-center gap-2 border-b border-[#dce7e1] dark:border-[#223126] pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab("receiver")}
-          className={`px-4 py-2 rounded-xl text-xs font-mono font-black transition-all cursor-pointer ${
-            activeTab === "receiver"
-              ? "bg-[#8fe617] text-[#062404] shadow-xs"
-              : "text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
-          }`}
-        >
-          Receiver Production Settings (Active)
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("station")}
-          className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
-            activeTab === "station"
-              ? "bg-[#8fe617] text-[#062404] shadow-xs"
-              : "text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
-          }`}
-        >
-          Theme &amp; Visuals
-        </button>
-      </div>
+      {/* Unified Receiver Production Settings */}
+      <div className="space-y-6">
+        {/* Section 1: CSV & Local Photo File Path (Core User Requirement) */}
+        <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-5">
+          <div className="flex items-center gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+            <div className="h-9 w-9 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
+              <Folder className="h-5 w-5 text-[#8fe617]" />
+            </div>
+            <div>
+              <h2 className="text-sm font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                Local Photo Storage &amp; CSV File Paths
+              </h2>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+                Configure directory where high-res studio photos are saved and mapped in Excel/CSV `@photo` column
+              </p>
+            </div>
+          </div>
 
-      {activeTab === "receiver" && (
-        <div className="space-y-6">
-          {/* Section 1: CSV & Local Photo File Path (Core User Requirement) */}
-          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-5">
-            <div className="flex items-center gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
-              <div className="h-9 w-9 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
-                <Folder className="h-5 w-5 text-[#8fe617]" />
-              </div>
-              <div>
-                <h2 className="text-sm font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
-                  Local Photo Storage &amp; CSV File Paths
-                </h2>
-                <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
-                  Configure directory where high-res studio photos are saved and mapped in Excel/CSV `@photo` column
-                </p>
+          <div className="space-y-4">
+            {/* Photo Folder Path */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-mono font-bold uppercase text-[#080808] dark:text-[#f2f7f4] flex items-center justify-between">
+                <span>Photo Folder Local File Path</span>
+                <span className="text-[10px] text-[#8fe617] font-bold">
+                  ACTIVE PRODUCTION DIRECTORY
+                </span>
+              </label>
+              <input
+                type="text"
+                value={settings.photoFolder}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSettings((prev) => ({ ...prev, photoFolder: val }));
+                  try {
+                    localStorage.setItem("sb_receiver_photo_folder", val.trim());
+                  } catch {}
+                }}
+                placeholder="C:\Users\athede\Desktop\students project for 17000"
+                className="w-full rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-4 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none focus:ring-1 focus:ring-[#8fe617] transition-all"
+              />
+              <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                  Directly editable. All CSV exports and photo manifests will reference this path.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = "C:\\Users\\athede\\Desktop\\students project for 17000";
+                    setSettings((prev) => ({ ...prev, photoFolder: p }));
+                    try {
+                      localStorage.setItem("sb_receiver_photo_folder", p);
+                      window.dispatchEvent(new Event("storage"));
+                    } catch {}
+                  }}
+                  className="text-[10px] font-mono font-bold text-[#062404] bg-[#8fe617] hover:bg-[#7ecc10] px-2.5 py-1 rounded-lg transition-all cursor-pointer shadow-xs"
+                >
+                  Set: C:\Users\athede\Desktop\students project for 17000
+                </button>
               </div>
             </div>
 
-            <div className="space-y-4">
-              {/* Photo Folder Path */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono font-bold uppercase text-[#080808] dark:text-[#f2f7f4] flex items-center justify-between">
-                  <span>Photo Folder Local File Path</span>
-                  <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-normal">
-                    Windows or POSIX directory path
-                  </span>
-                </label>
-                <input
-                  type="text"
-                  value={settings.photoFolder}
-                  onChange={(e) => setSettings({ ...settings, photoFolder: e.target.value })}
-                  placeholder="e.g. C:\Users\YourUser\Desktop\StudentPhotos"
-                  className="w-full rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-4 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none focus:ring-1 focus:ring-[#8fe617] transition-all"
-                />
+            {/* Live Preview of @photo column */}
+            <div className="rounded-2xl border border-[#8fe617]/30 bg-[#8fe617]/5 p-3.5 space-y-1.5 font-mono text-xs">
+              <div className="flex items-center justify-between text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-bold uppercase">
+                <span>Excel / CSV @photo Column Live Preview</span>
+                <span className="text-[#8fe617]">DYNAMICALLY MAPPED</span>
               </div>
-
-              {/* Live Preview of @photo column */}
-              <div className="rounded-2xl border border-[#8fe617]/30 bg-[#8fe617]/5 p-3.5 space-y-1.5 font-mono text-xs">
-                <div className="flex items-center justify-between text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-bold uppercase">
-                  <span>Excel / CSV @photo Column Live Preview</span>
-                  <span className="text-[#8fe617]">DYNAMICALLY MAPPED</span>
-                </div>
-                <div className="text-xs font-bold text-[#080808] dark:text-[#8fe617] break-all bg-white dark:bg-[#070908] p-2.5 rounded-xl border border-[#dce7e1] dark:border-[#223126]">
-                  {samplePhotoPathPreview}
-                </div>
-                <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
-                  All exported manifests, ZIP archives, and card production batches will immediately reference this path.
-                </p>
+              <div className="text-xs font-bold text-[#080808] dark:text-[#8fe617] break-all bg-white dark:bg-[#070908] p-2.5 rounded-xl border border-[#dce7e1] dark:border-[#223126]">
+                {samplePhotoPathPreview}
               </div>
+              <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                All exported manifests, ZIP archives, and card production batches will immediately reference this path.
+              </p>
+            </div>
 
               {/* Folder Hierarchy Organization */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
@@ -633,14 +639,8 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Mode 2: Theme & Hardware Studio (For Dark/Light and Backups) */}
-      {activeTab === "station" && (
-        <div className="space-y-6">
-          {/* Studio Theme Selection */}
-          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-4">
+        {/* Section 5: Studio Theme Selection */}
+        <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2.5 border-b border-[#dce7e1] dark:border-[#223126] pb-3">
               <div className="h-9 w-9 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
                 <Sparkles className="h-5 w-5 text-[#8fe617]" />
@@ -712,7 +712,6 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-      )}
-    </div>
+      </div>
   );
 }

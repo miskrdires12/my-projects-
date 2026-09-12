@@ -403,14 +403,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       ? displayStudents.filter((s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId)))
       : displayStudents;
 
+    if (targetStudents.length === 0) {
+      alert("No student found to download in this view.");
+      return;
+    }
+
     const withPhotos = targetStudents.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0));
 
     if (withPhotos.length === 0) {
-      alert(
-        selectedIds.size > 0
-          ? `None of the ${selectedIds.size} selected student(s) have photographs attached.`
-          : "No student photographs found to download in this view."
-      );
+      alert("No student found to download in this view.");
       return;
     }
 
@@ -713,13 +714,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
       );
       if (listToExport.length === 0) {
-        alert("No student records selected to export.");
+        alert("No student found to download in this view.");
         return;
       }
     } else {
       listToExport = targetGrade
         ? displayStudents.filter((s) => s.grade === targetGrade)
         : displayStudents;
+    }
+
+    if (listToExport.length === 0) {
+      alert("No student found to download in this view.");
+      return;
     }
 
     if (listToExport.length > 0) {
@@ -769,13 +775,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
       );
       if (listToExport.length === 0) {
-        alert("No student records selected to export.");
+        alert("No student found to download in this view.");
         return;
       }
     } else {
       listToExport = targetGrade
         ? displayStudents.filter((s) => s.grade === targetGrade)
         : displayStudents;
+    }
+
+    if (listToExport.length === 0) {
+      alert("No student found to download in this view.");
+      return;
     }
 
     // Always generate CSV with UTF-8 BOM via client-side Blob — guaranteed to ALWAYS work!
@@ -824,7 +835,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // Download all selected students together into 1 combined CSV or Excel file via API
   const downloadSelectedTogether = async (format: "csv" | "xlsx" = "csv") => {
     if (selectedIds.size === 0) {
-      alert("No student records selected to export.");
+      alert("No student found to download in this view.");
       return;
     }
 
@@ -981,7 +992,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
               selectedGrade === "ALL"
                 ? "bg-[#8fe617] text-[#070908] font-bold shadow-xs"
-                : "bg-surface border border-border text-foreground-muted hover:text-foreground hover:bg-surface-secondary"
+                : "bg-surface dark:bg-[#111613] border border-border dark:border-[#223126] text-foreground-muted dark:text-[#8a9e93] hover:text-foreground dark:hover:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#161e19]"
             }`}
           >
             All Students ({totalCount.toLocaleString()})
@@ -1000,7 +1011,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
                   isSelected
                     ? "bg-[#8fe617] text-[#070908] font-bold shadow-xs"
-                    : "bg-surface border border-border text-foreground-muted hover:text-foreground hover:bg-surface-secondary"
+                    : "bg-surface dark:bg-[#111613] border border-border dark:border-[#223126] text-foreground-muted dark:text-[#8a9e93] hover:text-foreground dark:hover:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#161e19]"
                 }`}
               >
                 {g} {count !== undefined ? `(${count.toLocaleString()})` : ""}
@@ -1011,37 +1022,37 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       )}
 
       {/* Search & Multi-Filter Controls Bar (Comfortable Size & Enterprise Layout) */}
-      <div className="rounded-2xl border border-border bg-surface p-4 sm:p-5 space-y-4 shadow-xs">
+      <div className="rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] p-4 sm:p-5 space-y-4 shadow-xs">
         <form onSubmit={handleSearchSubmit} className="flex flex-wrap sm:flex-nowrap items-center gap-3">
           <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-4 top-3.5 h-4 w-4 text-foreground-muted" />
+            <Search className="absolute left-4 top-3.5 h-4 w-4 text-foreground-muted dark:text-[#8a9e93]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by Name, Student ID, Phone, Department, or School..."
-              className="w-full h-11 rounded-xl border border-border bg-surface-secondary pl-11 pr-4 text-sm text-foreground placeholder:text-foreground-subtle focus:border-[#8fe617] focus:outline-none transition-colors"
+              className="w-full h-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] pl-11 pr-4 text-sm text-foreground dark:text-[#f2f7f4] placeholder:text-foreground-subtle dark:placeholder:text-[#6c8074] focus:border-[#8fe617] focus:outline-none transition-colors"
             />
           </div>
           <button
             type="submit"
-            className="h-11 px-6 rounded-xl bg-[#8fe617] text-[#070908] font-bold text-sm hover:brightness-105 transition-all shadow-xs"
+            className="h-11 px-6 rounded-xl bg-[#8fe617] text-[#070908] font-bold text-sm hover:brightness-105 transition-all shadow-xs cursor-pointer"
           >
             Search
           </button>
           <button
             type="button"
             onClick={() => handleExportCSV(false)}
-            className="h-11 px-4 rounded-xl border border-border bg-surface hover:bg-surface-secondary text-foreground text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs"
+            className="h-11 px-4 rounded-xl border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] hover:bg-surface-secondary dark:hover:bg-[#202b23] text-foreground dark:text-[#f2f7f4] text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
             title="Download full student directory as CSV"
           >
-            <Download className="h-4 w-4 text-foreground-muted" />
+            <Download className="h-4 w-4 text-foreground-muted dark:text-[#8a9e93]" />
             <span>Export CSV</span>
           </button>
           <button
             type="button"
             onClick={() => handleExportExcel(false)}
-            className="h-11 px-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs"
+            className="h-11 px-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
             title="Download full student directory as Excel (.xlsx)"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
@@ -1070,7 +1081,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           <button
             type="button"
             onClick={handleClearAllStudents}
-            className="h-11 px-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 text-sm font-semibold transition-colors flex items-center gap-1.5"
+            className="h-11 px-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
             title="Delete all data to feed fresh records"
           >
             <Trash2 className="h-4 w-4" />
@@ -1087,7 +1098,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               setSelectedGrade(e.target.value);
               applyFilters({ grade: e.target.value });
             }}
-            className="h-10 rounded-xl border border-border bg-surface-secondary px-3.5 text-sm text-foreground focus:border-[#8fe617] focus:outline-none transition-colors"
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3.5 text-sm text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors"
           >
             <option value="ALL">All Grades</option>
             {grades.map((g) => (
@@ -1104,7 +1115,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               setSelectedDept(e.target.value);
               applyFilters({ department: e.target.value });
             }}
-            className="h-10 rounded-xl border border-border bg-surface-secondary px-3.5 text-sm text-foreground focus:border-[#8fe617] focus:outline-none transition-colors"
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3.5 text-sm text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors"
           >
             <option value="ALL">All Departments</option>
             {departments.map((d) => (
@@ -1121,7 +1132,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               setSelectedPhotoStatus(e.target.value);
               applyFilters({ photoStatus: e.target.value });
             }}
-            className="h-10 rounded-xl border border-border bg-surface-secondary px-3.5 text-sm text-foreground focus:border-[#8fe617] focus:outline-none transition-colors"
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3.5 text-sm text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors"
           >
             <option value="ALL">Photo: All</option>
             <option value="HAS_PHOTO">Photo: Available</option>
@@ -1131,10 +1142,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       </div>
 
       {/* Main Student Data Table */}
-      <div className="rounded-2xl border border-border bg-surface overflow-hidden shadow-xs">
+      <div className="rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-border bg-surface-secondary text-xs uppercase tracking-wider text-foreground-muted font-mono select-none">
+            <thead className="border-b border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] text-xs uppercase tracking-wider text-foreground-muted dark:text-[#8a9e93] font-mono select-none">
               <tr>
                 <th className="w-12 px-4 py-3.5 text-center">
                   <input
@@ -1244,18 +1255,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-border dark:divide-[#223126]">
               {displayStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-20 px-6 text-center bg-surface">
+                  <td colSpan={9} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
-                      <div className="w-16 h-16 rounded-2xl bg-surface-secondary border border-border flex items-center justify-center text-accent">
-                        <Users className="w-8 h-8" />
+                      <div className="w-16 h-16 rounded-2xl bg-surface-secondary dark:bg-[#161e19] border border-border dark:border-[#223126] flex items-center justify-center text-accent">
+                        <Users className="w-8 h-8 text-[#8fe617]" />
                       </div>
                       <div className="space-y-1.5">
-                        <h4 className="text-lg font-bold text-foreground tracking-tight">Student Directory is Empty (0 Records)</h4>
-                        <p className="text-xs text-foreground-muted leading-relaxed">
-                          All previous data has been purged. The database is clean and ready to accept your fresh real-world data feed.
+                        <h4 className="text-lg font-bold text-foreground dark:text-[#f2f7f4] tracking-tight">No student found to download in this view.</h4>
+                        <p className="text-xs text-foreground-muted dark:text-[#8a9e93] leading-relaxed">
+                          All previous data has been purged or no recorded student credentials match this view. The database is clean and ready to accept your fresh real-world data feed.
                         </p>
                       </div>
                       <div className="flex items-center gap-3 pt-2">
@@ -1268,7 +1279,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                         </Link>
                         <Link
                           href="/register"
-                          className="px-5 py-2.5 bg-surface text-foreground border border-border text-sm font-semibold rounded-xl hover:bg-surface-secondary transition-colors flex items-center gap-2"
+                          className="px-5 py-2.5 bg-surface dark:bg-[#161e19] text-foreground dark:text-[#f2f7f4] border border-border dark:border-[#223126] text-sm font-semibold rounded-xl hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors flex items-center gap-2"
                         >
                           <UserPlus className="w-4 h-4" />
                           Enroll Single Student
@@ -1286,7 +1297,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     <tr
                       key={student.id}
                       className={`transition-colors ${
-                        isSelected ? "bg-[#8fe617]/10" : "hover:bg-surface-secondary/60"
+                        isSelected ? "bg-[#8fe617]/10" : "hover:bg-surface-secondary/60 dark:hover:bg-[#161e19]/60"
                       }`}
                     >
                       <td className="px-4 py-3.5 text-center">
@@ -1301,7 +1312,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       {/* Photo Thumbnail with Hover Zoom Popover */}
                       <td className="px-4 py-3">
                         <div className="relative group/thumb inline-block">
-                          <div className="h-14 w-11 rounded-xl border border-border bg-surface-secondary overflow-hidden flex items-center justify-center shadow-xs transition-transform duration-150 group-hover/thumb:scale-105 cursor-pointer">
+                          <div className="h-14 w-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] overflow-hidden flex items-center justify-center shadow-xs transition-transform duration-150 group-hover/thumb:scale-105 cursor-pointer">
                             {student.photoPath ? (
                               <img
                                 src={student.photoPath}
@@ -1309,14 +1320,14 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                                 className="h-full w-full object-cover"
                               />
                             ) : (
-                              <Camera className="h-4 w-4 text-foreground-subtle" />
+                              <Camera className="h-4 w-4 text-foreground-subtle dark:text-[#6c8074]" />
                             )}
                           </div>
 
                           {/* Studio Portrait Hover Zoom Popover */}
                           {student.photoPath && (
-                            <div className="hidden group-hover/thumb:flex flex-col absolute left-14 top-1/2 -translate-y-1/2 z-30 w-44 rounded-2xl border border-border bg-surface p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
-                              <div className="aspect-[3/4] w-full rounded-xl overflow-hidden bg-black border border-border">
+                            <div className="hidden group-hover/thumb:flex flex-col absolute left-14 top-1/2 -translate-y-1/2 z-30 w-44 rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
+                              <div className="aspect-[3/4] w-full rounded-xl overflow-hidden bg-black border border-border dark:border-[#223126]">
                                 <img
                                   src={student.photoPath}
                                   alt={student.fullName}
@@ -1324,8 +1335,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                                 />
                               </div>
                               <div className="pt-2 px-1">
-                                <div className="font-bold text-xs text-foreground truncate">{student.fullName}</div>
-                                <div className="font-mono text-[10px] text-foreground-muted flex items-center justify-between pt-0.5">
+                                <div className="font-bold text-xs text-foreground dark:text-[#f2f7f4] truncate">{student.fullName}</div>
+                                <div className="font-mono text-[10px] text-foreground-muted dark:text-[#8a9e93] flex items-center justify-between pt-0.5">
                                   <span>{student.studentId}</span>
                                   <span className="text-[#8fe617] font-semibold">{student.grade}</span>
                                 </div>
@@ -1335,11 +1346,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                         </div>
                       </td>
 
-                      <td className="px-4 py-3.5 font-mono font-bold text-sm text-foreground">
+                      <td className="px-4 py-3.5 font-mono font-bold text-sm text-foreground dark:text-[#f2f7f4]">
                         {student.studentId}
                       </td>
 
-                      <td className="px-4 py-3.5 font-semibold text-sm text-foreground">
+                      <td className="px-4 py-3.5 font-semibold text-sm text-foreground dark:text-[#f2f7f4]">
                         {student.fullName}
                       </td>
 
@@ -1355,8 +1366,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                         </span>
                       </td>
 
-                      <td className="px-4 py-3.5 text-sm font-medium text-foreground">{student.grade}</td>
-                      <td className="px-4 py-3.5 text-sm font-mono text-foreground-muted">{student.phone}</td>
+                      <td className="px-4 py-3.5 text-sm font-medium text-foreground dark:text-[#f2f7f4]">{student.grade}</td>
+                      <td className="px-4 py-3.5 text-sm font-mono text-foreground-muted dark:text-[#8a9e93]">{student.phone}</td>
 
                       {/* Photo Status */}
                       <td className="px-4 py-3.5">
@@ -1379,7 +1390,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleDownloadSinglePhoto(student.photoPath!, student.fullName)}
-                                className="rounded-lg p-2 text-foreground-muted hover:bg-surface-secondary hover:text-foreground transition-colors"
+                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors"
                                 title={`Download Photo (${student.fullName}.jpg)`}
                               >
                                 <Download className="h-4 w-4" />
@@ -1387,7 +1398,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setEditingStudent(student)}
-                                className="rounded-lg p-2 text-foreground-muted hover:bg-surface-secondary hover:text-foreground transition-colors"
+                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors"
                                 title={`Crop & Edit Photo (${student.fullName})`}
                               >
                                 <Crop className="h-4 w-4" />
@@ -1398,7 +1409,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                           <button
                             type="button"
                             onClick={() => setActiveStudent(student)}
-                            className="rounded-lg p-2 text-foreground-muted hover:bg-surface-secondary hover:text-foreground transition-colors"
+                            className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors"
                             title="Inspect Profile"
                           >
                             <Eye className="h-4 w-4" />
@@ -1408,7 +1419,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             <button
                               type="button"
                               onClick={() => handleDelete(student.id, student.fullName, student.studentId)}
-                              className="rounded-lg p-2 text-foreground-muted hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                              className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-red-500/10 hover:text-red-500 transition-colors"
                               title="Delete Record"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1425,12 +1436,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         </div>
 
         {/* Server-Side Pagination Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-border bg-surface-secondary/50 px-6 py-3 text-xs text-foreground-muted">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-border dark:border-[#223126] bg-surface-secondary/50 dark:bg-[#161e19]/50 px-6 py-3 text-xs text-foreground-muted dark:text-[#8a9e93]">
           <div className="flex items-center gap-3">
             <span>
-              Showing <strong className="text-foreground">{startItem}</strong> to{" "}
-              <strong className="text-foreground">{endItem}</strong> of{" "}
-              <strong className="text-foreground font-mono">{totalEffective.toLocaleString()}</strong> students
+              Showing <strong className="text-foreground dark:text-[#f2f7f4]">{startItem}</strong> to{" "}
+              <strong className="text-foreground dark:text-[#f2f7f4]">{endItem}</strong> of{" "}
+              <strong className="text-foreground dark:text-[#f2f7f4] font-mono">{totalEffective.toLocaleString()}</strong> students
             </span>
 
             <div className="flex items-center gap-1.5">
@@ -1438,7 +1449,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               <select
                 value={activePageSize}
                 onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
-                className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-foreground focus:border-accent focus:outline-none cursor-pointer"
+                className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#070908] px-2.5 py-1 text-xs font-semibold text-foreground dark:text-[#f2f7f4] focus:border-accent focus:outline-none cursor-pointer"
               >
                 <option value={25}>25</option>
                 <option value={50}>50</option>
@@ -1455,7 +1466,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <button
               onClick={() => handlePageChange(activePage - 1)}
               disabled={activePage <= 1}
-              className="rounded-lg border border-border bg-surface p-1.5 text-foreground hover:bg-surface-secondary disabled:opacity-30 transition-colors"
+              className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1.5 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
               title="Previous Page"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -1464,7 +1475,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <button
               onClick={() => handlePageChange(activePage + 1)}
               disabled={activePage >= totalPages}
-              className="rounded-lg border border-border bg-surface p-1.5 text-foreground hover:bg-surface-secondary disabled:opacity-30 transition-colors"
+              className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1.5 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
               title="Next Page"
             >
               <ChevronRight className="h-4 w-4" />
@@ -1569,27 +1580,27 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       {/* Student Profile Deep Inspection Drawer */}
       {activeStudent && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs">
-          <div className="flex h-full w-full max-w-md flex-col border-l border-border bg-surface shadow-2xl p-6 overflow-y-auto space-y-6">
-            <div className="flex items-center justify-between border-b border-border pb-4">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-xs">
+          <div className="flex h-full w-full max-w-md flex-col border-l border-border dark:border-[#223126] bg-surface dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] shadow-2xl p-6 overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between border-b border-border dark:border-[#223126] pb-4">
               <div>
-                <h3 className="text-sm font-semibold text-foreground">Student Profile Details</h3>
+                <h3 className="text-sm font-semibold text-foreground dark:text-[#f2f7f4]">Student Profile Details</h3>
                 <span className="text-[10px] font-mono text-accent">{activeStudent.studentId}</span>
               </div>
               <button
                 onClick={() => setActiveStudent(null)}
-                className="rounded-lg p-1.5 text-foreground-muted hover:bg-surface-secondary"
+                className="rounded-lg p-1.5 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Studio Photo Showcase (QR Removed) */}
-            <div className="flex flex-col items-center justify-center space-y-3 p-4 rounded-2xl border border-border bg-surface-secondary/40">
-              <span className="text-xs font-mono uppercase tracking-wider text-foreground-muted font-semibold">
+            <div className="flex flex-col items-center justify-center space-y-3 p-4 rounded-2xl border border-border dark:border-[#223126] bg-surface-secondary/40 dark:bg-[#070908]">
+              <span className="text-xs font-mono uppercase tracking-wider text-foreground-muted dark:text-[#8a9e93] font-semibold">
                 Official Studio Portrait (3:4)
               </span>
-              <div className="w-48 aspect-[3/4] rounded-2xl border-2 border-border bg-black overflow-hidden flex items-center justify-center shadow-lg relative">
+              <div className="w-48 aspect-[3/4] rounded-2xl border-2 border-border dark:border-[#223126] bg-black overflow-hidden flex items-center justify-center shadow-lg relative">
                 {activeStudent.photoPath ? (
                   <img
                     src={activeStudent.photoPath}
@@ -1605,7 +1616,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <button
                     type="button"
                     onClick={() => handleDownloadSinglePhoto(activeStudent.photoPath!, activeStudent.fullName)}
-                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-surface border border-border text-foreground hover:bg-surface-secondary transition-colors"
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors cursor-pointer"
                   >
                     <Download className="h-3.5 w-3.5 text-[#8fe617]" /> Download Portrait (.jpg)
                   </button>
@@ -1616,7 +1627,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   >
                     <Crop className="h-3.5 w-3.5" /> Crop & Edit Portrait
                   </button>
-                  <div className="text-[11px] font-mono text-foreground-muted text-center truncate pt-0.5">
+                  <div className="text-[11px] font-mono text-foreground-muted dark:text-[#8a9e93] text-center truncate pt-0.5">
                     /photos/{activeStudent.fullName}.jpg
                   </div>
                 </div>
@@ -1624,56 +1635,56 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             </div>
 
             {/* Field Details */}
-            <div className="space-y-3 divide-y divide-border text-sm">
+            <div className="space-y-3 divide-y divide-border dark:divide-[#223126] text-sm">
               <div className="pt-2 flex justify-between">
-                <span className="text-foreground-muted">Name:</span>
-                <strong className="text-foreground">{activeStudent.fullName}</strong>
+                <span className="text-foreground-muted dark:text-[#8a9e93]">Name:</span>
+                <strong className="text-foreground dark:text-[#f2f7f4]">{activeStudent.fullName}</strong>
               </div>
               <div className="pt-2 flex justify-between">
-                <span className="text-foreground-muted">Grade:</span>
-                <span className="text-foreground">{activeStudent.grade}</span>
+                <span className="text-foreground-muted dark:text-[#8a9e93]">Grade:</span>
+                <span className="text-foreground dark:text-[#f2f7f4]">{activeStudent.grade}</span>
               </div>
               <div className="pt-2 flex justify-between">
-                <span className="text-foreground-muted">Sex:</span>
-                <span className="text-foreground font-semibold">{activeStudent.sex || "Male"}</span>
+                <span className="text-foreground-muted dark:text-[#8a9e93]">Sex:</span>
+                <span className="text-foreground dark:text-[#f2f7f4] font-semibold">{activeStudent.sex || "Male"}</span>
               </div>
               <div className="pt-2 flex justify-between">
-                <span className="text-foreground-muted">Phone:</span>
-                <span className="text-foreground font-mono">{activeStudent.phone}</span>
+                <span className="text-foreground-muted dark:text-[#8a9e93]">Phone:</span>
+                <span className="text-foreground dark:text-[#f2f7f4] font-mono">{activeStudent.phone}</span>
               </div>
               {activeStudent.school && (
                 <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted">School:</span>
-                  <span className="text-foreground">{activeStudent.school}</span>
+                  <span className="text-foreground-muted dark:text-[#8a9e93]">School:</span>
+                  <span className="text-foreground dark:text-[#f2f7f4]">{activeStudent.school}</span>
                 </div>
               )}
               {activeStudent.department && (
                 <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted">Department:</span>
-                  <span className="text-foreground">{activeStudent.department}</span>
+                  <span className="text-foreground-muted dark:text-[#8a9e93]">Department:</span>
+                  <span className="text-foreground dark:text-[#f2f7f4]">{activeStudent.department}</span>
                 </div>
               )}
               {activeStudent.emailAddress && (
                 <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted">Email:</span>
-                  <span className="text-foreground">{activeStudent.emailAddress}</span>
+                  <span className="text-foreground-muted dark:text-[#8a9e93]">Email:</span>
+                  <span className="text-foreground dark:text-[#f2f7f4]">{activeStudent.emailAddress}</span>
                 </div>
               )}
               {activeStudent.guardianFullName && (
                 <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted">Guardian:</span>
-                  <span className="text-foreground">{activeStudent.guardianFullName}</span>
+                  <span className="text-foreground-muted dark:text-[#8a9e93]">Guardian:</span>
+                  <span className="text-foreground dark:text-[#f2f7f4]">{activeStudent.guardianFullName}</span>
                 </div>
               )}
               {activeStudent.emergencyContactPhone && (
                 <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted">Emergency Phone:</span>
-                  <span className="text-foreground font-mono">{activeStudent.emergencyContactPhone}</span>
+                  <span className="text-foreground-muted dark:text-[#8a9e93]">Emergency Phone:</span>
+                  <span className="text-foreground dark:text-[#f2f7f4] font-mono">{activeStudent.emergencyContactPhone}</span>
                 </div>
               )}
               {activeStudent.bloodType && (
                 <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted">Blood Group:</span>
+                  <span className="text-foreground-muted dark:text-[#8a9e93]">Blood Group:</span>
                   <span className="text-accent font-bold">{activeStudent.bloodType}</span>
                 </div>
               )}
@@ -1681,15 +1692,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
             {/* Custom Fields Section */}
             {activeStudent.customValues && activeStudent.customValues.length > 0 && (
-              <div className="rounded-xl border border-border bg-surface-secondary p-4 space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground border-b border-border pb-2">
+              <div className="rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] p-4 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground dark:text-[#f2f7f4] border-b border-border dark:border-[#223126] pb-2">
                   <Tag className="h-3.5 w-3.5 text-accent" />
                   <span>Custom Attributes</span>
                 </div>
                 {activeStudent.customValues.map((cv, i) => (
                   <div key={i} className="flex justify-between text-xs pt-1">
-                    <span className="text-foreground-muted">{cv.customField.label}:</span>
-                    <strong className="text-foreground">{cv.value}</strong>
+                    <span className="text-foreground-muted dark:text-[#8a9e93]">{cv.customField.label}:</span>
+                    <strong className="text-foreground dark:text-[#f2f7f4]">{cv.value}</strong>
                   </div>
                 ))}
               </div>
