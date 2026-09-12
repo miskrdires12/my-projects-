@@ -114,6 +114,31 @@ if (fs.existsSync(devDbSrc)) {
   console.log("✅ Root dev.db fallback copied with read/write access.");
 }
 
+// 5b. Ensure all Prisma Query Engines (especially debian-openssl-1.1.x) are present in staging
+const rootPrismaClientDir = path.join(projectRoot, "node_modules", ".prisma", "client");
+const stagingPrismaClientDir = path.join(stagingDir, "node_modules", ".prisma", "client");
+fs.mkdirSync(stagingPrismaClientDir, { recursive: true });
+
+if (fs.existsSync(rootPrismaClientDir)) {
+  const engineFiles = fs.readdirSync(rootPrismaClientDir).filter((f) => f.includes("query_engine"));
+  for (const f of engineFiles) {
+    const dest = path.join(stagingPrismaClientDir, f);
+    if (!fs.existsSync(dest)) {
+      fs.copyFileSync(path.join(rootPrismaClientDir, f), dest);
+      console.log(`📦 Synced query engine into staging: ${f}`);
+    }
+  }
+}
+
+const debian11Engine = path.join(stagingPrismaClientDir, "libquery_engine-debian-openssl-1.1.x.so.node");
+if (!fs.existsSync(debian11Engine)) {
+  console.error("❌ CRITICAL ERROR: libquery_engine-debian-openssl-1.1.x.so.node not found in staging!");
+  process.exit(1);
+} else {
+  const size = fs.statSync(debian11Engine).size;
+  console.log(`✅ Verified: libquery_engine-debian-openssl-1.1.x.so.node is present (${size.toLocaleString()} bytes).`);
+}
+
 // 6. Write production .env file
 const envProductionContent = `# ==========================================
 # SILICON LABS — PRODUCTION cPanel Node.js 20
