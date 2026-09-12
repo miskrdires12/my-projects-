@@ -1,10 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  compress: true,
+  poweredByHeader: false,
   experimental: {
+    cpus: 1,
+    workerThreads: false,
     serverComponentsExternalPackages: ["sharp", "archiver"],
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "http",
