@@ -58,7 +58,16 @@ export async function createUserAction(input: CreateUserInput) {
   });
 
   revalidatePath("/admin/users");
-  return { success: true, userId: user.id };
+  return {
+    success: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt,
+    },
+  };
 }
 
 export async function deleteUserAction(id: string) {

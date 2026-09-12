@@ -29,8 +29,6 @@ import {
   ArrowUpRight,
   GraduationCap,
   BarChart3,
-  Bell,
-  Volume2,
 } from "lucide-react";
 
 import { subscribeToCloudSync } from "@/lib/sync-client";
@@ -80,35 +78,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [noticeVisible, setNoticeVisible] = useState(Boolean(notice));
   const [exportNotice, setExportNotice] = useState<string | null>(null);
-
-  // Live Metrics Section Notification Center (Strictly for Live Metrics)
-  const [metricsNotificationOpen, setMetricsNotificationOpen] = useState(false);
-  const [unreadMetricsCount, setUnreadMetricsCount] = useState(3);
-  const [metricsNotifications, setMetricsNotifications] = useState<
-    { id: string; title: string; description: string; time: string; type: "alert" | "success" | "batch" }[]
-  >([
-    {
-      id: "notif-1",
-      title: "Peak Production Velocity",
-      description: "Hourly velocity peaked at 800 cards/hr with balanced registration queues.",
-      time: "5m ago",
-      type: "success",
-    },
-    {
-      id: "notif-2",
-      title: "100% Studio Portrait Match",
-      description: "Active grade cohort reached 100% verified 3:4 portrait coverage.",
-      time: "18m ago",
-      type: "alert",
-    },
-    {
-      id: "notif-3",
-      title: "8-Up Sheet Allocation Optimal",
-      description: "Batch imposition density calculated at 8 cards per A4 sheet.",
-      time: "42m ago",
-      type: "batch",
-    },
-  ]);
 
   const playAudioChime = useCallback(() => {
     try {
@@ -261,19 +230,8 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           };
         });
 
-        // Trigger Live Audio Chime & Notification in Live Metrics Section & Global Header
+        // Trigger Live Audio Chime & Global Notification
         playAudioChime();
-        setMetricsNotifications((prev) => [
-          {
-            id: `notif-${Date.now()}`,
-            title: "Student Ingested",
-            description: `${newStudent.fullName || "Student"} (${newStudent.studentId || ""}) • Grade ${newStudent.grade || "General"}`,
-            time: "Just now",
-            type: "success",
-          },
-          ...prev.slice(0, 9),
-        ]);
-        setUnreadMetricsCount((c) => c + 1);
 
         if (typeof window !== "undefined") {
           window.dispatchEvent(
@@ -325,18 +283,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           };
         });
 
-        setMetricsNotifications((prev) => [
-          {
-            id: `notif-${Date.now()}`,
-            title: "Record Deleted (0ms)",
-            description: `ID ${deletedStudentId} removed instantly from queue.`,
-            time: "Just now",
-            type: "alert",
-          },
-          ...prev.slice(0, 9),
-        ]);
-        setUnreadMetricsCount((c) => c + 1);
-
         fetchMetrics();
         setLastUpdated(new Date().toLocaleTimeString());
       },
@@ -353,18 +299,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           missingPhotos: [],
         }));
         setAllStudentsList([]);
-
-        setMetricsNotifications((prev) => [
-          {
-            id: `notif-${Date.now()}`,
-            title: "Roster Cleared (0ms)",
-            description: "All student records wiped instantly with zero lag.",
-            time: "Just now",
-            type: "batch",
-          },
-          ...prev.slice(0, 9),
-        ]);
-        setUnreadMetricsCount((c) => c + 1);
 
         setLastUpdated(new Date().toLocaleTimeString());
       }
@@ -533,8 +467,8 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         window.dispatchEvent(
           new CustomEvent("siliconlabs_notification", {
             detail: {
-              title: "Pre-Flight Audit Complete",
-              desc: `Scanned ${total} records: ${verified} (${readinessRate}%) ready for 8-Up production.`,
+              title: "Readiness Verification Complete",
+              desc: `Inspected ${total} records: ${verified} (${readinessRate}%) verified for 8-Up production.`,
               type: "info",
             },
           })
@@ -965,14 +899,14 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
             {data.readyForPrintCount.toLocaleString()}
           </div>
           <div className="text-[10px] text-[#062404] bg-[#8fe617] px-2 py-0.5 rounded-full inline-block font-mono font-bold mt-1 shadow-xs">
-            100% PRE-FLIGHT OK
+            100% VERIFIED READY
           </div>
         </div>
 
         <div
           className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm cursor-pointer hover:border-amber-400 transition-colors"
           onClick={runPreflightAudit}
-          title="Click to run Pre-Flight Audit"
+          title="Run Production Readiness Verification (Automated multi-point inspection)"
         >
           <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
             <span>ATTENTION GAPS</span>
@@ -982,7 +916,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
             {data.pendingVerification.toLocaleString()}
           </div>
           <div className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 px-2 py-0.5 rounded-full inline-block font-mono font-bold mt-1">
-            RUN AUDIT →
+            VERIFY READINESS →
           </div>
         </div>
       </div>
@@ -1003,99 +937,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* LIVE METRICS NOTIFICATION BELL (Strictly on Live Metrics Section, Top Near Toggles) */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setMetricsNotificationOpen((o) => !o);
-                  if (!metricsNotificationOpen) setUnreadMetricsCount(0);
-                }}
-                className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126] hover:border-[#8fe617] text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] transition-all cursor-pointer shadow-xs"
-                title="Live Metrics Production Alerts"
-              >
-                <Bell className="w-3.5 h-3.5 text-[#080808] dark:text-[#8fe617]" />
-                <span className="text-[11px]">Live Alerts</span>
-                {unreadMetricsCount > 0 && (
-                  <span className="h-4 min-w-4 px-1 rounded-full bg-[#8fe617] text-[#062404] text-[10px] font-black flex items-center justify-center animate-bounce">
-                    {unreadMetricsCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Dropdown Stream */}
-              {metricsNotificationOpen && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white/95 dark:bg-[#0c110e]/95 backdrop-blur-xl border border-[#dce7e1] dark:border-[#223126] shadow-2xl p-3 z-30 space-y-2.5 text-xs font-mono">
-                  <div className="flex items-center justify-between pb-2 border-b border-[#eef5f1] dark:border-[#1c261e]">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-ping" />
-                      <span className="font-extrabold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
-                        Live Metrics Stream
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMetricsNotifications([]);
-                          setUnreadMetricsCount(0);
-                        }}
-                        className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] hover:text-red-500 font-bold transition-colors cursor-pointer"
-                      >
-                        Clear Feed (0ms)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMetricsNotificationOpen(false)}
-                        className="text-[#6b7771] hover:text-[#080808] dark:hover:text-[#f2f7f4] font-bold text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="max-h-56 overflow-y-auto space-y-1.5 divide-y divide-[#f0f5f2] dark:divide-[#162019] pr-1">
-                    {metricsNotifications.length === 0 ? (
-                      <div className="text-center py-5 text-[#6b7771] dark:text-[#8a9e93] text-[11px]">
-                        No new metric notifications. Production running smooth.
-                      </div>
-                    ) : (
-                      metricsNotifications.map((notif) => (
-                        <div key={notif.id} className="pt-1.5 first:pt-0 flex items-start justify-between gap-2">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  notif.type === "success"
-                                    ? "bg-[#8fe617]"
-                                    : notif.type === "alert"
-                                    ? "bg-amber-400"
-                                    : "bg-blue-400"
-                                }`}
-                              />
-                              <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
-                                {notif.title}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] leading-relaxed">
-                              {notif.description}
-                            </p>
-                          </div>
-                          <span className="text-[9px] text-[#8a9e93] whitespace-nowrap">{notif.time}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="pt-2 border-t border-[#eef5f1] dark:border-[#1c261e] flex items-center justify-between text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
-                    <span className="flex items-center gap-1">
-                      <Volume2 className="w-3 h-3 text-[#8fe617]" /> Chime Alert On
-                    </span>
-                    <span className="text-[#8fe617] font-bold">RECEIVER FACILITY ACTIVE</span>
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Metric Mode Selector */}
             <div className="inline-flex rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] p-0.5 text-xs font-mono font-bold">
@@ -1722,10 +1563,10 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               onClick={runPreflightAudit}
               disabled={isAuditing}
               className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3 py-1.5 text-xs font-mono font-bold hover:bg-[#7ed112] transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-              title="Run Pre-Flight Audit"
+              title="Automated multi-point inspection verifying student identity credentials, studio portrait resolution, and 8-Up imposition alignment before batch production."
             >
               <Sparkles className={`h-3.5 w-3.5 ${isAuditing ? "animate-spin" : ""}`} />
-              <span>{isAuditing ? "Auditing..." : "Pre-Flight Audit"}</span>
+              <span>{isAuditing ? "Verifying..." : "Verify Readiness"}</span>
             </button>
 
             <button
@@ -1915,10 +1756,10 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                 </div>
                 <div>
                   <h3 className="text-base font-black text-[#080808] dark:text-[#f2f7f4]">
-                    Pre-Flight Verification Audit Report
+                    Production Readiness & Asset Verification Report
                   </h3>
                   <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono">
-                    Scanned {auditResults.totalAudited} students across IndexedDB & central database
+                    Multi-point inspection scanned {auditResults.totalAudited} students across central database & cache
                   </p>
                 </div>
               </div>
@@ -1970,7 +1811,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
               {auditResults.flaggedList.length === 0 ? (
                 <div className="text-center py-6 text-xs text-emerald-600 dark:text-emerald-400 font-mono font-bold bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200 dark:border-emerald-800">
-                  ✓ Outstanding! 100% of scanned student records passed pre-flight checks.
+                  ✓ Outstanding! 100% of student records passed production readiness verification.
                 </div>
               ) : (
                 <div className="max-h-60 overflow-y-auto space-y-2 pr-1">

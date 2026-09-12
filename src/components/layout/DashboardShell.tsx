@@ -250,30 +250,18 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 <Sparkles className="h-4 w-4 shrink-0" />
                 <span>Badge Designer</span>
               </Link>
-
-              <Link
-                href="/settings"
-                onClick={closeMenu}
-                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
-                  pathname === "/settings"
-                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
-                }`}
-              >
-                <Settings className="h-4 w-4 shrink-0" />
-                <span>System Settings</span>
-              </Link>
             </div>
           )}
 
-          {/* ADMIN ENVIRONMENT */}
+          {/* ADMIN ENVIRONMENT - Unified Master Operations & System Administration */}
           {isAdmin && (
             <div className="space-y-1.5 pt-2 border-t border-[#dce7e1] dark:border-[#223126]">
               <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 pb-1">
                 <Shield className="h-3 w-3 text-[#8fe617]" />
-                <span>Administrator</span>
+                <span>Institutional Administrator</span>
               </div>
 
+              {/* Core Operations Console */}
               <Link
                 href="/dashboard"
                 onClick={closeMenu}
@@ -284,47 +272,102 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 }`}
               >
                 <LayoutDashboard className="h-4 w-4 shrink-0" />
-                <span>Dashboard</span>
+                <span>Live Dashboard &amp; Metrics</span>
               </Link>
 
               <Link
-                href="/admin/users"
+                href="/students"
                 onClick={closeMenu}
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
-                  pathname === "/admin/users"
+                  pathname === "/students"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
                     : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
-                <Shield className="h-4 w-4 shrink-0" />
-                <span>Security & Roles</span>
+                <Users className="h-4 w-4 shrink-0" />
+                <span>Student Directory &amp; Records</span>
               </Link>
 
               <Link
-                href="/admin/database"
+                href="/print-engine"
                 onClick={closeMenu}
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
-                  pathname === "/admin/database"
+                  pathname === "/print-engine"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
                     : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
-                <Database className="h-4 w-4 shrink-0" />
-                <span>Database Manager</span>
+                <Printer className="h-4 w-4 shrink-0" />
+                <span>8-Up Print Engine</span>
               </Link>
 
               <Link
-                href="/settings"
+                href="/designer"
                 onClick={closeMenu}
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
-                  pathname === "/settings"
+                  pathname === "/designer"
                     ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
                     : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                 }`}
               >
-                <Settings className="h-4 w-4 shrink-0" />
-                <span>System Settings</span>
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span>Badge Designer Studio</span>
               </Link>
+
+              <Link
+                href="/register"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/register"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <UserPlus className="h-4 w-4 shrink-0" />
+                <span>Student Registration</span>
+              </Link>
+
+              {/* Administrative Privileges */}
+              <div className="pt-2 mt-2 border-t border-[#dce7e1] dark:border-[#223126]">
+                <Link
+                  href="/admin/users"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/admin/users"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Shield className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span>Provision Operators &amp; RBAC</span>
+                </Link>
+
+                <Link
+                  href="/admin/database"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/admin/database"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Database className="h-4 w-4 shrink-0 text-cyan-500" />
+                  <span>Database &amp; Log Management</span>
+                </Link>
+
+                <Link
+                  href="/settings"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/settings"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Settings className="h-4 w-4 shrink-0 text-emerald-500" />
+                  <span>Admin System Settings</span>
+                </Link>
+              </div>
             </div>
           )}
         </nav>
@@ -398,22 +441,17 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               <span className="h-0.5 w-5 rounded-full bg-[#080808] dark:bg-[#f2f7f4] group-hover:bg-[#8fe617] group-hover:w-3.5 group-hover:translate-x-0.5 transition-all duration-300" />
             </button>
 
-            {/* Circular Logo in Receiver Station */}
+            {/* Brand Title (Logo image removed as requested) */}
             <Link
               href={isSender ? "/register" : "/dashboard"}
-              className="flex items-center gap-2.5 group"
+              className="flex items-center gap-2 group py-1"
               title="Silicon Labs Platform"
             >
-              <div className="h-9 w-9 rounded-full bg-[#f7faf9] dark:bg-[#070908] border-2 border-[#dce7e1] dark:border-[#223126] p-1 shadow-xs flex items-center justify-center overflow-hidden group-hover:border-[#8fe617] group-hover:shadow-[0_0_12px_rgba(143,230,23,0.35)] transition-all shrink-0">
-                <img
-                  src="/logo.png"
-                  alt="Silicon Labs"
-                  className="h-full w-full object-cover rounded-full"
-                />
-              </div>
-              <div className="hidden md:flex items-center gap-1 font-mono text-xs font-extrabold tracking-tight text-[#080808] dark:text-[#f2f7f4]">
+              <div className="flex items-center gap-1.5 font-mono text-sm font-black tracking-tight text-[#080808] dark:text-[#f2f7f4]">
                 <span>SILICON</span>
-                <span className="text-[#080808] bg-[#8fe617] px-1 rounded text-[10px] font-black">LABS</span>
+                <span className="text-[#062404] bg-[#8fe617] px-1.5 py-0.5 rounded-md text-xs font-black shadow-xs">
+                  LABS
+                </span>
               </div>
             </Link>
           </div>

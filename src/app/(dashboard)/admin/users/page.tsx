@@ -7,6 +7,11 @@ import { logoutAction } from "@/actions/auth";
 import { redirect } from "next/navigation";
 import { UsersClient } from "./client";
 
+export const metadata = {
+  title: "Operator Provisioning & RBAC | SILICON LABS",
+  description: "Provision operator accounts and assign role privileges",
+};
+
 export default async function AdminUsersPage() {
   const session = await getSession();
   if (!session || session.role !== "ADMIN") {
@@ -26,26 +31,26 @@ export default async function AdminUsersPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto text-[#080808] dark:text-[#f2f7f4]">
       {/* Top Breadcrumb & Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#dce7e1] dark:border-[#223126] pb-5">
         <div>
-          <div className="flex items-center gap-2 text-xs font-mono text-neutral-500 mb-1">
-            <Link href="/dashboard" className="hover:text-black transition-colors flex items-center gap-1">
+          <div className="flex items-center gap-2 text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">
+            <Link href="/dashboard" className="hover:text-[#8fe617] transition-colors flex items-center gap-1">
               <ArrowLeft className="h-3 w-3" />
               <span>Dashboard</span>
             </Link>
             <span>/</span>
-            <span className="text-black font-semibold">Administration</span>
+            <span className="text-[#080808] dark:text-[#f2f7f4] font-semibold">Administration</span>
             <span>/</span>
-            <span className="text-black">Security & Roles</span>
+            <span className="text-[#8fe617]">Security &amp; Roles</span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-black flex items-center gap-2">
-            <Shield className="h-5 w-5 text-black" />
-            <span>User & RBAC Administration</span>
+          <h1 className="text-2xl font-black tracking-tight text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2.5">
+            <Shield className="h-6 w-6 text-[#8fe617]" />
+            <span>Operator Provisioning &amp; RBAC Control</span>
           </h1>
-          <p className="text-xs text-neutral-500 mt-1">
-            Control institutional access privileges, provision credentials, and assign operator roles
+          <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-1 font-mono">
+            Control institutional access privileges, provision operator credentials, and manage workstation accounts
           </p>
         </div>
 
@@ -53,7 +58,7 @@ export default async function AdminUsersPage() {
           <form action={logoutAction}>
             <button
               type="submit"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-mono font-semibold text-red-700 hover:bg-red-100 transition-colors shadow-xs"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 px-3.5 py-2 text-xs font-mono font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shadow-xs cursor-pointer"
               title="End admin session"
             >
               <LogOut className="h-3.5 w-3.5" />
