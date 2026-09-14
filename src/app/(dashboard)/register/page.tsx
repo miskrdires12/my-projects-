@@ -25,6 +25,10 @@ import {
   Loader2,
   RotateCcw,
   Receipt,
+  Download,
+  Wifi,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react";
 import { createStudentAction, getCustomFieldsAction, checkStudentIdAvailabilityAction } from "@/actions/students";
 import type { StudentFormInput } from "@/lib/validations";
@@ -80,6 +84,13 @@ export default function RegisterPage() {
   const [editedPhotoPreview, setEditedPhotoPreview] = useState<string | null>(null);
   const [officialPhotoPath, setOfficialPhotoPath] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Offline-First Queue & Network State
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+  const [offlinePendingQueue, setOfflinePendingQueue] = useState<any[]>([]);
+  const [isSyncingOfflineQueue, setIsSyncingOfflineQueue] = useState<boolean>(false);
 
   // Core Form Fields
   const [formData, setFormData] = useState<Partial<StudentFormInput>>({
@@ -137,7 +148,87 @@ export default function RegisterPage() {
         if (fields) setCustomFieldsList(fields as CustomFieldMeta[]);
       })
       .catch(() => {});
+
+    // Hydrate offline pending registrations from storage
+    try {
+      const rawQueue = localStorage.getItem("sb_offline_pending_students");
+      if (rawQueue) {
+        const parsed = JSON.parse(rawQueue);
+        if (Array.isArray(parsed)) {
+          setOfflinePendingQueue(parsed);
+        }
+      }
+    } catch {}
+
+    // Network status listener
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
+
+  // Download Offline Backup JSON
+  const handleDownloadOfflineBackup = () => {
+    if (offlinePendingQueue.length === 0) {
+      alert("No offline records currently pending.");
+      return;
+    }
+    const dataStr = JSON.stringify(offlinePendingQueue, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const dateTag = new Date().toISOString().replace(/[:.]/g, "-");
+    a.download = `Student_Bridge_Offline_Backup_${dateTag}.json`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      try {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 500);
+  };
+
+  // Sync Offline Queue to Directory
+  const handleSyncOfflineQueue = async () => {
+    if (offlinePendingQueue.length === 0 || isSyncingOfflineQueue) return;
+    setIsSyncingOfflineQueue(true);
+    setErrorMessage(null);
+    let successfulCount = 0;
+    const remainingQueue = [...offlinePendingQueue];
+
+    for (let i = 0; i < offlinePendingQueue.length; i++) {
+      const item = offlinePendingQueue[i];
+      try {
+        const res = await createStudentAction(item.payload);
+        if (res.success || (res.error && res.error.includes("already exists"))) {
+          successfulCount++;
+          await saveStudentToDB(item.record);
+          publishStudentSync("UPSERT", item.record).catch(() => {});
+          const idx = remainingQueue.findIndex((q) => q.record.studentId === item.record.studentId);
+          if (idx !== -1) remainingQueue.splice(idx, 1);
+        }
+      } catch (e) {
+        console.warn("Sync failed for record:", item.record?.studentId, e);
+      }
+    }
+
+    setOfflinePendingQueue(remainingQueue);
+    try {
+      localStorage.setItem("sb_offline_pending_students", JSON.stringify(remainingQueue));
+    } catch {}
+    setIsSyncingOfflineQueue(false);
+
+    if (successfulCount > 0) {
+      alert(`⚡ Successfully synced ${successfulCount} offline student(s) into directory!`);
+    }
+  };
 
   // Auto-reset countdown timer when "Sent Successfully" dialog is shown
   useEffect(() => {
@@ -412,18 +503,54 @@ export default function RegisterPage() {
           })),
         };
 
-        // 1. Save to high-capacity IndexedDB (stores 6,000+ students safely with photos)
+        // 1. Save immediately to high-capacity IndexedDB + persistent local mirror
         await saveStudentToDB(record);
 
-        // 2. Broadcast immediately to Receiver Workstation via Cloud Sync
+        // 2. Check if device is offline
+        const isCurrentlyOffline = typeof navigator !== "undefined" ? !navigator.onLine : false;
+
+        if (isCurrentlyOffline) {
+          const queueItem = { payload, record, timestamp: new Date().toISOString() };
+          const nextQueue = [...offlinePendingQueue, queueItem];
+          setOfflinePendingQueue(nextQueue);
+          try {
+            localStorage.setItem("sb_offline_pending_students", JSON.stringify(nextQueue));
+          } catch {}
+
+          setSentSuccessfullyData({
+            studentId: payload.studentId,
+            fullName: payload.fullName,
+            grade: payload.grade,
+            sex: payload.sex,
+          });
+          return;
+        }
+
+        // 3. Broadcast immediately to Receiver Workstation via Cloud Sync
         publishStudentSync("UPSERT", record).catch(() => {});
 
-        // 3. Dual-persist to server action
-        createStudentAction(payload).catch((err) => {
-          console.warn("Server action background sync notice:", err);
-        });
+        // 4. Submit to server action with automatic offline fallback
+        try {
+          const res = await createStudentAction(payload);
+          if (!res.success && res.error && !res.error.includes("already exists")) {
+            const queueItem = { payload, record, timestamp: new Date().toISOString() };
+            const nextQueue = [...offlinePendingQueue, queueItem];
+            setOfflinePendingQueue(nextQueue);
+            try {
+              localStorage.setItem("sb_offline_pending_students", JSON.stringify(nextQueue));
+            } catch {}
+          }
+        } catch (serverErr) {
+          console.warn("Server action connection notice; queued offline:", serverErr);
+          const queueItem = { payload, record, timestamp: new Date().toISOString() };
+          const nextQueue = [...offlinePendingQueue, queueItem];
+          setOfflinePendingQueue(nextQueue);
+          try {
+            localStorage.setItem("sb_offline_pending_students", JSON.stringify(nextQueue));
+          } catch {}
+        }
 
-        // 4. Show "Sent Successfully!" confirmation modal
+        // 5. Show "Sent Successfully!" confirmation modal
         setSentSuccessfullyData({
           studentId: payload.studentId,
           fullName: payload.fullName,
@@ -482,6 +609,65 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-[#f7faf9] dark:bg-[#070908] text-[#080808] dark:text-[#f2f7f4] pb-16 transition-colors duration-200">
       {/* Phone-Centric Container */}
       <div className="max-w-xl mx-auto px-4 pt-4 space-y-4">
+
+        {/* Offline Queue & Network Status Banner */}
+        {(offlinePendingQueue.length > 0 || !isOnline) && (
+          <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/30 p-4 shadow-sm space-y-3 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                {!isOnline ? (
+                  <WifiOff className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                ) : (
+                  <Wifi className="h-4 w-4 text-[#8fe617] shrink-0" />
+                )}
+                <div>
+                  <div className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2 font-mono">
+                    <span>{!isOnline ? "Working Offline" : "Network Connected"}</span>
+                    {offlinePendingQueue.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-black">
+                        {offlinePendingQueue.length} Queued
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-[#6b7771] dark:text-[#8a9e93]">
+                    {offlinePendingQueue.length > 0
+                      ? "Enrolled students stored safely on this phone with full photos."
+                      : "Ready to sync records back into student directory."}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {offlinePendingQueue.length > 0 && (
+              <div className="flex items-center gap-2 pt-1 border-t border-amber-500/20">
+                <button
+                  type="button"
+                  onClick={handleDownloadOfflineBackup}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white dark:bg-[#161e19] border border-amber-500/30 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:bg-neutral-100 dark:hover:bg-[#223126] transition-all shadow-xs cursor-pointer"
+                  title="Download offline registrations backup file (.json)"
+                >
+                  <Download className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Download Backup ({offlinePendingQueue.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncOfflineQueue}
+                  disabled={isSyncingOfflineQueue}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#8fe617] text-[#070908] text-xs font-mono font-black hover:brightness-105 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                  title="Sync offline students to server and directory"
+                >
+                  {isSyncingOfflineQueue ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  <span>{isSyncingOfflineQueue ? "Syncing..." : "Sync to Directory"}</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Error Alert Banner */}
         {errorMessage && (
@@ -673,6 +859,36 @@ export default function RegisterPage() {
                   <option value="Female" className="bg-white dark:bg-[#161c18] text-[#080808] dark:text-[#f2f7f4]">Female</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-blue-500">
+                  <ChevronDown className="h-4 w-4 stroke-[2.5]" />
+                </div>
+              </div>
+            </div>
+
+            {/* Blood Type Selector */}
+            <div>
+              <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono flex items-center justify-between">
+                <span>Blood Group / Type</span>
+                <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-normal">Optional</span>
+              </label>
+              <div className="relative">
+                <select
+                  name="bloodType"
+                  value={formData.bloodType || ""}
+                  onChange={handleChange}
+                  className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-red-500 hover:shadow-[0_0_14px_rgba(239,68,68,0.25)] focus:border-red-500 focus:ring-2 focus:ring-red-500/30 focus:outline-none transition-all cursor-pointer"
+                >
+                  <option value="">Select Blood Group (or Unknown)</option>
+                  <option value="A+">A+ (A Positive)</option>
+                  <option value="A-">A- (A Negative)</option>
+                  <option value="B+">B+ (B Positive)</option>
+                  <option value="B-">B- (B Negative)</option>
+                  <option value="AB+">AB+ (AB Positive)</option>
+                  <option value="AB-">AB- (AB Negative)</option>
+                  <option value="O+">O+ (O Positive)</option>
+                  <option value="O-">O- (O Negative)</option>
+                  <option value="Unknown">Unknown / Not Tested</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-red-500">
                   <ChevronDown className="h-4 w-4 stroke-[2.5]" />
                 </div>
               </div>

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { RefreshCw, Camera } from "lucide-react";
-import { reportPhotoTransmissionFailureAction } from "@/actions/students";
 
 interface ResilientStudentPhotoProps {
   src?: string | null;
@@ -28,7 +27,7 @@ export const ResilientStudentPhoto: React.FC<ResilientStudentPhotoProps> = ({
   containerClassName = "",
   showInitialsOnEmpty = true,
   priority = false,
-  onAutoDelete,
+  onAutoDelete: _onAutoDelete,
 }) => {
   const [resolvedSrc, setResolvedSrc] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(src));
@@ -129,42 +128,10 @@ export const ResilientStudentPhoto: React.FC<ResilientStudentPhotoProps> = ({
         setResolvedSrc(`${src}${separator}retry=${nextCount}&t=${Date.now()}`);
       }, nextCount * 1200);
     } else {
-      // 3 STRIKES EXHAUSTED: Low internet transmission failure!
+      // 3 STRIKES EXHAUSTED: Offline / Low signal state (Photo preserved, NEVER auto-deleted)
       setIsLoading(false);
       setHasError(true);
       setIsRetrying(false);
-
-      // 1. Purge corrupted/dropped URL from local CacheStorage
-      if (src && typeof window !== "undefined" && "caches" in window) {
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.delete(src);
-        }).catch(() => {});
-      }
-
-      // 2. Auto-delete from receiver state & database, and tell sender to retake
-      if (studentId) {
-        if (onAutoDelete) {
-          onAutoDelete(studentId, fullName, src || undefined);
-        }
-
-        reportPhotoTransmissionFailureAction({
-          studentId,
-          fullName,
-          photoPath: src || null,
-        }).catch(() => {});
-
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("siliconlabs_notification", {
-              detail: {
-                title: "Low Internet: Retake Photo",
-                desc: `Photo transmission failed for ${fullName || studentId}. Auto-deleted from receiver. Sender has been alerted to retake photo.`,
-                type: "warning",
-              },
-            })
-          );
-        }
-      }
     }
   };
 
@@ -211,16 +178,16 @@ export const ResilientStudentPhoto: React.FC<ResilientStudentPhotoProps> = ({
         </div>
       )}
 
-      {/* Network Drop / 3-Strike Exhausted: Auto-Deleted Status & Retry */}
+      {/* Network Drop / Offline State: Preserved Status & Retry */}
       {hasError && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-1 text-center bg-surface-secondary/95 dark:bg-[#111613]/95 backdrop-blur-xs">
           <span className="font-mono font-bold text-xs text-[#8fe617]/80">{initials}</span>
           <div className="mt-1 flex flex-col items-center gap-0.5">
             <span className="text-[7.5px] font-mono text-amber-500 dark:text-amber-400 font-bold leading-tight">
-              Low Net • Auto-Deleted
+              Offline • Pending
             </span>
             <span className="text-[7px] font-mono text-foreground-subtle dark:text-[#6c8074]">
-              Sender retake alerted
+              Photo preserved
             </span>
           </div>
           <button

@@ -818,11 +818,8 @@ export async function reportPhotoTransmissionFailureAction(params: {
 
     if (student) {
       const studentName = params.fullName || student.fullName;
-      // 2. Auto-delete photo from database so it never appears when inspecting the database
-      await prisma.student.update({
-        where: { id: student.id },
-        data: { photoPath: null },
-      });
+      // Do NOT delete photo from database; preserve existing record and flag pending sync
+      // Photo is safely kept in database and local cache
 
       // 3. Log real audit trail event
       await createSafeAuditLog({
@@ -833,7 +830,7 @@ export async function reportPhotoTransmissionFailureAction(params: {
           studentId: student.studentId,
           fullName: studentName,
           previousPhoto: photoPath || student.photoPath,
-          reason: "Low internet connection during transmission: Photo dropped after 3 retry strikes. Auto-deleted from receiver. Sender must retake photo.",
+          reason: "Low internet connection during transmission: Photo preserved in database. Sender/Receiver can attach or sync photo anytime.",
         },
         userId: session?.userId,
       });

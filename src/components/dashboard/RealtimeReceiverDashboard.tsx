@@ -266,7 +266,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         setLastUpdated(new Date().toLocaleTimeString());
       },
       (deletedStudentId) => {
-        // CRITICAL FIX: Handle live deletion immediately with 0ms delay
         try {
           const rawDel = localStorage.getItem("sb_deleted_student_ids") || "[]";
           const list: string[] = JSON.parse(rawDel);
@@ -275,6 +274,14 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
             localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
           }
           deleteStudentFromDB(deletedStudentId).catch(() => {});
+          const rawPerm = localStorage.getItem("sb_students_permanent_backup");
+          if (rawPerm) {
+            const permList = JSON.parse(rawPerm);
+            const filtered = permList.filter(
+              (s: any) => s.id !== deletedStudentId && s.studentId !== deletedStudentId
+            );
+            localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filtered));
+          }
         } catch {}
 
         setAllStudentsList((list) => list.filter((s) => s.studentId !== deletedStudentId && s.id !== deletedStudentId));

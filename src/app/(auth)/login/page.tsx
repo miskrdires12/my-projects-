@@ -19,7 +19,6 @@ import {
   Sun,
 } from "lucide-react";
 import { loginAction, quickRoleLoginAction } from "@/actions/auth";
-import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
 
 type WorkstationRole = "SENDER" | "RECEIVER" | "ADMIN";
 
@@ -79,10 +78,6 @@ export default function LoginPage() {
         document.documentElement.classList.remove("dark");
       }
     } catch {}
-
-    // Wipe client-side storage & caches on login screen for privacy
-    purgeSensitiveClientStorage().catch(() => {});
-
     // Prefetch destination routes for instant zero-wait transitions
     router.prefetch("/dashboard");
     router.prefetch("/register");

@@ -18,7 +18,6 @@ import {
   Bell,
   CheckCircle2,
 } from "lucide-react";
-import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
 import { logoutAction } from "@/actions/auth";
 import { getRecentAuditNotificationsAction } from "@/actions/audit";
 
@@ -111,9 +110,6 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
-    try {
-      await purgeSensitiveClientStorage();
-    } catch {}
     await logoutAction();
   };
 

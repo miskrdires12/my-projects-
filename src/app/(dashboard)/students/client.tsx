@@ -6,7 +6,7 @@
 // single photo downloads, and deep profile inspection drawer.
 // ============================================================================
 
-import React, { useState, useTransition, useEffect, useCallback } from "react";
+import React, { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Search,
@@ -28,6 +28,8 @@ import {
   FileSpreadsheet,
   Crop,
   Loader2,
+  Camera,
+  ImagePlus,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -42,6 +44,7 @@ import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
 import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver } from "@/lib/export-utils";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
+import { CameraModal } from "@/components/camera/CameraModal";
 import { ResilientStudentPhoto } from "@/components/ui/ResilientStudentPhoto";
 
 interface StudentExtended {
@@ -353,6 +356,38 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [sortField, setSortField] = useState<keyof StudentExtended | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
+  // Photo Attachment Workflow for Missing / Pending Photos
+  const [attachTargetStudent, setAttachTargetStudent] = useState<StudentExtended | null>(null);
+  const [isAttachCameraOpen, setIsAttachCameraOpen] = useState<boolean>(false);
+  const attachFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleStartAttachPhoto = (student: StudentExtended) => {
+    setAttachTargetStudent(student);
+  };
+
+  const handleAttachFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !attachTargetStudent) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const target = attachTargetStudent;
+      setAttachTargetStudent(null);
+      setEditingStudent({ ...target, photoPath: dataUrl });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleAttachCameraCapture = (_file: File, previewUrl: string) => {
+    setIsAttachCameraOpen(false);
+    if (!attachTargetStudent) return;
+    const target = attachTargetStudent;
+    setAttachTargetStudent(null);
+    setEditingStudent({ ...target, photoPath: previewUrl });
+  };
+
   const handleSort = (field: keyof StudentExtended) => {
     if (sortField === field) {
       if (sortDirection === "asc") {
@@ -593,6 +628,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
       }
 
+      const rawPerm = localStorage.getItem("sb_students_permanent_backup");
+      if (rawPerm) {
+        const permList = JSON.parse(rawPerm);
+        const filteredPerm = permList.filter(
+          (s: any) => s.id !== id && s.studentId !== studentId && s.id !== studentId && s.studentId !== id
+        );
+        localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filteredPerm));
+      }
+
       // Broadcast to live sync channel so receiver dashboard updates instantly
       publishStudentSync("DELETE", studentId || id).catch(() => {});
     } catch {}
@@ -663,6 +707,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
         );
         localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
+      }
+
+      const rawPerm = localStorage.getItem("sb_students_permanent_backup");
+      if (rawPerm) {
+        const permList = JSON.parse(rawPerm);
+        const filteredPerm = permList.filter(
+          (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
+        );
+        localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filteredPerm));
       }
 
       // Broadcast each delete to live cloud sync so receiver dashboard updates immediately
@@ -1409,10 +1462,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                         />
                       </td>
 
-                      {/* Photo Thumbnail with Hover Zoom Popover */}
+                      {/* Photo Thumbnail with Hover Zoom Popover or Quick Attach */}
                       <td className="px-4 py-3">
                         <div className="relative group/thumb inline-block">
-                          <div className="h-14 w-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] overflow-hidden flex items-center justify-center shadow-xs transition-transform duration-150 group-hover/thumb:scale-105 cursor-pointer">
+                          <div
+                            onClick={() => {
+                              if (!student.photoPath) {
+                                handleStartAttachPhoto(student);
+                              }
+                            }}
+                            className="h-14 w-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] overflow-hidden flex items-center justify-center shadow-xs transition-transform duration-150 group-hover/thumb:scale-105 cursor-pointer"
+                            title={student.photoPath ? student.fullName : "Click to attach photo"}
+                          >
                             <ResilientStudentPhoto
                               src={student.photoPath}
                               alt={student.fullName}
@@ -1455,15 +1516,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       </td>
 
                       <td className="px-4 py-3.5">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${
-                            student.sex?.toLowerCase() === "female"
-                              ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
-                          }`}
-                        >
-                          {student.sex || "Male"}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                              student.sex?.toLowerCase() === "female"
+                                ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                            }`}
+                          >
+                            {student.sex || "Male"}
+                          </span>
+                          {student.bloodType && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                              🩸 {student.bloodType}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-4 py-3.5 text-sm font-medium text-foreground dark:text-[#f2f7f4]">{student.grade}</td>
@@ -1476,16 +1544,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             <CheckCircle2 className="h-3.5 w-3.5" /> Photo OK
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                            Missing
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleStartAttachPhoto(student)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40 hover:bg-amber-500/25 transition-all shadow-xs cursor-pointer"
+                            title="Click to attach student portrait"
+                          >
+                            <Camera className="h-3.5 w-3.5" />
+                            <span>Attach Photo</span>
+                          </button>
                         )}
                       </td>
 
                       {/* Actions */}
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {student.photoPath && (
+                          {student.photoPath ? (
                             <>
                               <button
                                 type="button"
@@ -1504,6 +1578,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                                 <Crop className="h-4 w-4" />
                               </button>
                             </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleStartAttachPhoto(student)}
+                              className="rounded-lg p-2 text-amber-500 hover:bg-amber-500/10 transition-colors"
+                              title={`Attach Photo (${student.fullName})`}
+                            >
+                              <ImagePlus className="h-4 w-4" />
+                            </button>
                           )}
 
                           <button
@@ -1731,13 +1814,20 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-1.5 w-full max-w-xs pt-2 text-center p-3 rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126]">
-                  <span className="text-xs font-mono font-bold text-amber-500 dark:text-amber-400">
-                    No Photo Assigned / Auto-Deleted
+                <div className="flex flex-col items-center gap-2 w-full max-w-xs pt-2 text-center p-3 rounded-xl bg-surface dark:bg-[#161e19] border border-amber-500/30">
+                  <span className="text-xs font-mono font-bold text-amber-500 dark:text-amber-400 flex items-center gap-1.5">
+                    <Camera className="h-3.5 w-3.5" /> Photo Not Attached
                   </span>
                   <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] leading-normal">
-                    Low internet caused transmission drop after 3 retries. Auto-deleted from receiver. Sender station has been alerted to retake photo.
+                    Photo was not sent or delayed due to internet. You can attach and sync the student photo directly now.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => handleStartAttachPhoto(activeStudent)}
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl bg-[#8fe617] text-[#070908] hover:brightness-105 transition-all shadow-xs cursor-pointer mt-1"
+                  >
+                    <Camera className="h-3.5 w-3.5" /> Attach Photo Now
+                  </button>
                 </div>
               )}
             </div>
@@ -1838,6 +1928,72 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           originalImageSrc={editingStudent.photoPath}
           onClose={() => setEditingStudent(null)}
           onSave={handleSaveEditedPhoto}
+        />
+      )}
+
+      {/* Attach Photo Option Modal */}
+      {attachTargetStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-border dark:border-[#223126] pb-3">
+              <div>
+                <h4 className="text-sm font-bold text-foreground dark:text-[#f2f7f4]">Attach Student Photo</h4>
+                <span className="text-[11px] font-mono text-[#8fe617]">
+                  {attachTargetStudent.fullName} ({attachTargetStudent.studentId})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttachTargetStudent(null)}
+                className="p-1 rounded-lg text-foreground-muted hover:bg-surface-secondary dark:hover:bg-[#161e19] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] leading-relaxed">
+              Choose how you want to attach the portrait for {attachTargetStudent.fullName}. You can crop and refine it before saving.
+            </p>
+
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsAttachCameraOpen(true)}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#8fe617] text-[#062404] py-3 px-4 text-xs font-mono font-black shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer"
+              >
+                <Camera className="h-4 w-4" />
+                <span>Take Photo with Camera</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => attachFileInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] py-2.5 px-4 text-xs font-mono font-bold text-foreground dark:text-[#f2f7f4] hover:bg-neutral-200 dark:hover:bg-[#202b23] transition-colors cursor-pointer"
+              >
+                <Upload className="h-4 w-4" />
+                <span>Upload from Gallery / Files</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file input for attaching photo */}
+      <input
+        type="file"
+        ref={attachFileInputRef}
+        accept="image/*"
+        onChange={handleAttachFileSelected}
+        className="hidden"
+      />
+
+      {/* Studio Camera Modal for attaching photo */}
+      {isAttachCameraOpen && (
+        <CameraModal
+          isOpen={isAttachCameraOpen}
+          onClose={() => setIsAttachCameraOpen(false)}
+          onCapture={handleAttachCameraCapture}
+          initialFacingMode="user"
         />
       )}
     </div>
