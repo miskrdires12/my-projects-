@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import {
   getStudentCountFromDB,
-  getAllStudentsFromDB,
   clearAllStudentsFromDB,
 } from "@/lib/idb-storage";
 import { clearAllStudentsAction } from "@/actions/students";
@@ -217,15 +216,12 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
 
     try {
       localStorage.removeItem("sb_enrolled_students");
+      localStorage.removeItem("sb_students_permanent_backup");
+      localStorage.removeItem("sb_offline_pending_students");
+      localStorage.removeItem("sb_deleted_student_ids");
       localStorage.removeItem("sb_photo_draft");
       localStorage.removeItem("sb_student_draft");
       sessionStorage.clear();
-
-      try {
-        const idbAll = await getAllStudentsFromDB();
-        const allIds = idbAll.flatMap((s: any) => [s.id, s.studentId]).filter(Boolean);
-        localStorage.setItem("sb_deleted_student_ids", JSON.stringify(allIds));
-      } catch {}
 
       await clearAllStudentsFromDB().catch(() => {});
       publishStudentSync("CLEAR").catch(() => {});
@@ -246,10 +242,13 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
     }
   };
 
-  const handleResetSuppressionRegistry = () => {
-    if (confirm("Reset the Deletion Suppression Registry? This allows re-importing previously cleared student IDs.")) {
+  const handlePurgeAllLocalResiduals = () => {
+    if (confirm("Wipe all local client cache residuals and offline queues?")) {
       localStorage.removeItem("sb_deleted_student_ids");
-      alert("Deletion Suppression Registry reset successfully.");
+      localStorage.removeItem("sb_offline_pending_students");
+      localStorage.removeItem("sb_student_draft");
+      localStorage.removeItem("sb_photo_draft");
+      alert("Local storage residuals completely purged.");
     }
   };
 
@@ -920,18 +919,18 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
             <div className="p-4 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] space-y-3">
               <div>
                 <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
-                  Reset Deletion Suppression Registry
+                  Purge Local Residuals & Queues
                 </span>
                 <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block mt-0.5">
-                  Clear the record suppression registry that prevents previously purged student IDs from re-importing.
+                  Wipe all local client cache residuals and offline intake queues with zero ghost traces remaining.
                 </span>
               </div>
               <button
                 type="button"
-                onClick={handleResetSuppressionRegistry}
+                onClick={handlePurgeAllLocalResiduals}
                 className="px-4 py-2 rounded-xl text-xs font-mono font-bold border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all cursor-pointer"
               >
-                Reset Suppression Registry
+                Purge Storage Residuals
               </button>
             </div>
 

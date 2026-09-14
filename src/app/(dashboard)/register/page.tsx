@@ -34,9 +34,9 @@ import { createStudentAction, getCustomFieldsAction, checkStudentIdAvailabilityA
 import type { StudentFormInput } from "@/lib/validations";
 import { CameraModal } from "@/components/camera/CameraModal";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
-import { publishStudentSync } from "@/lib/sync-client";
+import { publishStudentSync, subscribeToCloudSync } from "@/lib/sync-client";
 import { formatPhoneForReceiver } from "@/lib/export-utils";
-import { saveStudentToDB } from "@/lib/idb-storage";
+import { saveStudentToDB, getAllStudentsFromDB } from "@/lib/idb-storage";
 
 interface CustomFieldMeta {
   id: string;
@@ -160,15 +160,26 @@ export default function RegisterPage() {
       }
     } catch {}
 
-    // Network status listener
-    const handleOnline = () => setIsOnline(true);
+    // Network status listener & auto-resend on connection restore
+    const handleOnline = () => {
+      setIsOnline(true);
+      handleSyncOfflineQueue();
+    };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
+    // Automatic Photo Resender: Automatically retries transmission of disrupted/offline records in background
+    const autoResendTimer = setInterval(() => {
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        handleSyncOfflineQueue();
+      }
+    }, 10000);
+
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      clearInterval(autoResendTimer);
     };
   }, []);
 
@@ -229,6 +240,46 @@ export default function RegisterPage() {
       alert(`⚡ Successfully synced ${successfulCount} offline student(s) into directory!`);
     }
   };
+
+  // Background Auto-Resend: Periodically flush offline pending queue whenever online
+  useEffect(() => {
+    if (!isOnline || offlinePendingQueue.length === 0 || isSyncingOfflineQueue) return;
+    const interval = setInterval(() => {
+      handleSyncOfflineQueue();
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [isOnline, offlinePendingQueue.length, isSyncingOfflineQueue]);
+
+  // Realtime Cloud Listener: Auto-respond to Receiver Station photo resend requests
+  useEffect(() => {
+    const unsubscribe = subscribeToCloudSync(
+      () => {},
+      () => {},
+      () => {},
+      async (payload) => {
+        if (payload?.action === "RESEND_PHOTO_REQUEST" && payload.studentId) {
+          const reqId = payload.studentId;
+          // 1. Check offline pending queue
+          const foundInQueue = offlinePendingQueue.find(
+            (q) => q.record?.studentId === reqId || q.record?.id === reqId
+          );
+          if (foundInQueue && foundInQueue.record?.photoPath) {
+            handleSyncOfflineQueue();
+          } else {
+            // 2. Check local client IndexedDB
+            try {
+              const all = await getAllStudentsFromDB();
+              const found = all.find((s: any) => s.studentId === reqId || s.id === reqId);
+              if (found && found.photoPath) {
+                publishStudentSync("UPSERT", found).catch(() => {});
+              }
+            } catch {}
+          }
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, [offlinePendingQueue]);
 
   // Auto-reset countdown timer when "Sent Successfully" dialog is shown
   useEffect(() => {

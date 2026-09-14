@@ -410,13 +410,41 @@ export async function deleteStudentAction(
     const targetDbId = student?.id || idOrStudentId;
 
     if (student) {
-      // 1. Delete dependent child records first to satisfy foreign key constraints
+      // 1. Delete physical photo files from disk if present
+      const photosToDelete: string[] = [];
+      if (student.photoPath && !student.photoPath.startsWith("data:")) {
+        photosToDelete.push(student.photoPath);
+      }
+      try {
+        const dbPhotos = await prisma.studentPhoto.findMany({
+          where: { studentId: student.id },
+          select: { originalPath: true, editedPath: true },
+        });
+        dbPhotos.forEach((p) => {
+          if (p.originalPath && !p.originalPath.startsWith("data:")) photosToDelete.push(p.originalPath);
+          if (p.editedPath && !p.editedPath.startsWith("data:")) photosToDelete.push(p.editedPath);
+        });
+
+        const fs = await import("fs");
+        const path = await import("path");
+        photosToDelete.forEach((rel) => {
+          try {
+            const cleanRel = rel.split("?")[0].replace(/^\//, "");
+            const fullPath = path.join(process.cwd(), "public", cleanRel);
+            if (fs.existsSync(fullPath)) {
+              fs.unlinkSync(fullPath);
+            }
+          } catch {}
+        });
+      } catch {}
+
+      // 2. Delete dependent child records first to satisfy foreign key constraints
       await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
       await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }).catch(() => {});
       await prisma.studentQR.deleteMany({ where: { studentId: student.id } }).catch(() => {});
       await prisma.transferRecord.deleteMany({ where: { studentId: student.id } }).catch(() => {});
 
-      // 2. Delete student record
+      // 3. Delete student record permanently from database
       await prisma.student.delete({
         where: { id: student.id },
       }).catch((e) => {

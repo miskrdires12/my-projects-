@@ -153,24 +153,15 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     try {
       const idbStudents = await getAllStudentsFromDB();
 
-      // Read tombstoned deleted IDs to ensure deleted items NEVER reappear
-      let deletedIds = new Set<string>();
-      try {
-        const rawDel = localStorage.getItem("sb_deleted_student_ids");
-        if (rawDel) deletedIds = new Set(JSON.parse(rawDel));
-      } catch {}
-
-      const validIdb = idbStudents.filter((s) => !deletedIds.has(s.id) && !deletedIds.has(s.studentId));
+      const validIdb = idbStudents;
 
       setData((prev) => {
         const map = new Map<string, any>();
         // Add valid IDB students
         validIdb.forEach((s) => map.set(s.studentId, s));
-        // Add recent server students if not deleted
+        // Add recent server students
         (prev.recentStudents || []).forEach((s) => {
-          if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-            if (!map.has(s.studentId)) map.set(s.studentId, s);
-          }
+          if (!map.has(s.studentId)) map.set(s.studentId, s);
         });
 
         const mergedList = Array.from(map.values());
@@ -208,15 +199,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   useEffect(() => {
     const unsubscribe = subscribeToCloudSync(
       (newStudent) => {
-        // When a new student arrives, check tombstone
-        try {
-          const rawDel = localStorage.getItem("sb_deleted_student_ids");
-          if (rawDel) {
-            const delSet = new Set(JSON.parse(rawDel));
-            if (delSet.has(newStudent.id) || delSet.has(newStudent.studentId)) return;
-          }
-        } catch {}
-
         setAllStudentsList((list) => {
           const filtered = list.filter((s) => s.studentId !== newStudent.studentId && s.id !== newStudent.id);
           // NEWEST RECORD AT THE VERY TOP
@@ -267,21 +249,38 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       },
       (deletedStudentId) => {
         try {
-          const rawDel = localStorage.getItem("sb_deleted_student_ids") || "[]";
-          const list: string[] = JSON.parse(rawDel);
-          if (!list.includes(deletedStudentId)) {
-            list.push(deletedStudentId);
-            localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
-          }
           deleteStudentFromDB(deletedStudentId).catch(() => {});
           const rawPerm = localStorage.getItem("sb_students_permanent_backup");
           if (rawPerm) {
-            const permList = JSON.parse(rawPerm);
-            const filtered = permList.filter(
-              (s: any) => s.id !== deletedStudentId && s.studentId !== deletedStudentId
-            );
-            localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filtered));
+            try {
+              const permList = JSON.parse(rawPerm);
+              const filtered = permList.filter(
+                (s: any) => s.id !== deletedStudentId && s.studentId !== deletedStudentId
+              );
+              localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filtered));
+            } catch {}
           }
+          const rawEnrolled = localStorage.getItem("sb_enrolled_students");
+          if (rawEnrolled) {
+            try {
+              const enrolledList = JSON.parse(rawEnrolled);
+              const filtered = enrolledList.filter(
+                (s: any) => s.id !== deletedStudentId && s.studentId !== deletedStudentId
+              );
+              localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
+            } catch {}
+          }
+          const rawPending = localStorage.getItem("sb_offline_pending_students");
+          if (rawPending) {
+            try {
+              const pendingList = JSON.parse(rawPending);
+              const filtered = pendingList.filter(
+                (s: any) => s.studentId !== deletedStudentId && s.id !== deletedStudentId
+              );
+              localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
+            } catch {}
+          }
+          localStorage.removeItem("sb_deleted_student_ids");
         } catch {}
 
         setAllStudentsList((list) => list.filter((s) => s.studentId !== deletedStudentId && s.id !== deletedStudentId));
@@ -341,20 +340,13 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       if (res.ok) {
         const json = await res.json();
 
-        // Read tombstones to filter out deleted records
-        let deletedIds = new Set<string>();
-        try {
-          const rawDel = localStorage.getItem("sb_deleted_student_ids");
-          if (rawDel) deletedIds = new Set(JSON.parse(rawDel));
-        } catch {}
-
         let localCount = 0;
         let localPhotos = 0;
         let localReady = 0;
 
         try {
           const idbList = await getAllStudentsFromDB();
-          const validIdb = idbList.filter((s) => !deletedIds.has(s.id) && !deletedIds.has(s.studentId));
+          const validIdb = idbList;
 
           localCount = validIdb.length;
           localPhotos = validIdb.filter((s: any) => Boolean(s.photoPath)).length;
@@ -363,9 +355,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           const map = new Map<string, any>();
           validIdb.forEach((s) => map.set(s.studentId, s));
           (json.recentStudents || []).forEach((s: any) => {
-            if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-              if (!map.has(s.studentId)) map.set(s.studentId, s);
-            }
+            if (!map.has(s.studentId)) map.set(s.studentId, s);
           });
 
           const merged = Array.from(map.values());
@@ -374,7 +364,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           setAllStudentsList(merged);
         } catch {
           if (json.recentStudents) {
-            const validRecent = json.recentStudents.filter((s: any) => !deletedIds.has(s.id) && !deletedIds.has(s.studentId));
+            const validRecent = [...json.recentStudents];
             validRecent.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
             setAllStudentsList(validRecent);
           }
@@ -385,8 +375,9 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           const photos = Math.max(json.metrics.photosCount, localPhotos);
           const ready = Math.max(json.metrics.readyForPrintCount, localReady);
 
-          const validRecent = (json.recentStudents && json.recentStudents.length > 0 ? json.recentStudents : prev.recentStudents)
-            .filter((s: any) => !deletedIds.has(s.id) && !deletedIds.has(s.studentId));
+          const validRecent = [
+            ...(json.recentStudents && json.recentStudents.length > 0 ? json.recentStudents : prev.recentStudents),
+          ];
           validRecent.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
           return {
@@ -397,7 +388,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
             activeJobsCount: json.metrics.activeJobsCount,
             recentStudents: validRecent.slice(0, 15),
             recentBatches: json.recentBatches || [],
-            missingPhotos: (json.missingPhotos || []).filter((s: any) => !deletedIds.has(s.id) && !deletedIds.has(s.studentId)),
+            missingPhotos: json.missingPhotos || [],
             gradeBreakdown: json.gradeBreakdown || prev.gradeBreakdown,
             demographics: json.demographics || prev.demographics,
             batchPlanning: json.batchPlanning || prev.batchPlanning,

@@ -28,8 +28,8 @@ import {
   FileSpreadsheet,
   Crop,
   Loader2,
-  Camera,
-  ImagePlus,
+  Zap,
+  Link2,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -44,7 +44,6 @@ import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
 import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver } from "@/lib/export-utils";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
-import { CameraModal } from "@/components/camera/CameraModal";
 import { ResilientStudentPhoto } from "@/components/ui/ResilientStudentPhoto";
 
 interface StudentExtended {
@@ -155,14 +154,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // 1. Initial Load: Merge server students, high-capacity IndexedDB, localStorage, and pull from /api/students/sync
   useEffect(() => {
     const loadAndMerge = async () => {
-      let deletedIds = new Set<string>();
-      try {
-        const rawDel = localStorage.getItem("sb_deleted_student_ids");
-        if (rawDel) {
-          deletedIds = new Set(JSON.parse(rawDel));
-        }
-      } catch {}
-
       // Load from IndexedDB (supports 6,000+ students with high-res photos)
       let idbList: any[] = [];
       try {
@@ -177,19 +168,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       const map = new Map<string, StudentExtended>();
       idbList.forEach((s) => {
-        if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-          map.set(s.studentId, s as any);
-        }
+        map.set(s.studentId, s as any);
       });
       localList.forEach((s) => {
-        if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-          if (!map.has(s.studentId)) map.set(s.studentId, s);
-        }
+        if (!map.has(s.studentId)) map.set(s.studentId, s);
       });
       students.forEach((s) => {
-        if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-          map.set(s.studentId, s);
-        }
+        map.set(s.studentId, s);
       });
 
       const immediateMerged = Array.from(map.values());
@@ -210,14 +195,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               setDisplayStudents((prev) => {
                 const freshMap = new Map<string, StudentExtended>();
                 data.students.forEach((s: any) => {
-                  if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-                    freshMap.set(s.studentId, s);
-                  }
+                  freshMap.set(s.studentId, s);
                 });
                 prev.forEach((s) => {
-                  if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-                    freshMap.set(s.studentId, s);
-                  }
+                  freshMap.set(s.studentId, s);
                 });
                 const next = Array.from(freshMap.values());
                 next.sort((a, b) => {
@@ -251,16 +232,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   useEffect(() => {
     const unsubscribe = subscribeToCloudSync(
       (newStudent) => {
-        let deletedIds = new Set<string>();
-        try {
-          const rawDel = localStorage.getItem("sb_deleted_student_ids");
-          if (rawDel) deletedIds = new Set(JSON.parse(rawDel));
-        } catch {}
-
-        if (deletedIds.has(newStudent.id) || deletedIds.has(newStudent.studentId)) {
-          return;
-        }
-
         setDisplayStudents((prev) => {
           const map = new Map<string, StudentExtended>();
           // Put the newest student at the very top
@@ -281,14 +252,29 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         });
       },
       (studentIdOrId) => {
-        // Record in tombstone storage so it is never rehydrated
         try {
-          const rawDel = localStorage.getItem("sb_deleted_student_ids") || "[]";
-          const list: string[] = JSON.parse(rawDel);
-          if (!list.includes(studentIdOrId)) {
-            list.push(studentIdOrId);
-            localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
+          deleteStudentFromDB(studentIdOrId).catch(() => {});
+          const rawPerm = localStorage.getItem("sb_students_permanent_backup");
+          if (rawPerm) {
+            try {
+              const permList = JSON.parse(rawPerm);
+              const filtered = permList.filter(
+                (s: any) => s.id !== studentIdOrId && s.studentId !== studentIdOrId
+              );
+              localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filtered));
+            } catch {}
           }
+          const rawPending = localStorage.getItem("sb_offline_pending_students");
+          if (rawPending) {
+            try {
+              const pendingList = JSON.parse(rawPending);
+              const filtered = pendingList.filter(
+                (s: any) => s.studentId !== studentIdOrId && s.id !== studentIdOrId
+              );
+              localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
+            } catch {}
+          }
+          localStorage.removeItem("sb_deleted_student_ids");
         } catch {}
 
         setDisplayStudents((prev) => {
@@ -301,32 +287,25 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         setDisplayStudents([]);
         try {
           localStorage.removeItem("sb_enrolled_students");
+          localStorage.removeItem("sb_students_permanent_backup");
+          localStorage.removeItem("sb_offline_pending_students");
+          localStorage.removeItem("sb_deleted_student_ids");
         } catch {}
       }
     );
 
     const handleStorage = () => {
       try {
-        let deletedIds = new Set<string>();
-        try {
-          const rawDel = localStorage.getItem("sb_deleted_student_ids");
-          if (rawDel) deletedIds = new Set(JSON.parse(rawDel));
-        } catch {}
-
         const raw = localStorage.getItem("sb_enrolled_students");
         if (raw) {
           const localList: StudentExtended[] = parseSecureLocalList(raw);
           const map = new Map<string, StudentExtended>();
           localList.forEach((s) => {
-            if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-              map.set(s.studentId, s);
-            }
+            map.set(s.studentId, s);
           });
           setDisplayStudents((prev) => {
             prev.forEach((s) => {
-              if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
-                map.set(s.studentId, s);
-              }
+              map.set(s.studentId, s);
             });
             return Array.from(map.values());
           });
@@ -356,36 +335,72 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [sortField, setSortField] = useState<keyof StudentExtended | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-  // Photo Attachment Workflow for Missing / Pending Photos
-  const [attachTargetStudent, setAttachTargetStudent] = useState<StudentExtended | null>(null);
-  const [isAttachCameraOpen, setIsAttachCameraOpen] = useState<boolean>(false);
+  // Direct Photo Upload, Auto-Resend & Link Generation State
+  const [targetStudentForUpload, setTargetStudentForUpload] = useState<StudentExtended | null>(null);
   const attachFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleStartAttachPhoto = (student: StudentExtended) => {
-    setAttachTargetStudent(student);
+  const handleDirectFileUploadClick = (student: StudentExtended) => {
+    setTargetStudentForUpload(student);
+    if (attachFileInputRef.current) {
+      attachFileInputRef.current.value = "";
+      attachFileInputRef.current.click();
+    }
   };
 
   const handleAttachFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !attachTargetStudent) return;
+    if (!file || !targetStudentForUpload) return;
 
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      const target = attachTargetStudent;
-      setAttachTargetStudent(null);
+      const target = targetStudentForUpload;
+      setTargetStudentForUpload(null);
       setEditingStudent({ ...target, photoPath: dataUrl });
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-  const handleAttachCameraCapture = (_file: File, previewUrl: string) => {
-    setIsAttachCameraOpen(false);
-    if (!attachTargetStudent) return;
-    const target = attachTargetStudent;
-    setAttachTargetStudent(null);
-    setEditingStudent({ ...target, photoPath: previewUrl });
+  // 1-Click Direct Image Link Copy
+  const handleCopyImageLink = (student: StudentExtended) => {
+    const sId = student.studentId || student.id;
+    const url = `${window.location.origin}/api/uploads?studentId=${encodeURIComponent(sId)}`;
+    try {
+      navigator.clipboard.writeText(url);
+      alert(`🔗 Direct Image Link Generated & Copied to Clipboard:\n${url}\n\nThis direct endpoint serves the portrait dynamically across any device.`);
+    } catch {
+      prompt("Direct Image Link (Press Ctrl+C to copy):", url);
+    }
+  };
+
+  // 1-Click Auto-Resend / Sync from Sender Station & Cloud Vault
+  const handleAutoResendPhoto = async (student: StudentExtended) => {
+    const sId = student.studentId || student.id;
+    try {
+      // 1. Check if server already has the photo uploaded
+      const res = await fetch(`/api/uploads?studentId=${encodeURIComponent(sId)}`);
+      if (res.ok && res.headers.get("content-type")?.startsWith("image/")) {
+        const directUrl = `/api/uploads?studentId=${encodeURIComponent(sId)}`;
+        setDisplayStudents((prev) =>
+          prev.map((s) => (s.studentId === sId || s.id === sId ? { ...s, photoPath: directUrl } : s))
+        );
+        if (activeStudent && (activeStudent.studentId === sId || activeStudent.id === sId)) {
+          setActiveStudent((prev) => (prev ? { ...prev, photoPath: directUrl } : null));
+        }
+        saveStudentToDB({ ...student, photoPath: directUrl } as any).catch(() => {});
+        alert(`⚡ Direct photo successfully resolved and linked for ${student.fullName} (${sId})!`);
+        return;
+      }
+    } catch {}
+
+    // 2. Request auto-resend from sender station over cloud sync bus
+    publishStudentSync("RESEND_PHOTO_REQUEST", {
+      studentId: sId,
+      fullName: student.fullName,
+    }).catch(() => {});
+
+    alert(`⚡ Auto-resend signal dispatched to Sender Station for ${student.fullName} (${sId})!\n\nIf the sender station has this student queued or stored locally, the photo will auto-transmit immediately.`);
   };
 
   const handleSort = (field: keyof StudentExtended) => {
@@ -604,44 +619,47 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     router.push(`/print-engine?ids=${Array.from(selectedIds).join(",")}`);
   };
 
-  // Single Delete
+  // Single Delete (Total Expunge across all tiers: DB, disk files, IndexedDB, local storage)
   const handleDelete = (id: string, name: string, studentId?: string) => {
     if (!confirm(`Are you sure you want to permanently delete student "${name}"?`)) return;
 
-    // 1. Tombstone in localStorage so it never re-appears
     try {
-      const rawDel = localStorage.getItem("sb_deleted_student_ids") || "[]";
-      const list: string[] = JSON.parse(rawDel);
-      if (id && !list.includes(id)) list.push(id);
-      if (studentId && !list.includes(studentId)) list.push(studentId);
-      localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
-
       deleteStudentFromDB(id).catch(() => {});
       if (studentId) deleteStudentFromDB(studentId).catch(() => {});
 
       const raw = localStorage.getItem("sb_enrolled_students");
       if (raw) {
-        const localList = JSON.parse(raw);
+        const localList = parseSecureLocalList(raw);
         const filtered = localList.filter(
           (s: any) => s.id !== id && s.studentId !== studentId && s.id !== studentId
         );
-        localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
+        safeSaveLocalEnrolledStudents(filtered);
       }
 
       const rawPerm = localStorage.getItem("sb_students_permanent_backup");
       if (rawPerm) {
-        const permList = JSON.parse(rawPerm);
-        const filteredPerm = permList.filter(
-          (s: any) => s.id !== id && s.studentId !== studentId && s.id !== studentId && s.studentId !== id
-        );
-        localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filteredPerm));
+        try {
+          const permList = JSON.parse(rawPerm);
+          const filteredPerm = permList.filter(
+            (s: any) => s.id !== id && s.studentId !== studentId && s.id !== studentId && s.studentId !== id
+          );
+          localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filteredPerm));
+        } catch {}
       }
 
-      // Broadcast to live sync channel so receiver dashboard updates instantly
+      const rawPending = localStorage.getItem("sb_offline_pending_students");
+      if (rawPending) {
+        try {
+          const pendingList = JSON.parse(rawPending);
+          const filtered = pendingList.filter((s: any) => s.studentId !== studentId && s.id !== id);
+          localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
+        } catch {}
+      }
+
+      localStorage.removeItem("sb_deleted_student_ids");
       publishStudentSync("DELETE", studentId || id).catch(() => {});
     } catch {}
 
-    // 2. Immediate UI update
     setDisplayStudents((prev) =>
       prev.filter((s) => s.id !== id && s.studentId !== studentId && s.id !== studentId)
     );
@@ -649,7 +667,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       setActiveStudent(null);
     }
 
-    // 3. Server action
     startTransition(async () => {
       try {
         const res = await deleteStudentAction(id, studentId);
@@ -683,17 +700,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     });
 
     try {
-      const rawDel = localStorage.getItem("sb_deleted_student_ids") || "[]";
-      const list: string[] = JSON.parse(rawDel);
-      idsToDelete.forEach((id) => {
-        if (!list.includes(id)) list.push(id);
-      });
-      selectedItems.forEach((item) => {
-        if (item.id && !list.includes(item.id)) list.push(item.id);
-        if (item.studentId && !list.includes(item.studentId)) list.push(item.studentId);
-      });
-      localStorage.setItem("sb_deleted_student_ids", JSON.stringify(list));
-
       idsToDelete.forEach((id) => deleteStudentFromDB(id).catch(() => {}));
       selectedItems.forEach((item) => {
         if (item.id) deleteStudentFromDB(item.id).catch(() => {});
@@ -702,23 +708,37 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       const raw = localStorage.getItem("sb_enrolled_students");
       if (raw) {
-        const localList = JSON.parse(raw);
+        const localList = parseSecureLocalList(raw);
         const filtered = localList.filter(
           (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
         );
-        localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
+        safeSaveLocalEnrolledStudents(filtered);
       }
 
       const rawPerm = localStorage.getItem("sb_students_permanent_backup");
       if (rawPerm) {
-        const permList = JSON.parse(rawPerm);
-        const filteredPerm = permList.filter(
-          (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
-        );
-        localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filteredPerm));
+        try {
+          const permList = JSON.parse(rawPerm);
+          const filteredPerm = permList.filter(
+            (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
+          );
+          localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filteredPerm));
+        } catch {}
       }
 
-      // Broadcast each delete to live cloud sync so receiver dashboard updates immediately
+      const rawPending = localStorage.getItem("sb_offline_pending_students");
+      if (rawPending) {
+        try {
+          const pendingList = JSON.parse(rawPending);
+          const filtered = pendingList.filter(
+            (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
+          );
+          localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
+        } catch {}
+      }
+
+      localStorage.removeItem("sb_deleted_student_ids");
+
       idsToDelete.forEach((id) => {
         publishStudentSync("DELETE", id).catch(() => {});
       });
@@ -746,7 +766,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     });
   };
 
-  // Clear All Students (User Requirement)
+  // Clear All Students (User Requirement: Total Purge)
   const handleClearAllStudents = () => {
     if (
       confirm(
@@ -755,9 +775,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     ) {
       clearAllStudentsFromDB().catch(() => {});
       try {
-        const allIds = displayStudents.flatMap((s) => [s.id, s.studentId]).filter(Boolean);
-        localStorage.setItem("sb_deleted_student_ids", JSON.stringify(allIds));
         localStorage.removeItem("sb_enrolled_students");
+        localStorage.removeItem("sb_students_permanent_backup");
+        localStorage.removeItem("sb_offline_pending_students");
+        localStorage.removeItem("sb_deleted_student_ids");
         publishStudentSync("CLEAR").catch(() => {});
       } catch {}
       setDisplayStudents([]);
@@ -1462,17 +1483,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                         />
                       </td>
 
-                      {/* Photo Thumbnail with Hover Zoom Popover or Quick Attach */}
+                      {/* Photo Thumbnail with Hover Zoom Popover */}
                       <td className="px-4 py-3">
                         <div className="relative group/thumb inline-block">
                           <div
                             onClick={() => {
                               if (!student.photoPath) {
-                                handleStartAttachPhoto(student);
+                                handleAutoResendPhoto(student);
                               }
                             }}
                             className="h-14 w-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] overflow-hidden flex items-center justify-center shadow-xs transition-transform duration-150 group-hover/thumb:scale-105 cursor-pointer"
-                            title={student.photoPath ? student.fullName : "Click to attach photo"}
+                            title={student.photoPath ? student.fullName : "Click to auto-resend / resolve photo"}
                           >
                             <ResilientStudentPhoto
                               src={student.photoPath}
@@ -1540,19 +1561,47 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       {/* Photo Status */}
                       <td className="px-4 py-3.5">
                         {hasPhoto ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#8fe617]/15 text-[#8fe617] border border-[#8fe617]/30">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Photo OK
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#8fe617]/15 text-[#8fe617] border border-[#8fe617]/30">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Photo OK
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyImageLink(student)}
+                              className="p-1 rounded-md text-foreground-muted hover:text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+                              title="Generate / Copy Direct Image Link"
+                            >
+                              <Link2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleStartAttachPhoto(student)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40 hover:bg-amber-500/25 transition-all shadow-xs cursor-pointer"
-                            title="Click to attach student portrait"
-                          >
-                            <Camera className="h-3.5 w-3.5" />
-                            <span>Attach Photo</span>
-                          </button>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => handleAutoResendPhoto(student)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40 hover:bg-amber-500/25 transition-all shadow-xs cursor-pointer"
+                              title="Auto-resend photo from sender station or resolve cloud link"
+                            >
+                              <Zap className="h-3 w-3" />
+                              <span>Auto-Resend</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyImageLink(student)}
+                              className="p-1 rounded-md text-foreground-muted hover:text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+                              title="Generate / Copy Direct Image Link"
+                            >
+                              <Link2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDirectFileUploadClick(student)}
+                              className="p-1 rounded-md text-foreground-muted hover:text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                              title="Pick file directly from device (zero popup modal)"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         )}
                       </td>
 
@@ -1564,7 +1613,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleDownloadSinglePhoto(student.photoPath!, student.fullName)}
-                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors"
+                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
                                 title={`Download Photo (${student.fullName}.jpg)`}
                               >
                                 <Download className="h-4 w-4" />
@@ -1572,27 +1621,61 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setEditingStudent(student)}
-                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors"
+                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
                                 title={`Crop & Edit Photo (${student.fullName})`}
                               >
                                 <Crop className="h-4 w-4" />
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyImageLink(student)}
+                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-[#8fe617] transition-colors cursor-pointer"
+                                title="Copy Direct Image Link"
+                              >
+                                <Link2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDirectFileUploadClick(student)}
+                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+                                title="Replace Photo File Directly"
+                              >
+                                <Upload className="h-4 w-4" />
+                              </button>
                             </>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleStartAttachPhoto(student)}
-                              className="rounded-lg p-2 text-amber-500 hover:bg-amber-500/10 transition-colors"
-                              title={`Attach Photo (${student.fullName})`}
-                            >
-                              <ImagePlus className="h-4 w-4" />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleAutoResendPhoto(student)}
+                                className="rounded-lg p-2 text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                                title={`Auto-Resend Photo from Sender (${student.fullName})`}
+                              >
+                                <Zap className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyImageLink(student)}
+                                className="rounded-lg p-2 text-foreground-muted hover:text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+                                title="Generate / Copy Direct Image Link"
+                              >
+                                <Link2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDirectFileUploadClick(student)}
+                                className="rounded-lg p-2 text-foreground-muted hover:text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                                title="Upload Image File Directly"
+                              >
+                                <Upload className="h-4 w-4" />
+                              </button>
+                            </>
                           )}
 
                           <button
                             type="button"
                             onClick={() => setActiveStudent(student)}
-                            className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors"
+                            className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
                             title="Inspect Profile"
                           >
                             <Eye className="h-4 w-4" />
@@ -1805,29 +1888,59 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <button
                     type="button"
                     onClick={() => setEditingStudent(activeStudent)}
-                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-[#8fe617] text-[#070908] font-bold hover:brightness-105 transition-all shadow-xs"
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-[#8fe617] text-[#070908] font-bold hover:brightness-105 transition-all shadow-xs cursor-pointer"
                   >
                     <Crop className="h-3.5 w-3.5" /> Crop & Edit Portrait
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyImageLink(activeStudent)}
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors cursor-pointer"
+                  >
+                    <Link2 className="h-3.5 w-3.5 text-[#8fe617]" /> 🔗 Copy Direct Image Link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDirectFileUploadClick(activeStudent)}
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors cursor-pointer"
+                  >
+                    <Upload className="h-3.5 w-3.5 text-amber-500" /> 📁 Replace Photo File Directly
+                  </button>
                   <div className="text-[11px] font-mono text-foreground-muted dark:text-[#8a9e93] text-center truncate pt-0.5">
-                    /photos/{activeStudent.fullName}.jpg
+                    /api/uploads?studentId={activeStudent.studentId}
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 w-full max-w-xs pt-2 text-center p-3 rounded-xl bg-surface dark:bg-[#161e19] border border-amber-500/30">
                   <span className="text-xs font-mono font-bold text-amber-500 dark:text-amber-400 flex items-center gap-1.5">
-                    <Camera className="h-3.5 w-3.5" /> Photo Not Attached
+                    <Zap className="h-3.5 w-3.5" /> Photo Delayed or Disrupted
                   </span>
                   <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] leading-normal">
-                    Photo was not sent or delayed due to internet. You can attach and sync the student photo directly now.
+                    Transmission disrupted by internet. Auto-resend from sender station, generate direct image link, or upload directly.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => handleStartAttachPhoto(activeStudent)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl bg-[#8fe617] text-[#070908] hover:brightness-105 transition-all shadow-xs cursor-pointer mt-1"
-                  >
-                    <Camera className="h-3.5 w-3.5" /> Attach Photo Now
-                  </button>
+                  <div className="w-full space-y-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleAutoResendPhoto(activeStudent)}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl bg-[#8fe617] text-[#070908] hover:brightness-105 transition-all shadow-xs cursor-pointer"
+                    >
+                      <Zap className="h-3.5 w-3.5" /> ⚡ Auto-Resend from Sender Station
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyImageLink(activeStudent)}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors cursor-pointer"
+                    >
+                      <Link2 className="h-3.5 w-3.5 text-[#8fe617]" /> 🔗 Copy Direct Image Link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDirectFileUploadClick(activeStudent)}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors cursor-pointer"
+                    >
+                      <Upload className="h-3.5 w-3.5 text-amber-500" /> 📁 Upload File Directly
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1931,54 +2044,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         />
       )}
 
-      {/* Attach Photo Option Modal */}
-      {attachTargetStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-sm rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-border dark:border-[#223126] pb-3">
-              <div>
-                <h4 className="text-sm font-bold text-foreground dark:text-[#f2f7f4]">Attach Student Photo</h4>
-                <span className="text-[11px] font-mono text-[#8fe617]">
-                  {attachTargetStudent.fullName} ({attachTargetStudent.studentId})
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAttachTargetStudent(null)}
-                className="p-1 rounded-lg text-foreground-muted hover:bg-surface-secondary dark:hover:bg-[#161e19] cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] leading-relaxed">
-              Choose how you want to attach the portrait for {attachTargetStudent.fullName}. You can crop and refine it before saving.
-            </p>
-
-            <div className="space-y-2.5 pt-1">
-              <button
-                type="button"
-                onClick={() => setIsAttachCameraOpen(true)}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#8fe617] text-[#062404] py-3 px-4 text-xs font-mono font-black shadow-md hover:brightness-105 active:scale-95 transition-all cursor-pointer"
-              >
-                <Camera className="h-4 w-4" />
-                <span>Take Photo with Camera</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => attachFileInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-2 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] py-2.5 px-4 text-xs font-mono font-bold text-foreground dark:text-[#f2f7f4] hover:bg-neutral-200 dark:hover:bg-[#202b23] transition-colors cursor-pointer"
-              >
-                <Upload className="h-4 w-4" />
-                <span>Upload from Gallery / Files</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Hidden file input for attaching photo */}
+      {/* Hidden file input for direct photo upload (zero popup modals) */}
       <input
         type="file"
         ref={attachFileInputRef}
@@ -1986,16 +2052,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         onChange={handleAttachFileSelected}
         className="hidden"
       />
-
-      {/* Studio Camera Modal for attaching photo */}
-      {isAttachCameraOpen && (
-        <CameraModal
-          isOpen={isAttachCameraOpen}
-          onClose={() => setIsAttachCameraOpen(false)}
-          onCapture={handleAttachCameraCapture}
-          initialFacingMode="user"
-        />
-      )}
     </div>
   );
 };

@@ -115,3 +115,72 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+
+/**
+ * Direct Image Link Generator & Photo Resolver
+ * Returns the student's portrait directly as an image binary or redirects to photo path.
+ */
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const studentId = searchParams.get("studentId");
+  const fileParam = searchParams.get("file");
+
+  try {
+    let photoPath: string | null = null;
+
+    if (studentId) {
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [{ studentId }, { id: studentId }],
+        },
+        select: { photoPath: true, fullName: true, studentId: true },
+      });
+      photoPath = student?.photoPath || null;
+    } else if (fileParam) {
+      photoPath = fileParam;
+    }
+
+    if (!photoPath) {
+      return NextResponse.json({ error: "Photo not found" }, { status: 404 });
+    }
+
+    // Handle base64 Data URIs directly
+    if (photoPath.startsWith("data:image/")) {
+      const parts = photoPath.split(",");
+      const mime = parts[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+      const buffer = Buffer.from(parts[1], "base64");
+      return new NextResponse(buffer, {
+        headers: {
+          "Content-Type": mime,
+          "Cache-Control": "public, max-age=86400, immutable",
+        },
+      });
+    }
+
+    // Handle local file system storage
+    const cleanRel = photoPath.split("?")[0].replace(/^\//, "");
+    const fs = await import("fs");
+    const path = await import("path");
+    const fullPath = path.join(process.cwd(), "public", cleanRel);
+
+    if (fs.existsSync(fullPath)) {
+      const buffer = fs.readFileSync(fullPath);
+      return new NextResponse(buffer, {
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Cache-Control": "public, max-age=86400, immutable",
+        },
+      });
+    }
+
+    // Handle remote external URL redirect
+    if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
+      return NextResponse.redirect(photoPath);
+    }
+
+    return NextResponse.json({ photoPath, status: "READY" });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Failed to resolve photo" }, { status: 500 });
+  }
+}
+

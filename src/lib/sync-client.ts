@@ -8,10 +8,11 @@ export const SYNC_TOPIC = "sb_prod_sync_miskrdires12_v1";
 export const SYNC_BASE_URL = `https://ntfy.sh/${SYNC_TOPIC}`;
 
 export interface SyncPayload {
-  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED";
+  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED" | "RESEND_PHOTO_REQUEST" | "RESEND_PHOTO";
   student?: any;
   studentId?: string;
   fullName?: string;
+  photoPath?: string;
   message?: string;
   timestamp: number;
 }
@@ -21,7 +22,7 @@ export interface SyncPayload {
  * Safe to call from any client component or browser.
  */
 export async function publishStudentSync(
-  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED",
+  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED" | "RESEND_PHOTO_REQUEST" | "RESEND_PHOTO",
   studentOrId?: any
 ): Promise<boolean> {
   try {
@@ -29,12 +30,13 @@ export async function publishStudentSync(
       action,
       student: action === "UPSERT" ? studentOrId : undefined,
       studentId:
-        action === "DELETE" || action === "PHOTO_RETAKE_REQUIRED"
+        action === "DELETE" || action === "PHOTO_RETAKE_REQUIRED" || action === "RESEND_PHOTO_REQUEST"
           ? typeof studentOrId === "string"
             ? studentOrId
             : studentOrId?.studentId
           : studentOrId?.studentId,
       fullName: studentOrId?.fullName,
+      photoPath: studentOrId?.photoPath,
       message: studentOrId?.message,
       timestamp: Date.now(),
     };
@@ -64,7 +66,8 @@ export async function publishStudentSync(
 export function subscribeToCloudSync(
   onStudentUpsert: (student: any) => void,
   onStudentDelete?: (studentId: string) => void,
-  onClearAll?: () => void
+  onClearAll?: () => void,
+  onRawEvent?: (payload: SyncPayload) => void
 ): () => void {
   if (typeof window === "undefined") return () => {};
 
@@ -94,6 +97,12 @@ export function subscribeToCloudSync(
         }
 
         if (!payload || !payload.action) return;
+
+        if (onRawEvent) {
+          try {
+            onRawEvent(payload);
+          } catch {}
+        }
 
         if (payload.action === "UPSERT" && payload.student) {
           onStudentUpsert(payload.student);

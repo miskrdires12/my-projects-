@@ -10,10 +10,11 @@ export const SYNC_TOPIC = "sb_prod_sync_miskrdires12_v1";
 export const SYNC_BASE_URL = `https://ntfy.sh/${SYNC_TOPIC}`;
 
 export interface SyncPayload {
-  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED";
+  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED" | "RESEND_PHOTO_REQUEST" | "RESEND_PHOTO";
   student?: any;
   studentId?: string;
   fullName?: string;
+  photoPath?: string;
   message?: string;
   timestamp: number;
 }
@@ -23,7 +24,7 @@ export interface SyncPayload {
  * Can be called from server actions, API routes, or browser clients.
  */
 export async function publishStudentSync(
-  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED",
+  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED" | "RESEND_PHOTO_REQUEST" | "RESEND_PHOTO",
   studentOrId?: any
 ): Promise<boolean> {
   try {
@@ -31,6 +32,7 @@ export async function publishStudentSync(
     let id = "";
     let fullName = "";
     let message = "";
+    let photoPath = "";
 
     if (typeof studentOrId === "string") {
       studentId = studentOrId;
@@ -40,6 +42,7 @@ export async function publishStudentSync(
       id = studentOrId.id || "";
       fullName = studentOrId.fullName || "";
       message = studentOrId.message || "";
+      photoPath = studentOrId.photoPath || "";
     }
 
     const payload: SyncPayload = {
@@ -47,6 +50,7 @@ export async function publishStudentSync(
       student: action === "UPSERT" ? studentOrId : (action === "DELETE" ? { id, studentId } : undefined),
       studentId: studentId || id,
       fullName,
+      photoPath,
       message,
       timestamp: Date.now(),
     };
