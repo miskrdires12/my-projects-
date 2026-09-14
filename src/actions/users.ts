@@ -12,80 +12,96 @@ import { createUserSchema, type CreateUserInput } from "@/lib/validations";
 import type { UserRole } from "@/types/auth";
 
 export async function createUserAction(input: CreateUserInput) {
-  const session = await requireAuth("user:create");
+  try {
+    const session = await requireAuth("user:create");
 
-  const validated = createUserSchema.safeParse(input);
-  if (!validated.success) {
+    const validated = createUserSchema.safeParse(input);
+    if (!validated.success) {
+      return {
+        success: false,
+        error: validated.error.issues[0]?.message ?? "Invalid user data",
+      };
+    }
+
+    const { username, email, password, role } = validated.data;
+
+    // Check unique username & email
+    const existing = await prisma.user.findFirst({
+      where: {
+        OR: [{ username }, { email }],
+      },
+    });
+
+    if (existing) {
+      return {
+        success: false,
+        error: "A user with this username or email already exists.",
+      };
+    }
+
+    const passwordHash = await hashPassword(password);
+
+    const user = await prisma.user.create({
+      data: {
+        username,
+        email,
+        passwordHash,
+        role: role as UserRole,
+      },
+    });
+
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "USER_CREATE",
+      entityType: "USER",
+      entityId: user.id,
+      metadata: { username: user.username, role: user.role },
+    });
+
+    revalidatePath("/admin/users");
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+    };
+  } catch (err: unknown) {
+    console.error("[createUserAction] Failed to provision operator:", err);
     return {
       success: false,
-      error: validated.error.issues[0]?.message ?? "Invalid user data",
+      error: err instanceof Error ? err.message : "Failed to provision operator account",
     };
   }
-
-  const { username, email, password, role } = validated.data;
-
-  // Check unique username & email
-  const existing = await prisma.user.findFirst({
-    where: {
-      OR: [{ username }, { email }],
-    },
-  });
-
-  if (existing) {
-    return {
-      success: false,
-      error: "A user with this username or email already exists.",
-    };
-  }
-
-  const passwordHash = await hashPassword(password);
-
-  const user = await prisma.user.create({
-    data: {
-      username,
-      email,
-      passwordHash,
-      role: role as UserRole,
-    },
-  });
-
-  await createSafeAuditLog({
-    userId: session.userId,
-    action: "USER_CREATE",
-    entityType: "USER",
-    entityId: user.id,
-    metadata: { username: user.username, role: user.role },
-  });
-
-  revalidatePath("/admin/users");
-  return {
-    success: true,
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      createdAt: user.createdAt,
-    },
-  };
 }
 
 export async function deleteUserAction(id: string) {
-  const session = await requireAuth("user:delete");
+  try {
+    const session = await requireAuth("user:delete");
 
-  if (session.userId === id) {
-    return { success: false, error: "Cannot delete your own active administrator account." };
+    if (session.userId === id) {
+      return { success: false, error: "Cannot delete your own active operator account." };
+    }
+
+    await prisma.user.delete({ where: { id } });
+
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "USER_DELETE",
+      entityType: "USER",
+      entityId: id,
+    });
+
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("[deleteUserAction] Failed to decommission operator:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to decommission operator account",
+    };
   }
-
-  await prisma.user.delete({ where: { id } });
-
-  await createSafeAuditLog({
-    userId: session.userId,
-    action: "USER_DELETE",
-    entityType: "USER",
-    entityId: id,
-  });
-
-  revalidatePath("/admin/users");
-  return { success: true };
 }

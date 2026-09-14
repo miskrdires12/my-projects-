@@ -36,6 +36,11 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionAction[]> = {
     "student:qr_scan",       // External QR image import & matching
     "print:generate",
     "print:template_edit",   // ID card designer & template versioning
+    "user:create",           // Provision operator accounts
+    "user:read",             // Inspect operator directory
+    "user:update",
+    "user:delete",
+    "user:role_assign",
     "settings:update",
   ],
   ADMIN: [
@@ -104,10 +109,14 @@ export function canAccessRoute(role: UserRole | undefined | null, pathname: stri
     return true;
   }
 
-  // ── ADMIN-ONLY routes ─────────────────────────────────────────────────
-  // Admin center (User & RBAC management, database telemetry)
+  // ── OPERATOR PROVISIONING & RBAC (Accessible by Admin and Receiver Station Supervisors) ──
+  if (pathname.startsWith("/admin/users")) {
+    return role === "RECEIVER";
+  }
+
+  // ── STRICT ADMIN-ONLY routes (Database dumps & raw server logs) ───────
   if (pathname.startsWith("/admin")) {
-    return false; // Since Admin was handled above (role === "ADMIN" returns true), all others denied
+    return false; // Only ADMIN can access database & system logs
   }
 
   // ── SENDER-ONLY routes ─────────────────────────────────────────────────

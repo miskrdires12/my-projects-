@@ -104,77 +104,97 @@ export default async function DashboardPage({
   // Print Batch Planning
   const totalA4SheetsNeeded = Math.ceil(readyForPrintCount / 8);
 
-  // Timeline Analytics for Server-Side Graph Rendering
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-  sevenDaysAgo.setHours(0, 0, 0, 0);
+  // Timeline Analytics for Server-Side Graph Rendering (Exact Real-World Time)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  thirtyDaysAgo.setHours(0, 0, 0, 0);
 
   const recentTimeRecords = await prisma.student.findMany({
-    where: { createdAt: { gte: sevenDaysAgo } },
+    where: { createdAt: { gte: thirtyDaysAgo } },
     select: { createdAt: true, photoPath: true },
   });
 
-  const hourlyLabels = [
-    "08:00", "09:00", "10:00", "11:00", "12:00",
-    "13:00", "14:00", "15:00", "16:00", "17:00",
-    "18:00", "19:00", "20:00"
-  ];
-  const todayDateStr = new Date().toDateString();
+  const now = new Date();
+  const currentHour = now.getHours();
+  const todayDateStr = now.toDateString();
 
-  const hourlyToday = hourlyLabels.map((timeStr) => {
-    const hourNum = parseInt(timeStr.split(":")[0], 10);
+  // Business hours: 08:00 to 18:00 (extended up to currentHour if > 18:00)
+  const maxHour = Math.max(18, currentHour);
+  const hourlyToday = [];
+  for (let h = 8; h <= maxHour; h++) {
+    const timeStr = `${h.toString().padStart(2, "0")}:00`;
     const inHour = recentTimeRecords.filter((r) => {
       const d = new Date(r.createdAt);
-      return d.toDateString() === todayDateStr && d.getHours() === hourNum;
+      return d.toDateString() === todayDateStr && d.getHours() === h;
     });
 
     const count = inHour.length;
     const photos = inHour.filter((r) => Boolean(r.photoPath)).length;
-    const baseline = Math.max(count, Math.round(totalStudents > 0 ? (totalStudents / 12) * ((hourNum >= 10 && hourNum <= 16) ? 1.4 : 0.8) : 0));
-    const effectiveCount = count > 0 ? count : baseline;
+    const hourLabel = `${h > 12 ? h - 12 : h === 0 ? 12 : h} ${h >= 12 ? "PM" : "AM"}`;
+    const isCurrentHour = h === currentHour;
 
-    return {
+    hourlyToday.push({
       time: timeStr,
-      label: `${hourNum > 12 ? hourNum - 12 : hourNum} ${hourNum >= 12 ? "PM" : "AM"}`,
-      count: effectiveCount,
-      photos: count > 0 ? photos : Math.round(effectiveCount * (totalStudents > 0 ? photosCount / totalStudents : 0.9)),
-      readiness: count > 0 ? photos : Math.round(effectiveCount * (totalStudents > 0 ? photosCount / totalStudents : 0.9)),
-      throughput: Math.round(effectiveCount * 12),
-    };
-  });
+      label: isCurrentHour ? `${hourLabel} • Now` : hourLabel,
+      count,
+      photos,
+      readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+      throughput: count * 8,
+      isCurrentHour,
+    });
+  }
 
   const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const daily7Days = Array.from({ length: 7 }).map((_, idx) => {
+    const offset = 6 - idx;
     const d = new Date();
-    d.setDate(d.getDate() - (6 - idx));
+    d.setDate(d.getDate() - offset);
     const dateString = d.toISOString().split("T")[0];
+    const targetDateStr = d.toDateString();
     const dayLabel = daysOfWeek[d.getDay()];
 
     const dayRecords = recentTimeRecords.filter(
-      (r) => new Date(r.createdAt).toISOString().split("T")[0] === dateString
+      (r) => new Date(r.createdAt).toDateString() === targetDateStr
     );
 
     const count = dayRecords.length;
     const photos = dayRecords.filter((r) => Boolean(r.photoPath)).length;
-    const baseline = Math.max(count, Math.round(totalStudents > 0 ? (totalStudents / 7) * (idx === 6 ? 1.2 : 0.9) : 0));
-    const effectiveCount = count > 0 ? count : baseline;
 
     return {
       date: dateString,
-      label: dayLabel,
-      count: effectiveCount,
-      photos: count > 0 ? photos : Math.round(effectiveCount * (totalStudents > 0 ? photosCount / totalStudents : 0.9)),
-      readiness: count > 0 ? photos : Math.round(effectiveCount * (totalStudents > 0 ? photosCount / totalStudents : 0.9)),
-      throughput: effectiveCount * 8,
+      label: offset === 0 ? `Today (${dayLabel})` : `${dayLabel} ${d.getDate()}`,
+      count,
+      photos,
+      readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+      throughput: count * 8,
+      isCurrentHour: offset === 0,
     };
   });
 
-  const trend30Days = [
-    { label: "Wk 1", count: Math.round(totalStudents * 0.18), photos: Math.round(photosCount * 0.18), readiness: Math.round(photosCount * 0.18) },
-    { label: "Wk 2", count: Math.round(totalStudents * 0.24), photos: Math.round(photosCount * 0.24), readiness: Math.round(photosCount * 0.24) },
-    { label: "Wk 3", count: Math.round(totalStudents * 0.28), photos: Math.round(photosCount * 0.28), readiness: Math.round(photosCount * 0.28) },
-    { label: "Wk 4", count: Math.round(totalStudents * 0.30), photos: Math.round(photosCount * 0.30), readiness: Math.round(photosCount * 0.30) },
-  ];
+  const trend30Days = Array.from({ length: 4 }).map((_, idx) => {
+    const weekNum = idx + 1;
+    const endDaysAgo = (4 - weekNum) * 7;
+    const startDaysAgo = endDaysAgo + 7;
+    const nowTime = Date.now();
+    const startTime = nowTime - startDaysAgo * 86400000;
+    const endTime = nowTime - endDaysAgo * 86400000;
+
+    const weekRecords = recentTimeRecords.filter((r) => {
+      const t = new Date(r.createdAt).getTime();
+      return t >= startTime && t < endTime;
+    });
+
+    const count = weekRecords.length;
+    const photos = weekRecords.filter((r) => Boolean(r.photoPath)).length;
+
+    return {
+      label: weekNum === 4 ? "This Week" : `Wk ${weekNum}`,
+      count,
+      photos,
+      readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+      throughput: count * 8,
+    };
+  });
 
   return (
     <RealtimeReceiverDashboard

@@ -107,6 +107,24 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const chartSvgRef = useRef<SVGSVGElement | null>(null);
 
+  // Real-world Live Clock State
+  const [currentTimeStr, setCurrentTimeStr] = useState<string>("");
+  useEffect(() => {
+    const updateClock = () => {
+      const d = new Date();
+      setCurrentTimeStr(
+        d.toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      );
+    };
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Student Roster Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "ready" | "missing_photo">("all");
@@ -535,49 +553,155 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   }, [allStudentsList, data.recentStudents]);
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 6. SVG PRODUCTION GRAPH COMPUTATIONS (REAL-WORLD DATA CURVE)
+  // 6. SVG PRODUCTION GRAPH COMPUTATIONS (EXACT REAL-WORLD TIME)
   // ──────────────────────────────────────────────────────────────────────────
   const activeSeriesData = useMemo(() => {
+    // Collect all students from local state + server data with de-duplication
+    const studentMap = new Map<string, any>();
+    allStudentsList.forEach((s) => {
+      const id = s.studentId || s.id;
+      if (id) studentMap.set(id, s);
+    });
+    (data.recentStudents || []).forEach((s) => {
+      const id = s.studentId || s.id;
+      if (id && !studentMap.has(id)) studentMap.set(id, s);
+    });
+    const students = Array.from(studentMap.values());
+
+    const now = new Date();
+    const todayDateStr = now.toDateString();
+    const currentHour = now.getHours();
+
     if (activeTimeRange === "hourly") {
-      return timeline.hourlyToday && timeline.hourlyToday.length > 0
-        ? timeline.hourlyToday
-        : [
-            { label: "8 AM", count: Math.round(data.totalStudents * 0.08), photos: Math.round(data.photosCount * 0.08), readiness: Math.round(data.photosCount * 0.08), throughput: 64 },
-            { label: "10 AM", count: Math.round(data.totalStudents * 0.18), photos: Math.round(data.photosCount * 0.18), readiness: Math.round(data.photosCount * 0.18), throughput: 144 },
-            { label: "12 PM", count: Math.round(data.totalStudents * 0.32), photos: Math.round(data.photosCount * 0.32), readiness: Math.round(data.photosCount * 0.32), throughput: 256 },
-            { label: "2 PM", count: Math.round(data.totalStudents * 0.52), photos: Math.round(data.photosCount * 0.52), readiness: Math.round(data.photosCount * 0.52), throughput: 416 },
-            { label: "4 PM", count: Math.round(data.totalStudents * 0.76), photos: Math.round(data.photosCount * 0.76), readiness: Math.round(data.photosCount * 0.76), throughput: 608 },
-            { label: "6 PM", count: data.totalStudents, photos: data.photosCount, readiness: data.photosCount, throughput: 800 },
-          ];
+      // Real local business hours: 8:00 AM to 6:00 PM (extended up to currentHour if after 18:00)
+      const maxHour = Math.max(18, currentHour);
+      const hoursList: number[] = [];
+      for (let h = 8; h <= maxHour; h++) {
+        hoursList.push(h);
+      }
+
+      // If we have live/IDB students, compute from them; otherwise fallback to server timeline.hourlyToday
+      const hasLiveRecords = students.some((s) => {
+        if (!s.createdAt) return false;
+        return new Date(s.createdAt).toDateString() === todayDateStr;
+      });
+
+      if (hasLiveRecords || (!timeline.hourlyToday || timeline.hourlyToday.length === 0)) {
+        return hoursList.map((hourNum) => {
+          const matching = students.filter((s) => {
+            if (!s.createdAt) return false;
+            const d = new Date(s.createdAt);
+            return d.toDateString() === todayDateStr && d.getHours() === hourNum;
+          });
+
+          const count = matching.length;
+          const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+          const hourLabel = `${hourNum > 12 ? hourNum - 12 : hourNum === 0 ? 12 : hourNum} ${hourNum >= 12 ? "PM" : "AM"}`;
+          const isCurrentHour = hourNum === currentHour;
+
+          return {
+            time: `${hourNum.toString().padStart(2, "0")}:00`,
+            label: isCurrentHour ? `${hourLabel} • Now` : hourLabel,
+            count,
+            photos,
+            readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+            throughput: count * 8,
+            isCurrentHour,
+          };
+        });
+      }
+
+      return timeline.hourlyToday;
     } else if (activeTimeRange === "daily") {
-      return timeline.daily7Days && timeline.daily7Days.length > 0
-        ? timeline.daily7Days
-        : [
-            { label: "Mon", count: Math.round(data.totalStudents * 0.15), photos: Math.round(data.photosCount * 0.15), readiness: Math.round(data.photosCount * 0.15), throughput: 1200 },
-            { label: "Tue", count: Math.round(data.totalStudents * 0.28), photos: Math.round(data.photosCount * 0.28), readiness: Math.round(data.photosCount * 0.28), throughput: 2240 },
-            { label: "Wed", count: Math.round(data.totalStudents * 0.45), photos: Math.round(data.photosCount * 0.45), readiness: Math.round(data.photosCount * 0.45), throughput: 3600 },
-            { label: "Thu", count: Math.round(data.totalStudents * 0.62), photos: Math.round(data.photosCount * 0.62), readiness: Math.round(data.photosCount * 0.62), throughput: 4960 },
-            { label: "Fri", count: Math.round(data.totalStudents * 0.80), photos: Math.round(data.photosCount * 0.80), readiness: Math.round(data.photosCount * 0.80), throughput: 6400 },
-            { label: "Sat", count: data.totalStudents, photos: data.photosCount, readiness: data.photosCount, throughput: 8000 },
-          ];
+      const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+      const hasLiveRecords = students.length > 0;
+      if (hasLiveRecords || (!timeline.daily7Days || timeline.daily7Days.length === 0)) {
+        return Array.from({ length: 7 }).map((_, idx) => {
+          const offset = 6 - idx;
+          const d = new Date();
+          d.setDate(d.getDate() - offset);
+          const targetDateStr = d.toDateString();
+          const dateIso = d.toISOString().split("T")[0];
+
+          const matching = students.filter((s) => {
+            if (!s.createdAt) return false;
+            return new Date(s.createdAt).toDateString() === targetDateStr;
+          });
+
+          const count = matching.length;
+          const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+          const dayName = daysOfWeek[d.getDay()];
+          const dayNum = d.getDate();
+          const isToday = offset === 0;
+
+          return {
+            date: dateIso,
+            label: isToday ? `Today (${dayName})` : `${dayName} ${dayNum}`,
+            count,
+            photos,
+            readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+            throughput: count * 8,
+            isCurrentHour: isToday,
+          };
+        });
+      }
+
+      return timeline.daily7Days;
     } else if (activeTimeRange === "year") {
-      return [
-        { label: "Q1", count: Math.round(data.totalStudents * 0.28), photos: Math.round(data.photosCount * 0.28), readiness: Math.round(data.photosCount * 0.28), throughput: 2800 },
-        { label: "Q2", count: Math.round(data.totalStudents * 0.55), photos: Math.round(data.photosCount * 0.55), readiness: Math.round(data.photosCount * 0.55), throughput: 5500 },
-        { label: "Q3", count: Math.round(data.totalStudents * 0.82), photos: Math.round(data.photosCount * 0.82), readiness: Math.round(data.photosCount * 0.82), throughput: 7800 },
-        { label: "Q4", count: data.totalStudents, photos: data.photosCount, readiness: data.photosCount, throughput: 9600 },
+      const currentYear = now.getFullYear();
+      const quarters = [
+        { label: `Q1 ${currentYear}`, startMonth: 0, endMonth: 2 },
+        { label: `Q2 ${currentYear}`, startMonth: 3, endMonth: 5 },
+        { label: `Q3 ${currentYear}`, startMonth: 6, endMonth: 8 },
+        { label: `Q4 ${currentYear}`, startMonth: 9, endMonth: 11 },
       ];
+
+      return quarters.map((q) => {
+        const matching = students.filter((s) => {
+          if (!s.createdAt) return false;
+          const d = new Date(s.createdAt);
+          return d.getFullYear() === currentYear && d.getMonth() >= q.startMonth && d.getMonth() <= q.endMonth;
+        });
+        const count = matching.length;
+        const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+        return {
+          label: q.label,
+          count,
+          photos,
+          readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+          throughput: count * 8,
+        };
+      });
     } else {
-      return timeline.trend30Days && timeline.trend30Days.length > 0
-        ? timeline.trend30Days
-        : [
-            { label: "Wk 1", count: Math.round(data.totalStudents * 0.2), photos: Math.round(data.photosCount * 0.2), readiness: Math.round(data.photosCount * 0.2), throughput: 1600 },
-            { label: "Wk 2", count: Math.round(data.totalStudents * 0.45), photos: Math.round(data.photosCount * 0.45), readiness: Math.round(data.photosCount * 0.45), throughput: 3600 },
-            { label: "Wk 3", count: Math.round(data.totalStudents * 0.72), photos: Math.round(data.photosCount * 0.72), readiness: Math.round(data.photosCount * 0.72), throughput: 5760 },
-            { label: "Wk 4", count: data.totalStudents, photos: data.photosCount, readiness: data.photosCount, throughput: 8000 },
-          ];
+      // 30-Day trend broken into 4 weeks of exact calendar time
+      return Array.from({ length: 4 }).map((_, idx) => {
+        const weekNum = idx + 1;
+        const endDaysAgo = (4 - weekNum) * 7;
+        const startDaysAgo = endDaysAgo + 7;
+        const nowTime = now.getTime();
+        const startTime = nowTime - startDaysAgo * 86400000;
+        const endTime = nowTime - endDaysAgo * 86400000;
+
+        const matching = students.filter((s) => {
+          if (!s.createdAt) return false;
+          const t = new Date(s.createdAt).getTime();
+          return t >= startTime && t < endTime;
+        });
+
+        const count = matching.length;
+        const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+
+        return {
+          label: weekNum === 4 ? "This Week" : `Wk ${weekNum}`,
+          count,
+          photos,
+          readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+          throughput: count * 8,
+        };
+      });
     }
-  }, [activeTimeRange, timeline, data]);
+  }, [activeTimeRange, timeline, data.recentStudents, allStudentsList]);
 
   // Real-time calculation of student data gathered in: A Day, A Week, A Month, and A Year
   const gatheredTimeframeStats = useMemo(() => {
@@ -592,9 +716,9 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
     if (list.length === 0) {
       return {
-        day: { count: totalCount > 0 ? Math.max(1, Math.round(totalCount * 0.18)) : 0, photos: Math.round(data.photosCount * 0.18) },
-        week: { count: totalCount > 0 ? Math.max(1, Math.round(totalCount * 0.45)) : 0, photos: Math.round(data.photosCount * 0.45) },
-        month: { count: totalCount > 0 ? Math.max(1, Math.round(totalCount * 0.82)) : 0, photos: Math.round(data.photosCount * 0.82) },
+        day: { count: totalCount > 0 ? 1 : 0, photos: data.photosCount > 0 ? 1 : 0 },
+        week: { count: totalCount, photos: data.photosCount },
+        month: { count: totalCount, photos: data.photosCount },
         year: { count: totalCount, photos: data.photosCount },
       };
     }
@@ -634,15 +758,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         if (hasPhoto) yearPhotos++;
       }
     });
-
-    if (dayCount === list.length && list.length > 20) {
-      return {
-        day: { count: Math.max(1, Math.round(totalCount * 0.22)), photos: Math.round(data.photosCount * 0.22) },
-        week: { count: Math.max(1, Math.round(totalCount * 0.58)), photos: Math.round(data.photosCount * 0.58) },
-        month: { count: Math.max(1, Math.round(totalCount * 0.88)), photos: Math.round(data.photosCount * 0.88) },
-        year: { count: totalCount, photos: data.photosCount },
-      };
-    }
 
     return {
       day: { count: Math.max(dayCount, 0), photos: dayPhotos },
@@ -704,6 +819,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         slotX: padLeft + i * slotWidth,
         slotWidth,
         centerX: barX + barWidth / 2,
+        isCurrentHour: Boolean((p.raw as any)?.isCurrentHour),
       };
     });
   }, [chartPoints, maxVal, plotW, plotH, padLeft, padTop]);
@@ -930,9 +1046,15 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               <h2 className="text-sm font-mono font-extrabold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
                 Production Velocity &amp; Realtime Metrics
               </h2>
+              {currentTimeStr && (
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#8fe617]/10 dark:bg-[#8fe617]/20 border border-[#8fe617]/40 text-[#062404] dark:text-[#8fe617] text-[11px] font-mono font-bold shadow-xs">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617] animate-ping" />
+                  <span>{currentTimeStr} LOCAL TIME</span>
+                </div>
+              )}
             </div>
-            <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
-              Live registration velocity, photo verification cadence, and realtime print throughput
+            <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5 font-mono">
+              Live real-world intake • Exact student registration timestamps • 0ms active sync
             </p>
           </div>
 
@@ -1242,9 +1364,9 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                         ? "url(#lemonPeakGrad)"
                         : "url(#lemonBarGrad)"
                     }
-                    stroke={isHovered ? "#8fe617" : isPeak ? "#b6ff4d" : "none"}
-                    strokeWidth={isHovered ? "2" : "0"}
-                    filter={isHovered || isPeak ? "url(#lemonGlow)" : undefined}
+                    stroke={isHovered ? "#8fe617" : bar.isCurrentHour ? "#38bdf8" : isPeak ? "#b6ff4d" : "none"}
+                    strokeWidth={isHovered ? "2.5" : bar.isCurrentHour ? "2" : "0"}
+                    filter={isHovered || isPeak || bar.isCurrentHour ? "url(#lemonGlow)" : undefined}
                     className="transition-all duration-200"
                   />
 
@@ -1281,14 +1403,38 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                     </g>
                   )}
 
+                  {/* Real-world Active Time Badge */}
+                  {bar.isCurrentHour && !isPeak && (
+                    <g>
+                      <rect
+                        x={bar.centerX - 16}
+                        y={Math.max(6, bar.barY - 26)}
+                        width="32"
+                        height="13"
+                        rx="4"
+                        fill="#38bdf8"
+                      />
+                      <text
+                        x={bar.centerX}
+                        y={Math.max(16, bar.barY - 17)}
+                        textAnchor="middle"
+                        className="text-[8px] font-mono font-black fill-[#082f49]"
+                      >
+                        NOW
+                      </text>
+                    </g>
+                  )}
+
                   {/* Direct Value Label Above Bar */}
                   <text
                     x={bar.centerX}
-                    y={isPeak ? Math.max(22, bar.barY - 8) : Math.max(14, bar.barY - 6)}
+                    y={isPeak || bar.isCurrentHour ? Math.max(22, bar.barY - 8) : Math.max(14, bar.barY - 6)}
                     textAnchor="middle"
                     className={`text-[11px] font-mono font-bold transition-colors ${
                       isHovered
                         ? "fill-[#8fe617]"
+                        : bar.isCurrentHour
+                        ? "fill-[#38bdf8]"
                         : "fill-[#080808] dark:fill-[#f2f7f4]"
                     }`}
                   >
@@ -1304,11 +1450,21 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                     className={`text-[10px] font-mono font-bold transition-colors ${
                       isHovered
                         ? "fill-[#8fe617]"
+                        : bar.isCurrentHour
+                        ? "fill-[#38bdf8] font-black"
                         : "fill-[#6b7771] dark:fill-[#8a9e93]"
                     }`}
                   >
                     {bar.label}
                   </text>
+                  {bar.isCurrentHour && (
+                    <circle
+                      cx={bar.centerX}
+                      cy={padTop + plotH + 31}
+                      r="2"
+                      fill="#38bdf8"
+                    />
+                  )}
                 </g>
               );
             })}
@@ -1355,13 +1511,13 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                 <div className="flex justify-between gap-4 text-[10px] text-[#3f4743] dark:text-[#8a9e93]">
                   <span>Photos Attached:</span>
                   <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
-                    {barPlotData[hoveredPointIndex].raw?.photos || Math.round(barPlotData[hoveredPointIndex].value * 0.95)}
+                    {barPlotData[hoveredPointIndex].raw?.photos ?? 0}
                   </span>
                 </div>
                 <div className="flex justify-between gap-4 text-[10px] text-[#3f4743] dark:text-[#8a9e93]">
                   <span>A4 Sheets (8-Up):</span>
                   <span className="font-bold text-[#8fe617]">
-                    {Math.ceil((barPlotData[hoveredPointIndex].raw?.photos || barPlotData[hoveredPointIndex].value) / 8)} sheets
+                    {Math.ceil((barPlotData[hoveredPointIndex].raw?.photos ?? barPlotData[hoveredPointIndex].value) / 8)} sheets
                   </span>
                 </div>
               </div>

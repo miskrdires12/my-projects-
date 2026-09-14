@@ -258,6 +258,19 @@ export default function DashboardShell({ session, children }: DashboardShellProp
               </Link>
 
               <Link
+                href="/admin/users"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/admin/users"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Shield className="h-4 w-4 shrink-0 text-amber-500" />
+                <span>Provision Operators &amp; RBAC</span>
+              </Link>
+
+              <Link
                 href="/settings"
                 onClick={closeMenu}
                 className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
@@ -346,49 +359,47 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 <span>Student Registration</span>
               </Link>
 
-              {/* Administrative Privileges (Strictly Admin Only) */}
-              {session?.role === "ADMIN" && (
-                <div className="pt-2 mt-2 border-t border-[#dce7e1] dark:border-[#223126]">
-                  <Link
-                    href="/admin/users"
-                    onClick={closeMenu}
-                    className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
-                      pathname === "/admin/users"
-                        ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                        : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
-                    }`}
-                  >
-                    <Shield className="h-4 w-4 shrink-0 text-amber-500" />
-                    <span>Provision Operators &amp; RBAC</span>
-                  </Link>
+              {/* Administrative Privileges */}
+              <div className="pt-2 mt-2 border-t border-[#dce7e1] dark:border-[#223126] space-y-1.5">
+                <Link
+                  href="/admin/users"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/admin/users"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Shield className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span>Provision Operators &amp; RBAC</span>
+                </Link>
 
-                  <Link
-                    href="/admin/database"
-                    onClick={closeMenu}
-                    className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
-                      pathname === "/admin/database"
-                        ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                        : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
-                    }`}
-                  >
-                    <Database className="h-4 w-4 shrink-0 text-cyan-500" />
-                    <span>Database &amp; Log Management</span>
-                  </Link>
+                <Link
+                  href="/admin/database"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/admin/database"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Database className="h-4 w-4 shrink-0 text-blue-500" />
+                  <span>Database &amp; Audit Logs</span>
+                </Link>
 
-                  <Link
-                    href="/settings"
-                    onClick={closeMenu}
-                    className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
-                      pathname === "/settings"
-                        ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
-                        : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
-                    }`}
-                  >
-                    <Settings className="h-4 w-4 shrink-0 text-emerald-500" />
-                    <span>Admin System Settings</span>
-                  </Link>
-                </div>
-              )}
+                <Link
+                  href="/settings"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/settings"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Settings className="h-4 w-4 shrink-0 text-emerald-500" />
+                  <span>Admin System Settings</span>
+                </Link>
+              </div>
             </div>
           )}
         </nav>
