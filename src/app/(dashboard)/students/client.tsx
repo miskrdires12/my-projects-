@@ -14,7 +14,6 @@ import {
   Eye,
   Trash2,
   X,
-  Camera,
   Download,
   CheckCircle2,
   ChevronLeft,
@@ -43,6 +42,7 @@ import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
 import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver } from "@/lib/export-utils";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
+import { ResilientStudentPhoto } from "@/components/ui/ResilientStudentPhoto";
 
 interface StudentExtended {
   id: string;
@@ -1313,25 +1313,23 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       <td className="px-4 py-3">
                         <div className="relative group/thumb inline-block">
                           <div className="h-14 w-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] overflow-hidden flex items-center justify-center shadow-xs transition-transform duration-150 group-hover/thumb:scale-105 cursor-pointer">
-                            {student.photoPath ? (
-                              <img
-                                src={student.photoPath}
-                                alt={student.fullName}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <Camera className="h-4 w-4 text-foreground-subtle dark:text-[#6c8074]" />
-                            )}
+                            <ResilientStudentPhoto
+                              src={student.photoPath}
+                              alt={student.fullName}
+                              fullName={student.fullName}
+                              studentId={student.studentId}
+                            />
                           </div>
 
                           {/* Studio Portrait Hover Zoom Popover */}
                           {student.photoPath && (
                             <div className="hidden group-hover/thumb:flex flex-col absolute left-14 top-1/2 -translate-y-1/2 z-30 w-44 rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
                               <div className="aspect-[3/4] w-full rounded-xl overflow-hidden bg-black border border-border dark:border-[#223126]">
-                                <img
+                                <ResilientStudentPhoto
                                   src={student.photoPath}
                                   alt={student.fullName}
-                                  className="h-full w-full object-cover"
+                                  fullName={student.fullName}
+                                  studentId={student.studentId}
                                 />
                               </div>
                               <div className="pt-2 px-1">
@@ -1601,15 +1599,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 Official Studio Portrait (3:4)
               </span>
               <div className="w-48 aspect-[3/4] rounded-2xl border-2 border-border dark:border-[#223126] bg-black overflow-hidden flex items-center justify-center shadow-lg relative">
-                {activeStudent.photoPath ? (
-                  <img
-                    src={activeStudent.photoPath}
-                    alt={activeStudent.fullName}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <Camera className="h-10 w-10 text-foreground-subtle" />
-                )}
+                <ResilientStudentPhoto
+                  src={activeStudent.photoPath}
+                  alt={activeStudent.fullName}
+                  fullName={activeStudent.fullName}
+                  studentId={activeStudent.studentId}
+                  priority={true}
+                />
               </div>
               {activeStudent.photoPath && (
                 <div className="flex flex-col gap-2 w-full max-w-xs pt-1">

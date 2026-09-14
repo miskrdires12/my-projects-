@@ -16,9 +16,11 @@ import {
   Sun,
   LogOut,
   Bell,
+  CheckCircle2,
 } from "lucide-react";
 import { purgeSensitiveClientStorage } from "@/lib/idb-storage";
 import { logoutAction } from "@/actions/auth";
+import { getRecentAuditNotificationsAction } from "@/actions/audit";
 
 interface DashboardShellProps {
   session: {
@@ -61,27 +63,31 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  // Global Header Real-Time Notifications
+  // Global Header Real-Time Notifications (Grounded in real database audit events)
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(1);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [headerNotifications, setHeaderNotifications] = useState<
     Array<{ id: string; title: string; desc: string; time: string; type: string }>
-  >([
-    {
-      id: "sys-init-1",
-      title: "Realtime Telemetry Online",
-      desc: "Live Cloud Ingestion & Local Cache running with 0ms latency.",
-      time: "Live",
-      type: "success",
-    },
-    {
-      id: "sys-init-2",
-      title: "8-Up Engine Configured",
-      desc: "Ready for high-speed A4 production with 2mm perimeter bleed.",
-      time: "Ready",
-      type: "info",
-    },
-  ]);
+  >([]);
+
+  // Fetch verified system notifications from real audit history
+  useEffect(() => {
+    let isMounted = true;
+    getRecentAuditNotificationsAction()
+      .then((realLogs) => {
+        if (isMounted && realLogs && realLogs.length > 0) {
+          setHeaderNotifications(realLogs);
+          // Show unread indicator if events occurred recently
+          const recentCount = realLogs.filter((l) => l.time === "Just now" || l.time.includes("m ago")).length;
+          setUnreadCount(recentCount);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleNotification = (e: any) => {
@@ -89,8 +95,8 @@ export default function DashboardShell({ session, children }: DashboardShellProp
         setHeaderNotifications((prev) => [
           {
             id: `notif-${Date.now()}`,
-            title: e.detail.title || "Live Alert",
-            desc: e.detail.desc || e.detail.message || "New event received",
+            title: e.detail.title || "Live Event",
+            desc: e.detail.desc || e.detail.message || "Action processed successfully",
             time: "Just now",
             type: e.detail.type || "info",
           },
@@ -557,8 +563,12 @@ export default function DashboardShell({ session, children }: DashboardShellProp
 
                   <div className="max-h-60 overflow-y-auto space-y-2 divide-y divide-[#f0f5f2] dark:divide-[#162019] pr-1">
                     {headerNotifications.length === 0 ? (
-                      <div className="text-center py-6 text-[#6b7771] dark:text-[#8a9e93] text-[11px]">
-                        No active notifications. System operating normally.
+                      <div className="text-center py-6 text-[#6b7771] dark:text-[#8a9e93] text-[11px] space-y-1.5">
+                        <CheckCircle2 className="h-6 w-6 text-[#8fe617] mx-auto opacity-80" />
+                        <div className="font-bold text-[#080808] dark:text-[#f2f7f4]">Zero Active Alerts</div>
+                        <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                          All student records & workstations operating normally.
+                        </p>
                       </div>
                     ) : (
                       headerNotifications.map((notif) => (
