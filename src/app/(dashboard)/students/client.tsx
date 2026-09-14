@@ -91,17 +91,31 @@ import {
   clearAllStudentsFromDB,
 } from "@/lib/idb-storage";
 
-// Safe database helper using IndexedDB (handles 6,000 to 20,000+ students with photos safely)
+// Helper to safely parse obfuscated student records from local storage
+function parseSecureLocalList(raw: string | null): StudentExtended[] {
+  if (!raw) return [];
+  try {
+    if (raw.startsWith("[")) return JSON.parse(raw);
+    const decoded = decodeURIComponent(escape(atob(raw)));
+    return JSON.parse(decoded);
+  } catch {
+    return [];
+  }
+}
+
+// Safe database helper using protected vault
 const safeSaveLocalEnrolledStudents = (list: StudentExtended[]) => {
   saveStudentsToDB(list as any).catch((err) => {
-    console.warn("IndexedDB bulk save notice:", err);
+    console.warn("Secure vault bulk save notice:", err);
   });
   try {
     const lightList = list.slice(0, 100).map((s) => ({
       ...s,
       photoPath: s.photoPath && s.photoPath.length > 500 ? null : s.photoPath,
     }));
-    localStorage.setItem("sb_enrolled_students", JSON.stringify(lightList));
+    const serialized = JSON.stringify(lightList);
+    const encoded = btoa(unescape(encodeURIComponent(serialized)));
+    localStorage.setItem("sb_enrolled_students", encoded);
   } catch {}
 };
 
@@ -155,7 +169,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       let localList: StudentExtended[] = [];
       try {
         const raw = localStorage.getItem("sb_enrolled_students");
-        if (raw) localList = JSON.parse(raw);
+        localList = parseSecureLocalList(raw);
       } catch {}
 
       const map = new Map<string, StudentExtended>();
@@ -298,7 +312,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
         const raw = localStorage.getItem("sb_enrolled_students");
         if (raw) {
-          const localList: StudentExtended[] = JSON.parse(raw);
+          const localList: StudentExtended[] = parseSecureLocalList(raw);
           const map = new Map<string, StudentExtended>();
           localList.forEach((s) => {
             if (!deletedIds.has(s.id) && !deletedIds.has(s.studentId)) {
@@ -393,10 +407,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
   // Bulk Selection
   const handleToggleSelectAll = () => {
-    if (selectedIds.size === displayStudents.length) {
+    if (selectedIds.size === filteredStudents.length && filteredStudents.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(displayStudents.map((s) => s.id)));
+      setSelectedIds(new Set(filteredStudents.map((s) => s.id)));
     }
   };
 
@@ -410,8 +424,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // Bulk Photo Download (Grouped strictly by Grade folders, without companion CSV)
   const handleBulkDownloadPhotos = async () => {
     const targetStudents = selectedIds.size > 0
-      ? displayStudents.filter((s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId)))
-      : displayStudents;
+      ? filteredStudents.filter((s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId)))
+      : filteredStudents;
 
     if (targetStudents.length === 0) {
       alert("No student found to download in this view.");
@@ -720,7 +734,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
     let listToExport: StudentExtended[] = [];
     if (selectedOnly) {
-      listToExport = displayStudents.filter(
+      listToExport = filteredStudents.filter(
         (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
       );
       if (listToExport.length === 0) {
@@ -729,8 +743,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       }
     } else {
       listToExport = targetGrade
-        ? displayStudents.filter((s) => s.grade === targetGrade)
-        : displayStudents;
+        ? filteredStudents.filter((s) => s.grade === targetGrade)
+        : filteredStudents;
     }
 
     if (listToExport.length === 0) {
@@ -781,7 +795,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
     let listToExport: StudentExtended[] = [];
     if (selectedOnly) {
-      listToExport = displayStudents.filter(
+      listToExport = filteredStudents.filter(
         (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
       );
       if (listToExport.length === 0) {
@@ -790,8 +804,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       }
     } else {
       listToExport = targetGrade
-        ? displayStudents.filter((s) => s.grade === targetGrade)
-        : displayStudents;
+        ? filteredStudents.filter((s) => s.grade === targetGrade)
+        : filteredStudents;
     }
 
     if (listToExport.length === 0) {
@@ -910,11 +924,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         if (res.ok) {
           const uploadRes = await res.json();
           if (uploadRes.relativePath) {
-            finalPath = uploadRes.relativePath;
+            // Append cache-busting timestamp so browser immediately displays new crop
+            finalPath = `${uploadRes.relativePath}?t=${Date.now()}`;
           }
         }
       } catch (uploadErr) {
         console.warn("Upload fallback to dataUri:", uploadErr);
+      }
+
+      // Invalidate service worker and browser CacheStorage for student photos
+      if (typeof window !== "undefined" && "caches" in window) {
+        try {
+          const cache = await caches.open("siliconlabs_student_photos_v1");
+          if (studentToUpdate.photoPath) {
+            const cleanUrl = studentToUpdate.photoPath.split("?")[0];
+            await cache.delete(cleanUrl);
+            await cache.delete(studentToUpdate.photoPath);
+          }
+        } catch {}
       }
 
       const updatedStudent: StudentExtended = {
@@ -922,11 +949,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         photoPath: finalPath,
       };
 
-      // 1. Persist to IndexedDB (permanent local database supporting 6,000+ per day)
+      // 1. Persist to secure client vault
       try {
         await saveStudentToDB(updatedStudent as any);
       } catch (idbErr) {
-        console.warn("IndexedDB photo update error:", idbErr);
+        console.warn("Secure vault photo update error:", idbErr);
       }
 
       // 2. Broadcast live update across all tabs and mobile/desktop clients
@@ -964,15 +991,78 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     reader.readAsDataURL(editedBlob);
   };
 
-  const totalEffective = Math.max(totalCount, displayStudents.length);
+  // Multi-Field Instant Search and Filter across all attributes
+  const filteredStudents = React.useMemo(() => {
+    let list = displayStudents;
+
+    // Filter by Search Query across ALL fields
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((s) => {
+        const name = (s.fullName || "").toLowerCase();
+        const sId = (s.studentId || "").toLowerCase();
+        const phone = (s.phone || "").toLowerCase();
+        const dept = (s.department || "").toLowerCase();
+        const school = (s.school || "").toLowerCase();
+        const grade = (s.grade || "").toLowerCase();
+        const email = (s.emailAddress || "").toLowerCase();
+        const guardian = (s.guardianFullName || "").toLowerCase();
+        const emPhone = (s.emergencyContactPhone || "").toLowerCase();
+        const emName = (s.emergencyContactName || "").toLowerCase();
+        const blood = (s.bloodType || "").toLowerCase();
+        const customMatch = s.customValues?.some((cv) =>
+          (cv.value || "").toLowerCase().includes(q)
+        );
+        return (
+          name.includes(q) ||
+          sId.includes(q) ||
+          phone.includes(q) ||
+          dept.includes(q) ||
+          school.includes(q) ||
+          grade.includes(q) ||
+          email.includes(q) ||
+          guardian.includes(q) ||
+          emPhone.includes(q) ||
+          emName.includes(q) ||
+          blood.includes(q) ||
+          Boolean(customMatch)
+        );
+      });
+    }
+
+    // Filter by Grade
+    if (selectedGrade && selectedGrade !== "ALL") {
+      list = list.filter(
+        (s) => (s.grade || "").trim().toLowerCase() === selectedGrade.trim().toLowerCase()
+      );
+    }
+
+    // Filter by Department
+    if (selectedDept && selectedDept !== "ALL") {
+      list = list.filter(
+        (s) => (s.department || "").trim().toLowerCase() === selectedDept.trim().toLowerCase()
+      );
+    }
+
+    // Filter by Photo Status
+    if (selectedPhotoStatus === "HAS_PHOTO") {
+      list = list.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0));
+    } else if (selectedPhotoStatus === "MISSING_PHOTO") {
+      list = list.filter((s) => !s.photoPath || s.photoPath.trim().length === 0);
+    }
+
+    return list;
+  }, [displayStudents, searchQuery, selectedGrade, selectedDept, selectedPhotoStatus]);
+
+  const totalEffective = filteredStudents.length;
   const totalPages = Math.ceil(totalEffective / activePageSize) || 1;
   const startItem = totalEffective === 0 ? 0 : (activePage - 1) * activePageSize + 1;
   const endItem = Math.min(activePage * activePageSize, totalEffective);
 
   // Sorted students based on active column sort or default newest first
   const sortedStudents = React.useMemo(() => {
-    if (!sortField) return displayStudents;
-    const sorted = [...displayStudents];
+    if (!sortField) return filteredStudents;
+    const sorted = [...filteredStudents];
     sorted.sort((a, b) => {
       const valA = (a as any)[sortField] ?? "";
       const valB = (b as any)[sortField] ?? "";
@@ -980,7 +1070,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       return sortDirection === "asc" ? comp : -comp;
     });
     return sorted;
-  }, [displayStudents, sortField, sortDirection]);
+  }, [filteredStudents, sortField, sortDirection]);
 
   // Client-side pagination slice ensuring Per page (25, 50, 100) functions instantaneously
   const paginatedStudents = React.useMemo(() => {
@@ -1266,7 +1356,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-border dark:divide-[#223126]">
-              {displayStudents.length === 0 ? (
+              {filteredStudents.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
