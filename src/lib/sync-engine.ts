@@ -10,44 +10,53 @@ export const SYNC_TOPIC = "sb_prod_sync_miskrdires12_v1";
 export const SYNC_BASE_URL = `https://ntfy.sh/${SYNC_TOPIC}`;
 
 export interface SyncPayload {
-  action: "UPSERT" | "DELETE" | "CLEAR";
+  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED";
   student?: any;
   studentId?: string;
+  fullName?: string;
+  message?: string;
   timestamp: number;
 }
 
 /**
- * Publishes an upsert or deletion event to the Global Cloud Sync Bus.
+ * Publishes an upsert, deletion, or photo-retake event to the Global Cloud Sync Bus.
  * Can be called from server actions, API routes, or browser clients.
  */
 export async function publishStudentSync(
-  action: "UPSERT" | "DELETE" | "CLEAR",
+  action: "UPSERT" | "DELETE" | "CLEAR" | "PHOTO_RETAKE_REQUIRED",
   studentOrId?: any
 ): Promise<boolean> {
   try {
     let studentId = "";
     let id = "";
+    let fullName = "";
+    let message = "";
+
     if (typeof studentOrId === "string") {
       studentId = studentOrId;
       id = studentOrId;
     } else if (studentOrId) {
       studentId = studentOrId.studentId || "";
       id = studentOrId.id || "";
+      fullName = studentOrId.fullName || "";
+      message = studentOrId.message || "";
     }
 
     const payload: SyncPayload = {
       action,
       student: action === "UPSERT" ? studentOrId : (action === "DELETE" ? { id, studentId } : undefined),
       studentId: studentId || id,
+      fullName,
+      message,
       timestamp: Date.now(),
     };
 
     const res = await fetch(SYNC_BASE_URL, {
       method: "POST",
       headers: {
-        Title: `STUDENT_${action}`,
+        Title: action === "PHOTO_RETAKE_REQUIRED" ? "PHOTO_RETAKE_REQUIRED" : `STUDENT_${action}`,
         Priority: "urgent",
-        Tags: "student,sync",
+        Tags: action === "PHOTO_RETAKE_REQUIRED" ? "warning,camera,retake" : "student,sync",
       },
       body: JSON.stringify(payload),
       cache: "no-store",

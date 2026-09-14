@@ -22,6 +22,7 @@ import {
   RefreshCw,
   FolderArchive,
   ChevronDown,
+  AlertTriangle,
 } from "lucide-react";
 import { getStudentCountFromDB } from "@/lib/idb-storage";
 
@@ -57,6 +58,25 @@ export function RealtimeSenderDashboard() {
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [retakeQueue, setRetakeQueue] = useState<
+    Array<{ studentId: string; fullName?: string; message?: string }>
+  >([]);
+
+  useEffect(() => {
+    const handleRetakeRequired = (e: any) => {
+      if (e?.detail?.studentId) {
+        setRetakeQueue((prev) => [
+          e.detail,
+          ...prev.filter((item) => item.studentId !== e.detail.studentId),
+        ]);
+      }
+    };
+
+    window.addEventListener("siliconlabs_photo_retake_required", handleRetakeRequired);
+    return () => {
+      window.removeEventListener("siliconlabs_photo_retake_required", handleRetakeRequired);
+    };
+  }, []);
 
   const fetchMetrics = useCallback(async () => {
     setIsRefreshing(true);
@@ -248,6 +268,53 @@ export function RealtimeSenderDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Low Internet Photo Retake Alert Banner */}
+      {retakeQueue.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20 p-4 text-amber-800 dark:text-amber-200 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+              <span className="font-bold text-sm">
+                Low Internet Retake Alert ({retakeQueue.length} {retakeQueue.length === 1 ? "Student" : "Students"})
+              </span>
+            </div>
+            <button
+              onClick={() => setRetakeQueue([])}
+              className="text-xs font-mono text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+          <p className="text-xs text-amber-700 dark:text-amber-300 font-mono mb-3">
+            Weak network connection dropped photo transmission after 3 automatic retries. The broken asset was auto-deleted from the receiver. Please retake photo:
+          </p>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {retakeQueue.map((item) => (
+              <div
+                key={item.studentId}
+                className="flex items-center justify-between rounded-xl bg-white/70 dark:bg-[#161c18] p-2.5 border border-amber-500/20 text-xs font-mono"
+              >
+                <div>
+                  <div className="font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    {item.fullName || "Student"}
+                  </div>
+                  <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                    ID: {item.studentId}
+                  </div>
+                </div>
+                <Link
+                  href={`/sender/photo-import?search=${encodeURIComponent(item.studentId)}`}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#8fe617] text-[#062404] font-black text-[10px] hover:brightness-110 transition shadow-xs cursor-pointer"
+                >
+                  <Camera className="h-3 w-3" />
+                  <span>Retake Photo</span>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

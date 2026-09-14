@@ -1,10 +1,9 @@
 import React from "react";
 import Link from "next/link";
-import { Shield, ArrowLeft, LogOut } from "lucide-react";
+import { Shield, ArrowLeft, LogOut, ShieldAlert } from "lucide-react";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { logoutAction } from "@/actions/auth";
-import { redirect } from "next/navigation";
 import { UsersClient } from "./client";
 
 export const metadata = {
@@ -15,7 +14,29 @@ export const metadata = {
 export default async function AdminUsersPage() {
   const session = await getSession();
   if (!session || session.role !== "ADMIN") {
-    redirect("/dashboard?error=forbidden");
+    return (
+      <div className="min-h-[75vh] flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-200">
+        <div className="w-20 h-20 rounded-3xl bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center mb-5 text-red-500 shadow-2xl shadow-red-500/10 animate-pulse">
+          <ShieldAlert className="h-10 w-10" />
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 font-mono text-xs font-bold uppercase tracking-wider mb-3">
+          Security Access Restricted
+        </div>
+        <h1 className="text-3xl font-black text-[#080808] dark:text-[#f2f7f4] tracking-tight mb-2">
+          You Are Not Supposed to Be Here
+        </h1>
+        <p className="text-sm text-[#6b7771] dark:text-[#8a9e93] max-w-lg font-mono leading-relaxed mb-6">
+          Access Restricted: Operator provisioning, user credentials, and security role assignments are strictly reserved for System Administrators. Your current role ({session?.role || "GUEST"}) lacks clearance to inspect or manage user accounts.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#8fe617] text-[#062404] font-black text-xs hover:brightness-110 transition-all shadow-lg shadow-[#8fe617]/20 hover:scale-105 active:scale-95 cursor-pointer"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Return to Safe Workstation</span>
+        </Link>
+      </div>
+    );
   }
 
   const users = await prisma.user.findMany({

@@ -6,7 +6,7 @@
 // single photo downloads, and deep profile inspection drawer.
 // ============================================================================
 
-import React, { useState, useTransition, useEffect } from "react";
+import React, { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Search,
@@ -219,6 +219,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
     loadAndMerge();
   }, [students]);
+
+  // Handle low-internet 3-strike failure: photo auto-deleted from receiver and database
+  const handlePhotoAutoDeleted = useCallback((studentId: string, _fullName?: string) => {
+    setDisplayStudents((prev) =>
+      prev.map((s) => (s.studentId === studentId || s.id === studentId ? { ...s, photoPath: null } : s))
+    );
+    setActiveStudent((prev) =>
+      prev && (prev.studentId === studentId || prev.id === studentId) ? { ...prev, photoPath: null } : prev
+    );
+  }, []);
 
   // 2. Real-time Live Sync across devices (Mobile Phone to Receiver Desktop)
   useEffect(() => {
@@ -1318,6 +1328,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               alt={student.fullName}
                               fullName={student.fullName}
                               studentId={student.studentId}
+                              onAutoDelete={handlePhotoAutoDeleted}
                             />
                           </div>
 
@@ -1330,6 +1341,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                                   alt={student.fullName}
                                   fullName={student.fullName}
                                   studentId={student.studentId}
+                                  onAutoDelete={handlePhotoAutoDeleted}
                                 />
                               </div>
                               <div className="pt-2 px-1">
@@ -1605,9 +1617,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   fullName={activeStudent.fullName}
                   studentId={activeStudent.studentId}
                   priority={true}
+                  onAutoDelete={handlePhotoAutoDeleted}
                 />
               </div>
-              {activeStudent.photoPath && (
+              {activeStudent.photoPath ? (
                 <div className="flex flex-col gap-2 w-full max-w-xs pt-1">
                   <button
                     type="button"
@@ -1626,6 +1639,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <div className="text-[11px] font-mono text-foreground-muted dark:text-[#8a9e93] text-center truncate pt-0.5">
                     /photos/{activeStudent.fullName}.jpg
                   </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 w-full max-w-xs pt-2 text-center p-3 rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126]">
+                  <span className="text-xs font-mono font-bold text-amber-500 dark:text-amber-400">
+                    No Photo Assigned / Auto-Deleted
+                  </span>
+                  <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] leading-normal">
+                    Low internet caused transmission drop after 3 retries. Auto-deleted from receiver. Sender station has been alerted to retake photo.
+                  </p>
                 </div>
               )}
             </div>

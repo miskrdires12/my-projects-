@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { RefreshCw, Camera, ImageOff } from "lucide-react";
+import { RefreshCw, Camera } from "lucide-react";
+import { reportPhotoTransmissionFailureAction } from "@/actions/students";
 
 interface ResilientStudentPhotoProps {
   src?: string | null;
@@ -13,6 +14,7 @@ interface ResilientStudentPhotoProps {
   aspectRatio?: "portrait" | "square";
   showInitialsOnEmpty?: boolean;
   priority?: boolean;
+  onAutoDelete?: (studentId: string, fullName?: string, failedSrc?: string) => void;
 }
 
 const CACHE_NAME = "siliconlabs_student_photos_v1";
@@ -26,6 +28,7 @@ export const ResilientStudentPhoto: React.FC<ResilientStudentPhotoProps> = ({
   containerClassName = "",
   showInitialsOnEmpty = true,
   priority = false,
+  onAutoDelete,
 }) => {
   const [resolvedSrc, setResolvedSrc] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(src));
@@ -114,7 +117,7 @@ export const ResilientStudentPhoto: React.FC<ResilientStudentPhotoProps> = ({
   };
 
   const handleImageError = () => {
-    // If low internet caused network drop, auto-retry up to 3 times
+    // If low internet caused network drop, auto-retry up to 3 times (Automatic 3-Strike Exponential Backoff)
     if (retryCount < 3 && src) {
       setIsRetrying(true);
       const nextCount = retryCount + 1;
@@ -126,9 +129,42 @@ export const ResilientStudentPhoto: React.FC<ResilientStudentPhotoProps> = ({
         setResolvedSrc(`${src}${separator}retry=${nextCount}&t=${Date.now()}`);
       }, nextCount * 1200);
     } else {
+      // 3 STRIKES EXHAUSTED: Low internet transmission failure!
       setIsLoading(false);
       setHasError(true);
       setIsRetrying(false);
+
+      // 1. Purge corrupted/dropped URL from local CacheStorage
+      if (src && typeof window !== "undefined" && "caches" in window) {
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.delete(src);
+        }).catch(() => {});
+      }
+
+      // 2. Auto-delete from receiver state & database, and tell sender to retake
+      if (studentId) {
+        if (onAutoDelete) {
+          onAutoDelete(studentId, fullName, src || undefined);
+        }
+
+        reportPhotoTransmissionFailureAction({
+          studentId,
+          fullName,
+          photoPath: src || null,
+        }).catch(() => {});
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("siliconlabs_notification", {
+              detail: {
+                title: "Low Internet: Retake Photo",
+                desc: `Photo transmission failed for ${fullName || studentId}. Auto-deleted from receiver. Sender has been alerted to retake photo.`,
+                type: "warning",
+              },
+            })
+          );
+        }
+      }
     }
   };
 
@@ -175,20 +211,25 @@ export const ResilientStudentPhoto: React.FC<ResilientStudentPhotoProps> = ({
         </div>
       )}
 
-      {/* Network Drop / Timeout Error with Tap to Retry */}
+      {/* Network Drop / 3-Strike Exhausted: Auto-Deleted Status & Retry */}
       {hasError && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-1 text-center bg-red-950/20 dark:bg-black/70 backdrop-blur-xs border border-red-500/20">
-          <ImageOff className="h-3.5 w-3.5 text-red-400 mb-0.5 opacity-80" />
-          <span className="text-[8px] font-mono text-red-300 font-semibold mb-1 leading-tight">
-            Low Network
-          </span>
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-1 text-center bg-surface-secondary/95 dark:bg-[#111613]/95 backdrop-blur-xs">
+          <span className="font-mono font-bold text-xs text-[#8fe617]/80">{initials}</span>
+          <div className="mt-1 flex flex-col items-center gap-0.5">
+            <span className="text-[7.5px] font-mono text-amber-500 dark:text-amber-400 font-bold leading-tight">
+              Low Net • Auto-Deleted
+            </span>
+            <span className="text-[7px] font-mono text-foreground-subtle dark:text-[#6c8074]">
+              Sender retake alerted
+            </span>
+          </div>
           <button
             type="button"
             onClick={handleManualRetry}
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#8fe617] text-[#070908] text-[9px] font-bold hover:brightness-110 shadow-xs cursor-pointer"
-            title="Click to reload photo"
+            className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#8fe617] text-[#070908] text-[8px] font-bold hover:brightness-110 shadow-xs cursor-pointer"
+            title="Click to manually reload photo"
           >
-            <RefreshCw className="h-2.5 w-2.5" />
+            <RefreshCw className="h-2 w-2" />
             <span>Retry</span>
           </button>
         </div>

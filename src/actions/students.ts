@@ -793,3 +793,75 @@ export async function exportStudentsCSVAction(): Promise<{ success: boolean; csv
   }
 }
 
+/**
+ * Handles permanent photo drop after 3-strike automatic exponential backoff retry due to low internet.
+ * Automatically deletes the broken photo from the central database (so it never appears when inspecting the database),
+ * logs a real audit record, and notifies the sender station to retake the photo.
+ */
+export async function reportPhotoTransmissionFailureAction(params: {
+  studentId: string;
+  fullName?: string;
+  photoPath?: string | null;
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const { studentId, photoPath } = params;
+    if (!studentId) return { success: false, message: "Missing studentId parameter." };
+
+    const session = await getSession();
+
+    // 1. Locate student by studentId or internal ID
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: [{ studentId }, { id: studentId }],
+      },
+    });
+
+    if (student) {
+      const studentName = params.fullName || student.fullName;
+      // 2. Auto-delete photo from database so it never appears when inspecting the database
+      await prisma.student.update({
+        where: { id: student.id },
+        data: { photoPath: null },
+      });
+
+      // 3. Log real audit trail event
+      await createSafeAuditLog({
+        action: "PHOTO_RETAKE_REQUIRED",
+        entityType: "STUDENT",
+        entityId: student.id,
+        metadata: {
+          studentId: student.studentId,
+          fullName: studentName,
+          previousPhoto: photoPath || student.photoPath,
+          reason: "Low internet connection during transmission: Photo dropped after 3 retry strikes. Auto-deleted from receiver. Sender must retake photo.",
+        },
+        userId: session?.userId,
+      });
+
+      // 4. Broadcast to Cloud Sync Bus so Sender station receives real-time retake alert
+      await publishStudentSync(
+        "PHOTO_RETAKE_REQUIRED" as any,
+        {
+          studentId: student.studentId,
+          fullName: studentName,
+          message: `Low internet detected: Photo transmission failed for ${studentName} (${student.studentId}). Photo removed from receiver. Sender: please retake photo.`,
+        }
+      );
+
+      revalidatePath("/students");
+      revalidatePath("/dashboard");
+      revalidatePath("/sender/photo-import");
+
+      return {
+        success: true,
+        message: `Photo auto-deleted from receiver and database for ${student.fullName}. Sender notified to retake.`,
+      };
+    }
+
+    return { success: false, message: "Student record not found." };
+  } catch (err: any) {
+    console.error("Error in reportPhotoTransmissionFailureAction:", err);
+    return { success: false, message: err?.message || "Failed to process photo transmission failure" };
+  }
+}
+

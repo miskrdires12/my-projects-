@@ -106,6 +106,11 @@ export async function getRecentAuditNotificationsAction(): Promise<RealSystemNot
           desc = `${actor} signed in to workstation`;
           type = "info";
           break;
+        case "PHOTO_RETAKE_REQUIRED":
+          title = "Low Internet: Retake Photo";
+          desc = `Photo dropped for ${meta?.fullName || meta?.studentId || "Student"}. Auto-deleted from receiver. Sender must retake.`;
+          type = "warning";
+          break;
         case "AUDIT_LOGS_CLEARED":
           title = "Audit Logs Cleared";
           desc = `Audit trail purged by ${actor}`;
