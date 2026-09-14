@@ -182,3 +182,81 @@ export function formatStudentForReceiverExcel(student: {
     getStudentPhotoLocalPath(student),
   ];
 }
+
+/**
+ * Resolves Grade and Section classification for folder structuring in ZIP exports.
+ * 
+ * Supports:
+ * - Explicit grade + department as section (e.g., Grade 9, Section A -> Grade_9 / Section_A)
+ * - Combined grade & section strings (e.g., "Grade 9A", "10B", "11 - C", "Grade 12 Section B")
+ * - Custom field value for section
+ * - Fallback to Section_General if no section is specified
+ */
+export function resolveGradeAndSection(student: {
+  grade?: string | null;
+  department?: string | null;
+  section?: string | null;
+  customValues?: any[];
+  [key: string]: any;
+}): { gradeFolder: string; sectionFolder: string; rawGrade: string; rawSection: string } {
+  let gradeInput = (student.grade || "").trim();
+  let sectionInput = (student.section || "").trim();
+  const deptInput = (student.department || "").trim();
+
+  // 1. If explicit section field was not present, check department
+  if (!sectionInput && deptInput) {
+    sectionInput = deptInput;
+  }
+
+  // 2. Check customValues for a section attribute
+  if (!sectionInput && Array.isArray(student.customValues)) {
+    const foundCustom = student.customValues.find((cv: any) => {
+      const name = (cv?.field?.name || cv?.fieldName || cv?.name || cv?.key || "").toLowerCase();
+      return name.includes("section") || name === "sec";
+    });
+    if (foundCustom?.value) {
+      sectionInput = String(foundCustom.value).trim();
+    }
+  }
+
+  // 3. Extract combined Grade and Section from gradeInput if sectionInput is still empty
+  if (!sectionInput && gradeInput) {
+    // Matches "Grade 9A", "Grade 9-A", "Grade 9 - A", "Grade 9_A", "Grade 9 Section A", "9A", "10B", "11C", "12 - D"
+    const combinedMatch = gradeInput.match(
+      /^(?:grade\s*)?(\d+)\s*[-/_ ]*\s*(?:section\s*|sec\s*)?([a-zA-Z]|[0-9]+)$/i
+    );
+    if (combinedMatch) {
+      gradeInput = `Grade ${combinedMatch[1]}`;
+      sectionInput = combinedMatch[2].toUpperCase();
+    } else {
+      // Matches "Grade 9 (Section A)" or "Grade 9 [A]"
+      const bracketMatch = gradeInput.match(
+        /^(?:grade\s*)?(\d+)\s*[\(\[]\s*(?:section\s*|sec\s*)?([a-zA-Z0-9]+)\s*[\)\]]$/i
+      );
+      if (bracketMatch) {
+        gradeInput = `Grade ${bracketMatch[1]}`;
+        sectionInput = bracketMatch[2].toUpperCase();
+      }
+    }
+  }
+
+  // Normalize Grade string
+  let cleanGrade = gradeInput.replace(/^grade\s*/i, "").trim();
+  if (!cleanGrade) cleanGrade = "General";
+  cleanGrade = cleanGrade.replace(/[:*?"<>|/\\]/g, "_");
+  const gradeFolder = `Grade_${cleanGrade}`;
+
+  // Normalize Section string
+  let cleanSection = sectionInput.replace(/^(?:section|sec)\s*/i, "").trim();
+  if (!cleanSection) cleanSection = "General";
+  cleanSection = cleanSection.replace(/[:*?"<>|/\\]/g, "_");
+  const sectionFolder = `Section_${cleanSection.toUpperCase()}`;
+
+  return {
+    gradeFolder,
+    sectionFolder,
+    rawGrade: gradeInput || "General",
+    rawSection: sectionInput || "General",
+  };
+}
+

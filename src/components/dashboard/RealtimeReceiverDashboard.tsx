@@ -29,10 +29,12 @@ import {
   ArrowUpRight,
   GraduationCap,
   BarChart3,
+  Crop,
 } from "lucide-react";
 
 import { subscribeToCloudSync } from "@/lib/sync-client";
-import { getAllStudentsFromDB, deleteStudentFromDB } from "@/lib/idb-storage";
+import { getAllStudentsFromDB, deleteStudentFromDB, saveStudentToDB } from "@/lib/idb-storage";
+import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 import {
   getReceiverCsvPrefix,
   getStudentPhotoLocalPath,
@@ -107,23 +109,104 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const chartSvgRef = useRef<SVGSVGElement | null>(null);
 
-  // Real-world Live Clock State
-  const [currentTimeStr, setCurrentTimeStr] = useState<string>("");
-  useEffect(() => {
-    const updateClock = () => {
-      const d = new Date();
-      setCurrentTimeStr(
-        d.toLocaleTimeString(undefined, {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
+  // Photo Studio Editor State for Receiver
+  const [editingStudent, setEditingStudent] = useState<any | null>(null);
+
+  const handleSaveEditedPhoto = async (editedBlob: Blob, _originalBlob?: Blob | null, _metadata?: any) => {
+    if (!editingStudent) return;
+    const studentToUpdate = editingStudent;
+    setEditingStudent(null);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUri = reader.result as string;
+
+      let cleanName = (studentToUpdate.fullName || studentToUpdate.studentId || "student")
+        .replace(/[/\\]/g, " - ")
+        .replace(/[:*?"<>|]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
+      const safePhotoName = `${cleanName}.jpg`;
+
+      const form = new FormData();
+      form.append("file", editedBlob, safePhotoName);
+      form.append("studentId", studentToUpdate.studentId || studentToUpdate.id);
+
+      let finalPath = dataUri;
+      try {
+        const res = await fetch("/api/uploads", {
+          method: "POST",
+          body: form,
+        });
+        if (res.ok) {
+          const uploadRes = await res.json();
+          if (uploadRes.relativePath) {
+            finalPath = `${uploadRes.relativePath}?t=${Date.now()}`;
+          }
+        }
+      } catch (uploadErr) {
+        console.warn("Receiver upload fallback to dataUri:", uploadErr);
+      }
+
+      // Invalidate service worker and browser caches
+      if (typeof window !== "undefined" && "caches" in window) {
+        try {
+          const cache = await caches.open("siliconlabs_student_photos_v1");
+          if (studentToUpdate.photoPath) {
+            const cleanUrl = studentToUpdate.photoPath.split("?")[0];
+            await cache.delete(cleanUrl);
+            await cache.delete(studentToUpdate.photoPath);
+          }
+        } catch {}
+      }
+
+      // Update student in IDB
+      try {
+        await saveStudentToDB({
+          ...studentToUpdate,
+          studentId: studentToUpdate.studentId || studentToUpdate.id,
+          fullName: studentToUpdate.fullName || "",
+          grade: studentToUpdate.grade || "",
+          phone: studentToUpdate.phone || "",
+          photoPath: finalPath,
+        });
+      } catch (idbErr) {
+        console.warn("Failed saving edited photo to IDB:", idbErr);
+      }
+
+      // Update local state in Receiver Dashboard
+      setData((prev) => {
+        const updatedRecent = (prev.recentStudents || []).map((s) =>
+          s.studentId === studentToUpdate.studentId || s.id === studentToUpdate.id
+            ? { ...s, photoPath: finalPath }
+            : s
+        );
+        return {
+          ...prev,
+          recentStudents: updatedRecent,
+        };
+      });
+
+      setAllStudentsList((prev) =>
+        prev.map((s) =>
+          s.studentId === studentToUpdate.studentId || s.id === studentToUpdate.id
+            ? { ...s, photoPath: finalPath }
+            : s
+        )
       );
+
+      // Notify other components / directory
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("sb_student_updated", {
+            detail: { ...studentToUpdate, photoPath: finalPath },
+          })
+        );
+      }
     };
-    updateClock();
-    const timer = setInterval(updateClock, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    reader.readAsDataURL(editedBlob);
+  };
 
   // Student Roster Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
@@ -1044,12 +1127,6 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               <h2 className="text-sm font-mono font-extrabold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
                 Production Velocity &amp; Realtime Metrics
               </h2>
-              {currentTimeStr && (
-                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#8fe617]/10 dark:bg-[#8fe617]/20 border border-[#8fe617]/40 text-[#062404] dark:text-[#8fe617] text-[11px] font-mono font-bold shadow-xs">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617] animate-ping" />
-                  <span>{currentTimeStr} LOCAL TIME</span>
-                </div>
-              )}
             </div>
             <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5 font-mono">
               Live real-world intake • Exact student registration timestamps • 0ms active sync
@@ -1824,13 +1901,26 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                     className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#f7faf9] dark:hover:bg-[#161d19] transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-9 w-9 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#eef5f1] dark:bg-[#1c261e] shrink-0 overflow-hidden flex items-center justify-center">
+                      <div
+                        onClick={() => {
+                          if (s.photoPath) {
+                            setEditingStudent(s);
+                          }
+                        }}
+                        className={`h-9 w-9 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#eef5f1] dark:bg-[#1c261e] shrink-0 overflow-hidden flex items-center justify-center relative ${s.photoPath ? "cursor-pointer group/streamThumb hover:border-[#8fe617] hover:scale-105 transition-all" : ""}`}
+                        title={s.photoPath ? `Click to Crop & Edit Photo (${s.fullName})` : "No Photo"}
+                      >
                         {s.photoPath ? (
-                          <img
-                            src={s.photoPath}
-                            alt={s.fullName}
-                            className="h-full w-full object-cover"
-                          />
+                          <>
+                            <img
+                              src={s.photoPath}
+                              alt={s.fullName}
+                              className="h-full w-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/streamThumb:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                              <Crop className="h-3.5 w-3.5 text-[#8fe617]" />
+                            </div>
+                          </>
                         ) : (
                           <Camera className="h-4 w-4 text-[#6b7771] dark:text-[#8a9e93]" />
                         )}
@@ -1870,6 +1960,17 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                       >
                         {isReady ? "READY" : "PENDING"}
                       </span>
+
+                      {hasPhoto && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingStudent(s)}
+                          className="p-1.5 rounded-lg border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#080808] dark:text-[#8fe617] hover:bg-[#8fe617]/25 transition-colors cursor-pointer"
+                          title={`Crop & Edit Photo (${s.fullName})`}
+                        >
+                          <Crop className="h-3.5 w-3.5 text-[#8fe617]" />
+                        </button>
+                      )}
 
                       <Link
                         href={`/students?id=${encodeURIComponent(s.studentId)}`}
@@ -2014,6 +2115,18 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           </div>
         </div>
       )}
+
+      {/* Studio Photo Cropper & Refinement Modal for Receiver Workstation */}
+      {editingStudent && editingStudent.photoPath && (
+        <PhotoEditorModal
+          isOpen={Boolean(editingStudent)}
+          originalImageSrc={editingStudent.photoPath}
+          onClose={() => setEditingStudent(null)}
+          onSave={handleSaveEditedPhoto}
+        />
+      )}
     </div>
   );
 }
+
+

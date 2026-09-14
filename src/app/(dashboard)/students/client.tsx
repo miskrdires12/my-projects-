@@ -42,7 +42,7 @@ import {
 } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
-import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver } from "@/lib/export-utils";
+import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver, resolveGradeAndSection } from "@/lib/export-utils";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 import { ResilientStudentPhoto } from "@/components/ui/ResilientStudentPhoto";
 
@@ -511,7 +511,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             a.href = url;
             const dateTag = new Date().toISOString().split("T")[0];
             const scopeLabel = selectedIds.size > 0 ? `Selected_${withPhotos.length}` : `All_${withPhotos.length}`;
-            a.download = `Student_Photos_By_Grade_${scopeLabel}_${dateTag}.zip`;
+            a.download = `Student_Photos_Grade_Section_${scopeLabel}_${dateTag}.zip`;
             document.body.appendChild(a);
             a.click();
             setTimeout(() => {
@@ -527,7 +527,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         console.warn("Server streaming zip fallback to client JSZip:", serverErr);
       }
 
-      // 2. Client-side JSZip packaging organized by Grade Folders (Works offline, with IndexedDB base64 photos, etc.)
+      // 2. Client-side JSZip packaging organized by Grade & Section Folders (Works offline, with IndexedDB base64 photos, etc.)
       const zip = new JSZip();
 
       for (const student of withPhotos) {
@@ -540,23 +540,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
         const photoFileName = `${cleanName}.jpg`;
 
-        // Organize strictly into Grade Folders
-        const gradeStr = (student.grade || "General").trim() || "General";
-        const safeGradeFolder = `Grade_${gradeStr.replace(/Grade /i, "").replace(/[:*?"<>|/\\]/g, "_")}`;
-        const gradeFolder = zip.folder(safeGradeFolder) || zip;
+        // Organize strictly into Grade and Section Folders (e.g. Grade_9/Section_A/)
+        const { gradeFolder, sectionFolder } = resolveGradeAndSection(student);
+        const targetFolder = zip.folder(gradeFolder)?.folder(sectionFolder) || zip;
 
         if (student.photoPath) {
           try {
             if (student.photoPath.startsWith("data:image/")) {
               const base64Data = student.photoPath.split(",")[1];
               if (base64Data) {
-                gradeFolder.file(photoFileName, base64Data, { base64: true });
+                targetFolder.file(photoFileName, base64Data, { base64: true });
               }
             } else {
               const res = await fetch(student.photoPath);
               if (res.ok) {
                 const imgBlob = await res.blob();
-                gradeFolder.file(photoFileName, imgBlob);
+                targetFolder.file(photoFileName, imgBlob);
               }
             }
           } catch (photoErr) {
@@ -565,14 +564,14 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         }
       }
 
-      // Generate pure photo ZIP (no unwanted CSV)
+      // Generate pure photo ZIP organized by Grade and Section
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const url = window.URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = url;
       const dateTag = new Date().toISOString().split("T")[0];
       const scopeLabel = selectedIds.size > 0 ? `Selected_${withPhotos.length}` : `All_${withPhotos.length}`;
-      a.download = `Student_Photos_By_Grade_${scopeLabel}_${dateTag}.zip`;
+      a.download = `Student_Photos_Grade_Section_${scopeLabel}_${dateTag}.zip`;
       document.body.appendChild(a);
       a.click();
       setTimeout(() => {
@@ -1237,7 +1236,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             disabled={isDownloadingPhotos}
             onClick={handleBulkDownloadPhotos}
             className="h-11 px-5 rounded-xl bg-black text-white hover:bg-neutral-800 dark:bg-neutral-900 dark:border dark:border-[#223126] text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
-            title="Download student portraits organized into Grade folders (ZIP archive)"
+            title="Download student portraits organized into Grade & Section folders (ZIP archive)"
           >
             {isDownloadingPhotos ? (
               <Loader2 className="h-4 w-4 text-[#8fe617] animate-spin" />
@@ -1488,12 +1487,14 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                         <div className="relative group/thumb inline-block">
                           <div
                             onClick={() => {
-                              if (!student.photoPath) {
+                              if (student.photoPath) {
+                                setEditingStudent(student);
+                              } else {
                                 handleAutoResendPhoto(student);
                               }
                             }}
-                            className="h-14 w-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] overflow-hidden flex items-center justify-center shadow-xs transition-transform duration-150 group-hover/thumb:scale-105 cursor-pointer"
-                            title={student.photoPath ? student.fullName : "Click to auto-resend / resolve photo"}
+                            className="h-14 w-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] overflow-hidden flex items-center justify-center shadow-xs transition-transform duration-150 group-hover/thumb:scale-105 cursor-pointer relative"
+                            title={student.photoPath ? `Click to Crop & Edit Studio Portrait (${student.fullName})` : "Click to auto-resend / resolve photo"}
                           >
                             <ResilientStudentPhoto
                               src={student.photoPath}
@@ -1502,6 +1503,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               studentId={student.studentId}
                               onAutoDelete={handlePhotoAutoDeleted}
                             />
+                            {student.photoPath && (
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center rounded-xl pointer-events-none">
+                                <Crop className="h-4 w-4 text-[#8fe617]" />
+                              </div>
+                            )}
                           </div>
 
                           {/* Studio Portrait Hover Zoom Popover */}
@@ -1621,7 +1627,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setEditingStudent(student)}
-                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+                                className="rounded-lg p-2 text-[#8fe617] bg-[#8fe617]/10 hover:bg-[#8fe617]/20 border border-[#8fe617]/30 transition-colors cursor-pointer"
                                 title={`Crop & Edit Photo (${student.fullName})`}
                               >
                                 <Crop className="h-4 w-4" />
@@ -1798,7 +1804,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 onClick={handleBulkDownloadPhotos}
                 disabled={isDownloadingPhotos}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-700 bg-neutral-900/80 hover:bg-neutral-800 text-xs font-medium text-white transition-colors disabled:opacity-50 cursor-pointer"
-                title="Download selected student photos organized by grade (.zip)"
+                title="Download selected student photos organized by grade and section (.zip)"
               >
                 {isDownloadingPhotos ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8fe617]" />
@@ -1866,7 +1872,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               <span className="text-xs font-mono uppercase tracking-wider text-foreground-muted dark:text-[#8a9e93] font-semibold">
                 Official Studio Portrait (3:4)
               </span>
-              <div className="w-48 aspect-[3/4] rounded-2xl border-2 border-border dark:border-[#223126] bg-black overflow-hidden flex items-center justify-center shadow-lg relative">
+              <div
+                onClick={() => {
+                  if (activeStudent.photoPath) {
+                    setEditingStudent(activeStudent);
+                  }
+                }}
+                className={`w-48 aspect-[3/4] rounded-2xl border-2 border-border dark:border-[#223126] bg-black overflow-hidden flex items-center justify-center shadow-lg relative ${activeStudent.photoPath ? "cursor-pointer group/drawerPhoto" : ""}`}
+                title={activeStudent.photoPath ? "Click to Crop & Edit Studio Portrait" : undefined}
+              >
                 <ResilientStudentPhoto
                   src={activeStudent.photoPath}
                   alt={activeStudent.fullName}
@@ -1875,6 +1889,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   priority={true}
                   onAutoDelete={handlePhotoAutoDeleted}
                 />
+                {activeStudent.photoPath && (
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/drawerPhoto:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white text-xs font-semibold pointer-events-none">
+                    <Crop className="h-6 w-6 text-[#8fe617]" />
+                    <span className="bg-black/60 px-2.5 py-1 rounded-full text-[11px] font-mono border border-white/20">Click to Edit Photo</span>
+                  </div>
+                )}
               </div>
               {activeStudent.photoPath ? (
                 <div className="flex flex-col gap-2 w-full max-w-xs pt-1">

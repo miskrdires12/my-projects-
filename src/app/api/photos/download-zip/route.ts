@@ -29,7 +29,7 @@ import fs from "fs";
 import path from "path";
 import { PassThrough } from "stream";
 import { generateSafePhotoFilename } from "@/lib/image-processing";
-import { getStudentPhotoFileName, formatPhoneForReceiver } from "@/lib/export-utils";
+import { getStudentPhotoFileName, formatPhoneForReceiver, resolveGradeAndSection } from "@/lib/export-utils";
 
 // Factory for creating ZipArchive compatible with both legacy and archiver v8
 function createZipArchive(options: Record<string, unknown> = { zlib: { level: 5 } }) {
@@ -190,34 +190,38 @@ export async function POST(request: NextRequest) {
               getStudentPhotoFileName(s) ||
               generateSafePhotoFilename(s.fullName, s.studentId, isDup, "jpg");
 
-            // Determine folder prefix based on chosen structure
+            // Determine folder prefix based on chosen structure with section classification
             let folderPrefix = "";
             switch (folderStructure) {
               case "by-grade":
-                folderPrefix = `Grade_${sanitizeDir(s.grade)}/`;
+              default: {
+                const { gradeFolder, sectionFolder } = resolveGradeAndSection(s);
+                folderPrefix = `${gradeFolder}/${sectionFolder}/`;
                 break;
+              }
               case "by-batch":
                 folderPrefix = `Batch_${sanitizeDir(
                   s.batch?.batchNumber || "Unassigned"
                 )}/`;
                 break;
-              case "by-department":
-                folderPrefix = `Dept_${sanitizeDir(
-                  s.department || "General"
-                )}/`;
+              case "by-department": {
+                const { sectionFolder } = resolveGradeAndSection(s);
+                folderPrefix = `Dept_${sanitizeDir(s.department || "General")}/${sectionFolder}/`;
                 break;
+              }
               case "custom":
                 if (customPattern) {
+                  const { sectionFolder } = resolveGradeAndSection(s);
                   folderPrefix =
                     customPattern
                       .replace("{grade}", sanitizeDir(s.grade))
+                      .replace("{section}", sanitizeDir(sectionFolder.replace(/^Section_/, "")))
                       .replace("{department}", sanitizeDir(s.department))
                       .replace("{batch}", sanitizeDir(s.batch?.batchNumber))
                       .replace(/\/+$/, "") + "/";
                 }
                 break;
               case "flat":
-              default:
                 folderPrefix = "";
                 break;
             }
@@ -285,7 +289,7 @@ export async function POST(request: NextRequest) {
         ? "Batch"
         : "All";
 
-    const zipFilename = `Student_Photos_${scopeLabel}_${timestamp}.zip`;
+    const zipFilename = `Student_Photos_${scopeLabel}_Grade_Section_${timestamp}.zip`;
 
     // Audit log the download
     try {
