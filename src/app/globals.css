@@ -265,3 +265,46 @@ select option:focus {
   transition: transform 0.65s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease, fill 0.3s ease;
 }
 
+/* Telegram-Style 3-Stage Progressive Photo Upload Animations */
+@keyframes telegramSpinLoader {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes telegramPulseShimmer {
+  0%, 100% { opacity: 0.4; transform: scale(0.98); }
+  50% { opacity: 0.9; transform: scale(1.02); }
+}
+
+@keyframes telegramRevealSharp {
+  0% {
+    filter: blur(8px) brightness(0.85);
+    transform: scale(0.96);
+  }
+  60% {
+    filter: blur(2px) brightness(1.05);
+  }
+  100% {
+    filter: blur(0px) brightness(1);
+    transform: scale(1);
+  }
+}
+
+.telegram-photo-stage-1 {
+  filter: blur(12px) brightness(0.7);
+  transition: filter 0.4s ease, transform 0.4s ease;
+}
+
+.telegram-photo-stage-2 {
+  filter: blur(4px) brightness(0.9);
+  transition: filter 0.4s ease, transform 0.4s ease;
+}
+
+.telegram-photo-stage-3 {
+  animation: telegramRevealSharp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.telegram-spinner-circle {
+  animation: telegramSpinLoader 0.9s linear infinite;
+}
+

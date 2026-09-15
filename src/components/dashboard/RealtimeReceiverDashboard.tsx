@@ -29,12 +29,16 @@ import {
   ArrowUpRight,
   GraduationCap,
   BarChart3,
-  Crop,
+  CheckSquare,
+  Square,
+  FileSpreadsheet,
+  Filter,
 } from "lucide-react";
 
+import JSZip from "jszip";
 import { subscribeToCloudSync } from "@/lib/sync-client";
-import { getAllStudentsFromDB, deleteStudentFromDB, saveStudentToDB } from "@/lib/idb-storage";
-import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
+import { getAllStudentsFromDB, deleteStudentFromDB } from "@/lib/idb-storage";
+import { TelegramStagePhoto } from "@/components/common/TelegramStagePhoto";
 import {
   getReceiverCsvPrefix,
   getStudentPhotoLocalPath,
@@ -109,104 +113,18 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const chartSvgRef = useRef<SVGSVGElement | null>(null);
 
-  // Photo Studio Editor State for Receiver
-  const [editingStudent, setEditingStudent] = useState<any | null>(null);
+  // Selective Student Download State (Issue 3)
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
 
-  const handleSaveEditedPhoto = async (editedBlob: Blob, _originalBlob?: Blob | null, _metadata?: any) => {
-    if (!editingStudent) return;
-    const studentToUpdate = editingStudent;
-    setEditingStudent(null);
+  // Grade & Section Classifiers (Issue 4)
+  const [gradeClassifier, setGradeClassifier] = useState<string>("ALL");
+  const [sectionClassifier, setSectionClassifier] = useState<string>("ALL");
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUri = reader.result as string;
+  // Read-only High-Res Lightbox Photo Modal (Replaces buggy PhotoEditorModal)
+  const [inspectingPhotoStudent, setInspectingPhotoStudent] = useState<any | null>(null);
 
-      let cleanName = (studentToUpdate.fullName || studentToUpdate.studentId || "student")
-        .replace(/[/\\]/g, " - ")
-        .replace(/[:*?"<>|]/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-      cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
-      const safePhotoName = `${cleanName}.jpg`;
-
-      const form = new FormData();
-      form.append("file", editedBlob, safePhotoName);
-      form.append("studentId", studentToUpdate.studentId || studentToUpdate.id);
-
-      let finalPath = dataUri;
-      try {
-        const res = await fetch("/api/uploads", {
-          method: "POST",
-          body: form,
-        });
-        if (res.ok) {
-          const uploadRes = await res.json();
-          if (uploadRes.relativePath) {
-            finalPath = `${uploadRes.relativePath}?t=${Date.now()}`;
-          }
-        }
-      } catch (uploadErr) {
-        console.warn("Receiver upload fallback to dataUri:", uploadErr);
-      }
-
-      // Invalidate service worker and browser caches
-      if (typeof window !== "undefined" && "caches" in window) {
-        try {
-          const cache = await caches.open("siliconlabs_student_photos_v1");
-          if (studentToUpdate.photoPath) {
-            const cleanUrl = studentToUpdate.photoPath.split("?")[0];
-            await cache.delete(cleanUrl);
-            await cache.delete(studentToUpdate.photoPath);
-          }
-        } catch {}
-      }
-
-      // Update student in IDB
-      try {
-        await saveStudentToDB({
-          ...studentToUpdate,
-          studentId: studentToUpdate.studentId || studentToUpdate.id,
-          fullName: studentToUpdate.fullName || "",
-          grade: studentToUpdate.grade || "",
-          phone: studentToUpdate.phone || "",
-          photoPath: finalPath,
-        });
-      } catch (idbErr) {
-        console.warn("Failed saving edited photo to IDB:", idbErr);
-      }
-
-      // Update local state in Receiver Dashboard
-      setData((prev) => {
-        const updatedRecent = (prev.recentStudents || []).map((s) =>
-          s.studentId === studentToUpdate.studentId || s.id === studentToUpdate.id
-            ? { ...s, photoPath: finalPath }
-            : s
-        );
-        return {
-          ...prev,
-          recentStudents: updatedRecent,
-        };
-      });
-
-      setAllStudentsList((prev) =>
-        prev.map((s) =>
-          s.studentId === studentToUpdate.studentId || s.id === studentToUpdate.id
-            ? { ...s, photoPath: finalPath }
-            : s
-        )
-      );
-
-      // Notify other components / directory
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("sb_student_updated", {
-            detail: { ...studentToUpdate, photoPath: finalPath },
-          })
-        );
-      }
-    };
-    reader.readAsDataURL(editedBlob);
-  };
+  // Telegram 3-Stage Progressive Reveal IDs
+  const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
 
   // Student Roster Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
@@ -236,15 +154,28 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     try {
       const idbStudents = await getAllStudentsFromDB();
 
-      const validIdb = idbStudents;
+      // Read persistent deleted IDs so deleted records are never resurrected
+      let deletedSet = new Set<string>();
+      try {
+        const rawDel = localStorage.getItem("sb_deleted_student_ids");
+        if (rawDel) {
+          deletedSet = new Set(JSON.parse(rawDel));
+        }
+      } catch {}
+
+      const validIdb = idbStudents.filter(
+        (s) => !deletedSet.has(s.studentId) && !deletedSet.has(s.id)
+      );
 
       setData((prev) => {
         const map = new Map<string, any>();
         // Add valid IDB students
         validIdb.forEach((s) => map.set(s.studentId, s));
-        // Add recent server students
+        // Add recent server students (skipping deleted)
         (prev.recentStudents || []).forEach((s) => {
-          if (!map.has(s.studentId)) map.set(s.studentId, s);
+          if (!deletedSet.has(s.studentId) && !deletedSet.has(s.id)) {
+            map.set(s.studentId, s);
+          }
         });
 
         const mergedList = Array.from(map.values());
@@ -259,10 +190,10 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
 
         return {
           ...prev,
-          totalStudents: Math.max(prev.totalStudents, total),
-          photosCount: Math.max(prev.photosCount, photos),
-          readyForPrintCount: Math.max(prev.readyForPrintCount, ready),
-          pendingVerification: Math.max(0, Math.max(prev.totalStudents, total) - Math.max(prev.readyForPrintCount, ready)),
+          totalStudents: total,
+          photosCount: photos,
+          readyForPrintCount: ready,
+          pendingVerification: Math.max(0, total - ready),
           recentStudents: mergedList.slice(0, 15),
         };
       });
@@ -282,6 +213,18 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   useEffect(() => {
     const unsubscribe = subscribeToCloudSync(
       (newStudent) => {
+        const arrivalKey = newStudent.studentId || newStudent.id;
+        if (arrivalKey) {
+          setNewlyArrivedIds((prev) => new Set(prev).add(arrivalKey));
+          setTimeout(() => {
+            setNewlyArrivedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(arrivalKey);
+              return next;
+            });
+          }, 6000);
+        }
+
         setAllStudentsList((list) => {
           const filtered = list.filter((s) => s.studentId !== newStudent.studentId && s.id !== newStudent.id);
           // NEWEST RECORD AT THE VERY TOP
@@ -363,7 +306,12 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
             } catch {}
           }
-          localStorage.removeItem("sb_deleted_student_ids");
+          try {
+            const rawDel = localStorage.getItem("sb_deleted_student_ids");
+            const delSet = new Set<string>(rawDel ? JSON.parse(rawDel) : []);
+            delSet.add(deletedStudentId);
+            localStorage.setItem("sb_deleted_student_ids", JSON.stringify(Array.from(delSet)));
+          } catch {}
         } catch {}
 
         setAllStudentsList((list) => list.filter((s) => s.studentId !== deletedStudentId && s.id !== deletedStudentId));
@@ -579,12 +527,168 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   // ──────────────────────────────────────────────────────────────────────────
   // 5. PRODUCTION BATCH CSV MANIFEST EXPORT ALGORITHM (RECEIVER CUSTOM PATHS)
   // ──────────────────────────────────────────────────────────────────────────
-  const handleExportManifest = useCallback(() => {
-    const list = allStudentsList.length > 0 ? allStudentsList : (data.recentStudents || []);
+  // ──────────────────────────────────────────────────────────────────────────
+  // 5. PRODUCTION BATCH & SELECTIVE CSV / PHOTO EXPORT (ISSUE 3)
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleToggleSelectStudent = useCallback((id: string) => {
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleDownloadSingleStudentPhoto = useCallback(async (student: any) => {
+    if (!student.photoPath) {
+      alert("This student does not have an attached photo.");
+      return;
+    }
+    const cleanId = (student.studentId || "student").replace(/[/\\]/g, "_");
+    const cleanName = (student.fullName || "photo").replace(/[/\\]/g, "_");
+    const filename = `${cleanId}_${cleanName}.jpg`;
+
+    try {
+      const res = await fetch(student.photoPath);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+      setExportNotice(`Downloaded photo for ${student.fullName}`);
+    } catch {
+      window.open(student.photoPath, "_blank");
+    }
+  }, []);
+
+  const handleDownloadSingleStudentCSV = useCallback((student: any) => {
+    const headers = [
+      "StudentID",
+      "Name",
+      "Sex",
+      "Grade",
+      "Section",
+      "Phone",
+      "@photo",
+      "8-Up Print Readiness",
+      "Enrolled Date",
+    ];
+
+    const row = [
+      `"${(student.studentId || "").replace(/"/g, '""')}"`,
+      `"${(student.fullName || "").replace(/"/g, '""')}"`,
+      `"${(student.sex || "Male").replace(/"/g, '""')}"`,
+      `"${(student.grade || "").replace(/"/g, '""')}"`,
+      `"${(student.department || student.section || "").replace(/"/g, '""')}"`,
+      `"${formatPhoneForReceiver(student.phone)}"`,
+      `"${getStudentPhotoLocalPath(student).replace(/"/g, '""')}"`,
+      student.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
+      `"${student.createdAt || new Date().toISOString()}"`,
+    ];
+
+    const csvContent = "\uFEFF" + [headers.join(","), row.join(",")].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const cleanId = (student.studentId || "STU").replace(/[/\\]/g, "_");
+    link.download = `student_${cleanId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 500);
+    setExportNotice(`Exported 1 student CSV for ${student.fullName}`);
+  }, []);
+
+  const handleDownloadSelectedPhotos = useCallback(async () => {
+    const sourceList = allStudentsList.length > 0 ? allStudentsList : (data.recentStudents || []);
+    const list = sourceList.filter((s) => selectedStudentIds.has(s.studentId || s.id));
+
     if (list.length === 0) {
-      alert("No student found to download in this view.");
-      setExportNotice("No student found to download in this view.");
-      setTimeout(() => setExportNotice(null), 3500);
+      alert("Please select at least 1 student with a checkbox to download photos.");
+      return;
+    }
+
+    const withPhoto = list.filter((s) => Boolean(s.photoPath));
+    if (withPhoto.length === 0) {
+      alert("None of the selected students have an attached photo.");
+      return;
+    }
+
+    if (withPhoto.length === 1) {
+      await handleDownloadSingleStudentPhoto(withPhoto[0]);
+      return;
+    }
+
+    // Multiple: JSZip bundle
+    try {
+      setExportNotice(`Packaging ${withPhoto.length} selected photos into ZIP...`);
+      const zip = new JSZip();
+
+      for (const student of withPhoto) {
+        try {
+          const cleanGrade = (student.grade || "General").replace(/[/\\]/g, "_");
+          const cleanId = (student.studentId || "STU").replace(/[/\\]/g, "_");
+          const cleanName = (student.fullName || "Student").replace(/[/\\]/g, "_");
+          const filename = `${cleanId}_${cleanName}.jpg`;
+
+          const res = await fetch(student.photoPath);
+          if (res.ok) {
+            const blob = await res.blob();
+            zip.folder(cleanGrade)?.file(filename, blob);
+          }
+        } catch {}
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `selected_${withPhoto.length}_photos_${new Date().toISOString().split("T")[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+
+      setExportNotice(`ZIP bundle with ${withPhoto.length} selected photos downloaded.`);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      alert("Failed creating photo ZIP: " + err?.message);
+    }
+  }, [allStudentsList, data.recentStudents, selectedStudentIds, handleDownloadSingleStudentPhoto]);
+
+  const handleExportManifest = useCallback(() => {
+    // If students are selected, export ONLY those selected; otherwise export all currently filtered!
+    let list: any[] = [];
+    const sourceList = allStudentsList.length > 0 ? allStudentsList : (data.recentStudents || []);
+
+    if (selectedStudentIds.size > 0) {
+      list = sourceList.filter((s) => selectedStudentIds.has(s.studentId || s.id));
+    } else {
+      list = sourceList;
+    }
+
+    if (list.length === 0) {
+      alert("No students selected or found to export.");
       return;
     }
 
@@ -593,9 +697,9 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       "Name",
       "Sex",
       "Grade",
+      "Section",
       "Phone",
       "@photo",
-      "Department",
       "8-Up Print Readiness",
       "Enrolled Date",
     ];
@@ -605,9 +709,9 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       `"${(s.fullName || "").replace(/"/g, '""')}"`,
       `"${(s.sex || "Male").replace(/"/g, '""')}"`,
       `"${(s.grade || "").replace(/"/g, '""')}"`,
+      `"${(s.department || s.section || "").replace(/"/g, '""')}"`,
       `"${formatPhoneForReceiver(s.phone)}"`,
       `"${getStudentPhotoLocalPath(s).replace(/"/g, '""')}"`,
-      `"${(s.department || "").replace(/"/g, '""')}"`,
       s.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
       `"${s.createdAt || new Date().toISOString()}"`,
     ]);
@@ -618,7 +722,8 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    const filename = `${prefix}_${new Date().toISOString().split("T")[0]}.csv`;
+    const countTag = selectedStudentIds.size > 0 ? `_selected_${list.length}` : `_manifest_${list.length}`;
+    const filename = `${prefix}${countTag}_${new Date().toISOString().split("T")[0]}.csv`;
     link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
@@ -629,9 +734,9 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       } catch {}
     }, 500);
 
-    setExportNotice(`Production Manifest (${list.length} records) downloaded to ${filename}.`);
+    setExportNotice(`Exported ${list.length} student record${list.length > 1 ? "s" : ""} (${selectedStudentIds.size > 0 ? "Selected Only" : "Full Manifest"}) to ${filename}`);
     setTimeout(() => setExportNotice(null), 4000);
-  }, [allStudentsList, data.recentStudents]);
+  }, [allStudentsList, data.recentStudents, selectedStudentIds]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // 6. SVG PRODUCTION GRAPH COMPUTATIONS (EXACT REAL-WORLD TIME)
@@ -935,6 +1040,30 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     setHoveredPointIndex(null);
   };
 
+  // Grade & Section Classifiers (Issue 4)
+  const uniqueGrades = useMemo(() => {
+    const grades = new Set<string>();
+    const list = allStudentsList.length > 0 ? allStudentsList : (data.recentStudents || []);
+    list.forEach((s) => {
+      if (s.grade && String(s.grade).trim().length > 0) {
+        grades.add(String(s.grade).trim());
+      }
+    });
+    return Array.from(grades).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [allStudentsList, data.recentStudents]);
+
+  const uniqueSections = useMemo(() => {
+    const sections = new Set<string>();
+    const list = allStudentsList.length > 0 ? allStudentsList : (data.recentStudents || []);
+    list.forEach((s) => {
+      const sec = s.department || s.section;
+      if (sec && String(sec).trim().length > 0) {
+        sections.add(String(sec).trim());
+      }
+    });
+    return Array.from(sections).sort();
+  }, [allStudentsList, data.recentStudents]);
+
   // ──────────────────────────────────────────────────────────────────────────
   // 7. REAL-TIME SEARCH & FILTERED STUDENT ROSTER (NEWEST ON TOP)
   // ──────────────────────────────────────────────────────────────────────────
@@ -947,14 +1076,23 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       list = list.filter((s) => !s.photoPath || s.photoPath.trim().length === 0);
     }
 
+    if (gradeClassifier !== "ALL") {
+      list = list.filter((s) => String(s.grade || "").trim() === gradeClassifier);
+    }
+
+    if (sectionClassifier !== "ALL") {
+      list = list.filter((s) => String(s.department || s.section || "").trim() === sectionClassifier);
+    }
+
     if (searchQuery.trim().length > 0) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
         (s) =>
           (s.fullName && s.fullName.toLowerCase().includes(q)) ||
           (s.studentId && s.studentId.toLowerCase().includes(q)) ||
-          (s.grade && s.grade.toLowerCase().includes(q)) ||
-          (s.department && s.department.toLowerCase().includes(q))
+          (s.grade && String(s.grade).toLowerCase().includes(q)) ||
+          (s.department && String(s.department).toLowerCase().includes(q)) ||
+          (s.section && String(s.section).toLowerCase().includes(q))
       );
     }
 
@@ -962,7 +1100,28 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     const sorted = [...list];
     sorted.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     return sorted;
-  }, [allStudentsList, data.recentStudents, activeFilter, searchQuery]);
+  }, [allStudentsList, data.recentStudents, activeFilter, gradeClassifier, sectionClassifier, searchQuery]);
+
+  const isAllFilteredSelected = useMemo(() => {
+    if (filteredStudents.length === 0) return false;
+    return filteredStudents.every((s) => selectedStudentIds.has(s.studentId || s.id));
+  }, [filteredStudents, selectedStudentIds]);
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (isAllFilteredSelected) {
+      setSelectedStudentIds((prev) => {
+        const next = new Set(prev);
+        filteredStudents.forEach((s) => next.delete(s.studentId || s.id));
+        return next;
+      });
+    } else {
+      setSelectedStudentIds((prev) => {
+        const next = new Set(prev);
+        filteredStudents.forEach((s) => next.add(s.studentId || s.id));
+        return next;
+      });
+    }
+  }, [isAllFilteredSelected, filteredStudents]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20 text-[#080808] dark:text-[#f2f7f4] font-sans">
@@ -1787,30 +1946,69 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
             </h2>
           </div>
 
-          {/* Table Actions & Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={runPreflightAudit}
-              disabled={isAuditing}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3 py-1.5 text-xs font-mono font-bold hover:bg-[#7ed112] transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-              title="Automated multi-point inspection verifying student identity credentials, studio portrait resolution, and 8-Up imposition alignment before batch production."
-            >
-              <Sparkles className={`h-3.5 w-3.5 ${isAuditing ? "animate-spin" : ""}`} />
-              <span>{isAuditing ? "Verifying..." : "Verify Readiness"}</span>
-            </button>
+          {/* Table Actions & Classifiers */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={runPreflightAudit}
+                disabled={isAuditing}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3 py-1.5 text-xs font-mono font-bold hover:bg-[#7ed112] transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                title="Automated multi-point inspection verifying student identity credentials, studio portrait resolution, and 8-Up imposition alignment before batch production."
+              >
+                <Sparkles className={`h-3.5 w-3.5 ${isAuditing ? "animate-spin" : ""}`} />
+                <span>{isAuditing ? "Verifying..." : "Verify Readiness"}</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={handleExportManifest}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] px-3 py-1.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all cursor-pointer active:scale-95"
-              title="Export Production Manifest (CSV)"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>Export Manifest (CSV)</span>
-            </button>
+              <button
+                type="button"
+                onClick={handleExportManifest}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] px-3 py-1.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] hover:text-[#8fe617] transition-all cursor-pointer active:scale-95"
+                title={selectedStudentIds.size > 0 ? `Export CSV for ${selectedStudentIds.size} Selected Students` : "Export Production Manifest CSV"}
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>{selectedStudentIds.size > 0 ? `Export Selected CSV (${selectedStudentIds.size})` : "Export Manifest (CSV)"}</span>
+              </button>
 
-            <div className="h-4 w-px bg-[#dce7e1] dark:bg-[#223126] hidden sm:block mx-0.5" />
+              {/* Grade Classifier Dropdown (Issue 4) */}
+              <div className="flex items-center gap-1.5 bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126] px-2.5 py-1 rounded-xl">
+                <span className="text-[10px] font-mono uppercase font-bold text-[#6b7771] dark:text-[#8a9e93] flex items-center gap-1">
+                  <Filter className="h-3 w-3 text-[#8fe617]" />
+                  Grade:
+                </span>
+                <select
+                  value={gradeClassifier}
+                  onChange={(e) => setGradeClassifier(e.target.value)}
+                  className="bg-transparent text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] outline-none cursor-pointer"
+                >
+                  <option value="ALL" className="bg-white dark:bg-[#111613]">All Grades ({uniqueGrades.length})</option>
+                  {uniqueGrades.map((g) => (
+                    <option key={g} value={g} className="bg-white dark:bg-[#111613]">
+                      Grade {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Section Classifier Dropdown (Issue 4) */}
+              <div className="flex items-center gap-1.5 bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126] px-2.5 py-1 rounded-xl">
+                <span className="text-[10px] font-mono uppercase font-bold text-[#6b7771] dark:text-[#8a9e93]">
+                  Section:
+                </span>
+                <select
+                  value={sectionClassifier}
+                  onChange={(e) => setSectionClassifier(e.target.value)}
+                  className="bg-transparent text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] outline-none cursor-pointer"
+                >
+                  <option value="ALL" className="bg-white dark:bg-[#111613]">All Sections ({uniqueSections.length})</option>
+                  {uniqueSections.map((sec) => (
+                    <option key={sec} value={sec} className="bg-white dark:bg-[#111613]">
+                      Section {sec}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             {/* Quick Filter Tabs */}
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1851,152 +2049,262 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           </div>
         </div>
 
-          {/* Search Bar with Animated Borderless X Clear Button */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-[#6b7771] dark:text-[#8a9e93]" />
+        {/* Selected Batch Action Bar (Issue 3 - Selective Download) */}
+        {selectedStudentIds.size > 0 && (
+          <div className="rounded-2xl border-2 border-[#8fe617] bg-[#8fe617]/10 p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5 font-mono text-xs">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#8fe617] opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#8fe617]" />
+              </span>
+              <strong className="text-[#080808] dark:text-[#f2f7f4] font-black">
+                {selectedStudentIds.size} student{selectedStudentIds.size > 1 ? "s" : ""} selected
+              </strong>
+              <span className="text-[#6b7771] dark:text-[#8a9e93]">
+                (Selective export mode active)
+              </span>
             </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search student by name, ID, grade, or department..."
-              className="w-full rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] pl-10 pr-10 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] placeholder-[#6b7771] dark:placeholder-[#8a9e93] focus:border-[#8fe617] focus:outline-none focus:ring-1 focus:ring-[#8fe617] transition-all font-mono"
-            />
-            {searchQuery && (
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center p-1 rounded-xl border-0 outline-none ring-0 text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] transition-all duration-300 group cursor-pointer active:scale-90"
-                aria-label="Clear search"
+                onClick={handleExportManifest}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-black rounded-xl bg-[#080808] text-[#8fe617] dark:bg-[#8fe617] dark:text-[#062404] hover:opacity-90 transition-all cursor-pointer shadow-sm active:scale-95"
               >
-                <X className="h-4 w-4 transition-transform duration-300 ease-out group-hover:rotate-90 group-hover:scale-110" />
+                <Download className="h-3.5 w-3.5" />
+                <span>Download Selected CSV ({selectedStudentIds.size})</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadSelectedPhotos}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold rounded-xl border border-[#8fe617] bg-[#8fe617]/20 text-[#080808] dark:text-[#f2f7f4] hover:bg-[#8fe617]/30 transition-all cursor-pointer active:scale-95"
+              >
+                <Camera className="h-3.5 w-3.5 text-[#8fe617]" />
+                <span>Download Selected Photos ({selectedStudentIds.size > 1 ? `${selectedStudentIds.size} ZIP` : "1 Photo"})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStudentIds(new Set())}
+                className="px-2.5 py-1.5 text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-rose-500 transition-colors cursor-pointer"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Search Bar with Animated Borderless X Clear Button */}
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-[#6b7771] dark:text-[#8a9e93]" />
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search student by name, ID, grade, or section..."
+            className="w-full rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] pl-10 pr-10 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] placeholder-[#6b7771] dark:placeholder-[#8a9e93] focus:border-[#8fe617] focus:outline-none focus:ring-1 focus:ring-[#8fe617] transition-all font-mono"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center p-1 rounded-xl border-0 outline-none ring-0 text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] transition-all duration-300 group cursor-pointer active:scale-90"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4 transition-transform duration-300 ease-out group-hover:rotate-90 group-hover:scale-110" />
+            </button>
+          )}
+        </div>
+
+        {/* Student List & Selection Table (Newest on top) */}
+        {filteredStudents.length === 0 ? (
+          <div className="text-center py-12 text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono space-y-2">
+            <div>No matching student records found for the active filters.</div>
+            {(searchQuery || gradeClassifier !== "ALL" || sectionClassifier !== "ALL" || activeFilter !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setGradeClassifier("ALL");
+                  setSectionClassifier("ALL");
+                  setActiveFilter("all");
+                }}
+                className="text-[#8fe617] underline hover:no-underline cursor-pointer"
+              >
+                Reset all filters & search
               </button>
             )}
           </div>
-
-          {/* Student List (Newest on top) */}
-          {filteredStudents.length === 0 ? (
-            <div className="text-center py-12 text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono space-y-2">
-              <div>No matching student records found.</div>
-              {searchQuery && (
+        ) : (
+          <div className="border border-[#dce7e1] dark:border-[#223126] rounded-2xl overflow-hidden divide-y divide-[#eef5f1] dark:divide-[#1c261e]">
+            {/* Table Header with Master Select-All */}
+            <div className="flex items-center justify-between px-3.5 py-2 bg-[#f7faf9] dark:bg-[#161d19] text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93]">
+              <div className="flex items-center gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="text-[#8fe617] underline hover:no-underline cursor-pointer"
+                  onClick={handleToggleSelectAll}
+                  className="p-1 text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] transition-colors cursor-pointer"
+                  title={isAllFilteredSelected ? "Deselect All Filtered" : "Select All Filtered"}
                 >
-                  Clear search query
+                  {isAllFilteredSelected ? (
+                    <CheckSquare className="h-4 w-4 text-[#8fe617]" />
+                  ) : (
+                    <Square className="h-4 w-4" />
+                  )}
                 </button>
-              )}
+                <span className="font-bold">Select All Filtered ({filteredStudents.length})</span>
+              </div>
+              <div className="hidden sm:flex items-center gap-6 text-[10px] uppercase font-bold tracking-wider">
+                <span>Classifiers</span>
+                <span>Actions</span>
+              </div>
             </div>
-          ) : (
-            <div className="divide-y divide-[#eef5f1] dark:divide-[#1c261e] border border-[#dce7e1] dark:border-[#223126] rounded-2xl overflow-hidden">
-              {filteredStudents.slice(0, 10).map((s) => {
-                const hasPhoto = Boolean(s.photoPath);
-                const isReady = hasPhoto;
 
-                return (
-                  <div
-                    key={s.id || s.studentId}
-                    className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#f7faf9] dark:hover:bg-[#161d19] transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        onClick={() => {
-                          if (s.photoPath) {
-                            setEditingStudent(s);
-                          }
-                        }}
-                        className={`h-9 w-9 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#eef5f1] dark:bg-[#1c261e] shrink-0 overflow-hidden flex items-center justify-center relative ${s.photoPath ? "cursor-pointer group/streamThumb hover:border-[#8fe617] hover:scale-105 transition-all" : ""}`}
-                        title={s.photoPath ? `Click to Crop & Edit Photo (${s.fullName})` : "No Photo"}
-                      >
-                        {s.photoPath ? (
-                          <>
-                            <img
-                              src={s.photoPath}
-                              alt={s.fullName}
-                              className="h-full w-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/streamThumb:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                              <Crop className="h-3.5 w-3.5 text-[#8fe617]" />
-                            </div>
-                          </>
-                        ) : (
-                          <Camera className="h-4 w-4 text-[#6b7771] dark:text-[#8a9e93]" />
+            {/* Student Rows */}
+            {filteredStudents.slice(0, 20).map((s) => {
+              const hasPhoto = Boolean(s.photoPath);
+              const isReady = hasPhoto;
+              const isSelected = selectedStudentIds.has(s.studentId || s.id);
+              const isNew = newlyArrivedIds.has(s.studentId || s.id);
+
+              return (
+                <div
+                  key={s.id || s.studentId}
+                  className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                    isSelected
+                      ? "bg-[#8fe617]/10 dark:bg-[#8fe617]/15"
+                      : "hover:bg-[#f7faf9] dark:hover:bg-[#161d19]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Row Select Checkbox */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSelectStudent(s.studentId || s.id)}
+                      className="p-1 text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] transition-colors cursor-pointer shrink-0"
+                      title={isSelected ? "Deselect student" : "Select student for CSV/Photo export"}
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="h-4 w-4 text-[#8fe617]" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                    </button>
+
+                    {/* Telegram 3-Stage Photo Thumbnail with Click-to-Inspect (Issue 4 & 5) */}
+                    <div
+                      onClick={() => {
+                        if (s.photoPath) {
+                          setInspectingPhotoStudent(s);
+                        }
+                      }}
+                      className={`h-10 w-10 shrink-0 ${s.photoPath ? "cursor-pointer group hover:ring-2 hover:ring-[#8fe617] rounded-xl transition-all" : ""}`}
+                      title={s.photoPath ? `View high-res photo (${s.fullName})` : "No photo attached"}
+                    >
+                      <TelegramStagePhoto
+                        photoPath={s.photoPath}
+                        alt={s.fullName}
+                        size="sm"
+                        initialStage={isNew ? 1 : 3}
+                      />
+                    </div>
+
+                    <div className="truncate">
+                      <div className="font-bold text-xs text-[#080808] dark:text-[#f2f7f4] truncate flex items-center gap-2">
+                        <span>{s.fullName}</span>
+                        {isNew && (
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-[#8fe617] text-[#062404] font-black animate-pulse">
+                            NEW
+                          </span>
                         )}
                       </div>
-
-                      <div className="truncate">
-                        <div className="font-bold text-xs text-[#080808] dark:text-[#f2f7f4] truncate">
-                          {s.fullName}
-                        </div>
-                        <div className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
-                          {s.studentId} • {s.grade || s.department || "General"}
-                        </div>
+                      <div className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                        {s.studentId} • {formatPhoneForReceiver(s.phone)}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                      <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                          hasPhoto
-                            ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
-                            : "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
-                        }`}
-                      >
-                        {hasPhoto ? "PHOTO ✓" : "NO PHOTO"}
-                      </span>
-
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#080808] dark:text-[#8fe617]">
-                        GRADE {s.grade || "N/A"}
-                      </span>
-
-                      <span
-                        className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
-                          isReady
-                            ? "bg-[#8fe617] text-[#062404]"
-                            : "bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
-                        }`}
-                      >
-                        {isReady ? "READY" : "PENDING"}
-                      </span>
-
-                      {hasPhoto && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingStudent(s)}
-                          className="p-1.5 rounded-lg border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#080808] dark:text-[#8fe617] hover:bg-[#8fe617]/25 transition-colors cursor-pointer"
-                          title={`Crop & Edit Photo (${s.fullName})`}
-                        >
-                          <Crop className="h-3.5 w-3.5 text-[#8fe617]" />
-                        </button>
-                      )}
-
-                      <Link
-                        href={`/students?id=${encodeURIComponent(s.studentId)}`}
-                        className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-colors"
-                        title="Inspect in directory"
-                      >
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
 
-          <div className="flex items-center justify-between text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] pt-1">
-            <span>Showing latest {Math.min(10, filteredStudents.length)} records</span>
-            <Link
-              href="/students"
-              className="text-[#8fe617] font-bold hover:underline flex items-center gap-1"
-            >
-              <span>View All in Directory ({data.totalStudents})</span>
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {/* Photo Attached Status */}
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                        hasPhoto
+                          ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                          : "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+                      }`}
+                    >
+                      {hasPhoto ? "PHOTO ✓" : "NO PHOTO"}
+                    </span>
+
+                    {/* Separate Grade Classifier Badge (Issue 4) */}
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#080808] dark:text-[#8fe617]">
+                      GRADE {s.grade || "N/A"}
+                    </span>
+
+                    {/* Separate Section Classifier Badge (Issue 4) */}
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-400/10 text-sky-700 dark:text-sky-300">
+                      SEC {s.department || s.section || "A"}
+                    </span>
+
+                    {/* Readiness Tag */}
+                    <span
+                      className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
+                        isReady
+                          ? "bg-[#8fe617] text-[#062404]"
+                          : "bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                      }`}
+                    >
+                      {isReady ? "READY" : "PENDING"}
+                    </span>
+
+                    {/* 1-Click Single Student Photo Download (Issue 3) */}
+                    {hasPhoto && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadSingleStudentPhoto(s)}
+                        className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-all cursor-pointer"
+                        title={`Download photo for ${s.fullName}`}
+                      >
+                        <Camera className="h-3.5 w-3.5 text-[#8fe617]" />
+                      </button>
+                    )}
+
+                    {/* 1-Click Single Student CSV Download (Issue 3) */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleStudentCSV(s)}
+                      className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-all cursor-pointer"
+                      title={`Download single CSV for ${s.fullName} (${s.studentId})`}
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                    </button>
+
+                    {/* Directory Link */}
+                    <Link
+                      href={`/students?id=${encodeURIComponent(s.studentId)}`}
+                      className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-colors"
+                      title="Inspect in directory"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        )}
+
+        <div className="flex items-center justify-between text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] pt-1">
+          <span>Showing latest {Math.min(20, filteredStudents.length)} of {filteredStudents.length} records</span>
+          <Link
+            href="/students"
+            className="text-[#8fe617] font-bold hover:underline flex items-center gap-1"
+          >
+            <span>View All in Directory ({data.totalStudents})</span>
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
+      </div>
 
 
 
@@ -2116,14 +2424,60 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
         </div>
       )}
 
-      {/* Studio Photo Cropper & Refinement Modal for Receiver Workstation */}
-      {editingStudent && editingStudent.photoPath && (
-        <PhotoEditorModal
-          isOpen={Boolean(editingStudent)}
-          originalImageSrc={editingStudent.photoPath}
-          onClose={() => setEditingStudent(null)}
-          onSave={handleSaveEditedPhoto}
-        />
+      {/* High-Resolution Photo Lightbox Modal (Issue 4 - Replaces buggy crop editor) */}
+      {inspectingPhotoStudent && inspectingPhotoStudent.photoPath && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div>
+                <h3 className="text-sm font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">
+                  {inspectingPhotoStudent.fullName}
+                </h3>
+                <p className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                  ID: {inspectingPhotoStudent.studentId} • Grade: {inspectingPhotoStudent.grade || "N/A"} • Section: {inspectingPhotoStudent.department || inspectingPhotoStudent.section || "A"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectingPhotoStudent(null)}
+                className="p-1.5 rounded-xl text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-800 flex items-center justify-center max-h-[60vh] p-2">
+              <img
+                src={inspectingPhotoStudent.photoPath}
+                alt={inspectingPhotoStudent.fullName}
+                className="max-h-[55vh] w-auto object-contain rounded-xl"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                Supabase & Local Vault Synchronized
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSingleStudentPhoto(inspectingPhotoStudent)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8fe617] text-[#062404] text-xs font-mono font-bold hover:bg-[#7ed112] transition-colors cursor-pointer shadow-xs"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectingPhotoStudent(null)}
+                  className="px-3 py-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

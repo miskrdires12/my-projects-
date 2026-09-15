@@ -21,8 +21,11 @@ import {
   User,
   X,
   ExternalLink,
+  Cloud,
+  ShieldAlert,
 } from "lucide-react";
 import { clearAuditLogsAction } from "@/actions/audit";
+import { deletePermanentlyFromSupabaseAction } from "@/actions/students";
 
 export interface ChartSegment {
   label: string;
@@ -293,6 +296,11 @@ export function DatabaseClient({
     null
   );
 
+  // Supabase Cloud Permanent Storage & Data Controls (Issue 6)
+  const [supabaseDeleteId, setSupabaseDeleteId] = useState("");
+  const [supabaseWipeConfirmation, setSupabaseWipeConfirmation] = useState("");
+  const [isSupabaseDeleting, setIsSupabaseDeleting] = useState(false);
+
   // 1. Photo Linkage Distribution Data
   const photoChartData: ChartSegment[] = [
     {
@@ -417,6 +425,129 @@ export function DatabaseClient({
         });
       }
     });
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Supabase Cloud Permanent Storage & Database Deletion Handlers (Issue 6)
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleDeleteStudentFromSupabase = async () => {
+    const idToDel = supabaseDeleteId.trim();
+    if (!idToDel) {
+      alert("Please enter a Student ID to delete from Supabase.");
+      return;
+    }
+
+    if (
+      !confirm(
+        `⚠️ PERMANENT SUPABASE DELETION: Are you sure you want to delete student "${idToDel}" permanently from Supabase PostgreSQL and purge their portraits from Supabase Storage bucket 'student data'? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setIsSupabaseDeleting(true);
+    try {
+      const res = await deletePermanentlyFromSupabaseAction({
+        mode: "STUDENT_ID",
+        studentId: idToDel,
+      });
+
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          message: res.message,
+        });
+        setSupabaseDeleteId("");
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.message,
+        });
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err?.message || "Failed executing permanent Supabase deletion.",
+      });
+    } finally {
+      setIsSupabaseDeleting(false);
+    }
+  };
+
+  const handlePurgeAllSupabasePhotos = async () => {
+    if (
+      !confirm(
+        "⚠️ PERMANENT STORAGE PURGE: Are you sure you want to delete ALL photos inside the Supabase Storage bucket 'student data'? Student text records in PostgreSQL will remain, but portraits will be removed."
+      )
+    ) {
+      return;
+    }
+
+    setIsSupabaseDeleting(true);
+    try {
+      const res = await deletePermanentlyFromSupabaseAction({ mode: "ALL_PHOTOS" });
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          message: res.message,
+        });
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.message,
+        });
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err?.message || "Failed purging Supabase storage photos.",
+      });
+    } finally {
+      setIsSupabaseDeleting(false);
+    }
+  };
+
+  const handleFullSupabaseWipe = async () => {
+    if (supabaseWipeConfirmation !== "DELETE-SUPABASE") {
+      alert("Please type 'DELETE-SUPABASE' exactly into the confirmation box to authorize a complete wipe.");
+      return;
+    }
+
+    if (
+      !confirm(
+        "🚨 EXTREME CAUTION: This will permanently wipe ALL students, photos, and custom fields from both PostgreSQL and Supabase Storage. Are you 100% sure you want to proceed?"
+      )
+    ) {
+      return;
+    }
+
+    setIsSupabaseDeleting(true);
+    try {
+      const res = await deletePermanentlyFromSupabaseAction({
+        mode: "FULL_WIPE",
+        confirmationCode: supabaseWipeConfirmation,
+      });
+
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          message: res.message,
+        });
+        setSupabaseWipeConfirmation("");
+      } else {
+        setFeedback({
+          type: "error",
+          message: res.message,
+        });
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err?.message || "Failed executing complete Supabase wipe.",
+      });
+    } finally {
+      setIsSupabaseDeleting(false);
+    }
   };
 
   return (
@@ -547,6 +678,126 @@ export function DatabaseClient({
             data={roleChartData}
             donut={false}
           />
+        </div>
+      </div>
+
+      {/* SECTION: SUPABASE CLOUD PERMANENT STORAGE & DATA CONTROLS (Issue 6) */}
+      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] overflow-hidden shadow-sm space-y-6 p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center">
+              <Cloud className="h-4 w-4 text-[#8fe617]" />
+            </div>
+            <div>
+              <h2 className="text-base font-black tracking-tight text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2 font-mono">
+                <span>Supabase Cloud Permanent Storage &amp; Database Controls</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 font-bold">
+                  CONNECTED
+                </span>
+              </h2>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
+                Target Bucket: <code className="text-[#8fe617] font-bold">student data</code> • Instance: <code className="text-[#38bdf8]">hiwhmpuhhakguckckuqv</code>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Interactive Cloud Control Operations */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Card 1: Delete Single Student Permanently */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold uppercase text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                  <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                  Delete Student from Supabase
+                </span>
+              </div>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93]">
+                Permanently wipes student record from PostgreSQL and deletes studio portraits from the Supabase Storage bucket.
+              </p>
+              <input
+                type="text"
+                value={supabaseDeleteId}
+                onChange={(e) => setSupabaseDeleteId(e.target.value)}
+                placeholder="Enter Student ID (e.g. SB-2026-001)"
+                className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-3 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-rose-500 outline-none"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDeleteStudentFromSupabase}
+              disabled={isSupabaseDeleting || !supabaseDeleteId.trim()}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-mono font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40 transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>{isSupabaseDeleting ? "Deleting..." : "Delete from Supabase"}</span>
+            </button>
+          </div>
+
+          {/* Card 2: Purge All Storage Photos */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold uppercase text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                  <Cloud className="h-3.5 w-3.5 text-amber-500" />
+                  Purge Storage Photos
+                </span>
+                <span className="text-[10px] font-mono font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                  Bucket Only
+                </span>
+              </div>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93]">
+                Empties all images in the <code className="text-[#8fe617]">student data</code> Supabase bucket. Preserves student database text records.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handlePurgeAllSupabasePhotos}
+              disabled={isSupabaseDeleting}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-mono font-bold rounded-xl border border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25 disabled:opacity-40 transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Purge Supabase Bucket Photos</span>
+            </button>
+          </div>
+
+          {/* Card 3: Full Supabase Wipe (Extreme Danger Zone) */}
+          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 dark:bg-rose-950/20 p-4 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold uppercase text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                  <ShieldAlert className="h-3.5 w-3.5 text-rose-500" />
+                  Full Supabase Wipe
+                </span>
+                <span className="text-[10px] font-mono font-bold text-rose-500 bg-rose-500/15 px-2 py-0.5 rounded-full">
+                  Danger
+                </span>
+              </div>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93]">
+                Wipes all students, photos, and custom fields from PostgreSQL &amp; Supabase Storage. Type <code className="text-rose-500 font-bold">DELETE-SUPABASE</code>:
+              </p>
+              <input
+                type="text"
+                value={supabaseWipeConfirmation}
+                onChange={(e) => setSupabaseWipeConfirmation(e.target.value)}
+                placeholder="Type DELETE-SUPABASE"
+                className="w-full rounded-xl border border-rose-500/40 bg-white dark:bg-[#111613] px-3 py-2 text-xs font-mono text-rose-500 focus:border-rose-600 outline-none"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleFullSupabaseWipe}
+              disabled={isSupabaseDeleting || supabaseWipeConfirmation !== "DELETE-SUPABASE"}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-mono font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40 transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              <span>Full Supabase Wipe</span>
+            </button>
+          </div>
         </div>
       </div>
 

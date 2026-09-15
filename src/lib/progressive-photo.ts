@@ -13,6 +13,7 @@ import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { uploadToSupabaseBucket } from "./supabase-storage";
 
 export interface ProgressivePhotoResult {
   thumbnailPath: string;
@@ -76,6 +77,7 @@ export async function writeLocalDesktopBackup(
   const filename = `${safeStudentId}_${safeFullName}.jpg`;
 
   const candidateDirs = getLocalDesktopBackupBaseDirs();
+  const successfulPaths: string[] = [];
 
   for (const baseDir of candidateDirs) {
     try {
@@ -83,13 +85,14 @@ export async function writeLocalDesktopBackup(
       await fs.mkdir(gradeDir, { recursive: true });
       const fullPath = path.join(gradeDir, filename);
       await fs.writeFile(fullPath, originalBuffer);
-      return fullPath;
-    } catch {
-      // Continue to next candidate directory if this one fails (e.g. non-existent OneDrive)
+      successfulPaths.push(fullPath);
+      console.log(`[Local Folder Backup] ✓ Saved photo to: ${fullPath}`);
+    } catch (err: any) {
+      // Continue to next candidate directory
     }
   }
 
-  return null;
+  return successfulPaths.length > 0 ? successfulPaths[0] : null;
 }
 
 /**
@@ -144,12 +147,46 @@ export async function generate3PhasePhotos(
     process.env.LAMBDA_TASK_ROOT
   );
 
+  // Phase 1 Thumbnail: Always store Base64 in database for 0ms instant display anywhere
   let thumbnailPath = `data:image/jpeg;base64,${thumbnailBuffer.toString("base64")}`;
   let previewPath = `data:image/jpeg;base64,${previewBuffer.toString("base64")}`;
   let originalPath = `data:image/jpeg;base64,${originalBuffer.toString("base64")}`;
   let backupLocalPath: string | null = null;
 
-  // On standard local/server environment with filesystem access
+  // 5. Attempt Cloud Upload directly to Supabase Storage bucket 'student data'
+  const safeGrade = sanitizeFsName(meta.grade || "General", "General");
+  try {
+    const origUpload = await uploadToSupabaseBucket(
+      originalBuffer,
+      safeGrade,
+      baseSafeName,
+      "image/jpeg"
+    );
+    if (origUpload.success && origUpload.publicUrl) {
+      originalPath = origUpload.publicUrl;
+    }
+
+    const prevUpload = await uploadToSupabaseBucket(
+      previewBuffer,
+      `${safeGrade}/previews`,
+      baseSafeName,
+      "image/jpeg"
+    );
+    if (prevUpload.success && prevUpload.publicUrl) {
+      previewPath = prevUpload.publicUrl;
+    }
+  } catch (storageErr) {
+    console.warn("Supabase Storage upload skipped/fallback:", storageErr);
+  }
+
+  // 6. Save Phase 3 to Local Desktop Backup Directory
+  try {
+    backupLocalPath = await writeLocalDesktopBackup(originalBuffer, meta);
+  } catch (backupErr) {
+    console.warn("Local desktop backup warning:", backupErr);
+  }
+
+  // 7. Also write to local public server disk for local fallback if available
   if (!isServerless) {
     try {
       const publicDir = path.join(process.cwd(), "public", "uploads", "photos");
@@ -160,25 +197,11 @@ export async function generate3PhasePhotos(
       await fs.mkdir(thumbsDir, { recursive: true });
       await fs.mkdir(previewsDir, { recursive: true });
 
-      // Save Phase 1
-      const thumbFile = path.join(thumbsDir, baseSafeName);
-      await fs.writeFile(thumbFile, thumbnailBuffer);
-      thumbnailPath = `/uploads/photos/thumbnails/${baseSafeName}`;
-
-      // Save Phase 2
-      const prevFile = path.join(previewsDir, baseSafeName);
-      await fs.writeFile(prevFile, previewBuffer);
-      previewPath = `/uploads/photos/previews/${baseSafeName}`;
-
-      // Save Phase 3
-      const origFile = path.join(publicDir, safeName);
-      await fs.writeFile(origFile, originalBuffer);
-      originalPath = `/uploads/photos/${safeName}`;
-
-      // Save Phase 3 to Local Desktop Backup Directory
-      backupLocalPath = await writeLocalDesktopBackup(originalBuffer, meta);
-    } catch (fsErr) {
-      console.warn("Notice: Server disk write fallback to Base64:", fsErr);
+      await fs.writeFile(path.join(thumbsDir, baseSafeName), thumbnailBuffer);
+      await fs.writeFile(path.join(previewsDir, baseSafeName), previewBuffer);
+      await fs.writeFile(path.join(publicDir, safeName), originalBuffer);
+    } catch {
+      // Non-critical local cache
     }
   }
 

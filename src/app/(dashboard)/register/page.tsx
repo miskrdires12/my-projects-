@@ -41,7 +41,8 @@ import {
   saveActiveDraft,
   getActiveDraft,
   clearActiveDraft,
-  enqueueStudent,
+  deliverStudentSequentially,
+  type DeliveryProgress,
   subscribeToOutbox,
   triggerOutboxWorker,
   type OutboxItem,
@@ -59,6 +60,10 @@ interface CustomFieldMeta {
 export default function RegisterPage() {
   const [isPending, startTransition] = useTransition();
 
+  // Telegram-style Delivery Wait State
+  const [deliveryProgress, setDeliveryProgress] = useState<DeliveryProgress | null>(null);
+  const [isDelivering, setIsDelivering] = useState(false);
+
   // Modals & Camera Controls
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("environment");
@@ -73,6 +78,8 @@ export default function RegisterPage() {
     fullName: string;
     grade: string;
     sex: string;
+    folderSaved?: boolean;
+    supabaseUploaded?: boolean;
   } | null>(null);
   const [autoResetTimer, setAutoResetTimer] = useState<number>(3);
 
@@ -496,7 +503,7 @@ export default function RegisterPage() {
       const dataUrl = reader.result as string;
       setEditedPhotoPreview(dataUrl);
       setOfficialPhotoPath(dataUrl);
-      handleOpenPhotoEditor(file, dataUrl);
+      handleDirectPhotoUpload(file, dataUrl);
     };
     reader.readAsDataURL(file);
   };
@@ -587,23 +594,39 @@ export default function RegisterPage() {
           })),
         };
 
-        // 1. Enqueue into Telegram-style outbox engine (handles 3-phases, zero-data-loss, retry daemon)
-        await enqueueStudent(payload, record);
+        // Telegram Sequential Delivery: Wait for local desktop backup + PostgreSQL + Supabase Cloud
+        setIsDelivering(true);
+        setDeliveryProgress({
+          stage: 1,
+          stageName: "Local Backup & Photo Pipeline",
+          detail: "Encoding photo, backing up to host PC folders...",
+        });
 
-        // 2. Broadcast immediately to Receiver Workstation via Cloud Sync
-        publishStudentSync("UPSERT", record).catch(() => {});
+        const deliveryRes = await deliverStudentSequentially(payload, record, (prog) => {
+          setDeliveryProgress(prog);
+        });
 
-        // 3. Clear active form draft since student is safely enrolled in Outbox
+        setIsDelivering(false);
+
+        if (!deliveryRes.success) {
+          setErrorMessage(deliveryRes.error || "Delivery failed. Student is saved in outbox and will not advance until delivered.");
+          return;
+        }
+
+        // Clear active form draft since student is safely enrolled & confirmed
         clearActiveDraft();
 
-        // 4. Show "Sent Successfully!" confirmation modal
+        // Show "Sent Successfully!" confirmation modal
         setSentSuccessfullyData({
           studentId: payload.studentId,
           fullName: payload.fullName,
           grade: payload.grade,
           sex: payload.sex,
+          folderSaved: true,
+          supabaseUploaded: true,
         });
       } catch (err: any) {
+        setIsDelivering(false);
         setErrorMessage(err?.message || "Communication failure while enrolling student.");
       }
     });
@@ -1104,6 +1127,77 @@ export default function RegisterPage() {
       </div>
 
       {/* ====================================================================
+          TELEGRAM-STYLE SEQUENTIAL DELIVERY PROGRESS MODAL
+         ==================================================================== */}
+      {isDelivering && deliveryProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-3xl border-2 border-[#8fe617] bg-white dark:bg-[#161c18] p-6 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Telegram Frosted Circle Rotating Loader */}
+            <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#080808] border-2 border-[#8fe617]/50 shadow-[0_0_25px_rgba(143,230,23,0.3)]">
+              <div className="absolute inset-1 rounded-full border-2 border-transparent border-t-[#8fe617] border-r-[#8fe617] telegram-spinner-circle" />
+              <span className="text-sm font-mono font-black text-[#8fe617]">
+                {deliveryProgress.stage}/3
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-lg font-mono font-black tracking-tight text-[#080808] dark:text-[#f2f7f4]">
+                Delivering Student Data...
+              </h3>
+              <p className="text-xs font-mono text-[#8fe617] font-bold">
+                Stage {deliveryProgress.stage}: {deliveryProgress.stageName}
+              </p>
+              <p className="text-[11px] text-[#6b7771] dark:text-[#a4b8ad]">
+                {deliveryProgress.detail}
+              </p>
+            </div>
+
+            {/* Telegram 3-Stage Progress Steps */}
+            <div className="space-y-1.5 pt-2 border-t border-[#dce7e1] dark:border-[#223126] text-left font-mono text-xs">
+              <div
+                className={`flex items-center gap-2 p-2 rounded-xl transition-all ${
+                  deliveryProgress.stage === 1
+                    ? "bg-[#8fe617]/15 border border-[#8fe617]/40 text-[#080808] dark:text-[#f2f7f4] font-bold"
+                    : deliveryProgress.stage > 1
+                    ? "text-emerald-500 font-medium"
+                    : "text-[#6b7771] opacity-50"
+                }`}
+              >
+                <span>{deliveryProgress.stage > 1 ? "✓✓" : "1."}</span>
+                <span>Local Desktop Backup Folder</span>
+              </div>
+              <div
+                className={`flex items-center gap-2 p-2 rounded-xl transition-all ${
+                  deliveryProgress.stage === 2
+                    ? "bg-[#8fe617]/15 border border-[#8fe617]/40 text-[#080808] dark:text-[#f2f7f4] font-bold"
+                    : deliveryProgress.stage > 2
+                    ? "text-emerald-500 font-medium"
+                    : "text-[#6b7771] opacity-50"
+                }`}
+              >
+                <span>{deliveryProgress.stage > 2 ? "✓✓" : "2."}</span>
+                <span>PostgreSQL Cloud Database</span>
+              </div>
+              <div
+                className={`flex items-center gap-2 p-2 rounded-xl transition-all ${
+                  deliveryProgress.stage === 3
+                    ? "bg-[#8fe617]/15 border border-[#8fe617]/40 text-[#080808] dark:text-[#f2f7f4] font-bold"
+                    : "text-[#6b7771] opacity-50"
+                }`}
+              >
+                <span>3.</span>
+                <span>Supabase Storage Bucket (&apos;student data&apos;)</span>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+              Waiting for complete delivery before advancing like Telegram...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
           "SENT SUCCESSFULLY!" CELEBRATION MODAL
          ==================================================================== */}
       {sentSuccessfullyData && (
@@ -1116,15 +1210,15 @@ export default function RegisterPage() {
 
             <div className="space-y-1">
               <h3 className="text-xl font-mono font-black tracking-tight text-[#080808] dark:text-[#f2f7f4]">
-                Sent Successfully!
+                Delivered Successfully!
               </h3>
               <p className="text-xs text-[#3f4743] dark:text-[#a4b8ad]">
-                Student registered & synced to Receiver Workstation
+                Verified across Host Folder, PostgreSQL &amp; Supabase Cloud
               </p>
             </div>
 
             {/* Student Preview Card */}
-            <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-3 text-left space-y-1 font-mono text-xs">
+            <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-3 text-left space-y-1.5 font-mono text-xs">
               <div className="font-bold text-[#080808] dark:text-[#f2f7f4] text-sm truncate">
                 {sentSuccessfullyData.fullName}
               </div>
@@ -1133,6 +1227,11 @@ export default function RegisterPage() {
               </div>
               <div className="text-[#3f4743] dark:text-[#a4b8ad]">
                 Class: {sentSuccessfullyData.grade} • {sentSuccessfullyData.sex}
+              </div>
+              <div className="pt-1.5 border-t border-[#dce7e1] dark:border-[#26332b] space-y-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                <div>✓ Host PC Backup Folder (Desktop)</div>
+                <div>✓ Supabase Cloud PostgreSQL DB</div>
+                <div>✓ Supabase Storage Bucket (&apos;student data&apos;)</div>
               </div>
             </div>
 

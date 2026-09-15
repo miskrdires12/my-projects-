@@ -114,26 +114,44 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
     const academicYear = data.academicYear?.trim() || null;
     const dateOfBirth = data.dateOfBirth || null;
 
-    // Convert Base64 data URI to 3-phase progressive photos & local desktop backup
+    // Convert Base64 data URI or uploaded file path to 3-phase progressive photos & local desktop backup + Supabase Cloud
     let finalPhotoPath: string | null = data.photoPath || null;
     let finalThumbnailPath: string | null = null;
     let finalPreviewPath: string | null = null;
     let finalOriginalPath: string | null = null;
 
-    if (finalPhotoPath && finalPhotoPath.startsWith("data:image/")) {
+    if (finalPhotoPath && finalPhotoPath.trim().length > 0) {
       try {
         const { generate3PhasePhotos } = await import("@/lib/progressive-photo");
-        const base64Data = finalPhotoPath.replace(/^data:image\/\w+;base64,/, "");
-        const buffer = Buffer.from(base64Data, "base64");
-        const progressive = await generate3PhasePhotos(buffer, {
-          studentId: data.studentId.trim(),
-          fullName: data.fullName.trim(),
-          grade: data.grade.trim(),
-        });
-        finalPhotoPath = progressive.originalPath;
-        finalThumbnailPath = progressive.thumbnailPath;
-        finalPreviewPath = progressive.previewPath;
-        finalOriginalPath = progressive.originalPath;
+        let buffer: Buffer | null = null;
+
+        if (finalPhotoPath.startsWith("data:image/")) {
+          const base64Data = finalPhotoPath.replace(/^data:image\/\w+;base64,/, "");
+          buffer = Buffer.from(base64Data, "base64");
+        } else if (finalPhotoPath.startsWith("/") || finalPhotoPath.startsWith("uploads") || finalPhotoPath.includes("public")) {
+          const fs = await import("fs/promises");
+          const path = await import("path");
+          const normalized = finalPhotoPath.replace(/^\//, "");
+          const localFilePath = path.join(process.cwd(), "public", normalized);
+          try {
+            buffer = await fs.readFile(localFilePath);
+          } catch (readErr) {
+            console.warn("Could not read local file path for progressive generation:", readErr);
+          }
+        }
+
+        if (buffer) {
+          const progressive = await generate3PhasePhotos(buffer, {
+            studentId: data.studentId.trim(),
+            fullName: data.fullName.trim(),
+            grade: data.grade.trim(),
+          });
+          finalPhotoPath = progressive.originalPath;
+          finalThumbnailPath = progressive.thumbnailPath;
+          finalPreviewPath = progressive.previewPath;
+          finalOriginalPath = progressive.originalPath;
+          console.log(`[createStudentAction] ✓ 3-phase photo generated & synced for ${data.studentId}`);
+        }
       } catch (saveErr) {
         console.warn("Notice: Progressive photo generation warning:", saveErr);
       }
@@ -497,6 +515,22 @@ export async function deleteStudentAction(
           } catch {}
         });
       } catch {}
+
+      // 1.5 Delete portrait objects from Supabase Storage bucket 'student data'
+      try {
+        const { deleteFromSupabaseBucket } = await import("@/lib/supabase-storage");
+        const safeGrade = (student.grade || "General").replace(/[/\\]/g, " - ").trim();
+        const safeStudentId = student.studentId.replace(/[/\\]/g, " - ").trim();
+        const safeFullName = student.fullName.replace(/[/\\]/g, " - ").trim();
+        const storagePath = `${safeGrade}/${safeStudentId}_${safeFullName}.jpg`;
+        const storagePreviewPath = `${safeGrade}/previews/${safeStudentId}_${safeFullName}.jpg`;
+        const storageThumbPath = `${safeGrade}/thumbnails/${safeStudentId}_${safeFullName}.jpg`;
+        await deleteFromSupabaseBucket(storagePath).catch(() => {});
+        await deleteFromSupabaseBucket(storagePreviewPath).catch(() => {});
+        await deleteFromSupabaseBucket(storageThumbPath).catch(() => {});
+      } catch (sbErr) {
+        console.warn("Notice: Supabase storage delete in deleteStudentAction non-fatal:", sbErr);
+      }
 
       // 2. Delete dependent child records first to satisfy foreign key constraints
       await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
@@ -949,4 +983,133 @@ export async function reportPhotoTransmissionFailureAction(params: {
     return { success: false, message: err?.message || "Failed to process photo transmission failure" };
   }
 }
+
+/**
+ * Permanently deletes student records and/or storage objects from Supabase Cloud
+ */
+export async function deletePermanentlyFromSupabaseAction(params: {
+  mode: "STUDENT_ID" | "ALL_PHOTOS" | "FULL_WIPE";
+  studentId?: string;
+  confirmationCode?: string;
+}): Promise<{ success: boolean; message: string; deletedCount?: number }> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "ADMIN") {
+      return { success: false, message: "Forbidden: Admin privilege required." };
+    }
+
+    const { deleteFromSupabaseBucket, purgeAllSupabaseStorageObjects } = await import("@/lib/supabase-storage");
+
+    if (params.mode === "STUDENT_ID") {
+      if (!params.studentId || !params.studentId.trim()) {
+        return { success: false, message: "Student ID is required." };
+      }
+      const sid = params.studentId.trim();
+      const student = await prisma.student.findFirst({
+        where: { OR: [{ studentId: sid }, { id: sid }] },
+        include: { photos: true },
+      });
+
+      if (!student) {
+        return { success: false, message: `Student with ID "${sid}" not found in database.` };
+      }
+
+      // 1. Delete photo from Supabase storage if present
+      try {
+        const safeGrade = (student.grade || "General").replace(/[/\\]/g, " - ").trim();
+        const safeStudentId = student.studentId.replace(/[/\\]/g, " - ").trim();
+        const safeFullName = student.fullName.replace(/[/\\]/g, " - ").trim();
+        const storagePath = `${safeGrade}/${safeStudentId}_${safeFullName}.jpg`;
+        const storagePreviewPath = `${safeGrade}/previews/${safeStudentId}_${safeFullName}.jpg`;
+        await deleteFromSupabaseBucket(storagePath);
+        await deleteFromSupabaseBucket(storagePreviewPath);
+      } catch (storageErr) {
+        console.warn("Notice: Supabase storage delete non-fatal:", storageErr);
+      }
+
+      // 2. Cascade delete records in PostgreSQL
+      await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } });
+      await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } });
+      await prisma.student.delete({ where: { id: student.id } });
+
+      // 3. Log audit event
+      await createSafeAuditLog({
+        action: "SUPABASE_STUDENT_PERMANENT_DELETE",
+        entityType: "STUDENT",
+        entityId: student.id,
+        metadata: { studentId: student.studentId, fullName: student.fullName },
+        userId: session.userId,
+      });
+
+      // 4. Broadcast DELETE to all clients
+      await publishStudentSync("DELETE" as any, { studentId: student.studentId, id: student.id });
+
+      revalidatePath("/dashboard");
+      revalidatePath("/students");
+      revalidatePath("/admin/database");
+
+      return {
+        success: true,
+        message: `Permanently deleted student ${student.fullName} (${student.studentId}) from Supabase PostgreSQL & Storage.`,
+        deletedCount: 1,
+      };
+    }
+
+    if (params.mode === "ALL_PHOTOS") {
+      const purgeRes = await purgeAllSupabaseStorageObjects();
+      await createSafeAuditLog({
+        action: "SUPABASE_STORAGE_PURGED",
+        entityType: "STORAGE",
+        metadata: { purgedCount: purgeRes.count },
+        userId: session.userId,
+      });
+
+      revalidatePath("/admin/database");
+      return {
+        success: true,
+        message: `Successfully purged ${purgeRes.count} objects from Supabase Storage bucket 'student data'.`,
+        deletedCount: purgeRes.count,
+      };
+    }
+
+    if (params.mode === "FULL_WIPE") {
+      if (params.confirmationCode !== "DELETE-SUPABASE") {
+        return { success: false, message: "Invalid confirmation code. Please type 'DELETE-SUPABASE'." };
+      }
+
+      const purgeRes = await purgeAllSupabaseStorageObjects();
+      await prisma.customFieldValue.deleteMany({});
+      await prisma.studentPhoto.deleteMany({});
+      const deletedStudents = await prisma.student.deleteMany({});
+
+      await createSafeAuditLog({
+        action: "SUPABASE_FULL_WIPE",
+        entityType: "SYSTEM",
+        metadata: {
+          deletedStudents: deletedStudents.count,
+          purgedStorageFiles: purgeRes.count,
+        },
+        userId: session.userId,
+      });
+
+      await publishStudentSync("DELETE" as any, { fullWipe: true });
+
+      revalidatePath("/dashboard");
+      revalidatePath("/students");
+      revalidatePath("/admin/database");
+
+      return {
+        success: true,
+        message: `Full Supabase wipe complete: permanently removed ${deletedStudents.count} students and ${purgeRes.count} storage photos.`,
+        deletedCount: deletedStudents.count,
+      };
+    }
+
+    return { success: false, message: "Unknown purge mode requested." };
+  } catch (err: any) {
+    console.error("deletePermanentlyFromSupabaseAction error:", err);
+    return { success: false, message: err?.message || "Failed to execute permanent Supabase deletion." };
+  }
+}
+
 
