@@ -7,6 +7,9 @@ const nextConfig = {
     cpus: 1,
     workerThreads: false,
     serverComponentsExternalPackages: ["sharp", "archiver"],
+    serverActions: {
+      bodySizeLimit: "25mb",
+    },
   },
   images: {
     unoptimized: true,

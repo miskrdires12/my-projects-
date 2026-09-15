@@ -55,6 +55,13 @@ export async function publishStudentSync(
       timestamp: Date.now(),
     };
 
+    const localUrl = process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000";
+    fetch(`${localUrl}/api/sync/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+
     const res = await fetch(SYNC_BASE_URL, {
       method: "POST",
       headers: {

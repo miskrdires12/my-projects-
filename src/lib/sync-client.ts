@@ -41,6 +41,16 @@ export async function publishStudentSync(
       timestamp: Date.now(),
     };
 
+    // 1. Broadcast locally across LAN immediately (0ms, zero-internet dependency)
+    if (typeof window !== "undefined") {
+      fetch("/api/sync/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+
+    // 2. Broadcast to global cloud sync bus for remote/cloud devices
     const res = await fetch(SYNC_BASE_URL, {
       method: "POST",
       headers: {
@@ -60,8 +70,8 @@ export async function publishStudentSync(
 }
 
 /**
- * Client-Side Hook: Subscribes to real-time push events from the Cloud Sync Bus.
- * Instantly triggers when any student is enrolled from any device (e.g. mobile phone).
+ * Client-Side Hook: Subscribes to real-time push events from both Local LAN and Cloud Sync Bus.
+ * Instantly triggers when any student is enrolled from any PC or mobile device.
  */
 export function subscribeToCloudSync(
   onStudentUpsert: (student: any) => void,
@@ -71,13 +81,64 @@ export function subscribeToCloudSync(
 ): () => void {
   if (typeof window === "undefined") return () => {};
 
-  let eventSource: EventSource | null = null;
+  let cloudEventSource: EventSource | null = null;
+  let localEventSource: EventSource | null = null;
   let isClosed = false;
 
-  try {
-    eventSource = new EventSource(`${SYNC_BASE_URL}/sse`);
+  const handlePayload = (payload: SyncPayload | null) => {
+    if (!payload || !payload.action) return;
 
-    eventSource.onmessage = async (e) => {
+    if (onRawEvent) {
+      try {
+        onRawEvent(payload);
+      } catch {}
+    }
+
+    if (payload.action === "UPSERT" && payload.student) {
+      onStudentUpsert(payload.student);
+    } else if (payload.action === "DELETE" && payload.studentId && onStudentDelete) {
+      onStudentDelete(payload.studentId);
+    } else if (payload.action === "CLEAR" && onClearAll) {
+      onClearAll();
+    } else if (payload.action === "PHOTO_RETAKE_REQUIRED") {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("siliconlabs_notification", {
+            detail: {
+              title: "Photo Sync Notice",
+              desc:
+                payload.message ||
+                `Photo preserved in student directory for ${payload.fullName || payload.studentId}. You can attach or re-sync photo anytime.`,
+              type: "info",
+            },
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent("siliconlabs_photo_retake_required", {
+            detail: payload,
+          })
+        );
+      }
+    }
+  };
+
+  // 1. Connect to Local LAN SSE Bus (works with 0 internet)
+  try {
+    localEventSource = new EventSource("/api/sync/events");
+    localEventSource.onmessage = (e) => {
+      if (isClosed || !e.data || e.data.startsWith(":")) return;
+      try {
+        const payload: SyncPayload = JSON.parse(e.data);
+        handlePayload(payload);
+      } catch {}
+    };
+  } catch {}
+
+  // 2. Connect to Cloud Sync Bus
+  try {
+    cloudEventSource = new EventSource(`${SYNC_BASE_URL}/sse`);
+
+    cloudEventSource.onmessage = async (e) => {
       if (isClosed) return;
       try {
         const item = JSON.parse(e.data);
@@ -96,52 +157,18 @@ export function subscribeToCloudSync(
           } catch {}
         }
 
-        if (!payload || !payload.action) return;
-
-        if (onRawEvent) {
-          try {
-            onRawEvent(payload);
-          } catch {}
-        }
-
-        if (payload.action === "UPSERT" && payload.student) {
-          onStudentUpsert(payload.student);
-        } else if (payload.action === "DELETE" && payload.studentId && onStudentDelete) {
-          onStudentDelete(payload.studentId);
-        } else if (payload.action === "CLEAR" && onClearAll) {
-          onClearAll();
-        } else if (payload.action === "PHOTO_RETAKE_REQUIRED") {
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(
-              new CustomEvent("siliconlabs_notification", {
-                detail: {
-                  title: "Low Internet: Retake Photo",
-                  desc:
-                    payload.message ||
-                    `Photo transmission failed for ${payload.fullName || payload.studentId}. Auto-deleted from receiver. Sender: please retake photo.`,
-                  type: "warning",
-                },
-              })
-            );
-            window.dispatchEvent(
-              new CustomEvent("siliconlabs_photo_retake_required", {
-                detail: payload,
-              })
-            );
-          }
-        }
+        handlePayload(payload);
       } catch {}
     };
 
-    eventSource.onerror = () => {
+    cloudEventSource.onerror = () => {
       // EventSource automatically retries on network disconnect
     };
   } catch {}
 
   return () => {
     isClosed = true;
-    if (eventSource) {
-      eventSource.close();
-    }
+    if (localEventSource) localEventSource.close();
+    if (cloudEventSource) cloudEventSource.close();
   };
 }

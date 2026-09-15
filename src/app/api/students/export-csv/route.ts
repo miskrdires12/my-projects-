@@ -13,9 +13,8 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import * as XLSX from "xlsx";
 import {
-  RECEIVER_EXCEL_HEADERS,
-  getStudentPhotoLocalPath,
-  formatPhoneForReceiver,
+  getReceiverExcelHeaders,
+  formatStudentForReceiverExcel,
 } from "@/lib/export-utils";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +58,7 @@ async function handleExport(options: ExportOptions) {
     grade: string;
     phone: string;
     photoPath: string | null;
+    bloodType?: string | null;
   }> = [];
 
   let cursor: string | undefined;
@@ -74,6 +74,7 @@ async function handleExport(options: ExportOptions) {
         grade: true,
         phone: true,
         photoPath: true,
+        bloodType: true,
       },
       take: CHUNK_SIZE,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -87,17 +88,12 @@ async function handleExport(options: ExportOptions) {
     cursor = chunk[chunk.length - 1].id;
   }
 
-  // Receiver columns: StudentID, Name, Sex, Grade, Phone, @photo
-  const headers = [...RECEIVER_EXCEL_HEADERS];
-
-  const dataRows = allStudents.map((s) => [
-    s.studentId || "",
-    s.fullName || "",
-    s.sex || "Male",
-    s.grade || "",
-    formatPhoneForReceiver(s.phone),
-    getStudentPhotoLocalPath(s),
-  ]);
+  // Determine if BloodType column should be included (only if at least 1 student has a selected blood type)
+  const hasBloodType = allStudents.some(
+    (s) => s.bloodType && s.bloodType.trim() && s.bloodType.trim() !== "Unknown"
+  );
+  const headers = getReceiverExcelHeaders(hasBloodType);
+  const dataRows = allStudents.map((s) => formatStudentForReceiverExcel(s, hasBloodType));
 
   const dateTag = new Date().toISOString().split("T")[0];
   let fileCategory = "AllGrades";
@@ -113,13 +109,24 @@ async function handleExport(options: ExportOptions) {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
 
     // Set readable column widths
-    ws["!cols"] = [
-      { wch: 18 }, // StudentID
-      { wch: 28 }, // Name
-      { wch: 14 }, // Grade
-      { wch: 18 }, // Phone
-      { wch: 70 }, // @photo (Full local file path)
-    ];
+    ws["!cols"] = hasBloodType
+      ? [
+          { wch: 18 }, // StudentID
+          { wch: 28 }, // Name
+          { wch: 10 }, // Sex
+          { wch: 14 }, // Grade
+          { wch: 18 }, // Phone
+          { wch: 14 }, // BloodType
+          { wch: 70 }, // @photo
+        ]
+      : [
+          { wch: 18 }, // StudentID
+          { wch: 28 }, // Name
+          { wch: 10 }, // Sex
+          { wch: 14 }, // Grade
+          { wch: 18 }, // Phone
+          { wch: 70 }, // @photo
+        ];
 
     XLSX.utils.book_append_sheet(wb, ws, "Students");
     const excelBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });

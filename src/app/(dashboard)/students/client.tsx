@@ -42,7 +42,11 @@ import {
 } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
-import { RECEIVER_EXCEL_HEADERS, getStudentPhotoLocalPath, formatPhoneForReceiver, resolveGradeAndSection } from "@/lib/export-utils";
+import {
+  getReceiverExcelHeaders,
+  formatStudentForReceiverExcel,
+  resolveGradeAndSection,
+} from "@/lib/export-utils";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 import { ResilientStudentPhoto } from "@/components/ui/ResilientStudentPhoto";
 
@@ -218,14 +222,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     loadAndMerge();
   }, [students]);
 
-  // Handle low-internet 3-strike failure: photo auto-deleted from receiver and database
-  const handlePhotoAutoDeleted = useCallback((studentId: string, _fullName?: string) => {
-    setDisplayStudents((prev) =>
-      prev.map((s) => (s.studentId === studentId || s.id === studentId ? { ...s, photoPath: null } : s))
-    );
-    setActiveStudent((prev) =>
-      prev && (prev.studentId === studentId || prev.id === studentId) ? { ...prev, photoPath: null } : prev
-    );
+  // Network photo load status: Photos are NEVER auto-deleted on low internet
+  const handlePhotoAutoDeleted = useCallback((_studentId: string, _fullName?: string) => {
+    // Intentionally non-destructive: keep student record and photo path intact
   }, []);
 
   // 2. Real-time Live Sync across devices (Mobile Phone to Receiver Desktop)
@@ -799,9 +798,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }
   };
 
-  // Export Feeded Data to Excel / CSV with strict 5 columns & local desktop path:
-  // [StudentID, Name, Grade, Phone, @photo (C:\Users\athede\Desktop\students project for 17000\<photo>)]
-  // Smoothly handles 5,000 to 6,000+ records via server-side chunked query
+  // Export Feeded Data to Excel / CSV with dynamic columns & local desktop path:
+  // [StudentID, Name, Sex, Grade, Phone, (BloodType?), @photo]
   const handleExportExcel = (selectedOnly: boolean = false, overrideGrade?: string) => {
     const targetGrade = overrideGrade !== undefined ? overrideGrade : (selectedGrade !== "ALL" ? selectedGrade : "");
 
@@ -825,42 +823,44 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       return;
     }
 
-    if (listToExport.length > 0) {
-      const headers = [...RECEIVER_EXCEL_HEADERS];
-      const dataRows = listToExport.map((s) => [
-        s.studentId || "",
-        s.fullName || "",
-        s.sex || "Male",
-        s.grade || "",
-        formatPhoneForReceiver(s.phone),
-        getStudentPhotoLocalPath(s),
-      ]);
+    // Determine if BloodType column should be included (only if at least 1 student has a selected blood type)
+    const hasBloodType = listToExport.some(
+      (s) => s.bloodType && s.bloodType.trim() && s.bloodType.trim() !== "Unknown"
+    );
+    const headers = getReceiverExcelHeaders(hasBloodType);
+    const dataRows = listToExport.map((s) => formatStudentForReceiverExcel(s, hasBloodType));
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-      ws["!cols"] = [
-        { wch: 18 },
-        { wch: 28 },
-        { wch: 14 },
-        { wch: 18 },
-        { wch: 70 },
-      ];
-      XLSX.utils.book_append_sheet(wb, ws, "Students");
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    ws["!cols"] = hasBloodType
+      ? [
+          { wch: 18 }, // StudentID
+          { wch: 28 }, // Name
+          { wch: 10 }, // Sex
+          { wch: 14 }, // Grade
+          { wch: 18 }, // Phone
+          { wch: 14 }, // BloodType
+          { wch: 70 }, // @photo
+        ]
+      : [
+          { wch: 18 }, // StudentID
+          { wch: 28 }, // Name
+          { wch: 10 }, // Sex
+          { wch: 14 }, // Grade
+          { wch: 18 }, // Phone
+          { wch: 70 }, // @photo
+        ];
+    XLSX.utils.book_append_sheet(wb, ws, "Students");
 
-      const dateTag = new Date().toISOString().split("T")[0];
-      const scopeLabel = selectedOnly
-        ? `Selected_${listToExport.length}`
-        : targetGrade
-        ? `Grade_${targetGrade.replace(/[^a-zA-Z0-9_-]/g, "_")}`
-        : `All_${listToExport.length}`;
-      const fileName = `Student_Credentials_${scopeLabel}_${dateTag}.xlsx`;
+    const dateTag = new Date().toISOString().split("T")[0];
+    const scopeLabel = selectedOnly
+      ? `Selected_${listToExport.length}`
+      : targetGrade
+      ? `Grade_${targetGrade.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+      : `All_${listToExport.length}`;
+    const fileName = `Student_Credentials_${scopeLabel}_${dateTag}.xlsx`;
 
-      XLSX.writeFile(wb, fileName);
-      return;
-    }
-
-    const gradeQuery = targetGrade ? `&grade=${encodeURIComponent(targetGrade)}` : "";
-    window.location.href = `/api/students/export-csv?format=xlsx${gradeQuery}`;
+    XLSX.writeFile(wb, fileName);
   };
 
   const handleExportCSV = (selectedOnly: boolean = false, overrideGrade?: string) => {
@@ -886,83 +886,54 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       return;
     }
 
-    // Always generate CSV with UTF-8 BOM via client-side Blob — guaranteed to ALWAYS work!
-    if (listToExport.length > 0) {
-      const headers = [...RECEIVER_EXCEL_HEADERS];
-      const escapeCSV = (val: any) => {
-        if (val === null || val === undefined) return '""';
-        const str = String(val).trim();
-        return `"${str.replace(/"/g, '""')}"`;
-      };
+    // Determine if BloodType column should be included (only if at least 1 student has a selected blood type)
+    const hasBloodType = listToExport.some(
+      (s) => s.bloodType && s.bloodType.trim() && s.bloodType.trim() !== "Unknown"
+    );
+    const headers = getReceiverExcelHeaders(hasBloodType);
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).trim();
+      return `"${str.replace(/"/g, '""')}"`;
+    };
 
-      const rows = listToExport.map((s) => [
-        escapeCSV(s.studentId),
-        escapeCSV(s.fullName),
-        escapeCSV(s.sex || "Male"),
-        escapeCSV(s.grade),
-        escapeCSV(formatPhoneForReceiver(s.phone)),
-        escapeCSV(getStudentPhotoLocalPath(s)),
-      ].join(","));
+    const rows = listToExport.map((s) =>
+      formatStudentForReceiverExcel(s, hasBloodType)
+        .map((cell) => escapeCSV(cell))
+        .join(",")
+    );
 
-      // Add UTF-8 BOM so Excel opens with proper character encoding
-      const csvContent = "\uFEFF" + [headers.map((h) => escapeCSV(h)).join(","), ...rows].join("\r\n");
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = window.URL.createObjectURL(blob);
-      const dateTag = new Date().toISOString().split("T")[0];
-      const scopeLabel = selectedOnly
-        ? `Selected_${listToExport.length}`
-        : targetGrade
-        ? `Grade_${targetGrade.replace(/[^a-zA-Z0-9_-]/g, "_")}`
-        : `All_${listToExport.length}`;
-      const fileName = `Student_Credentials_${scopeLabel}_${dateTag}.csv`;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      return;
-    }
-
-    const gradeQuery = targetGrade ? `&grade=${encodeURIComponent(targetGrade)}` : "";
-    window.location.href = `/api/students/export-csv?format=csv${gradeQuery}`;
+    // Add UTF-8 BOM so Excel opens with proper character encoding
+    const csvContent = "\uFEFF" + [headers.map((h) => escapeCSV(h)).join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const dateTag = new Date().toISOString().split("T")[0];
+    const scopeLabel = selectedOnly
+      ? `Selected_${listToExport.length}`
+      : targetGrade
+      ? `Grade_${targetGrade.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+      : `All_${listToExport.length}`;
+    const fileName = `Student_Credentials_${scopeLabel}_${dateTag}.csv`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
-  // Download all selected students together into 1 combined CSV or Excel file via API
-  const downloadSelectedTogether = async (format: "csv" | "xlsx" = "csv") => {
+  // Download all selected students together into 1 combined CSV or Excel file (Client-Side Instant Export)
+  const downloadSelectedTogether = (format: "csv" | "xlsx" = "csv") => {
     if (selectedIds.size === 0) {
-      alert("No student found to download in this view.");
+      alert("Please select at least one student from the table first.");
       return;
     }
 
-    try {
-      const res = await fetch("/api/students/export-csv", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ids: Array.from(selectedIds),
-          format,
-        }),
-      });
-
-      if (!res.ok) throw new Error("Failed to export selected student records");
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const dateTag = new Date().toISOString().split("T")[0];
-      const ext = format === "xlsx" ? "xlsx" : "csv";
-      a.download = `Student_Credentials_Selected_${selectedIds.size}_Together_${dateTag}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      console.error("Selected export API error, falling back:", err);
-      if (format === "xlsx") handleExportExcel(true);
-      else handleExportCSV(true);
+    if (format === "xlsx") {
+      handleExportExcel(true);
+    } else {
+      handleExportCSV(true);
     }
   };
 

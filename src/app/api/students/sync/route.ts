@@ -61,32 +61,52 @@ export async function POST(request: Request) {
       if (!s.studentId || !s.fullName) continue;
 
       try {
+        let photoPath = s.photoPath || null;
+        if (photoPath && photoPath.startsWith("data:image/")) {
+          try {
+            const fs = await import("fs/promises");
+            const path = await import("path");
+            const { generateSafePhotoFilename } = await import("@/lib/image-processing");
+            const base64Data = photoPath.replace(/^data:image\/\w+;base64,/, "");
+            const buffer = Buffer.from(base64Data, "base64");
+            const safeName = generateSafePhotoFilename(s.fullName, s.studentId);
+            const publicDir = path.join(process.cwd(), "public", "uploads", "photos");
+            await fs.mkdir(publicDir, { recursive: true });
+            const filePath = path.join(publicDir, safeName);
+            await fs.writeFile(filePath, buffer);
+            photoPath = `/uploads/photos/${safeName}`;
+          } catch (writeErr) {
+            console.warn("Sync base64 disk write warning:", writeErr);
+          }
+        }
+
+        const studentData = {
+          fullName: s.fullName,
+          phone: s.phone || "N/A",
+          sex: s.sex || "Male",
+          grade: s.grade || "General",
+          school: s.school || "",
+          department: s.department || "",
+          academicYear: s.academicYear || "",
+          address: s.address || null,
+          bloodType: s.bloodType && s.bloodType.trim() !== "Unknown" ? s.bloodType.trim() : null,
+          guardianFullName: s.guardianFullName || "",
+          emergencyContactName: s.emergencyContactName || "",
+          emergencyContactPhone: s.emergencyContactPhone || "",
+          nationality: s.nationality || "",
+          nationalId: s.nationalId || null,
+          rollNumber: s.rollNumber || "",
+          photoPath,
+          qrCodeData: s.qrCodeData || `STUDENT:${s.studentId}`,
+          status: s.status || "ACTIVE",
+        };
+
         await prisma.student.upsert({
           where: { studentId: s.studentId },
-          update: {
-            fullName: s.fullName,
-            phone: s.phone || "N/A",
-            sex: s.sex || "Male",
-            grade: s.grade || "General",
-            school: s.school || "",
-            department: s.department || "",
-            academicYear: s.academicYear || "",
-            photoPath: s.photoPath || null,
-            qrCodeData: s.qrCodeData || `STUDENT:${s.studentId}`,
-            status: s.status || "ACTIVE",
-          },
+          update: studentData,
           create: {
             studentId: s.studentId,
-            fullName: s.fullName,
-            phone: s.phone || "N/A",
-            sex: s.sex || "Male",
-            grade: s.grade || "General",
-            school: s.school || "",
-            department: s.department || "",
-            academicYear: s.academicYear || "",
-            photoPath: s.photoPath || null,
-            qrCodeData: s.qrCodeData || `STUDENT:${s.studentId}`,
-            status: s.status || "ACTIVE",
+            ...studentData,
           },
         });
 

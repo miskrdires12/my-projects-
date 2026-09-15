@@ -520,7 +520,7 @@ export default function RegisterPage() {
           emergencyContactName: formData.emergencyContactName,
           emergencyContactPhone: formData.emergencyContactPhone,
           nationality: formData.nationality,
-          bloodType: formData.bloodType,
+          bloodType: formData.bloodType && formData.bloodType.trim() && formData.bloodType.trim() !== "Unknown" ? formData.bloodType.trim() : null,
           photoPath: officialPhotoPath,
           status: formData.status as any,
           customFields: customFieldValues,
@@ -542,7 +542,7 @@ export default function RegisterPage() {
           guardianFullName: payload.guardianFullName || null,
           emergencyContactPhone: payload.emergencyContactPhone || null,
           emergencyContactName: payload.emergencyContactName || null,
-          bloodType: payload.bloodType || null,
+          bloodType: payload.bloodType && payload.bloodType.trim() !== "Unknown" ? payload.bloodType.trim() : null,
           nationality: payload.nationality || null,
           photoPath: officialPhotoPath,
           qrCodeData: null,
@@ -928,7 +928,7 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-red-500 hover:shadow-[0_0_14px_rgba(239,68,68,0.25)] focus:border-red-500 focus:ring-2 focus:ring-red-500/30 focus:outline-none transition-all cursor-pointer"
                 >
-                  <option value="">Select Blood Group (or Unknown)</option>
+                  <option value="">-- No Blood Group Selected --</option>
                   <option value="A+">A+ (A Positive)</option>
                   <option value="A-">A- (A Negative)</option>
                   <option value="B+">B+ (B Positive)</option>
@@ -937,7 +937,6 @@ export default function RegisterPage() {
                   <option value="AB-">AB- (AB Negative)</option>
                   <option value="O+">O+ (O Positive)</option>
                   <option value="O-">O- (O Negative)</option>
-                  <option value="Unknown">Unknown / Not Tested</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-red-500">
                   <ChevronDown className="h-4 w-4 stroke-[2.5]" />

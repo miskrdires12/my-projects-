@@ -18,6 +18,7 @@ import {
   type CustomFieldInput,
 } from "@/lib/validations";
 import { publishStudentSync, rehydrateDatabaseFromCloud } from "@/lib/sync-engine";
+import { generateSafePhotoFilename } from "@/lib/image-processing";
 
 export interface StudentFilterParams {
   query?: string;
@@ -114,6 +115,25 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
     const academicYear = data.academicYear?.trim() || null;
     const dateOfBirth = data.dateOfBirth || null;
 
+    // Convert Base64 data URI to local photo file on disk if necessary
+    let finalPhotoPath: string | null = data.photoPath || null;
+    if (finalPhotoPath && finalPhotoPath.startsWith("data:image/")) {
+      try {
+        const fs = await import("fs/promises");
+        const path = await import("path");
+        const base64Data = finalPhotoPath.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const safeName = generateSafePhotoFilename(data.fullName, data.studentId);
+        const publicDir = path.join(process.cwd(), "public", "uploads", "photos");
+        await fs.mkdir(publicDir, { recursive: true });
+        const filePath = path.join(publicDir, safeName);
+        await fs.writeFile(filePath, buffer);
+        finalPhotoPath = `/uploads/photos/${safeName}`;
+      } catch (saveErr) {
+        console.warn("Notice: Base64 disk write warning:", saveErr);
+      }
+    }
+
     // Strict Requirement: QR codes are NEVER generated internally.
     // QR codes are imported as external image assets exclusively by the Receiver.
     const student = await prisma.student.create({
@@ -138,7 +158,7 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
         nationality,
         nationalId,
         dateOfBirth,
-        photoPath: data.photoPath || null,
+        photoPath: finalPhotoPath,
         qrCodeData: null, // Populated exclusively when Receiver imports external QR images
         status: data.status,
         batchId: data.batchId || null,
@@ -256,7 +276,28 @@ export async function updateStudentAction(
   if (input.nationalId !== undefined) updatePayload.nationalId = input.nationalId;
   if (input.bloodType !== undefined) updatePayload.bloodType = input.bloodType;
   if (input.emailAddress !== undefined) updatePayload.emailAddress = input.emailAddress;
-  if (input.photoPath !== undefined) updatePayload.photoPath = input.photoPath;
+  if (input.photoPath !== undefined) {
+    let finalPath = input.photoPath;
+    if (finalPath && finalPath.startsWith("data:image/")) {
+      try {
+        const fs = await import("fs/promises");
+        const path = await import("path");
+        const base64Data = finalPath.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        const studentName = input.fullName || existing.fullName;
+        const studentId = input.studentId || existing.studentId;
+        const safeName = generateSafePhotoFilename(studentName, studentId);
+        const publicDir = path.join(process.cwd(), "public", "uploads", "photos");
+        await fs.mkdir(publicDir, { recursive: true });
+        const filePath = path.join(publicDir, safeName);
+        await fs.writeFile(filePath, buffer);
+        finalPath = `/uploads/photos/${safeName}`;
+      } catch (saveErr) {
+        console.warn("Notice: Base64 disk write warning:", saveErr);
+      }
+    }
+    updatePayload.photoPath = finalPath;
+  }
   if (input.dateOfBirth !== undefined) updatePayload.dateOfBirth = input.dateOfBirth ? new Date(input.dateOfBirth) : null;
   if (input.status) updatePayload.status = input.status;
   if (input.batchId !== undefined) updatePayload.batchId = input.batchId;

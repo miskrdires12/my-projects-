@@ -161,26 +161,44 @@ export function getStudentPhotoLocalPath(student: StudentPhotoIdentity, folderOv
   return `${cleanFolder}${sep}${fileName}`;
 }
 
+export function getReceiverExcelHeaders(includeBloodType: boolean = false): string[] {
+  if (includeBloodType) {
+    return ["StudentID", "Name", "Sex", "Grade", "Phone", "BloodType", "@photo"];
+  }
+  return [...RECEIVER_EXCEL_HEADERS];
+}
+
 /**
  * Maps a student record into receiver columns:
- * [StudentID, Name, Sex, Grade, Phone, @photo]
+ * [StudentID, Name, Sex, Grade, Phone, (BloodType?), @photo]
  */
-export function formatStudentForReceiverExcel(student: {
-  studentId: string;
-  fullName: string;
-  sex?: string | null;
-  grade: string;
-  phone: string;
-  photoPath?: string | null;
-}) {
-  return [
+export function formatStudentForReceiverExcel(
+  student: {
+    studentId: string;
+    fullName: string;
+    sex?: string | null;
+    grade: string;
+    phone: string;
+    photoPath?: string | null;
+    bloodType?: string | null;
+  },
+  includeBloodType: boolean = false
+) {
+  const row = [
     student.studentId || "",
     student.fullName || "",
     student.sex || "Male",
     student.grade || "",
     formatPhoneForReceiver(student.phone),
-    getStudentPhotoLocalPath(student),
   ];
+
+  if (includeBloodType) {
+    const bt = (student.bloodType || "").trim();
+    row.push(bt && bt !== "Unknown" ? bt : "");
+  }
+
+  row.push(getStudentPhotoLocalPath(student));
+  return row;
 }
 
 /**
