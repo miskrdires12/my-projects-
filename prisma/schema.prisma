@@ -83,6 +83,9 @@ model Student {
 
   // Media Reference Pointers
   photoPath             String?
+  thumbnailPath         String?             // 150px progressive thumbnail for instant stream
+  previewPath           String?             // 800px progressive preview for inspection drawer
+  originalPhotoPath     String?             // Full resolution master original for printing & backup
   qrCodeData            String?
 
   // Status & Relational Partitioning
@@ -124,6 +127,8 @@ model StudentPhoto {
   student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   originalPath String
   editedPath   String
+  thumbnailPath String?
+  previewPath   String?
   width        Int?
   height       Int?
   cropData     String?  // JSON coordinates {x, y, width, height, zoom, rotation}

@@ -69,6 +69,9 @@ interface StudentExtended {
   nationality?: string | null;
   dateOfBirth?: string | Date | null;
   photoPath?: string | null;
+  thumbnailPath?: string | null;
+  previewPath?: string | null;
+  originalPhotoPath?: string | null;
   qrCodeData?: string | null;
   status: string;
   batch?: { batchNumber: string; title: string } | null;
@@ -543,15 +546,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         const { gradeFolder, sectionFolder } = resolveGradeAndSection(student);
         const targetFolder = zip.folder(gradeFolder)?.folder(sectionFolder) || zip;
 
-        if (student.photoPath) {
+        const rawPhoto = student.originalPhotoPath || student.photoPath;
+        if (rawPhoto) {
           try {
-            if (student.photoPath.startsWith("data:image/")) {
-              const base64Data = student.photoPath.split(",")[1];
+            if (rawPhoto.startsWith("data:image/")) {
+              const base64Data = rawPhoto.split(",")[1];
               if (base64Data) {
                 targetFolder.file(photoFileName, base64Data, { base64: true });
               }
             } else {
-              const res = await fetch(student.photoPath);
+              const res = await fetch(rawPhoto);
               if (res.ok) {
                 const imgBlob = await res.blob();
                 targetFolder.file(photoFileName, imgBlob);
@@ -1468,7 +1472,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             title={student.photoPath ? `Click to Crop & Edit Studio Portrait (${student.fullName})` : "Click to auto-resend / resolve photo"}
                           >
                             <ResilientStudentPhoto
-                              src={student.photoPath}
+                              src={student.thumbnailPath || student.previewPath || student.photoPath}
                               alt={student.fullName}
                               fullName={student.fullName}
                               studentId={student.studentId}
@@ -1486,7 +1490,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             <div className="hidden group-hover/thumb:flex flex-col absolute left-14 top-1/2 -translate-y-1/2 z-30 w-44 rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
                               <div className="aspect-[3/4] w-full rounded-xl overflow-hidden bg-black border border-border dark:border-[#223126]">
                                 <ResilientStudentPhoto
-                                  src={student.photoPath}
+                                  src={student.previewPath || student.photoPath}
                                   alt={student.fullName}
                                   fullName={student.fullName}
                                   studentId={student.studentId}
@@ -1589,9 +1593,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             <>
                               <button
                                 type="button"
-                                onClick={() => handleDownloadSinglePhoto(student.photoPath!, student.fullName)}
+                                onClick={() => handleDownloadSinglePhoto(student.originalPhotoPath || student.photoPath!, student.fullName)}
                                 className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
-                                title={`Download Photo (${student.fullName}.jpg)`}
+                                title={`Download Original Photo (${student.fullName}.jpg)`}
                               >
                                 <Download className="h-4 w-4" />
                               </button>
@@ -1853,7 +1857,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 title={activeStudent.photoPath ? "Click to Crop & Edit Studio Portrait" : undefined}
               >
                 <ResilientStudentPhoto
-                  src={activeStudent.photoPath}
+                  src={activeStudent.previewPath || activeStudent.photoPath}
                   alt={activeStudent.fullName}
                   fullName={activeStudent.fullName}
                   studentId={activeStudent.studentId}
@@ -1871,10 +1875,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <div className="flex flex-col gap-2 w-full max-w-xs pt-1">
                   <button
                     type="button"
-                    onClick={() => handleDownloadSinglePhoto(activeStudent.photoPath!, activeStudent.fullName)}
+                    onClick={() => handleDownloadSinglePhoto(activeStudent.originalPhotoPath || activeStudent.photoPath!, activeStudent.fullName)}
                     className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors cursor-pointer"
                   >
-                    <Download className="h-3.5 w-3.5 text-[#8fe617]" /> Download Portrait (.jpg)
+                    <Download className="h-3.5 w-3.5 text-[#8fe617]" /> Download Original Portrait (.jpg)
                   </button>
                   <button
                     type="button"

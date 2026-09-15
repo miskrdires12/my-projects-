@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file");
     const originalFile = formData.get("originalFile");
     const studentId = formData.get("studentId") as string | null;
+    let studentFullName = (formData.get("fullName") as string | null) || "";
+    let studentGrade = (formData.get("grade") as string | null) || "";
     const cropData = formData.get("cropData") as string | null;
     const filterData = formData.get("filterData") as string | null;
 
@@ -49,6 +51,32 @@ export async function POST(request: NextRequest) {
       originalResult = await processAndSaveStudentPhoto(originalBuffer, originalMime, "original");
     }
 
+    if (studentId && (!studentFullName || !studentGrade)) {
+      try {
+        const found = await prisma.student.findUnique({
+          where: { studentId },
+          select: { fullName: true, grade: true },
+        });
+        if (found) {
+          studentFullName = studentFullName || found.fullName;
+          studentGrade = studentGrade || found.grade;
+        }
+      } catch {}
+    }
+
+    // Generate 3-phase progressive photos & save to local desktop backup
+    let progressive = null;
+    try {
+      const { generate3PhasePhotos } = await import("@/lib/progressive-photo");
+      progressive = await generate3PhasePhotos(editedBuffer, {
+        studentId: studentId || "STU",
+        fullName: studentFullName || "student",
+        grade: studentGrade || "General",
+      });
+    } catch (progErr) {
+      console.warn("Notice: Progressive generation notice:", progErr);
+    }
+
     let photoRecord = null;
     if (studentId) {
       try {
@@ -57,13 +85,19 @@ export async function POST(request: NextRequest) {
         });
 
         if (student) {
+          const finalThumbnail = progressive?.thumbnailPath || null;
+          const finalPreview = progressive?.previewPath || null;
+          const finalOriginal = progressive?.originalPath || originalResult.relativePath;
+
           photoRecord = await prisma.studentPhoto.create({
             data: {
               studentId: student.id,
-              originalPath: originalResult.relativePath,
+              originalPath: finalOriginal,
               editedPath: editedResult.relativePath,
-              width: editedResult.width,
-              height: editedResult.height,
+              thumbnailPath: finalThumbnail,
+              previewPath: finalPreview,
+              width: progressive?.width || editedResult.width,
+              height: progressive?.height || editedResult.height,
               cropData: cropData || null,
               filterData: filterData || null,
               status: "EDITED",
@@ -72,7 +106,12 @@ export async function POST(request: NextRequest) {
 
           const updatedStudent = await prisma.student.update({
             where: { id: student.id },
-            data: { photoPath: editedResult.relativePath },
+            data: {
+              photoPath: editedResult.relativePath,
+              thumbnailPath: finalThumbnail,
+              previewPath: finalPreview,
+              originalPhotoPath: finalOriginal,
+            },
           });
 
           // Broadcast updated photo to receiver in real-time
@@ -87,6 +126,9 @@ export async function POST(request: NextRequest) {
             department: updatedStudent.department,
             academicYear: updatedStudent.academicYear,
             photoPath: updatedStudent.photoPath,
+            thumbnailPath: updatedStudent.thumbnailPath,
+            previewPath: updatedStudent.previewPath,
+            originalPhotoPath: updatedStudent.originalPhotoPath,
             qrCodeData: updatedStudent.qrCodeData || `STUDENT:${updatedStudent.studentId}`,
             status: updatedStudent.status,
             createdAt: updatedStudent.createdAt.toISOString(),
@@ -101,7 +143,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         relativePath: editedResult.relativePath,
-        originalPath: originalResult.relativePath,
+        originalPath: progressive?.originalPath || originalResult.relativePath,
+        thumbnailPath: progressive?.thumbnailPath || null,
+        previewPath: progressive?.previewPath || null,
+        backupLocalPath: progressive?.backupLocalPath || null,
         fileName: editedResult.fileName,
         width: editedResult.width,
         height: editedResult.height,

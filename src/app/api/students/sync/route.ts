@@ -62,21 +62,26 @@ export async function POST(request: Request) {
 
       try {
         let photoPath = s.photoPath || null;
+        let thumbnailPath = s.thumbnailPath || null;
+        let previewPath = s.previewPath || null;
+        let originalPhotoPath = s.originalPhotoPath || null;
+
         if (photoPath && photoPath.startsWith("data:image/")) {
           try {
-            const fs = await import("fs/promises");
-            const path = await import("path");
-            const { generateSafePhotoFilename } = await import("@/lib/image-processing");
+            const { generate3PhasePhotos } = await import("@/lib/progressive-photo");
             const base64Data = photoPath.replace(/^data:image\/\w+;base64,/, "");
             const buffer = Buffer.from(base64Data, "base64");
-            const safeName = generateSafePhotoFilename(s.fullName, s.studentId);
-            const publicDir = path.join(process.cwd(), "public", "uploads", "photos");
-            await fs.mkdir(publicDir, { recursive: true });
-            const filePath = path.join(publicDir, safeName);
-            await fs.writeFile(filePath, buffer);
-            photoPath = `/uploads/photos/${safeName}`;
+            const progressive = await generate3PhasePhotos(buffer, {
+              studentId: s.studentId,
+              fullName: s.fullName,
+              grade: s.grade || "General",
+            });
+            photoPath = progressive.originalPath;
+            thumbnailPath = progressive.thumbnailPath;
+            previewPath = progressive.previewPath;
+            originalPhotoPath = progressive.originalPath;
           } catch (writeErr) {
-            console.warn("Sync base64 disk write warning:", writeErr);
+            console.warn("Sync progressive photo write warning:", writeErr);
           }
         }
 
@@ -97,6 +102,9 @@ export async function POST(request: Request) {
           nationalId: s.nationalId || null,
           rollNumber: s.rollNumber || "",
           photoPath,
+          thumbnailPath,
+          previewPath,
+          originalPhotoPath,
           qrCodeData: s.qrCodeData || `STUDENT:${s.studentId}`,
           status: s.status || "ACTIVE",
         };
@@ -111,7 +119,7 @@ export async function POST(request: Request) {
         });
 
         // Broadcast to Global Cloud Sync Bus
-        publishStudentSync("UPSERT", s).catch(() => {});
+        publishStudentSync("UPSERT", { ...s, ...studentData }).catch(() => {});
         syncedCount++;
       } catch (upsertErr) {
         console.warn(`Sync upsert failed for student ${s.studentId}:`, upsertErr);

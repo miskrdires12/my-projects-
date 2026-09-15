@@ -37,6 +37,15 @@ import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 import { publishStudentSync, subscribeToCloudSync } from "@/lib/sync-client";
 import { formatPhoneForReceiver } from "@/lib/export-utils";
 import { saveStudentToDB, getAllStudentsFromDB } from "@/lib/idb-storage";
+import {
+  saveActiveDraft,
+  getActiveDraft,
+  clearActiveDraft,
+  enqueueStudent,
+  subscribeToOutbox,
+  triggerOutboxWorker,
+  type OutboxItem,
+} from "@/lib/outbox-engine";
 
 interface CustomFieldMeta {
   id: string;
@@ -149,6 +158,16 @@ export default function RegisterPage() {
       })
       .catch(() => {});
 
+    // Hydrate active form draft if browser was closed or reloaded (Rules 1 & 2)
+    try {
+      const draft = getActiveDraft();
+      if (draft && draft.formData && (draft.formData.fullName || draft.formData.phone || draft.officialPhotoPath)) {
+        setFormData((prev) => ({ ...prev, ...draft.formData }));
+        if (draft.officialPhotoPath) setOfficialPhotoPath(draft.officialPhotoPath);
+        if (draft.editedPhotoPreview) setEditedPhotoPreview(draft.editedPhotoPreview);
+      }
+    } catch {}
+
     // Hydrate offline pending registrations from storage
     try {
       const rawQueue = localStorage.getItem("sb_offline_pending_students");
@@ -181,6 +200,20 @@ export default function RegisterPage() {
       window.removeEventListener("offline", handleOffline);
       clearInterval(autoResendTimer);
     };
+  }, []);
+
+  // Active Draft Autosave: Persists every keystroke and photo to prevent data loss on reload/close
+  useEffect(() => {
+    if (formData.fullName || formData.phone || officialPhotoPath) {
+      saveActiveDraft({ formData, officialPhotoPath, editedPhotoPreview });
+    }
+  }, [formData, officialPhotoPath, editedPhotoPreview]);
+
+  // Outbox subscription: real-time updates of queued/syncing items
+  const [outboxQueue, setOutboxQueue] = useState<OutboxItem[]>([]);
+  useEffect(() => {
+    const unsub = subscribeToOutbox((q) => setOutboxQueue(q));
+    return () => unsub();
   }, []);
 
   // Download Offline Backup JSON
@@ -554,54 +587,16 @@ export default function RegisterPage() {
           })),
         };
 
-        // 1. Save immediately to high-capacity IndexedDB + persistent local mirror
-        await saveStudentToDB(record);
+        // 1. Enqueue into Telegram-style outbox engine (handles 3-phases, zero-data-loss, retry daemon)
+        await enqueueStudent(payload, record);
 
-        // 2. Check if device is offline
-        const isCurrentlyOffline = typeof navigator !== "undefined" ? !navigator.onLine : false;
-
-        if (isCurrentlyOffline) {
-          const queueItem = { payload, record, timestamp: new Date().toISOString() };
-          const nextQueue = [...offlinePendingQueue, queueItem];
-          setOfflinePendingQueue(nextQueue);
-          try {
-            localStorage.setItem("sb_offline_pending_students", JSON.stringify(nextQueue));
-          } catch {}
-
-          setSentSuccessfullyData({
-            studentId: payload.studentId,
-            fullName: payload.fullName,
-            grade: payload.grade,
-            sex: payload.sex,
-          });
-          return;
-        }
-
-        // 3. Broadcast immediately to Receiver Workstation via Cloud Sync
+        // 2. Broadcast immediately to Receiver Workstation via Cloud Sync
         publishStudentSync("UPSERT", record).catch(() => {});
 
-        // 4. Submit to server action with automatic offline fallback
-        try {
-          const res = await createStudentAction(payload);
-          if (!res.success && res.error && !res.error.includes("already exists")) {
-            const queueItem = { payload, record, timestamp: new Date().toISOString() };
-            const nextQueue = [...offlinePendingQueue, queueItem];
-            setOfflinePendingQueue(nextQueue);
-            try {
-              localStorage.setItem("sb_offline_pending_students", JSON.stringify(nextQueue));
-            } catch {}
-          }
-        } catch (serverErr) {
-          console.warn("Server action connection notice; queued offline:", serverErr);
-          const queueItem = { payload, record, timestamp: new Date().toISOString() };
-          const nextQueue = [...offlinePendingQueue, queueItem];
-          setOfflinePendingQueue(nextQueue);
-          try {
-            localStorage.setItem("sb_offline_pending_students", JSON.stringify(nextQueue));
-          } catch {}
-        }
+        // 3. Clear active form draft since student is safely enrolled in Outbox
+        clearActiveDraft();
 
-        // 5. Show "Sent Successfully!" confirmation modal
+        // 4. Show "Sent Successfully!" confirmation modal
         setSentSuccessfullyData({
           studentId: payload.studentId,
           fullName: payload.fullName,
@@ -615,6 +610,7 @@ export default function RegisterPage() {
   };
 
   const handleResetForm = () => {
+    clearActiveDraft();
     let defaultGrade = "10";
     let defaultSchool = "";
     let defaultAcademicYear = "2026-2027";
@@ -717,6 +713,26 @@ export default function RegisterPage() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Telegram-style Progressive Outbox Banner */}
+        {outboxQueue.length > 0 && (
+          <div className="rounded-2xl border border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 p-3.5 flex items-center justify-between gap-2.5 text-xs text-sky-800 dark:text-sky-300 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400 shrink-0" />
+              <div>
+                <span className="font-bold">Telegram-Style Outbox: </span>
+                <span>{outboxQueue.length} student(s) syncing in 3 progressive phases (150px thumbnail &rarr; 800px preview &rarr; original).</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => triggerOutboxWorker()}
+              className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-mono text-[10px] font-bold transition-colors shrink-0 cursor-pointer"
+            >
+              Sync Now
+            </button>
           </div>
         )}
 

@@ -18,7 +18,6 @@ import {
   type CustomFieldInput,
 } from "@/lib/validations";
 import { publishStudentSync, rehydrateDatabaseFromCloud } from "@/lib/sync-engine";
-import { generateSafePhotoFilename } from "@/lib/image-processing";
 
 export interface StudentFilterParams {
   query?: string;
@@ -115,22 +114,28 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
     const academicYear = data.academicYear?.trim() || null;
     const dateOfBirth = data.dateOfBirth || null;
 
-    // Convert Base64 data URI to local photo file on disk if necessary
+    // Convert Base64 data URI to 3-phase progressive photos & local desktop backup
     let finalPhotoPath: string | null = data.photoPath || null;
+    let finalThumbnailPath: string | null = null;
+    let finalPreviewPath: string | null = null;
+    let finalOriginalPath: string | null = null;
+
     if (finalPhotoPath && finalPhotoPath.startsWith("data:image/")) {
       try {
-        const fs = await import("fs/promises");
-        const path = await import("path");
+        const { generate3PhasePhotos } = await import("@/lib/progressive-photo");
         const base64Data = finalPhotoPath.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
-        const safeName = generateSafePhotoFilename(data.fullName, data.studentId);
-        const publicDir = path.join(process.cwd(), "public", "uploads", "photos");
-        await fs.mkdir(publicDir, { recursive: true });
-        const filePath = path.join(publicDir, safeName);
-        await fs.writeFile(filePath, buffer);
-        finalPhotoPath = `/uploads/photos/${safeName}`;
+        const progressive = await generate3PhasePhotos(buffer, {
+          studentId: data.studentId.trim(),
+          fullName: data.fullName.trim(),
+          grade: data.grade.trim(),
+        });
+        finalPhotoPath = progressive.originalPath;
+        finalThumbnailPath = progressive.thumbnailPath;
+        finalPreviewPath = progressive.previewPath;
+        finalOriginalPath = progressive.originalPath;
       } catch (saveErr) {
-        console.warn("Notice: Base64 disk write warning:", saveErr);
+        console.warn("Notice: Progressive photo generation warning:", saveErr);
       }
     }
 
@@ -159,6 +164,9 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
         nationalId,
         dateOfBirth,
         photoPath: finalPhotoPath,
+        thumbnailPath: finalThumbnailPath,
+        previewPath: finalPreviewPath,
+        originalPhotoPath: finalOriginalPath,
         qrCodeData: null, // Populated exclusively when Receiver imports external QR images
         status: data.status,
         batchId: data.batchId || null,
@@ -278,25 +286,36 @@ export async function updateStudentAction(
   if (input.emailAddress !== undefined) updatePayload.emailAddress = input.emailAddress;
   if (input.photoPath !== undefined) {
     let finalPath = input.photoPath;
+    let finalThumb: string | null = null;
+    let finalPrev: string | null = null;
+    let finalOrig: string | null = null;
+
     if (finalPath && finalPath.startsWith("data:image/")) {
       try {
-        const fs = await import("fs/promises");
-        const path = await import("path");
+        const { generate3PhasePhotos } = await import("@/lib/progressive-photo");
         const base64Data = finalPath.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
         const studentName = input.fullName || existing.fullName;
         const studentId = input.studentId || existing.studentId;
-        const safeName = generateSafePhotoFilename(studentName, studentId);
-        const publicDir = path.join(process.cwd(), "public", "uploads", "photos");
-        await fs.mkdir(publicDir, { recursive: true });
-        const filePath = path.join(publicDir, safeName);
-        await fs.writeFile(filePath, buffer);
-        finalPath = `/uploads/photos/${safeName}`;
+        const studentGrade = input.grade || existing.grade;
+
+        const progressive = await generate3PhasePhotos(buffer, {
+          studentId: studentId.trim(),
+          fullName: studentName.trim(),
+          grade: studentGrade.trim(),
+        });
+        finalPath = progressive.originalPath;
+        finalThumb = progressive.thumbnailPath;
+        finalPrev = progressive.previewPath;
+        finalOrig = progressive.originalPath;
       } catch (saveErr) {
-        console.warn("Notice: Base64 disk write warning:", saveErr);
+        console.warn("Notice: Progressive photo update warning:", saveErr);
       }
     }
     updatePayload.photoPath = finalPath;
+    if (finalThumb) updatePayload.thumbnailPath = finalThumb;
+    if (finalPrev) updatePayload.previewPath = finalPrev;
+    if (finalOrig) updatePayload.originalPhotoPath = finalOrig;
   }
   if (input.dateOfBirth !== undefined) updatePayload.dateOfBirth = input.dateOfBirth ? new Date(input.dateOfBirth) : null;
   if (input.status) updatePayload.status = input.status;
