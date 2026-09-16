@@ -352,20 +352,10 @@ export default function CanvaDesignerPage() {
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
-  // Load sample students on mount, including dual-persistence local enrolled students
+  // Load sample students on mount from server
   useEffect(() => {
     getStudentsAction({ pageSize: 15 }).then((res) => {
-      let list = res.students || [];
-      try {
-        const raw = localStorage.getItem("sb_enrolled_students");
-        if (raw) {
-          const localList = JSON.parse(raw);
-          const map = new Map();
-          localList.forEach((s: any) => map.set(s.studentId, s));
-          list.forEach((s: any) => map.set(s.studentId, s));
-          list = Array.from(map.values());
-        }
-      } catch {}
+      const list = res.students || [];
       if (list.length > 0) {
         setSampleStudents(list);
       }

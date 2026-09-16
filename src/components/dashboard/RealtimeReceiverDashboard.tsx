@@ -37,7 +37,7 @@ import {
 
 import JSZip from "jszip";
 import { subscribeToCloudSync } from "@/lib/sync-client";
-import { getAllStudentsFromDB, deleteStudentFromDB } from "@/lib/idb-storage";
+import { deleteStudentFromDB, reconcileLocalCacheWithServer } from "@/lib/idb-storage";
 import { TelegramStagePhoto } from "@/components/common/TelegramStagePhoto";
 import {
   getReceiverCsvPrefix,
@@ -148,44 +148,54 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   } | null>(null);
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 1. MERGE CLIENT-SIDE INDEXEDDB WITH SERVER DATA (NEWEST FIRST)
+  // 1. RECONCILE CLIENT STORAGE WITH SERVER DATA & OVERLAY OUTBOX
   // ──────────────────────────────────────────────────────────────────────────
   const syncWithIndexedDB = useCallback(async () => {
     try {
-      const idbStudents = await getAllStudentsFromDB();
-
-      // Read persistent deleted IDs so deleted records are never resurrected
-      let deletedSet = new Set<string>();
+      // Check for any uncommitted outbox items on this workstation
+      let activeOutboxItems: any[] = [];
+      const activeOutboxIds = new Set<string>();
       try {
-        const rawDel = localStorage.getItem("sb_deleted_student_ids");
-        if (rawDel) {
-          deletedSet = new Set(JSON.parse(rawDel));
-        }
+        const { getOutboxQueue } = await import("@/lib/outbox-engine");
+        const queue = getOutboxQueue();
+        queue.forEach((item) => {
+          if (item.status === "QUEUED" || item.status === "SYNCING") {
+            activeOutboxIds.add(item.studentId);
+            activeOutboxItems.push({
+              ...item.record,
+              studentId: item.studentId,
+              fullName: item.payload?.fullName || item.record?.fullName,
+              grade: item.payload?.grade || item.record?.grade || "General",
+              photoPath: (item.payload as any)?.photo || item.record?.photoPath,
+              isOutboxPending: true,
+              createdAt: item.timestamp || new Date().toISOString(),
+            });
+          }
+        });
       } catch {}
 
-      const validIdb = idbStudents.filter(
-        (s) => !deletedSet.has(s.studentId) && !deletedSet.has(s.id)
-      );
+      // Reconcile local storage with server records: purges deleted ghosts!
+      const serverRecents = initialData?.recentStudents || [];
+      await reconcileLocalCacheWithServer(serverRecents, activeOutboxIds);
 
       setData((prev) => {
         const map = new Map<string, any>();
-        // Add valid IDB students
-        validIdb.forEach((s) => map.set(s.studentId, s));
-        // Add recent server students (skipping deleted)
-        (prev.recentStudents || []).forEach((s) => {
-          if (!deletedSet.has(s.studentId) && !deletedSet.has(s.id)) {
-            map.set(s.studentId, s);
-          }
+        // Add authoritative server recent students
+        (prev.recentStudents || []).forEach((s) => map.set(s.studentId, s));
+        // Overlay active pending outbox items only
+        activeOutboxItems.forEach((s) => {
+          if (!map.has(s.studentId)) map.set(s.studentId, s);
         });
 
         const mergedList = Array.from(map.values());
-        // STRICT SORT: NEWEST RECORD AT THE VERY TOP
         mergedList.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
         setAllStudentsList(mergedList);
 
-        const total = mergedList.length;
-        const photos = mergedList.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+        const outboxPendingCount = activeOutboxItems.length;
+        const baseTotal = initialData?.totalStudents ?? prev.totalStudents;
+        const total = baseTotal + outboxPendingCount;
+        const photos = (initialData?.photosCount ?? prev.photosCount) + activeOutboxItems.filter((s: any) => !!s.photoPath).length;
         const ready = photos;
 
         return {
@@ -200,7 +210,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     } catch (e) {
       console.warn("IndexedDB sync check skipped:", e);
     }
-  }, []);
+  }, [initialData]);
 
   useEffect(() => {
     setLastUpdated(new Date().toLocaleTimeString());
@@ -371,52 +381,59 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       if (res.ok) {
         const json = await res.json();
 
-        let localCount = 0;
-        let localPhotos = 0;
-        let localReady = 0;
-
+        // Check for any uncommitted outbox items on this workstation
+        let activeOutboxItems: any[] = [];
+        const activeOutboxIds = new Set<string>();
         try {
-          const idbList = await getAllStudentsFromDB();
-          const validIdb = idbList;
-
-          localCount = validIdb.length;
-          localPhotos = validIdb.filter((s: any) => Boolean(s.photoPath)).length;
-          localReady = localPhotos;
-
-          const map = new Map<string, any>();
-          validIdb.forEach((s) => map.set(s.studentId, s));
-          (json.recentStudents || []).forEach((s: any) => {
-            if (!map.has(s.studentId)) map.set(s.studentId, s);
+          const { getOutboxQueue } = await import("@/lib/outbox-engine");
+          const queue = getOutboxQueue();
+          queue.forEach((item) => {
+            if (item.status === "QUEUED" || item.status === "SYNCING") {
+              activeOutboxIds.add(item.studentId);
+              activeOutboxItems.push({
+                ...item.record,
+                studentId: item.studentId,
+                fullName: item.payload?.fullName || item.record?.fullName,
+                grade: item.payload?.grade || item.record?.grade || "General",
+                photoPath: (item.payload as any)?.photo || item.record?.photoPath,
+                isOutboxPending: true,
+                createdAt: item.timestamp || new Date().toISOString(),
+              });
+            }
           });
+        } catch {}
 
-          const merged = Array.from(map.values());
-          // Sort newest first
-          merged.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-          setAllStudentsList(merged);
-        } catch {
-          if (json.recentStudents) {
-            const validRecent = [...json.recentStudents];
-            validRecent.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-            setAllStudentsList(validRecent);
-          }
+        // Reconcile and purge deleted ghosts from this browser
+        if (Array.isArray(json.recentStudents)) {
+          await reconcileLocalCacheWithServer(json.recentStudents, activeOutboxIds);
         }
 
+        const map = new Map<string, any>();
+        (json.recentStudents || []).forEach((s: any) => map.set(s.studentId, s));
+        activeOutboxItems.forEach((s) => {
+          if (!map.has(s.studentId)) map.set(s.studentId, s);
+        });
+
+        const merged = Array.from(map.values());
+        merged.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setAllStudentsList(merged);
+
         setData((prev) => {
-          const total = Math.max(json.metrics.totalStudents, localCount);
-          const photos = Math.max(json.metrics.photosCount, localPhotos);
-          const ready = Math.max(json.metrics.readyForPrintCount, localReady);
+          const outboxPendingCount = activeOutboxItems.length;
+          const total = (json.metrics?.totalStudents ?? prev.totalStudents) + outboxPendingCount;
+          const photos = (json.metrics?.photosCount ?? prev.photosCount) + activeOutboxItems.filter((s: any) => !!s.photoPath).length;
+          const ready = photos;
 
           const validRecent = [
-            ...(json.recentStudents && json.recentStudents.length > 0 ? json.recentStudents : prev.recentStudents),
+            ...(merged.length > 0 ? merged : (prev.recentStudents || [])),
           ];
-          validRecent.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
           return {
             totalStudents: total,
             photosCount: photos,
             readyForPrintCount: ready,
             pendingVerification: Math.max(0, total - ready),
-            activeJobsCount: json.metrics.activeJobsCount,
+            activeJobsCount: json.metrics?.activeJobsCount ?? prev.activeJobsCount,
             recentStudents: validRecent.slice(0, 15),
             recentBatches: json.recentBatches || [],
             missingPhotos: json.missingPhotos || [],

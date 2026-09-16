@@ -359,3 +359,82 @@ export function subscribeToDBChanges(callback: (event: any) => void): () => void
     broadcastChannel?.removeEventListener("message", handler);
   };
 }
+
+/**
+ * Reconciles local IndexedDB and localStorage with the authoritative server list.
+ * Any record in local storage that does NOT exist on the server AND is NOT currently
+ * pending in the active Outbox queue is identified as a DELETED GHOST and purged.
+ */
+export async function reconcileLocalCacheWithServer(
+  serverStudents: any[],
+  activeOutboxStudentIds: Set<string> = new Set()
+): Promise<void> {
+  if (typeof window === "undefined" || !Array.isArray(serverStudents)) return;
+
+  const serverIdSet = new Set<string>();
+  serverStudents.forEach((s) => {
+    if (s.studentId) serverIdSet.add(s.studentId);
+    if (s.id) serverIdSet.add(s.id);
+  });
+
+  // 1. Identify and purge ghost records from physical IndexedDB
+  try {
+    const db = await openDB();
+    const idbStudents = await new Promise<any[]>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+
+    const ghostIds: string[] = [];
+    for (const record of idbStudents) {
+      const sId = record.studentId || record.id;
+      // If not in server AND not pending in outbox, it was deleted!
+      if (!serverIdSet.has(sId) && !activeOutboxStudentIds.has(sId)) {
+        ghostIds.push(sId);
+        if (record.id && record.id !== sId) ghostIds.push(record.id);
+      }
+    }
+
+    if (ghostIds.length > 0) {
+      const delTx = db.transaction(STORE_NAME, "readwrite");
+      const delStore = delTx.objectStore(STORE_NAME);
+      ghostIds.forEach((id) => {
+        try { delStore.delete(id); } catch {}
+      });
+      await new Promise<void>((resolve) => {
+        delTx.oncomplete = () => resolve();
+        delTx.onerror = () => resolve();
+      });
+    }
+  } catch (err) {
+    console.warn("Notice: IDB reconciliation check:", err);
+  }
+
+  // 2. Purge from in-memory vault and permanent backup localStorage
+  hydrateVaultFromLocalBackup();
+  for (const [key, record] of _runtimeStudentVault.entries()) {
+    const sId = record.studentId || record.id;
+    if (!serverIdSet.has(sId) && !activeOutboxStudentIds.has(sId)) {
+      _runtimeStudentVault.delete(key);
+    }
+  }
+  syncVaultToLocalBackup();
+
+  // 3. Purge from legacy sb_enrolled_students localStorage
+  try {
+    const raw = localStorage.getItem("sb_enrolled_students");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.filter((s: any) => {
+          const sId = s.studentId || s.id;
+          return serverIdSet.has(sId) || activeOutboxStudentIds.has(sId);
+        });
+        localStorage.setItem("sb_enrolled_students", JSON.stringify(cleaned));
+      }
+    }
+  } catch {}
+}

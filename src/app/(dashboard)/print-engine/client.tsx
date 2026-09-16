@@ -79,17 +79,10 @@ export const PrintEngineClient: React.FC<PrintEngineClientProps> = ({ students, 
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Synchronize with local storage and cloud sync bus so they persist across lambda container cycles
+  // Synchronize with authoritative cloud sync bus
   useEffect(() => {
     const loadStudents = async () => {
-      let localList: StudentProjection[] = [];
-      try {
-        const raw = localStorage.getItem("sb_enrolled_students");
-        if (raw) localList = JSON.parse(raw);
-      } catch {}
-
       const map = new Map<string, StudentProjection>();
-      localList.forEach((s) => map.set(s.studentId, s));
       students.forEach((s) => map.set(s.studentId, s));
 
       try {

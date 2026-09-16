@@ -30,6 +30,7 @@ import {
   Loader2,
   Zap,
   Link2,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -93,15 +94,17 @@ interface StudentDirectoryClientProps {
 }
 
 import {
-  saveStudentsToDB,
   saveStudentToDB,
-  getAllStudentsFromDB,
+  saveStudentsToDB,
   deleteStudentFromDB,
   clearAllStudentsFromDB,
+  reconcileLocalCacheWithServer,
 } from "@/lib/idb-storage";
 
-// Helper to safely parse obfuscated student records from local storage
-function parseSecureLocalList(raw: string | null): StudentExtended[] {
+// Harmless no-op placeholder: Supabase database is authoritative; local cache is reconciled via reconcileLocalCacheWithServer
+const safeSaveLocalEnrolledStudents = (_list: StudentExtended[]) => {};
+
+function parseSecureLocalList(raw: string | null): any[] {
   if (!raw) return [];
   try {
     if (raw.startsWith("[")) return JSON.parse(raw);
@@ -112,21 +115,6 @@ function parseSecureLocalList(raw: string | null): StudentExtended[] {
   }
 }
 
-// Safe database helper using protected vault
-const safeSaveLocalEnrolledStudents = (list: StudentExtended[]) => {
-  saveStudentsToDB(list as any).catch((err) => {
-    console.warn("Secure vault bulk save notice:", err);
-  });
-  try {
-    const lightList = list.slice(0, 100).map((s) => ({
-      ...s,
-      photoPath: s.photoPath && s.photoPath.length > 500 ? null : s.photoPath,
-    }));
-    const serialized = JSON.stringify(lightList);
-    const encoded = btoa(unescape(encodeURIComponent(serialized)));
-    localStorage.setItem("sb_enrolled_students", encoded);
-  } catch {}
-};
 
 export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   students,
@@ -158,71 +146,92 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     if (pageSize) setActivePageSize(pageSize);
   }, [pageSize]);
 
-  // 1. Initial Load: Merge server students, high-capacity IndexedDB, localStorage, and pull from /api/students/sync
+  // 1. Initial Load: Server is authoritative. Local cache only overlays in-flight outbox records.
   useEffect(() => {
-    const loadAndMerge = async () => {
-      // Load from IndexedDB (supports 6,000+ students with high-res photos)
-      let idbList: any[] = [];
+    const loadAndReconcile = async () => {
+      // Fetch currently active/pending outbox items on this station
+      let activeOutboxItems: any[] = [];
+      const activeOutboxIds = new Set<string>();
       try {
-        idbList = await getAllStudentsFromDB();
+        const { getOutboxQueue } = await import("@/lib/outbox-engine");
+        const queue = getOutboxQueue();
+        queue.forEach((item) => {
+          if (item.status === "QUEUED" || item.status === "SYNCING") {
+            activeOutboxIds.add(item.studentId);
+            activeOutboxItems.push({
+              ...item.record,
+              studentId: item.studentId,
+              fullName: item.payload?.fullName || item.record?.fullName,
+              grade: item.payload?.grade || item.record?.grade || "General",
+              photoPath: (item.payload as any)?.photo || item.record?.photoPath,
+              isOutboxPending: true,
+              createdAt: item.timestamp || new Date().toISOString(),
+            });
+          }
+        });
       } catch {}
 
-      let localList: StudentExtended[] = [];
+      // Reconcile local cache with authoritative server records:
+      // Purges old deleted ghost records from this PC's IndexedDB and localStorage!
       try {
-        const raw = localStorage.getItem("sb_enrolled_students");
-        localList = parseSecureLocalList(raw);
+        await reconcileLocalCacheWithServer(students, activeOutboxIds);
       } catch {}
 
+      // Build authoritative map: Server students + pending outbox items
       const map = new Map<string, StudentExtended>();
-      idbList.forEach((s) => {
-        map.set(s.studentId, s as any);
-      });
-      localList.forEach((s) => {
-        if (!map.has(s.studentId)) map.set(s.studentId, s);
-      });
       students.forEach((s) => {
         map.set(s.studentId, s);
       });
+      activeOutboxItems.forEach((s) => {
+        if (!map.has(s.studentId)) {
+          map.set(s.studentId, s as StudentExtended);
+        }
+      });
 
-      const immediateMerged = Array.from(map.values());
-      immediateMerged.sort((a, b) => {
+      const authoritativeList = Array.from(map.values());
+      authoritativeList.sort((a, b) => {
         const tA = new Date(a.createdAt || 0).getTime();
         const tB = new Date(b.createdAt || 0).getTime();
         return tB - tA;
       });
-      setDisplayStudents(immediateMerged);
-      safeSaveLocalEnrolledStudents(immediateMerged);
+
+      setDisplayStudents(authoritativeList);
 
       // Non-blocking background sync from cloud
       fetch("/api/students/sync")
         .then(async (res) => {
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data.students) && data.students.length > 0) {
-              setDisplayStudents((prev) => {
-                const freshMap = new Map<string, StudentExtended>();
-                data.students.forEach((s: any) => {
-                  freshMap.set(s.studentId, s);
-                });
-                prev.forEach((s) => {
-                  freshMap.set(s.studentId, s);
-                });
-                const next = Array.from(freshMap.values());
-                next.sort((a, b) => {
-                  const tA = new Date(a.createdAt || 0).getTime();
-                  const tB = new Date(b.createdAt || 0).getTime();
-                  return tB - tA;
-                });
-                safeSaveLocalEnrolledStudents(next);
-                return next;
+            if (Array.isArray(data.students)) {
+              // Reconcile again with fresh cloud state
+              await reconcileLocalCacheWithServer(data.students, activeOutboxIds);
+
+              const freshMap = new Map<string, StudentExtended>();
+              data.students.forEach((s: any) => {
+                freshMap.set(s.studentId, s);
               });
+              // Overlay only pending outbox items
+              activeOutboxItems.forEach((s) => {
+                if (!freshMap.has(s.studentId)) {
+                  freshMap.set(s.studentId, s as StudentExtended);
+                }
+              });
+
+              const next = Array.from(freshMap.values());
+              next.sort((a, b) => {
+                const tA = new Date(a.createdAt || 0).getTime();
+                const tB = new Date(b.createdAt || 0).getTime();
+                return tB - tA;
+              });
+
+              setDisplayStudents(next);
             }
           }
         })
         .catch(() => {});
     };
 
-    loadAndMerge();
+    loadAndReconcile();
   }, [students]);
 
   // Network photo load status: Photos are NEVER auto-deleted on low internet
@@ -296,29 +305,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       }
     );
 
-    const handleStorage = () => {
-      try {
-        const raw = localStorage.getItem("sb_enrolled_students");
-        if (raw) {
-          const localList: StudentExtended[] = parseSecureLocalList(raw);
-          const map = new Map<string, StudentExtended>();
-          localList.forEach((s) => {
-            map.set(s.studentId, s);
-          });
-          setDisplayStudents((prev) => {
-            prev.forEach((s) => {
-              map.set(s.studentId, s);
-            });
-            return Array.from(map.values());
-          });
-        }
-      } catch {}
-    };
-    window.addEventListener("storage", handleStorage);
-
     return () => {
       unsubscribe();
-      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 
@@ -802,6 +790,43 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }
   };
 
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+
+  // Force Re-Sync with Cloud & Wipe Local Browser Stale Cache
+  const handleForceCloudSync = async () => {
+    setIsSyncingCloud(true);
+    try {
+      const res = await fetch("/api/students/sync", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.students)) {
+          // 1. Wipe local browser ghost records completely
+          await clearAllStudentsFromDB();
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.removeItem("sb_enrolled_students");
+              localStorage.removeItem("sb_students_permanent_backup");
+              localStorage.removeItem("sb_deleted_student_ids");
+              localStorage.removeItem("sb_offline_pending_students");
+            } catch {}
+          }
+
+          // 2. Re-populate with live server records
+          await saveStudentsToDB(data.students);
+          safeSaveLocalEnrolledStudents(data.students);
+          setDisplayStudents(data.students);
+          alert(`✓ Synchronized with Supabase Cloud: ${data.students.length} active students loaded. Any deleted ghost records on this PC were removed.`);
+        }
+      }
+    } catch (err: any) {
+      console.error("Force sync failed:", err);
+      alert("Failed to synchronize with cloud database: " + (err?.message || "Unknown error"));
+    } finally {
+      setIsSyncingCloud(false);
+      router.refresh();
+    }
+  };
+
   // Export Feeded Data to Excel / CSV with dynamic columns & local desktop path:
   // [StudentID, Name, Sex, Grade, Phone, (BloodType?), @photo]
   const handleExportExcel = (selectedOnly: boolean = false, overrideGrade?: string) => {
@@ -1257,6 +1282,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           >
             <Trash2 className="h-4 w-4" />
             <span>Clear All Data</span>
+          </button>
+          <button
+            type="button"
+            disabled={isSyncingCloud}
+            onClick={handleForceCloudSync}
+            className="h-11 px-4 rounded-xl border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#8fe617] hover:bg-[#8fe617]/20 text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            title="Clean local browser cache and synchronize with live Supabase database"
+          >
+            <RefreshCw className={`h-4 w-4 text-[#8fe617] ${isSyncingCloud ? "animate-spin" : ""}`} />
+            <span>{isSyncingCloud ? "Syncing..." : "Re-Sync Cloud"}</span>
           </button>
         </form>
 

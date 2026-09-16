@@ -24,7 +24,7 @@ import {
   ChevronDown,
   AlertTriangle,
 } from "lucide-react";
-import { getStudentCountFromDB } from "@/lib/idb-storage";
+import { reconcileLocalCacheWithServer } from "@/lib/idb-storage";
 
 interface SenderDashboardData {
   totalEnrolled: number;
@@ -88,47 +88,51 @@ export function RealtimeSenderDashboard() {
         serverData = await res.json();
       }
 
-      // 2. Read local high-capacity IndexedDB count
-      let idbCount = 0;
+      // 2. Check for currently active/pending outbox items on this workstation
+      let outboxPendingCount = 0;
+      let activeOutboxItems: any[] = [];
+      const activeOutboxIds = new Set<string>();
       try {
-        idbCount = await getStudentCountFromDB();
-      } catch {}
-
-      // 3. Read localStorage backup cache
-      let localCount = 0;
-      let localRecent: any[] = [];
-      try {
-        const raw = localStorage.getItem("sb_enrolled_students");
-        if (raw) {
-          const list = JSON.parse(raw);
-          if (Array.isArray(list)) {
-            localCount = list.length;
-            localRecent = list.slice(0, 10).map((s: any) => ({
-              id: s.id || s.studentId,
-              studentId: s.studentId,
-              fullName: s.fullName,
-              grade: s.grade,
-              photoPath: s.photoPath,
-              createdAt: s.createdAt,
-            }));
+        const { getOutboxQueue } = await import("@/lib/outbox-engine");
+        const queue = getOutboxQueue();
+        queue.forEach((item) => {
+          if (item.status === "QUEUED" || item.status === "SYNCING") {
+            outboxPendingCount++;
+            activeOutboxIds.add(item.studentId);
+            activeOutboxItems.push({
+              id: item.record?.id || item.studentId,
+              studentId: item.studentId,
+              fullName: item.payload?.fullName || item.record?.fullName,
+              grade: item.payload?.grade || item.record?.grade,
+              photoPath: (item.payload as any)?.photo || item.record?.photoPath,
+              createdAt: item.timestamp || new Date().toISOString(),
+            });
           }
-        }
+        });
       } catch {}
 
-      const effectiveTotal = Math.max(serverData?.totalEnrolled || 0, idbCount, localCount);
-      const effectiveRecent =
-        serverData?.recentStudents && serverData.recentStudents.length > 0
-          ? serverData.recentStudents
-          : localRecent;
+      // 3. Reconcile local storage with server records: purges deleted ghosts!
+      if (serverData?.recentStudents && Array.isArray(serverData.recentStudents)) {
+        await reconcileLocalCacheWithServer(serverData.recentStudents, activeOutboxIds);
+      }
+
+      const effectiveTotal = (serverData?.totalEnrolled || 0) + outboxPendingCount;
+      const map = new Map<string, any>();
+      (serverData?.recentStudents || []).forEach((s: any) => map.set(s.studentId, s));
+      activeOutboxItems.forEach((s) => {
+        if (!map.has(s.studentId)) map.set(s.studentId, s);
+      });
+      const effectiveRecent = Array.from(map.values());
+      effectiveRecent.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
       setData({
         totalEnrolled: effectiveTotal,
-        enrolledToday: serverData?.enrolledToday || localRecent.length,
-        photosCaptured: serverData?.photosCaptured || effectiveRecent.filter((s: any) => !!s.photoPath).length,
+        enrolledToday: serverData?.enrolledToday || 0,
+        photosCaptured: (serverData?.photosCaptured || 0) + activeOutboxItems.filter((s: any) => !!s.photoPath).length,
         totalBatches: serverData?.totalBatches || 0,
         sentBatchesCount: serverData?.sentBatchesCount || 0,
         draftBatchesCount: serverData?.draftBatchesCount || 0,
-        recentStudents: effectiveRecent,
+        recentStudents: effectiveRecent.slice(0, 10),
       });
 
       setLastUpdated(new Date().toLocaleTimeString());
