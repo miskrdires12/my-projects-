@@ -10,9 +10,9 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Canonical Supabase Cloud PostgreSQL Connection (Session/Transaction Pooler)
+// Canonical Supabase Cloud PostgreSQL Connection (PgBouncer Transaction Pooler)
 const SUPABASE_POSTGRES_URL =
-  "postgresql://postgres.hiwhmpuhhakguckckuqv:1998nehase10@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require";
+  "postgresql://postgres.hiwhmpuhhakguckckuqv:1998nehase10@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true&connection_limit=1";
 
 function resolveDatabaseUrl(): string {
   let dbUrl = process.env.DATABASE_URL?.trim();
@@ -20,6 +20,17 @@ function resolveDatabaseUrl(): string {
   // If missing or invalid protocol (e.g. SQLite file: or REST API https:), fallback to Supabase
   if (!dbUrl || (!dbUrl.startsWith("postgresql://") && !dbUrl.startsWith("postgres://"))) {
     dbUrl = SUPABASE_POSTGRES_URL;
+  }
+
+  // Rewrite Supabase pooler from Session Mode (5432, cap of 15) to Transaction Mode (6543)
+  if (dbUrl.includes("pooler.supabase.com")) {
+    dbUrl = dbUrl.replace(":5432", ":6543");
+    if (!dbUrl.includes("pgbouncer=")) {
+      dbUrl += (dbUrl.includes("?") ? "&" : "?") + "pgbouncer=true";
+    }
+    if (!dbUrl.includes("connection_limit=")) {
+      dbUrl += (dbUrl.includes("?") ? "&" : "?") + "connection_limit=1";
+    }
   }
 
   // Ensure SSL requirement for cloud database connections
@@ -34,6 +45,7 @@ function resolveDatabaseUrl(): string {
   process.env.DATABASE_URL = dbUrl;
   return dbUrl;
 }
+
 
 function getPrismaClient(): PrismaClient {
   const dbUrl = resolveDatabaseUrl();

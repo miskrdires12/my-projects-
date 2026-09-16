@@ -101,28 +101,32 @@ export default async function DashboardPage({
   const pendingVerification = Math.max(0, totalStudents - readyForPrintCount);
 
   // Compute Grade Cohort Distribution Analysis with 8-Up A4 Sheets Calculation
-  const gradeBreakdown = gradeGroups.map((g) => {
-    const count = g._count.id;
+  const gradeBreakdown = (gradeGroups || []).map((g) => {
+    const count = typeof g?._count === "object" && g?._count !== null ? (g._count.id ?? 0) : (Number(g?._count) || 0);
     return {
-      grade: g.grade || "Unassigned",
+      grade: g?.grade || "Unassigned",
       count,
       percent: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
       a4Sheets: Math.ceil(count / 8),
     };
   });
   // Sort grades naturally (KG, 1, 2, ..., 12)
-  gradeBreakdown.sort((a, b) => a.grade.localeCompare(b.grade, undefined, { numeric: true, sensitivity: "base" }));
+  gradeBreakdown.sort((a, b) =>
+    (a.grade || "").localeCompare(b.grade || "", undefined, { numeric: true, sensitivity: "base" })
+  );
 
   // Demographics Analysis (Male vs Female)
   let maleCount = 0;
   let femaleCount = 0;
-  sexGroups.forEach((s) => {
-    const sLower = (s.sex || "").toLowerCase();
-    if (sLower === "female") femaleCount += s._count.id;
-    else maleCount += s._count.id;
+  (sexGroups || []).forEach((s) => {
+    const sLower = (s?.sex || "").toLowerCase();
+    const count = typeof s?._count === "object" && s?._count !== null ? (s._count.id ?? 0) : (Number(s?._count) || 0);
+    if (sLower === "female") femaleCount += count;
+    else maleCount += count;
   });
   const malePercent = totalStudents > 0 ? Math.round((maleCount / totalStudents) * 100) : 0;
   const femalePercent = totalStudents > 0 ? Math.round((femaleCount / totalStudents) * 100) : 0;
+
 
   // Print Batch Planning
   const totalA4SheetsNeeded = Math.ceil(readyForPrintCount / 8);

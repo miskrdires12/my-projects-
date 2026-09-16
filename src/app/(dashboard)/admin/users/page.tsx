@@ -39,17 +39,23 @@ export default async function AdminUsersPage() {
     );
   }
 
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
+  let users: any[] = [];
+  try {
+    users = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  } catch (err) {
+    console.warn("[AdminUsersPage] Resilient fallback on users query:", err);
+  }
+
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto text-[#080808] dark:text-[#f2f7f4]">

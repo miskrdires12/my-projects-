@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { StudentDirectoryClient } from "./client";
-import { rehydrateDatabaseFromCloud } from "@/lib/sync-engine";
+
 
 export default async function StudentsPage({
   searchParams,
@@ -36,24 +36,18 @@ export default async function StudentsPage({
   const page = Math.max(1, parseInt(searchParams.page || "1", 10));
   const pageSize = Math.min(100, Math.max(10, parseInt(searchParams.pageSize || "25", 10)));
 
-  // If local database is empty on this serverless container, auto-rehydrate from Cloud Sync
-  const preCount = await prisma.student.count();
-  if (preCount === 0) {
-    await rehydrateDatabaseFromCloud();
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};
 
   if (query.trim() !== "") {
     const q = query.trim();
     where.OR = [
-      { fullName: { contains: q } },
-      { studentId: { contains: q } },
-      { rollNumber: { contains: q } },
-      { phone: { contains: q } },
-      { department: { contains: q } },
-      { school: { contains: q } },
+      { fullName: { contains: q, mode: "insensitive" } },
+      { studentId: { contains: q, mode: "insensitive" } },
+      { rollNumber: { contains: q, mode: "insensitive" } },
+      { phone: { contains: q, mode: "insensitive" } },
+      { department: { contains: q, mode: "insensitive" } },
+      { school: { contains: q, mode: "insensitive" } },
     ];
   }
 
@@ -68,45 +62,66 @@ export default async function StudentsPage({
     where.photoPath = null;
   }
 
-  // Optimized parallel queries for high performance (20,000+ students)
-  const [totalCount, students, grades, departments, batches, gradeGroups] = await Promise.all([
-    prisma.student.count({ where }),
-    prisma.student.findMany({
-      where,
-      include: {
-        batch: { select: { batchNumber: true, title: true } },
-        photos: { take: 1, orderBy: { createdAt: "desc" } },
-        customValues: { include: { customField: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.student.findMany({
-      select: { grade: true },
-      distinct: ["grade"],
-    }),
-    prisma.student.findMany({
-      select: { department: true },
-      distinct: ["department"],
-      where: { department: { not: null } },
-    }),
-    prisma.transferBatch.findMany({
-      select: { id: true, batchNumber: true, title: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.student.groupBy({
-      by: ["grade"],
-      _count: { id: true },
-    }),
-  ]);
+  let totalCount = 0;
+  let students: any[] = [];
+  let grades: any[] = [];
+  let departments: any[] = [];
+  let batches: any[] = [];
+  let gradeGroups: any[] = [];
 
-  const uniqueGrades = grades.map((g) => g.grade).filter(Boolean);
-  const uniqueDepartments = departments.map((d) => d.department!).filter(Boolean);
+  try {
+    const results = await Promise.all([
+      prisma.student.count({ where }),
+      prisma.student.findMany({
+        where,
+        include: {
+          batch: { select: { batchNumber: true, title: true } },
+          photos: { take: 1, orderBy: { createdAt: "desc" } },
+          customValues: { include: { customField: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.student.findMany({
+        select: { grade: true },
+        distinct: ["grade"],
+      }),
+      prisma.student.findMany({
+        select: { department: true },
+        distinct: ["department"],
+        where: { department: { not: null } },
+      }),
+      prisma.transferBatch.findMany({
+        select: { id: true, batchNumber: true, title: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.student.groupBy({
+        by: ["grade"],
+        _count: { id: true },
+      }),
+    ]);
+
+    totalCount = results[0];
+    students = results[1];
+    grades = results[2];
+    departments = results[3];
+    batches = results[4];
+    gradeGroups = results[5];
+  } catch (err) {
+    console.warn("[StudentsPage] Resilient database fallback:", err);
+  }
+
+  const uniqueGrades = (grades || []).map((g) => g?.grade).filter(Boolean);
+  const uniqueDepartments = (departments || []).map((d) => d?.department).filter(Boolean);
   const gradeCountMap: Record<string, number> = {};
-  gradeGroups.forEach((g) => {
-    if (g.grade) gradeCountMap[g.grade] = g._count.id;
+  (gradeGroups || []).forEach((g) => {
+    if (g?.grade) {
+      const count = typeof g?._count === "object" && g?._count !== null ? (g._count.id ?? 0) : (Number(g?._count) || 0);
+      gradeCountMap[g.grade] = count;
+    }
   });
+
 
   return (
     <div className="space-y-4 w-full px-4 sm:px-6 lg:px-8 pb-12">

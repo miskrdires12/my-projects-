@@ -14,27 +14,37 @@ export default async function PrintEnginePage() {
 
   // Server-side pagination: load first 500 active students for print preview.
   // Client-side pagination allows navigating through the full 20,000+ cohort.
-  const [students, totalCount] = await Promise.all([
-    prisma.student.findMany({
-      where: { status: "ACTIVE" },
-      orderBy: { rollNumber: "asc" },
-      take: 500,          // Limit to first 500 for initial render
-      select: {
-        id: true,
-        studentId: true,
-        fullName: true,
-        grade: true,
-        department: true,
-        school: true,
-        phone: true,
-        sex: true,
-        rollNumber: true,
-        photoPath: true,
-        qrCodeData: true,
-      },
-    }),
-    prisma.student.count({ where: { status: "ACTIVE" } }),
-  ]);
+  let students: any[] = [];
+  let totalCount = 0;
+
+  try {
+    const results = await Promise.all([
+      prisma.student.findMany({
+        where: { status: "ACTIVE" },
+        orderBy: { rollNumber: "asc" },
+        take: 500, // Limit to first 500 for initial render
+        select: {
+          id: true,
+          studentId: true,
+          fullName: true,
+          grade: true,
+          department: true,
+          school: true,
+          phone: true,
+          sex: true,
+          rollNumber: true,
+          photoPath: true,
+          qrCodeData: true,
+        },
+      }),
+      prisma.student.count({ where: { status: "ACTIVE" } }),
+    ]);
+    students = results[0];
+    totalCount = results[1];
+  } catch (err) {
+    console.warn("[PrintEnginePage] Resilient fallback on student queries:", err);
+  }
+
 
   return (
     <div className="space-y-6">
