@@ -411,7 +411,9 @@ export default function RegisterPage() {
    */
   const handleDirectPhotoUpload = async (file: File, previewUrl: string) => {
     setEditedPhotoPreview(previewUrl);
-    setOfficialPhotoPath(previewUrl);
+    if (!previewUrl.startsWith("blob:")) {
+      setOfficialPhotoPath(previewUrl);
+    }
     setIsUploadingPhoto(false);
 
     let cleanName = (formData.fullName || formData.studentId || "student")
@@ -561,7 +563,7 @@ export default function RegisterPage() {
           emergencyContactPhone: formData.emergencyContactPhone,
           nationality: formData.nationality,
           bloodType: formData.bloodType && formData.bloodType.trim() && formData.bloodType.trim() !== "Unknown" ? formData.bloodType.trim() : null,
-          photoPath: officialPhotoPath,
+          photoPath: officialPhotoPath && !officialPhotoPath.startsWith("blob:") ? officialPhotoPath : null,
           status: formData.status as any,
           customFields: customFieldValues,
         };
@@ -584,7 +586,7 @@ export default function RegisterPage() {
           emergencyContactName: payload.emergencyContactName || null,
           bloodType: payload.bloodType && payload.bloodType.trim() !== "Unknown" ? payload.bloodType.trim() : null,
           nationality: payload.nationality || null,
-          photoPath: officialPhotoPath,
+          photoPath: officialPhotoPath && !officialPhotoPath.startsWith("blob:") ? officialPhotoPath : null,
           qrCodeData: null,
           status: payload.status || "ACTIVE",
           createdAt: new Date().toISOString(),

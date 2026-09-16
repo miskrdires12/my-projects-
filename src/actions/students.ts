@@ -115,7 +115,8 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
     const dateOfBirth = data.dateOfBirth || null;
 
     // Convert Base64 data URI or uploaded file path to 3-phase progressive photos & local desktop backup + Supabase Cloud
-    let finalPhotoPath: string | null = data.photoPath || null;
+    let finalPhotoPath: string | null =
+      data.photoPath && !data.photoPath.startsWith("blob:") ? data.photoPath : null;
     let finalThumbnailPath: string | null = null;
     let finalPreviewPath: string | null = null;
     let finalOriginalPath: string | null = null;
