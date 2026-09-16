@@ -739,16 +739,17 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {/* Telegram-style Progressive Outbox Banner */}
+        {/* Enterprise Progressive Outbox Buffer Banner */}
         {outboxQueue.length > 0 && (
           <div className="rounded-2xl border border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 p-3.5 flex items-center justify-between gap-2.5 text-xs text-sky-800 dark:text-sky-300 shadow-xs">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400 shrink-0" />
               <div>
-                <span className="font-bold">Telegram-Style Outbox: </span>
-                <span>{outboxQueue.length} student(s) syncing in 3 progressive phases (150px thumbnail &rarr; 800px preview &rarr; original).</span>
+                <span className="font-bold">Zero-Data-Loss Outbox: </span>
+                <span>{outboxQueue.length} student(s) syncing in 3 progressive stages (150px thumbnail &rarr; 800px preview &rarr; master).</span>
               </div>
             </div>
+
             <button
               type="button"
               onClick={() => triggerOutboxWorker()}
@@ -1127,14 +1128,14 @@ export default function RegisterPage() {
       </div>
 
       {/* ====================================================================
-          TELEGRAM-STYLE SEQUENTIAL DELIVERY PROGRESS MODAL
+          SEQUENTIAL INGESTION & VERIFICATION PROGRESS MODAL
          ==================================================================== */}
       {isDelivering && deliveryProgress && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150">
           <div className="w-full max-w-sm rounded-3xl border-2 border-[#8fe617] bg-white dark:bg-[#161c18] p-6 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-200">
-            {/* Telegram Frosted Circle Rotating Loader */}
+            {/* Circular Rotating Loader */}
             <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#080808] border-2 border-[#8fe617]/50 shadow-[0_0_25px_rgba(143,230,23,0.3)]">
-              <div className="absolute inset-1 rounded-full border-2 border-transparent border-t-[#8fe617] border-r-[#8fe617] telegram-spinner-circle" />
+              <div className="absolute inset-1 rounded-full border-2 border-transparent border-t-[#8fe617] border-r-[#8fe617] stage-spinner-circle" />
               <span className="text-sm font-mono font-black text-[#8fe617]">
                 {deliveryProgress.stage}/3
               </span>
@@ -1142,7 +1143,7 @@ export default function RegisterPage() {
 
             <div className="space-y-1">
               <h3 className="text-lg font-mono font-black tracking-tight text-[#080808] dark:text-[#f2f7f4]">
-                Delivering Student Data...
+                Confirming Ingestion Pipeline...
               </h3>
               <p className="text-xs font-mono text-[#8fe617] font-bold">
                 Stage {deliveryProgress.stage}: {deliveryProgress.stageName}
@@ -1152,7 +1153,7 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            {/* Telegram 3-Stage Progress Steps */}
+            {/* 3-Stage Progress Confirmation Steps */}
             <div className="space-y-1.5 pt-2 border-t border-[#dce7e1] dark:border-[#223126] text-left font-mono text-xs">
               <div
                 className={`flex items-center gap-2 p-2 rounded-xl transition-all ${
@@ -1164,7 +1165,7 @@ export default function RegisterPage() {
                 }`}
               >
                 <span>{deliveryProgress.stage > 1 ? "✓✓" : "1."}</span>
-                <span>Local Desktop Backup Folder</span>
+                <span>Local IndexedDB & Desktop Backup</span>
               </div>
               <div
                 className={`flex items-center gap-2 p-2 rounded-xl transition-all ${
@@ -1191,7 +1192,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
-              Waiting for complete delivery before advancing like Telegram...
+              Enforcing multi-destination delivery confirmation before next entry...
             </div>
           </div>
         </div>

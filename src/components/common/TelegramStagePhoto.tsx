@@ -115,7 +115,7 @@ export function TelegramStagePhoto({
       className={`relative ${resolvedSize} rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#080808] shrink-0 overflow-hidden flex items-center justify-center select-none ${
         onClick ? "cursor-pointer group hover:border-[#8fe617] hover:scale-105 transition-all" : ""
       } ${className}`}
-      title={title || `${actualName} (Stage ${currentStage} - Telegram Rule)`}
+      title={title || `${actualName} (Verification Stage ${currentStage}/3 • Confirmed)`}
     >
       {/* Main Image with Stage-specific CSS Blur */}
       <img
@@ -123,23 +123,24 @@ export function TelegramStagePhoto({
         alt={actualName}
         className={`h-full w-full object-cover transition-all duration-500 ${
           currentStage === 1
-            ? "telegram-photo-stage-1"
+            ? "stage-photo-blur-1"
             : currentStage === 2
-            ? "telegram-photo-stage-2"
-            : "telegram-photo-stage-3"
+            ? "stage-photo-blur-2"
+            : "stage-photo-clear-3"
         }`}
         loading="lazy"
       />
 
-      {/* Stage 1 Overlay: Telegram Frosted Circle + Rotating Loader */}
+      {/* Stage 1 Overlay: Circular Rotating Loader */}
       {currentStage === 1 && (
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-10 animate-in fade-in duration-200">
           <div className="relative h-6 w-6 rounded-full bg-black/60 border border-white/20 flex items-center justify-center shadow-lg">
-            <div className="absolute inset-0.5 rounded-full border-2 border-transparent border-t-[#8fe617] border-r-[#8fe617] telegram-spinner-circle" />
+            <div className="absolute inset-0.5 rounded-full border-2 border-transparent border-t-[#8fe617] border-r-[#8fe617] stage-spinner-circle" />
             <span className="text-[7px] font-mono font-black text-white">1</span>
           </div>
         </div>
       )}
+
 
       {/* Stage 2 Overlay: Soft Rotating Shimmer & Syncing Glow */}
       {currentStage === 2 && (

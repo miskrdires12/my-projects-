@@ -1120,6 +1120,28 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     return sorted;
   }, [filteredStudents, sortField, sortDirection]);
 
+  // Dynamic grade counts and tabs synchronized with real active records
+  const dynamicGradeCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    displayStudents.forEach((s) => {
+      const g = s.grade?.trim() || "Unassigned";
+      counts[g] = (counts[g] || 0) + 1;
+    });
+    return counts;
+  }, [displayStudents]);
+
+  const allAvailableGrades = React.useMemo(() => {
+    const set = new Set<string>(grades);
+    displayStudents.forEach((s) => {
+      if (s.grade && s.grade.trim()) set.add(s.grade.trim());
+    });
+    const arr = Array.from(set);
+    arr.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+    return arr;
+  }, [grades, displayStudents]);
+
+  const activeTotalStudentsCount = Math.max(totalCount, displayStudents.length);
+
   // Client-side pagination slice ensuring Per page (25, 50, 100) functions instantaneously
   const paginatedStudents = React.useMemo(() => {
     const start = (activePage - 1) * activePageSize;
@@ -1129,7 +1151,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   return (
     <div className="space-y-4 pb-28">
       {/* Grade Cohort Tabs (Clean, Sleek, Instant Filtering) */}
-      {grades.length > 0 && (
+      {allAvailableGrades.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
           <button
             type="button"
@@ -1143,10 +1165,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 : "bg-surface dark:bg-[#111613] border border-border dark:border-[#223126] text-foreground-muted dark:text-[#8a9e93] hover:text-foreground dark:hover:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#161e19]"
             }`}
           >
-            All Students ({totalCount.toLocaleString()})
+            All Students ({activeTotalStudentsCount.toLocaleString()})
           </button>
-          {grades.map((g) => {
-            const count = gradeCounts?.[g];
+          {allAvailableGrades.map((g) => {
+            const count = dynamicGradeCounts[g] ?? gradeCounts?.[g];
             const isSelected = selectedGrade === g;
             return (
               <button
@@ -1168,6 +1190,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           })}
         </div>
       )}
+
 
       {/* Search & Multi-Filter Controls Bar (Comfortable Size & Enterprise Layout) */}
       <div className="rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] p-4 sm:p-5 space-y-4 shadow-xs">
