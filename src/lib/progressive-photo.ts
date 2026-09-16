@@ -153,38 +153,33 @@ export async function generate3PhasePhotos(
   let originalPath = `data:image/jpeg;base64,${originalBuffer.toString("base64")}`;
   let backupLocalPath: string | null = null;
 
-  // 5. Attempt Cloud Upload directly to Supabase Storage bucket 'student data'
+  // 5. Attempt High-Speed Cloud Upload directly to Supabase Storage bucket 'student data'
   const safeGrade = sanitizeFsName(meta.grade || "General", "General");
   try {
-    const origUpload = await uploadToSupabaseBucket(
-      originalBuffer,
-      safeGrade,
-      baseSafeName,
-      "image/jpeg"
-    );
-    if (origUpload.success && origUpload.publicUrl) {
-      originalPath = origUpload.publicUrl;
-    }
+    const [origRes, prevRes] = await Promise.allSettled([
+      uploadToSupabaseBucket(originalBuffer, safeGrade, baseSafeName, "image/jpeg"),
+      uploadToSupabaseBucket(previewBuffer, `${safeGrade}/previews`, baseSafeName, "image/jpeg"),
+    ]);
 
-    const prevUpload = await uploadToSupabaseBucket(
-      previewBuffer,
-      `${safeGrade}/previews`,
-      baseSafeName,
-      "image/jpeg"
-    );
-    if (prevUpload.success && prevUpload.publicUrl) {
-      previewPath = prevUpload.publicUrl;
+    if (origRes.status === "fulfilled" && origRes.value.success && origRes.value.publicUrl) {
+      originalPath = origRes.value.publicUrl;
+    }
+    if (prevRes.status === "fulfilled" && prevRes.value.success && prevRes.value.publicUrl) {
+      previewPath = prevRes.value.publicUrl;
     }
   } catch (storageErr) {
-    console.warn("Supabase Storage upload skipped/fallback:", storageErr);
+    console.warn("Supabase Storage high-speed upload fallback:", storageErr);
   }
 
-  // 6. Save Phase 3 to Local Desktop Backup Directory
-  try {
-    backupLocalPath = await writeLocalDesktopBackup(originalBuffer, meta);
-  } catch (backupErr) {
-    console.warn("Local desktop backup warning:", backupErr);
+  // 6. Save Phase 3 to Local Desktop Backup Directory (When running on workstation PC)
+  if (!isServerless) {
+    try {
+      backupLocalPath = await writeLocalDesktopBackup(originalBuffer, meta);
+    } catch (backupErr) {
+      console.warn("Local desktop backup notice:", backupErr);
+    }
   }
+
 
   // 7. Also write to local public server disk for local fallback if available
   if (!isServerless) {

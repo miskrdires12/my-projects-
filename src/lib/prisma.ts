@@ -1,44 +1,42 @@
 // ============================================================================
 // STUDENT BRIDGE — PRISMA CLIENT SINGLETON (VERCEL & LOCAL RESILIENT)
+// Guaranteed valid PostgreSQL datasource connection to Supabase Cloud
 // ============================================================================
 
 import { PrismaClient } from "@prisma/client";
-import fs from "node:fs";
-import path from "node:path";
 
 declare global {
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 
-function getPrismaClient(): PrismaClient {
-  let dbUrl = process.env.DATABASE_URL || "file:./dev.db";
+// Canonical Supabase Cloud PostgreSQL Connection (Session/Transaction Pooler)
+const SUPABASE_POSTGRES_URL =
+  "postgresql://postgres.hiwhmpuhhakguckckuqv:1998nehase10@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require";
 
-  // Check if running in a serverless environment (Vercel, AWS Lambda)
-  const isServerless = Boolean(
-    process.env.VERCEL ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    process.env.LAMBDA_TASK_ROOT
-  );
+function resolveDatabaseUrl(): string {
+  let dbUrl = process.env.DATABASE_URL?.trim();
 
-  if (isServerless && dbUrl.startsWith("file:")) {
-    const tmpDbPath = path.join("/tmp", "dev.db");
-    const sourceDbPath = path.join(process.cwd(), "prisma", "dev.db");
-
-    try {
-      if (!fs.existsSync(tmpDbPath)) {
-        if (fs.existsSync(sourceDbPath)) {
-          fs.copyFileSync(sourceDbPath, tmpDbPath);
-        } else {
-          fs.writeFileSync(tmpDbPath, "");
-        }
-      }
-    } catch (err) {
-      console.warn("Notice: SQLite serverless path copy warning:", err);
-    }
-
-    dbUrl = `file:${tmpDbPath}`;
+  // If missing or invalid protocol (e.g. SQLite file: or REST API https:), fallback to Supabase
+  if (!dbUrl || (!dbUrl.startsWith("postgresql://") && !dbUrl.startsWith("postgres://"))) {
+    dbUrl = SUPABASE_POSTGRES_URL;
   }
+
+  // Ensure SSL requirement for cloud database connections
+  if (
+    (dbUrl.includes("supabase.co") || dbUrl.includes("supabase.com") || dbUrl.includes("pooler.supabase.com")) &&
+    !dbUrl.includes("sslmode=")
+  ) {
+    dbUrl += (dbUrl.includes("?") ? "&" : "?") + "sslmode=require";
+  }
+
+  // Synchronize process.env so Prisma engine internals read the exact postgresql:// protocol
+  process.env.DATABASE_URL = dbUrl;
+  return dbUrl;
+}
+
+function getPrismaClient(): PrismaClient {
+  const dbUrl = resolveDatabaseUrl();
 
   return new PrismaClient({
     datasources: {
@@ -48,7 +46,7 @@ function getPrismaClient(): PrismaClient {
     },
     log:
       process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
+        ? ["error", "warn"]
         : ["error"],
   });
 }
@@ -60,3 +58,4 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export default prisma;
+

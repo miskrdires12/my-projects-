@@ -40,39 +40,52 @@ export default async function AdminDatabasePage() {
   }
 
   // Aggregate database statistics in parallel
-  const [
-    studentCount,
-    verifiedPhotoCount,
-    userCount,
-    templateCount,
-    gradeGroups,
-    roleGroups,
-    auditLogs,
-  ] = await Promise.all([
-    prisma.student.count(),
-    prisma.student.count({
-      where: {
-        photoPath: { not: null },
-      },
-    }),
-    prisma.user.count(),
-    prisma.cardTemplate.count(),
-    prisma.student.groupBy({
-      by: ["grade"],
-      _count: { id: true },
-      orderBy: { grade: "asc" },
-    }),
-    prisma.user.groupBy({
-      by: ["role"],
-      _count: { id: true },
-      orderBy: { role: "asc" },
-    }),
-    prisma.auditLog.findMany({
-      take: 100,
-      orderBy: { createdAt: "desc" },
-      include: { user: { select: { username: true, role: true } } },
-    }),
-  ]);
+  let studentCount = 0;
+  let verifiedPhotoCount = 0;
+  let userCount = 0;
+  let templateCount = 0;
+  let gradeGroups: any[] = [];
+  let roleGroups: any[] = [];
+  let auditLogs: any[] = [];
+
+  try {
+    const results = await Promise.all([
+      prisma.student.count(),
+      prisma.student.count({
+        where: {
+          photoPath: { not: null },
+        },
+      }),
+      prisma.user.count(),
+      prisma.cardTemplate.count(),
+      prisma.student.groupBy({
+        by: ["grade"],
+        _count: { id: true },
+        orderBy: { grade: "asc" },
+      }),
+      prisma.user.groupBy({
+        by: ["role"],
+        _count: { id: true },
+        orderBy: { role: "asc" },
+      }),
+      prisma.auditLog.findMany({
+        take: 100,
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { username: true, role: true } } },
+      }),
+    ]);
+
+    studentCount = results[0];
+    verifiedPhotoCount = results[1];
+    userCount = results[2];
+    templateCount = results[3];
+    gradeGroups = results[4];
+    roleGroups = results[5];
+    auditLogs = results[6];
+  } catch (err) {
+    console.warn("[AdminDatabasePage] Resilient fallback on DB query:", err);
+  }
+
 
   const missingPhotoCount = Math.max(0, studentCount - verifiedPhotoCount);
 

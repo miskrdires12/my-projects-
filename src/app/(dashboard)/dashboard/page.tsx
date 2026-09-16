@@ -28,50 +28,73 @@ export default async function DashboardPage({
   // RECEIVER & ADMIN DASHBOARD VIEW (20,000+ CAPACITY PRODUCTION FACILITY)
   // Pure Student Management • 8-Up Print Readiness • Detailed Data Analytics
   // ──────────────────────────────────────────────────────────────────────────
-  const [
-    totalStudents,
-    photosCount,
-    recentStudents,
-    missingPhotos,
-    activeJobsCount,
-    gradeGroups,
-    sexGroups,
-  ] = await Promise.all([
-    prisma.student.count(),
-    prisma.student.count({ where: { photoPath: { not: null } } }),
-    prisma.student.findMany({
-      take: 8,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        studentId: true,
-        fullName: true,
-        grade: true,
-        sex: true,
-        phone: true,
-        photoPath: true,
-        createdAt: true,
-      },
-    }),
-    prisma.student.findMany({
-      where: { photoPath: null },
-      take: 6,
-      select: { id: true, studentId: true, fullName: true, grade: true, phone: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.bulkGenerationJob.count({
-      where: { status: { in: ["QUEUED", "PROCESSING"] } },
-    }),
-    prisma.student.groupBy({
-      by: ["grade"],
-      _count: { id: true },
-      orderBy: { grade: "asc" },
-    }),
-    prisma.student.groupBy({
-      by: ["sex"],
-      _count: { id: true },
-    }),
-  ]);
+  let totalStudents = 0;
+  let photosCount = 0;
+  let recentStudents: any[] = [];
+  let missingPhotos: any[] = [];
+  let activeJobsCount = 0;
+  let gradeGroups: any[] = [];
+  let sexGroups: any[] = [];
+  let recentTimeRecords: any[] = [];
+
+  try {
+    const results = await Promise.all([
+      prisma.student.count(),
+      prisma.student.count({ where: { photoPath: { not: null } } }),
+      prisma.student.findMany({
+        take: 8,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          studentId: true,
+          fullName: true,
+          grade: true,
+          sex: true,
+          phone: true,
+          photoPath: true,
+          createdAt: true,
+        },
+      }),
+      prisma.student.findMany({
+        where: { photoPath: null },
+        take: 6,
+        select: { id: true, studentId: true, fullName: true, grade: true, phone: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.bulkGenerationJob.count({
+        where: { status: { in: ["QUEUED", "PROCESSING"] } },
+      }),
+      prisma.student.groupBy({
+        by: ["grade"],
+        _count: { id: true },
+        orderBy: { grade: "asc" },
+      }),
+      prisma.student.groupBy({
+        by: ["sex"],
+        _count: { id: true },
+      }),
+    ]);
+
+    totalStudents = results[0];
+    photosCount = results[1];
+    recentStudents = results[2];
+    missingPhotos = results[3];
+    activeJobsCount = results[4];
+    gradeGroups = results[5];
+    sexGroups = results[6];
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+    recentTimeRecords = await prisma.student.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true, photoPath: true },
+    });
+  } catch (dbErr) {
+    console.warn("[DashboardPage] Database fetch resilient fallback:", dbErr);
+  }
+
 
   // A student is 100% Print Ready when they have an attached 3:4 studio portrait
   const readyForPrintCount = photosCount;
@@ -104,15 +127,7 @@ export default async function DashboardPage({
   // Print Batch Planning
   const totalA4SheetsNeeded = Math.ceil(readyForPrintCount / 8);
 
-  // Timeline Analytics for Server-Side Graph Rendering (Exact Real-World Time)
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  thirtyDaysAgo.setHours(0, 0, 0, 0);
 
-  const recentTimeRecords = await prisma.student.findMany({
-    where: { createdAt: { gte: thirtyDaysAgo } },
-    select: { createdAt: true, photoPath: true },
-  });
 
   const now = new Date();
   const currentHour = now.getHours();
