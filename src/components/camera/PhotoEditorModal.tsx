@@ -497,25 +497,25 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     const cW = cRect.width || containerSize.width;
     const cH = cRect.height || containerSize.height;
 
-    // Determine target output resolution
-    let exportWidth = 1200;
-    let exportHeight = 1600;
+    // Determine target output resolution (optimized 3:4 portrait ID card 300 DPI bounds)
+    let exportWidth = 900;
+    let exportHeight = 1200;
 
     if (aspectRatio === "1:1") {
-      exportWidth = 1200;
-      exportHeight = 1200;
+      exportWidth = 900;
+      exportHeight = 900;
     } else if (aspectRatio === "free") {
       const cropRatio = cropBox.width / cropBox.height;
       if (cropRatio >= 1) {
-        exportWidth = 1600;
-        exportHeight = Math.max(300, Math.round(1600 / cropRatio));
+        exportWidth = 1200;
+        exportHeight = Math.max(300, Math.round(1200 / cropRatio));
       } else {
-        exportHeight = 1600;
-        exportWidth = Math.max(300, Math.round(1600 * cropRatio));
+        exportHeight = 1200;
+        exportWidth = Math.max(300, Math.round(1200 * cropRatio));
       }
     } else {
-      exportWidth = 1200;
-      exportHeight = 1600;
+      exportWidth = 900;
+      exportHeight = 1200;
     }
 
     const exportCanvas = document.createElement("canvas");
@@ -591,7 +591,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         onClose();
       },
       "image/jpeg",
-      0.98
+      0.88
     );
   };
 

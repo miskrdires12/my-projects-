@@ -179,7 +179,10 @@ export async function login(credentials: {
   try {
     user = await prisma.user.findFirst({
       where: {
-        OR: [{ email: trimmed }, { username: trimmed }],
+        OR: [
+          { email: { equals: trimmed, mode: "insensitive" } },
+          { username: { equals: trimmed, mode: "insensitive" } },
+        ],
       },
     });
   } catch (dbErr) {

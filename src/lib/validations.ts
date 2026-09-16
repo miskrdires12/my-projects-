@@ -175,17 +175,19 @@ export type BulkerLayoutConfig = z.infer<typeof bulkerLayoutSchema>;
  * User Creation & Management Schema (Admin only)
  */
 export const createUserSchema = z.object({
+  email: z.string().trim().email("Please enter a valid email address").toLowerCase(),
+  password: z
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .max(128, "Password cannot exceed 128 characters"),
   username: z
     .string()
     .trim()
-    .min(3, "Username must be at least 3 characters")
-    .max(30, "Username cannot exceed 30 characters")
-    .regex(/^[A-Za-z0-9_]+$/, "Username can only contain alphanumeric characters and underscores"),
-  email: z.string().trim().email("Invalid email address"),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(128, "Password cannot exceed 128 characters"),
+    .min(2, "Username must be at least 2 characters")
+    .max(35, "Username cannot exceed 35 characters")
+    .regex(/^[A-Za-z0-9_]+$/, "Username can only contain alphanumeric characters and underscores")
+    .optional()
+    .or(z.literal("")),
   role: UserRoleEnum.default("RECEIVER"),
 });
 

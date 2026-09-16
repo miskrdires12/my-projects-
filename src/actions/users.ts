@@ -24,27 +24,55 @@ export async function createUserAction(input: CreateUserInput) {
     }
 
     const { username, email, password, role } = validated.data;
+    const cleanEmail = email.trim().toLowerCase();
 
-    // Check unique username & email
-    const existing = await prisma.user.findFirst({
+    // Check unique email case-insensitively
+    const existingEmail = await prisma.user.findFirst({
       where: {
-        OR: [{ username }, { email }],
+        email: { equals: cleanEmail, mode: "insensitive" },
       },
     });
 
-    if (existing) {
+    if (existingEmail) {
       return {
         success: false,
-        error: "A user with this username or email already exists.",
+        error: `An operator account with email "${cleanEmail}" already exists.`,
       };
+    }
+
+    // Auto-derive clean, unique username if omitted
+    let finalUsername = "";
+    if (username && username.trim()) {
+      finalUsername = username.trim();
+      const existingUser = await prisma.user.findFirst({
+        where: { username: { equals: finalUsername, mode: "insensitive" } },
+      });
+      if (existingUser) {
+        return {
+          success: false,
+          error: `Username "${finalUsername}" is already taken. Please choose another or leave blank to auto-generate.`,
+        };
+      }
+    } else {
+      const emailPrefix = cleanEmail.split("@")[0] || "operator";
+      let baseUsername = emailPrefix.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 20) || "operator";
+      finalUsername = baseUsername;
+      let counter = 1;
+      while (
+        await prisma.user.findFirst({
+          where: { username: { equals: finalUsername, mode: "insensitive" } },
+        })
+      ) {
+        finalUsername = `${baseUsername}_${counter++}`;
+      }
     }
 
     const passwordHash = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: {
-        username,
-        email,
+        username: finalUsername,
+        email: cleanEmail,
         passwordHash,
         role: role as UserRole,
       },

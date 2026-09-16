@@ -21,6 +21,10 @@ import {
   KeyRound,
   Mail,
   User,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { createUserAction, deleteUserAction } from "@/actions/users";
 import type { UserRole } from "@/types/auth";
@@ -52,7 +56,9 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("RECEIVER");
+  const [role, setRole] = useState<UserRole>("SENDER");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showCustomUsername, setShowCustomUsername] = useState(false);
 
   // Notifications
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -74,20 +80,25 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    const trimmedEmail = email.trim().toLowerCase();
     const trimmedUsername = username.trim();
-    const trimmedEmail = email.trim();
 
-    if (!trimmedUsername || !trimmedEmail || !password) {
-      setErrorMessage("Please fill in all required operator fields.");
+    if (!trimmedEmail || !password) {
+      setErrorMessage("Please enter an Email and Password for the operator.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters.");
       return;
     }
 
     startTransition(async () => {
       const res = await createUserAction({
-        username: trimmedUsername,
         email: trimmedEmail,
         password,
         role,
+        username: trimmedUsername || undefined,
       });
 
       if (!res.success) {
@@ -95,7 +106,7 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
       } else {
         const newUser: UserItem = res.user || {
           id: (res as any).userId || `temp_${Date.now()}`,
-          username: trimmedUsername,
+          username: trimmedUsername || trimmedEmail.split("@")[0],
           email: trimmedEmail,
           role,
           createdAt: new Date(),
@@ -104,12 +115,14 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
         // 0ms Optimistic Update: prepend immediately to state
         setUsers((prev) => [newUser, ...prev]);
 
-        setSuccessMessage(`Operator "${trimmedUsername}" provisioned successfully with ${role} privileges.`);
+        setSuccessMessage(`Operator account "${trimmedEmail}" provisioned successfully with ${role} privileges.`);
         setIsCreateOpen(false);
         setUsername("");
         setEmail("");
         setPassword("");
-        setRole("RECEIVER");
+        setRole("SENDER");
+        setShowPassword(false);
+        setShowCustomUsername(false);
 
         // Sync in background
         router.refresh();
@@ -382,63 +395,88 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
             <form onSubmit={handleCreate} className="space-y-4 text-xs font-mono">
               <div className="space-y-1.5">
                 <label className="text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5">
-                  <User className="h-3.5 w-3.5 text-[#8fe617]" />
-                  <span>Username *</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="operator_one"
-                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5">
                   <Mail className="h-3.5 w-3.5 text-[#8fe617]" />
-                  <span>Institutional Email *</span>
+                  <span>Operator Email *</span>
                 </label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="operator@studentbridge.internal"
-                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
+                  placeholder="e.g. sender@school.org"
+                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5">
-                  <KeyRound className="h-3.5 w-3.5 text-[#8fe617]" />
-                  <span>Initial Password *</span>
+                <label className="text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5 text-[#8fe617]" />
+                    <span>Password *</span>
+                  </span>
+                  <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">min 6 chars</span>
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 pr-10 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5">
                   <Shield className="h-3.5 w-3.5 text-[#8fe617]" />
-                  <span>Assign Role Privilege *</span>
+                  <span>Assign Station / Role *</span>
                 </label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value as UserRole)}
-                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
+                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none cursor-pointer"
                 >
-                  <option value="RECEIVER">RECEIVER (8-Up Print Engine, Importer, Student Search)</option>
-                  <option value="SENDER">SENDER (Student Intake, Studio Photo Capture, Bulk Import)</option>
-                  <option value="ADMIN">ADMIN (Unrestricted Systemic Access &amp; RBAC Control)</option>
+                  <option value="SENDER">SENDER (Student Intake, Fast 300 DPI Camera, Send Note)</option>
+                  <option value="RECEIVER">RECEIVER (8-Up Print Engine, Directory Review, Importer)</option>
+                  <option value="ADMIN">ADMIN (Full Systemic Access, User Provisioning &amp; Database)</option>
                 </select>
+              </div>
+
+              {/* Optional Custom Username Accordion */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomUsername(!showCustomUsername)}
+                  className="flex items-center gap-1 text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] transition-colors cursor-pointer"
+                >
+                  {showCustomUsername ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  <span>{showCustomUsername ? "Hide Custom Username" : "+ Custom Username (Optional)"}</span>
+                </button>
+
+                {showCustomUsername && (
+                  <div className="mt-2 space-y-1 animate-in fade-in duration-150">
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="e.g. sender_station_1 (leave blank to auto-generate)"
+                      className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                      If left empty, a username is automatically created from the email prefix.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#eef5f1] dark:border-[#1c261e]">

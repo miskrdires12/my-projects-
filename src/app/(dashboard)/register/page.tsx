@@ -59,6 +59,7 @@ interface CustomFieldMeta {
 
 export default function RegisterPage() {
   const [isPending, startTransition] = useTransition();
+  const fullNameInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Telegram-style Delivery Wait State
   const [deliveryProgress, setDeliveryProgress] = useState<DeliveryProgress | null>(null);
@@ -99,7 +100,6 @@ export default function RegisterPage() {
   // Photo Buffers & Previews
   const [editedPhotoPreview, setEditedPhotoPreview] = useState<string | null>(null);
   const [officialPhotoPath, setOfficialPhotoPath] = useState<string | null>(null);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Offline-First Queue & Network State
   const [isOnline, setIsOnline] = useState<boolean>(
@@ -321,10 +321,10 @@ export default function RegisterPage() {
     return () => unsubscribe();
   }, [offlinePendingQueue]);
 
-  // Auto-reset countdown timer when "Sent Successfully" dialog is shown
+  // Auto-reset countdown timer & instant keyboard advance when "Sent Successfully" dialog is shown
   useEffect(() => {
     if (!sentSuccessfullyData) return;
-    setAutoResetTimer(3);
+    setAutoResetTimer(1);
     const interval = setInterval(() => {
       setAutoResetTimer((prev) => {
         if (prev <= 1) {
@@ -334,8 +334,21 @@ export default function RegisterPage() {
         }
         return prev - 1;
       });
-    }, 1000);
-    return () => clearInterval(interval);
+    }, 1400);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+        e.preventDefault();
+        clearInterval(interval);
+        handleResetForm();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [sentSuccessfullyData]);
 
   // Duplicate Student ID verification
@@ -406,48 +419,9 @@ export default function RegisterPage() {
     setIsCameraOpen(true);
   };
 
-  /**
-   * Direct photo upload / capture attachment
-   */
-  const handleDirectPhotoUpload = async (file: File, previewUrl: string) => {
-    setEditedPhotoPreview(previewUrl);
-    if (!previewUrl.startsWith("blob:")) {
-      setOfficialPhotoPath(previewUrl);
-    }
-    setIsUploadingPhoto(false);
-
-    let cleanName = (formData.fullName || formData.studentId || "student")
-      .replace(/[/\\]/g, " - ")
-      .replace(/[:*?"<>|]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
-    const safePhotoName = `${cleanName}.jpg`;
-
-    // Non-blocking background upload to server
-    try {
-      const form = new FormData();
-      form.append("file", file, safePhotoName);
-      form.append("studentId", formData.studentId || "");
-
-      fetch("/api/uploads", {
-        method: "POST",
-        body: form,
-      })
-        .then(async (res) => {
-          if (res.ok) {
-            const result = await res.json();
-            if (result?.relativePath) {
-              setOfficialPhotoPath(result.relativePath);
-            }
-          }
-        })
-        .catch(() => {});
-    } catch {}
-  };
 
   /**
-   * Called when webcam captures an image.
+   * Called when webcam captures an image (Auto-attached in ~150KB ID-card bounds).
    */
   const handleWebcamCaptured = (file: File, previewUrl: string) => {
     setIsCameraOpen(false);
@@ -456,7 +430,6 @@ export default function RegisterPage() {
     reader.onload = () => {
       const dataUri = reader.result as string;
       setOfficialPhotoPath(dataUri);
-      handleDirectPhotoUpload(file, previewUrl);
     };
     reader.readAsDataURL(file);
   };
@@ -476,14 +449,6 @@ export default function RegisterPage() {
    */
   const handlePhotoEditorSave = (editedBlob: Blob) => {
     setIsEditorOpen(false);
-    let cleanName = (formData.fullName || formData.studentId || "student")
-      .replace(/[/\\]/g, " - ")
-      .replace(/[:*?"<>|]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
-    const safePhotoName = `${cleanName}.jpg`;
-    const editedFile = new File([editedBlob], safePhotoName, { type: "image/jpeg" });
     const previewUrl = URL.createObjectURL(editedBlob);
     setEditedPhotoPreview(previewUrl);
 
@@ -491,23 +456,50 @@ export default function RegisterPage() {
     reader.onload = () => {
       const dataUri = reader.result as string;
       setOfficialPhotoPath(dataUri);
-      handleDirectPhotoUpload(editedFile, previewUrl);
     };
     reader.readAsDataURL(editedBlob);
   };
 
+  /**
+   * Fast Gallery File Selection: Automatically scales large phone photos to 300 DPI ID bounds
+   */
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setEditedPhotoPreview(dataUrl);
-      setOfficialPhotoPath(dataUrl);
-      handleDirectPhotoUpload(file, dataUrl);
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement("canvas");
+      let w = img.width;
+      let h = img.height;
+      const maxW = 900;
+      const maxH = 1200;
+      if (w > maxW || h > maxH) {
+        const scale = Math.min(maxW / w, maxH / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+        setEditedPhotoPreview(dataUrl);
+        setOfficialPhotoPath(dataUrl);
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          setEditedPhotoPreview(dataUrl);
+          setOfficialPhotoPath(dataUrl);
+        };
+        reader.readAsDataURL(file);
+      }
     };
-    reader.readAsDataURL(file);
+    img.src = objectUrl;
   };
 
   /**
@@ -675,6 +667,9 @@ export default function RegisterPage() {
     setOfficialPhotoPath(null);
     setSentSuccessfullyData(null);
     setErrorMessage(null);
+    setTimeout(() => {
+      fullNameInputRef.current?.focus();
+    }, 60);
   };
 
   return (
@@ -925,6 +920,7 @@ export default function RegisterPage() {
                 Full Name <span className="text-red-500">*</span>
               </label>
               <input
+                ref={fullNameInputRef}
                 type="text"
                 name="fullName"
                 value={formData.fullName}
@@ -1099,7 +1095,7 @@ export default function RegisterPage() {
           <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
             <button
               type="submit"
-              disabled={isPending || isUploadingPhoto || idAvailability.available === false}
+              disabled={isPending || isDelivering || idAvailability.available === false}
               className="flex-1 w-full flex items-center justify-center gap-2 rounded-2xl bg-[#8fe617] py-3.5 px-6 text-sm font-mono font-black text-[#062404] hover:bg-[#7ecc10] active:scale-[0.98] animated-btn transition-all shadow-[0_0_22px_rgba(143,230,23,0.45)] disabled:opacity-50 cursor-pointer"
             >
               {isPending ? (
@@ -1245,7 +1241,7 @@ export default function RegisterPage() {
                 onClick={handleResetForm}
                 className="w-full rounded-xl bg-[#8fe617] text-[#062404] py-2.5 text-xs font-mono font-black shadow-md hover:bg-[#7ecc10] cool-btn-hover transition-all cursor-pointer"
               >
-                Register Next Student ({autoResetTimer}s)
+                Register Next Student (Enter ↵ • {autoResetTimer}s)
               </button>
               <Link
                 href={`/sender/receipts?studentId=${sentSuccessfullyData.studentId}`}

@@ -47,8 +47,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   onCapture,
   onEditPhoto,
   initialFacingMode = "user",
-  maxDimensions = { width: 1600, height: 1600 },
-  compressionQuality = 0.98,
+  maxDimensions = { width: 900, height: 1200 },
+  compressionQuality = 0.88,
 }) => {
   const [cameraState, setCameraState] = useState<CameraState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -276,18 +276,15 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     setIsFlashing(true);
     setTimeout(() => setIsFlashing(false), 200);
 
-    // Full unconstrained frame preserved (up to max dimensions)
+    // Full unconstrained frame preserved (scaled to standard portrait ID card bounds)
     let destW = videoW;
     let destH = videoH;
-    const maxDim = maxDimensions.width || 1600;
-    if (destW > maxDim || destH > maxDim) {
-      if (destW >= destH) {
-        destH = Math.round((destH * maxDim) / destW);
-        destW = maxDim;
-      } else {
-        destW = Math.round((destW * maxDim) / destH);
-        destH = maxDim;
-      }
+    const maxW = maxDimensions.width || 900;
+    const maxH = maxDimensions.height || 1200;
+    if (destW > maxW || destH > maxH) {
+      const scale = Math.min(maxW / destW, maxH / destH);
+      destW = Math.round(destW * scale);
+      destH = Math.round(destH * scale);
     }
 
     const canvas = canvasRef.current || document.createElement("canvas");
