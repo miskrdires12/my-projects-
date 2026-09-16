@@ -17,6 +17,8 @@ const PUBLIC_PREFIXES = [
   "/favicon.ico",
   "/uploads",
   "/images",
+  "/api/uploads",
+  "/api/photos",
 ];
 
 function getAuthSecret(): Uint8Array {

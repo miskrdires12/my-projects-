@@ -5,17 +5,11 @@
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
 
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
