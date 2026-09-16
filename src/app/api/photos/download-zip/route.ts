@@ -29,7 +29,7 @@ import fs from "fs";
 import path from "path";
 import { PassThrough } from "stream";
 import { generateSafePhotoFilename } from "@/lib/image-processing";
-import { getStudentPhotoFileName, formatPhoneForReceiver, resolveGradeAndSection } from "@/lib/export-utils";
+import { getStudentPhotoFileName, resolveGradeAndSection } from "@/lib/export-utils";
 
 // Factory for creating ZipArchive compatible with both legacy and archiver v8
 function createZipArchive(options: Record<string, unknown> = { zlib: { level: 5 } }) {
@@ -147,12 +147,6 @@ export async function POST(request: NextRequest) {
     (async () => {
       try {
         let photoCursor: string | undefined;
-        const manifestRows: string[] = [];
-        const escapeCSV = (val: any) => {
-          if (val === null || val === undefined) return '""';
-          const str = String(val).trim();
-          return `"${str.replace(/"/g, '""')}"`;
-        };
 
         while (true) {
           const chunk = await prisma.student.findMany({
@@ -175,86 +169,89 @@ export async function POST(request: NextRequest) {
 
           if (chunk.length === 0) break;
 
-          for (const s of chunk) {
-            if (!s.photoPath) continue;
+          const CONCURRENCY = 10;
+          for (let i = 0; i < chunk.length; i += CONCURRENCY) {
+            const batch = chunk.slice(i, i + CONCURRENCY);
+            await Promise.all(
+              batch.map(async (s) => {
+                if (!s.photoPath) return;
 
-            const relativeClean = s.photoPath.replace(/^\//, "");
-            const absolutePhotoPath = path.join(publicDir, relativeClean);
+                const relativeClean = s.photoPath.replace(/^\//, "");
+                const absolutePhotoPath = path.join(publicDir, relativeClean);
 
-            // Determine duplicate status from name index
-            const isDup =
-              (nameOccurrences.get(s.fullName.trim().toLowerCase()) || 0) > 1;
+                // Determine duplicate status from name index
+                const isDup =
+                  (nameOccurrences.get(s.fullName.trim().toLowerCase()) || 0) > 1;
 
-            // Generate safe filename matching receiver Excel photo path (e.g. miskrdires.jpg)
-            const safeFilename =
-              getStudentPhotoFileName(s) ||
-              generateSafePhotoFilename(s.fullName, s.studentId, isDup, "jpg");
+                // Generate safe filename matching receiver Excel photo path (e.g. miskrdires.jpg)
+                const safeFilename =
+                  getStudentPhotoFileName(s) ||
+                  generateSafePhotoFilename(s.fullName, s.studentId, isDup, "jpg");
 
-            // Determine folder prefix based on chosen structure with section classification
-            let folderPrefix = "";
-            switch (folderStructure) {
-              case "by-grade":
-              default: {
-                const { gradeFolder, sectionFolder } = resolveGradeAndSection(s);
-                folderPrefix = `${gradeFolder}/${sectionFolder}/`;
-                break;
-              }
-              case "by-batch":
-                folderPrefix = `Batch_${sanitizeDir(
-                  s.batch?.batchNumber || "Unassigned"
-                )}/`;
-                break;
-              case "by-department": {
-                const { sectionFolder } = resolveGradeAndSection(s);
-                folderPrefix = `Dept_${sanitizeDir(s.department || "General")}/${sectionFolder}/`;
-                break;
-              }
-              case "custom":
-                if (customPattern) {
-                  const { sectionFolder } = resolveGradeAndSection(s);
-                  folderPrefix =
-                    customPattern
-                      .replace("{grade}", sanitizeDir(s.grade))
-                      .replace("{section}", sanitizeDir(sectionFolder.replace(/^Section_/, "")))
-                      .replace("{department}", sanitizeDir(s.department))
-                      .replace("{batch}", sanitizeDir(s.batch?.batchNumber))
-                      .replace(/\/+$/, "") + "/";
+                // Determine folder prefix based on chosen structure with section classification
+                let folderPrefix = "";
+                switch (folderStructure) {
+                  case "by-grade":
+                  default: {
+                    const { gradeFolder, sectionFolder } = resolveGradeAndSection(s);
+                    folderPrefix = `${gradeFolder}/${sectionFolder}/`;
+                    break;
+                  }
+                  case "by-batch":
+                    folderPrefix = `Batch_${sanitizeDir(
+                      s.batch?.batchNumber || "Unassigned"
+                    )}/`;
+                    break;
+                  case "by-department": {
+                    const { sectionFolder } = resolveGradeAndSection(s);
+                    folderPrefix = `Dept_${sanitizeDir(s.department || "General")}/${sectionFolder}/`;
+                    break;
+                  }
+                  case "custom":
+                    if (customPattern) {
+                      const { sectionFolder } = resolveGradeAndSection(s);
+                      folderPrefix =
+                        customPattern
+                          .replace("{grade}", sanitizeDir(s.grade))
+                          .replace("{section}", sanitizeDir(sectionFolder.replace(/^Section_/, "")))
+                          .replace("{department}", sanitizeDir(s.department))
+                          .replace("{batch}", sanitizeDir(s.batch?.batchNumber))
+                          .replace(/\/+$/, "") + "/";
+                    }
+                    break;
+                  case "flat":
+                    folderPrefix = "";
+                    break;
                 }
-                break;
-              case "flat":
-                folderPrefix = "";
-                break;
-            }
 
-            let photoAdded = false;
-            if (fs.existsSync(absolutePhotoPath)) {
-              archive.file(absolutePhotoPath, {
-                name: `${folderPrefix}${safeFilename}`,
-              });
-              photoAdded = true;
-            } else if (s.photoPath.startsWith("data:")) {
-              const base64Data = s.photoPath.split(",")[1];
-              if (base64Data) {
-                const imgBuffer = Buffer.from(base64Data, "base64");
-                archive.append(imgBuffer, {
-                  name: `${folderPrefix}${safeFilename}`,
-                });
-                photoAdded = true;
-              }
-            }
-
-            if (photoAdded) {
-              const formattedPhone = formatPhoneForReceiver(s.phone);
-              const localPhotoPath = `C:\\Users\\athede\\Desktop\\students project for 17000\\${safeFilename}`;
-              manifestRows.push([
-                escapeCSV(s.studentId),
-                escapeCSV(s.fullName),
-                escapeCSV(s.sex || "Male"),
-                escapeCSV(s.grade),
-                escapeCSV(formattedPhone),
-                escapeCSV(localPhotoPath),
-              ].join(","));
-            }
+                // Append photo from remote CDN, local disk, or data URI
+                if (s.photoPath.startsWith("http://") || s.photoPath.startsWith("https://")) {
+                  try {
+                    const res = await fetch(s.photoPath, { signal: AbortSignal.timeout(10000) });
+                    if (res.ok) {
+                      const arrayBuf = await res.arrayBuffer();
+                      archive.append(Buffer.from(arrayBuf), {
+                        name: `${folderPrefix}${safeFilename}`,
+                      });
+                    }
+                  } catch (fetchErr) {
+                    console.warn(`[ZIP Route] Failed to fetch remote photo for ${s.studentId}:`, fetchErr);
+                  }
+                } else if (fs.existsSync(absolutePhotoPath)) {
+                  archive.file(absolutePhotoPath, {
+                    name: `${folderPrefix}${safeFilename}`,
+                  });
+                } else if (s.photoPath.startsWith("data:")) {
+                  const base64Data = s.photoPath.split(",")[1];
+                  if (base64Data) {
+                    const imgBuffer = Buffer.from(base64Data, "base64");
+                    archive.append(imgBuffer, {
+                      name: `${folderPrefix}${safeFilename}`,
+                    });
+                  }
+                }
+              })
+            );
           }
 
           if (chunk.length < CHUNK_SIZE) break;
@@ -263,7 +260,8 @@ export async function POST(request: NextRequest) {
 
         // Finalize ZIP with only classified photos in grade folders (no unwanted CSV)
         await archive.finalize();
-      } catch {
+      } catch (zipErr) {
+        console.error("[ZIP Route] Archiving error:", zipErr);
         archive.abort();
       }
     })();

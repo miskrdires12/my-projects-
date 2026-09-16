@@ -321,6 +321,42 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [activeStudent, setActiveStudent] = useState<StudentExtended | null>(null);
   const [isDownloadingPhotos, setIsDownloadingPhotos] = useState(false);
 
+  // Photo ZIP Download Progress & Real-Time MB Metrics State
+  const [zipProgress, setZipProgress] = useState<{
+    isOpen: boolean;
+    status: "idle" | "fetching" | "compressing" | "ready" | "error";
+    current: number;
+    total: number;
+    downloadedBytes: number;
+    speedMBps: number;
+    currentFileName: string;
+    zipSizeBytes?: number;
+    errorMessage?: string;
+  }>({
+    isOpen: false,
+    status: "idle",
+    current: 0,
+    total: 0,
+    downloadedBytes: 0,
+    speedMBps: 0,
+    currentFileName: "",
+  });
+
+  // Single Photo Download Toast State (with MB metrics)
+  const [singleDownloadToast, setSingleDownloadToast] = useState<{
+    show: boolean;
+    studentName: string;
+    status: "downloading" | "success" | "error";
+    sizeFormatted?: string;
+    message?: string;
+  }>({
+    show: false,
+    studentName: "",
+    status: "downloading",
+  });
+
+  const [downloadingSingleStudentId, setDownloadingSingleStudentId] = useState<string | null>(null);
+
   // Table Column Interactive Sorting (A-Z / Z-A / Default Newest First)
   const [sortField, setSortField] = useState<keyof StudentExtended | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -461,145 +497,296 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     setSelectedIds(next);
   };
 
-  // Bulk Photo Download (Grouped strictly by Grade folders, without companion CSV)
+  // Bulk Photo Download with Real-Time MB Size, Metrics, Speed & Progress Modal
   const handleBulkDownloadPhotos = async () => {
-    const targetStudents = selectedIds.size > 0
-      ? filteredStudents.filter((s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId)))
-      : filteredStudents;
+    const targetStudents =
+      selectedIds.size > 0
+        ? filteredStudents.filter(
+            (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+          )
+        : filteredStudents;
 
     if (targetStudents.length === 0) {
       alert("No student found to download in this view.");
       return;
     }
 
-    const withPhotos = targetStudents.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0));
+    const withPhotos = targetStudents.filter(
+      (s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)
+    );
 
     if (withPhotos.length === 0) {
-      alert("No student found to download in this view.");
+      alert("None of the selected students have a photograph.");
       return;
     }
 
     setIsDownloadingPhotos(true);
+    setZipProgress({
+      isOpen: true,
+      status: "fetching",
+      current: 0,
+      total: withPhotos.length,
+      downloadedBytes: 0,
+      speedMBps: 0,
+      currentFileName: "Connecting to student photo storage...",
+    });
+
+    const startTime = Date.now();
+    let accumulatedBytes = 0;
+    let completedCount = 0;
 
     try {
-      // 1. Attempt server streaming endpoint with by-grade folder structure
-      try {
-        const response = await fetch("/api/photos/download-zip", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            studentIds: withPhotos.map((s) => s.id),
-            folderStructure: "by-grade",
-          }),
-        });
-
-        if (response.ok) {
-          const blob = await response.blob();
-          if (blob && blob.size > 200) {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            const dateTag = new Date().toISOString().split("T")[0];
-            const scopeLabel = selectedIds.size > 0 ? `Selected_${withPhotos.length}` : `All_${withPhotos.length}`;
-            a.download = `Student_Photos_Grade_Section_${scopeLabel}_${dateTag}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-              try {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-              } catch {}
-            }, 500);
-            return;
-          }
-        }
-      } catch (serverErr) {
-        console.warn("Server streaming zip fallback to client JSZip:", serverErr);
-      }
-
-      // 2. Client-side JSZip packaging organized by Grade & Section Folders (Works offline, with IndexedDB base64 photos, etc.)
       const zip = new JSZip();
+      const CONCURRENCY = 6; // 6 parallel streams for fast download without browser thrashing
 
-      for (const student of withPhotos) {
-        const sId = student.studentId || student.id;
-        let cleanName = (student.fullName || sId || "student")
-          .replace(/[/\\]/g, " - ")
-          .replace(/[:*?"<>|]/g, "")
-          .replace(/\s+/g, " ")
-          .trim();
-        cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
-        const photoFileName = `${cleanName}.jpg`;
+      for (let i = 0; i < withPhotos.length; i += CONCURRENCY) {
+        const batch = withPhotos.slice(i, i + CONCURRENCY);
 
-        // Organize strictly into Grade and Section Folders (e.g. Grade_9/Section_A/)
-        const { gradeFolder, sectionFolder } = resolveGradeAndSection(student);
-        const targetFolder = zip.folder(gradeFolder)?.folder(sectionFolder) || zip;
+        await Promise.all(
+          batch.map(async (student) => {
+            const sId = student.studentId || student.id;
+            let cleanName = (student.fullName || sId || "student")
+              .replace(/[/\\]/g, " - ")
+              .replace(/[:*?"<>|]/g, "")
+              .replace(/\s+/g, " ")
+              .trim();
+            cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
+            const photoFileName = `${cleanName}.jpg`;
 
-        const rawPhoto = student.originalPhotoPath || student.photoPath;
-        if (rawPhoto) {
-          try {
-            if (rawPhoto.startsWith("data:image/")) {
-              const base64Data = rawPhoto.split(",")[1];
-              if (base64Data) {
-                targetFolder.file(photoFileName, base64Data, { base64: true });
-              }
-            } else {
-              const res = await fetch(rawPhoto);
-              if (res.ok) {
-                const imgBlob = await res.blob();
-                targetFolder.file(photoFileName, imgBlob);
-              }
+            // Organize strictly into Grade and Section Folders (e.g. Grade_9/Section_A/)
+            const { gradeFolder, sectionFolder } = resolveGradeAndSection(student);
+            const targetFolder = zip.folder(gradeFolder)?.folder(sectionFolder) || zip;
+            const fullPathLabel = `${gradeFolder}/${sectionFolder}/${photoFileName}`;
+
+            const rawPhoto = student.originalPhotoPath || student.photoPath;
+            if (!rawPhoto) {
+              completedCount++;
+              return;
             }
-          } catch (photoErr) {
-            console.warn(`Failed to package photo for ${sId}:`, photoErr);
-          }
-        }
+
+            try {
+              if (rawPhoto.startsWith("data:image/")) {
+                const base64Data = rawPhoto.split(",")[1];
+                if (base64Data) {
+                  targetFolder.file(photoFileName, base64Data, { base64: true });
+                  const approxSize = Math.round((base64Data.length * 3) / 4);
+                  accumulatedBytes += approxSize;
+                }
+              } else {
+                let imgBlob: Blob | null = null;
+                try {
+                  const res = await fetch(rawPhoto, { signal: AbortSignal.timeout(10000) });
+                  if (res.ok) {
+                    imgBlob = await res.blob();
+                  }
+                } catch {
+                  // Direct fetch failed (e.g. cross-origin), try server proxy
+                  try {
+                    const proxyRes = await fetch(
+                      `/api/photos/download-single?id=${encodeURIComponent(student.id)}`
+                    );
+                    if (proxyRes.ok) {
+                      imgBlob = await proxyRes.blob();
+                    }
+                  } catch {}
+                }
+
+                if (imgBlob) {
+                  accumulatedBytes += imgBlob.size;
+                  targetFolder.file(photoFileName, imgBlob);
+                }
+              }
+            } catch (photoErr) {
+              console.warn(`Failed to package photo for ${sId}:`, photoErr);
+            } finally {
+              completedCount++;
+              const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.1);
+              const speed = (accumulatedBytes / (1024 * 1024)) / elapsedSec;
+
+              setZipProgress({
+                isOpen: true,
+                status: "fetching",
+                current: completedCount,
+                total: withPhotos.length,
+                downloadedBytes: accumulatedBytes,
+                speedMBps: Number(speed.toFixed(2)),
+                currentFileName: fullPathLabel,
+              });
+            }
+          })
+        );
       }
 
-      // Generate pure photo ZIP organized by Grade and Section
-      const zipBlob = await zip.generateAsync({ type: "blob" });
+      // Step 2: ZIP Compression Phase
+      setZipProgress((prev) => ({
+        ...prev,
+        status: "compressing",
+        currentFileName: "Compressing into Grade & Section ZIP archive...",
+      }));
+
+      const zipBlob = await zip.generateAsync(
+        {
+          type: "blob",
+          compression: "DEFLATE",
+          compressionOptions: { level: 5 },
+        },
+        (metadata) => {
+          setZipProgress((prev) => ({
+            ...prev,
+            status: "compressing",
+            currentFileName: `Compressing archive: ${metadata.percent.toFixed(0)}%`,
+          }));
+        }
+      );
+
+      // Step 3: Trigger Browser Download with Metrics
+      const dateTag = new Date().toISOString().split("T")[0];
+      const scopeLabel =
+        selectedIds.size > 0
+          ? `Selected_${withPhotos.length}`
+          : `All_${withPhotos.length}`;
+      const zipFileName = `Student_Photos_Grade_Section_${scopeLabel}_${dateTag}.zip`;
+
       const url = window.URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = url;
-      const dateTag = new Date().toISOString().split("T")[0];
-      const scopeLabel = selectedIds.size > 0 ? `Selected_${withPhotos.length}` : `All_${withPhotos.length}`;
-      a.download = `Student_Photos_Grade_Section_${scopeLabel}_${dateTag}.zip`;
+      a.download = zipFileName;
       document.body.appendChild(a);
       a.click();
+
       setTimeout(() => {
         try {
           document.body.removeChild(a);
           window.URL.revokeObjectURL(url);
         } catch {}
-      }, 500);
+      }, 4000);
+
+      setZipProgress({
+        isOpen: true,
+        status: "ready",
+        current: withPhotos.length,
+        total: withPhotos.length,
+        downloadedBytes: accumulatedBytes,
+        speedMBps: 0,
+        currentFileName: zipFileName,
+        zipSizeBytes: zipBlob.size,
+      });
     } catch (err: any) {
       console.error("ZIP creation error:", err);
-      alert("Failed to create photos ZIP archive: " + (err?.message || "Unknown error"));
+      setZipProgress((prev) => ({
+        ...prev,
+        status: "error",
+        errorMessage: err?.message || "Failed to generate ZIP archive.",
+      }));
     } finally {
       setIsDownloadingPhotos(false);
     }
   };
 
-  // Single Photo Direct Download by Real Student Name
-  const handleDownloadSinglePhoto = async (photoUrl: string, studentName: string) => {
+  // Single Photo Direct Download by Real Student Name with Live MB Metrics
+  const handleDownloadSinglePhoto = async (
+    photoUrl: string,
+    studentName: string,
+    studentId?: string
+  ) => {
+    const cleanName =
+      studentName
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .replace(/\s+/g, " ") || "Student_Portrait";
+
+    if (studentId) setDownloadingSingleStudentId(studentId);
+
+    setSingleDownloadToast({
+      show: true,
+      studentName: cleanName,
+      status: "downloading",
+      message: "Fetching portrait...",
+    });
+
     try {
-      const cleanName = studentName.trim().replace(/[\\/:*?"<>|]/g, "_");
-      const response = await fetch(photoUrl);
-      const blob = await response.blob();
+      let blob: Blob | null = null;
+
+      // 1. Try direct fetch first
+      try {
+        const response = await fetch(photoUrl);
+        if (response.ok) {
+          blob = await response.blob();
+        }
+      } catch {
+        // Direct fetch failed, fallback to server proxy
+      }
+
+      // 2. If direct fetch failed or wasn't ok, use server download-single proxy
+      if (!blob && studentId) {
+        try {
+          const proxyRes = await fetch(
+            `/api/photos/download-single?id=${encodeURIComponent(studentId)}`
+          );
+          if (proxyRes.ok) {
+            blob = await proxyRes.blob();
+          }
+        } catch {}
+      }
+
+      if (!blob) {
+        throw new Error("Unable to retrieve photo data");
+      }
+
+      // Calculate exact MB size
+      const bytes = blob.size;
+      const mb = (bytes / (1024 * 1024)).toFixed(2);
+      const sizeFormatted =
+        bytes < 1024 * 1024
+          ? `${(bytes / 1024).toFixed(1)} KB (${mb} MB)`
+          : `${mb} MB`;
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${cleanName}.jpg`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch {
-      const a = document.createElement("a");
-      a.href = photoUrl;
-      a.download = `${studentName.trim().replace(/[\\/:*?"<>|]/g, "_")}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+
+      // Safe timeout for revokeObjectURL (3.5s ensures browser finishes reading blob before revocation)
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        } catch {}
+      }, 3500);
+
+      setSingleDownloadToast({
+        show: true,
+        studentName: cleanName,
+        status: "success",
+        sizeFormatted,
+        message: `✓ Downloaded ${cleanName}.jpg (${sizeFormatted})`,
+      });
+
+      // Auto dismiss success toast after 4.5s
+      setTimeout(() => {
+        setSingleDownloadToast((prev) =>
+          prev.status === "success" ? { ...prev, show: false } : prev
+        );
+      }, 4500);
+    } catch (err: any) {
+      console.warn("Direct blob download failed, triggering server attachment download:", err);
+      if (studentId) {
+        window.open(
+          `/api/photos/download-single?id=${encodeURIComponent(studentId)}`,
+          "_blank"
+        );
+      }
+      setSingleDownloadToast({
+        show: true,
+        studentName: cleanName,
+        status: "error",
+        message: "Triggered native browser download",
+      });
+      setTimeout(() => setSingleDownloadToast((p) => ({ ...p, show: false })), 4000);
+    } finally {
+      if (studentId) setDownloadingSingleStudentId(null);
     }
   };
 
@@ -1651,11 +1838,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             <>
                               <button
                                 type="button"
-                                onClick={() => handleDownloadSinglePhoto(student.originalPhotoPath || student.photoPath!, student.fullName)}
-                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+                                disabled={downloadingSingleStudentId === student.id}
+                                onClick={() =>
+                                  handleDownloadSinglePhoto(
+                                    student.originalPhotoPath || student.photoPath!,
+                                    student.fullName,
+                                    student.id
+                                  )
+                                }
+                                className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer disabled:opacity-50"
                                 title={`Download Original Photo (${student.fullName}.jpg)`}
                               >
-                                <Download className="h-4 w-4" />
+                                {downloadingSingleStudentId === student.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-[#8fe617]" />
+                                ) : (
+                                  <Download className="h-4 w-4" />
+                                )}
                               </button>
                               <button
                                 type="button"
@@ -1831,6 +2029,36 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <span>CSV</span>
               </button>
 
+              {/* If 1 student selected with photo, show direct photo download button */}
+              {selectedIds.size === 1 && (() => {
+                const singleSel = filteredStudents.find(
+                  (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+                );
+                if (!singleSel || !singleSel.photoPath) return null;
+                return (
+                  <button
+                    type="button"
+                    disabled={downloadingSingleStudentId === singleSel.id}
+                    onClick={() =>
+                      handleDownloadSinglePhoto(
+                        singleSel.originalPhotoPath || singleSel.photoPath!,
+                        singleSel.fullName,
+                        singleSel.id
+                      )
+                    }
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#8fe617]/50 bg-[#8fe617]/15 hover:bg-[#8fe617]/25 text-xs font-semibold text-[#8fe617] transition-colors cursor-pointer disabled:opacity-50"
+                    title={`Download photo for ${singleSel.fullName}`}
+                  >
+                    {downloadingSingleStudentId === singleSel.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8fe617]" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5 text-[#8fe617]" />
+                    )}
+                    <span>Download Photo (1)</span>
+                  </button>
+                );
+              })()}
+
               {/* Download Selected Photos ZIP */}
               <button
                 type="button"
@@ -1844,7 +2072,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 ) : (
                   <Download className="h-3.5 w-3.5 text-[#8fe617]" />
                 )}
-                <span>Photos ZIP</span>
+                <span>Photos ZIP {selectedIds.size > 1 ? `(${selectedIds.size})` : "(1)"}</span>
               </button>
 
               {/* Batch Print 8-Up Engine */}
@@ -1933,10 +2161,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <div className="flex flex-col gap-2 w-full max-w-xs pt-1">
                   <button
                     type="button"
-                    onClick={() => handleDownloadSinglePhoto(activeStudent.originalPhotoPath || activeStudent.photoPath!, activeStudent.fullName)}
-                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors cursor-pointer"
+                    disabled={downloadingSingleStudentId === activeStudent.id}
+                    onClick={() =>
+                      handleDownloadSinglePhoto(
+                        activeStudent.originalPhotoPath || activeStudent.photoPath!,
+                        activeStudent.fullName,
+                        activeStudent.id
+                      )
+                    }
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-surface dark:bg-[#161e19] border border-border dark:border-[#223126] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    <Download className="h-3.5 w-3.5 text-[#8fe617]" /> Download Original Portrait (.jpg)
+                    {downloadingSingleStudentId === activeStudent.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8fe617]" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5 text-[#8fe617]" />
+                    )}
+                    <span>Download Original Portrait (.jpg)</span>
                   </button>
                   <button
                     type="button"
@@ -2105,6 +2345,181 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         onChange={handleAttachFileSelected}
         className="hidden"
       />
+
+      {/* Photo ZIP Download Real-Time Progress & Metrics Modal */}
+      {zipProgress.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-[#0c100e] p-6 shadow-2xl text-white ring-1 ring-white/10">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-neutral-800/80">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`p-2.5 rounded-xl ${
+                    zipProgress.status === "ready"
+                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                      : zipProgress.status === "error"
+                      ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                      : "bg-[#8fe617]/15 text-[#8fe617] border border-[#8fe617]/30"
+                  }`}
+                >
+                  {zipProgress.status === "ready" ? (
+                    <CheckCircle2 className="h-5 w-5" />
+                  ) : zipProgress.status === "error" ? (
+                    <X className="h-5 w-5" />
+                  ) : (
+                    <Download className="h-5 w-5 animate-bounce" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">
+                    {zipProgress.status === "ready"
+                      ? "Photos ZIP Ready!"
+                      : zipProgress.status === "compressing"
+                      ? "Generating ZIP Archive..."
+                      : zipProgress.status === "error"
+                      ? "Download Error"
+                      : "Downloading Student Portraits"}
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    {zipProgress.status === "ready"
+                      ? "Organized in Grade & Section folders"
+                      : `${zipProgress.current} of ${zipProgress.total} portraits processed`}
+                  </p>
+                </div>
+              </div>
+
+              {zipProgress.status === "ready" || zipProgress.status === "error" ? (
+                <button
+                  type="button"
+                  onClick={() => setZipProgress((p) => ({ ...p, isOpen: false }))}
+                  className="p-1 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+
+            {/* Metrics Display Grid */}
+            <div className="grid grid-cols-3 gap-2.5 my-4">
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-center">
+                <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wider">
+                  Downloaded
+                </div>
+                <div className="text-sm font-bold font-mono text-[#8fe617] mt-0.5">
+                  {(zipProgress.downloadedBytes / (1024 * 1024)).toFixed(2)} MB
+                </div>
+              </div>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-center">
+                <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wider">
+                  Speed
+                </div>
+                <div className="text-sm font-bold font-mono text-white mt-0.5">
+                  {zipProgress.speedMBps > 0 ? `${zipProgress.speedMBps} MB/s` : "—"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-center">
+                <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wider">
+                  Progress
+                </div>
+                <div className="text-sm font-bold font-mono text-sky-400 mt-0.5">
+                  {zipProgress.total > 0
+                    ? `${Math.min(
+                        Math.round((zipProgress.current / zipProgress.total) * 100),
+                        100
+                      )}%`
+                    : "0%"}
+                </div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden my-3">
+              <div
+                className={`h-full transition-all duration-200 ${
+                  zipProgress.status === "ready"
+                    ? "bg-emerald-500"
+                    : zipProgress.status === "error"
+                    ? "bg-red-500"
+                    : "bg-[#8fe617]"
+                }`}
+                style={{
+                  width: `${
+                    zipProgress.status === "ready"
+                      ? 100
+                      : zipProgress.total > 0
+                      ? Math.min(
+                          Math.round((zipProgress.current / zipProgress.total) * 100),
+                          100
+                        )
+                      : 5
+                  }%`,
+                }}
+              />
+            </div>
+
+            {/* Current File / Status Subtitle */}
+            <div className="text-xs text-neutral-400 font-mono truncate px-1 py-1">
+              {zipProgress.status === "ready" && zipProgress.zipSizeBytes ? (
+                <div className="flex items-center justify-between text-emerald-400 font-sans font-medium">
+                  <span>✓ Archive downloaded</span>
+                  <span className="font-mono font-bold">
+                    ZIP: {(zipProgress.zipSizeBytes / (1024 * 1024)).toFixed(2)} MB
+                  </span>
+                </div>
+              ) : zipProgress.status === "error" ? (
+                <span className="text-red-400 font-sans">
+                  {zipProgress.errorMessage || "Failed to download photos."}
+                </span>
+              ) : (
+                <span className="truncate">{zipProgress.currentFileName}</span>
+              )}
+            </div>
+
+            {/* Action Footer */}
+            {(zipProgress.status === "ready" || zipProgress.status === "error") && (
+              <div className="mt-4 pt-3 border-t border-neutral-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setZipProgress((p) => ({ ...p, isOpen: false }))}
+                  className="px-4 py-2 rounded-xl bg-[#8fe617] hover:bg-[#80d312] text-[#070908] text-xs font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Single Photo Download Toast Banner (Real-time MB size feedback) */}
+      {singleDownloadToast.show && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-center gap-3 rounded-2xl border border-neutral-800 bg-[#0c100e]/95 backdrop-blur-md px-4 py-3 shadow-2xl text-white ring-1 ring-white/10">
+            {singleDownloadToast.status === "downloading" ? (
+              <Loader2 className="h-4 w-4 text-[#8fe617] animate-spin shrink-0" />
+            ) : singleDownloadToast.status === "success" ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            ) : (
+              <X className="h-4 w-4 text-red-400 shrink-0" />
+            )}
+            <div className="text-xs">
+              <div className="font-semibold text-white truncate max-w-[220px]">
+                {singleDownloadToast.studentName}.jpg
+              </div>
+              <div className="text-neutral-400 text-[11px]">
+                {singleDownloadToast.message}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSingleDownloadToast((p) => ({ ...p, show: false }))}
+              className="p-1 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors ml-auto cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
