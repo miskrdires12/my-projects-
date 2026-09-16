@@ -149,27 +149,67 @@ export async function listSupabaseStorageFiles(prefix = ""): Promise<any[]> {
 }
 
 /**
- * Permanently purges all objects inside the 'student data' bucket
+ * Recursively lists all file paths inside the 'student data' bucket
+ */
+export async function listAllSupabaseStorageFilePaths(prefix = ""): Promise<string[]> {
+  const { supabaseUrl, apiKey } = getSupabaseConfig();
+
+  try {
+    const res = await fetch(`${supabaseUrl}/storage/v1/object/list/${ENCODED_BUCKET}`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "apikey": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prefix,
+        limit: 1000,
+        offset: 0,
+        sortBy: { column: "name", order: "asc" },
+      }),
+    });
+
+    if (!res.ok) return [];
+    const items = await res.json();
+    let filePaths: string[] = [];
+
+    for (const item of items) {
+      const fullItemPath = prefix ? `${prefix}/${item.name}` : item.name;
+      if (item.id === null) {
+        // Virtual folder - recurse into it
+        const subFiles = await listAllSupabaseStorageFilePaths(fullItemPath);
+        filePaths = filePaths.concat(subFiles);
+      } else {
+        filePaths.push(fullItemPath);
+      }
+    }
+
+    return filePaths;
+  } catch (err) {
+    console.error("[Supabase Storage] listAllSupabaseStorageFilePaths error:", err);
+    return [];
+  }
+}
+
+/**
+ * Permanently purges all objects inside the 'student data' bucket across all folders
  */
 export async function purgeAllSupabaseStorageObjects(): Promise<{ success: boolean; count: number; error?: string }> {
   const { supabaseUrl, apiKey } = getSupabaseConfig();
 
   try {
-    // 1. List objects
-    const objects = await listSupabaseStorageFiles("");
-    if (!objects || objects.length === 0) {
+    // 1. Recursively find all files in the bucket
+    const allPaths = await listAllSupabaseStorageFilePaths("");
+    if (!allPaths || allPaths.length === 0) {
       return { success: true, count: 0 };
     }
 
-    // 2. Extract prefixes (both direct items and folder items)
-    const prefixes: string[] = [];
-    for (const obj of objects) {
-      if (obj.name) {
-        prefixes.push(obj.name);
-      }
-    }
-
-    if (prefixes.length > 0) {
+    // 2. Batch delete in chunks of 100
+    let deletedCount = 0;
+    const chunkSize = 100;
+    for (let i = 0; i < allPaths.length; i += chunkSize) {
+      const chunk = allPaths.slice(i, i + chunkSize);
       const res = await fetch(`${supabaseUrl}/storage/v1/object/${ENCODED_BUCKET}`, {
         method: "DELETE",
         headers: {
@@ -177,16 +217,18 @@ export async function purgeAllSupabaseStorageObjects(): Promise<{ success: boole
           "apikey": apiKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prefixes }),
+        body: JSON.stringify({ prefixes: chunk }),
       });
 
-      if (!res.ok) {
+      if (res.ok) {
+        deletedCount += chunk.length;
+      } else {
         const err = await res.text();
-        return { success: false, count: 0, error: err };
+        console.warn("[Supabase Storage] Batch delete warning:", err);
       }
     }
 
-    return { success: true, count: prefixes.length };
+    return { success: true, count: deletedCount };
   } catch (err: any) {
     return { success: false, count: 0, error: err?.message };
   }
