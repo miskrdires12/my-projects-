@@ -42,3 +42,6 @@ scratch/
 # Temporary uploads
 public/uploads/temp/*
 !public/uploads/temp/.gitkeep
+
+# Local private storage fallback directory
+/storage/

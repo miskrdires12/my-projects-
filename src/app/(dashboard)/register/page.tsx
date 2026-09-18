@@ -31,6 +31,7 @@ import {
 } from "@/actions/students";
 import type { StudentFormInput } from "@/lib/validations";
 import { publishStudentSync } from "@/lib/sync-client";
+import { enqueueOutboxItem } from "@/lib/indexeddb-outbox";
 
 interface CustomFieldMeta {
   id: string;
@@ -50,6 +51,7 @@ export default function RegisterPage() {
   // Status & Feedback
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
+  const [queuedOutboxId, setQueuedOutboxId] = useState<string | null>(null);
   const [idAvailability, setIdAvailability] = useState<{
     checking: boolean;
     available: boolean | null;
@@ -263,29 +265,29 @@ export default function RegisterPage() {
     }
 
     startTransition(async () => {
-      try {
-        const payload: StudentFormInput = {
-          studentId: formData.studentId!,
-          fullName: formData.fullName!,
-          grade: formData.grade!,
-          sex: formData.sex!,
-          phone: formData.phone!,
-          dateOfBirth: formData.dateOfBirth,
-          emailAddress: formData.emailAddress,
-          address: formData.address,
-          school: formData.school,
-          department: formData.department,
-          academicYear: formData.academicYear,
-          guardianFullName: formData.guardianFullName,
-          emergencyContactName: formData.emergencyContactName,
-          emergencyContactPhone: formData.emergencyContactPhone,
-          nationality: formData.nationality,
-          bloodType: formData.bloodType,
-          photoPath: officialPhotoPath,
-          status: formData.status as any,
-          customFields: customFieldValues,
-        };
+      const payload: StudentFormInput = {
+        studentId: formData.studentId!,
+        fullName: formData.fullName!,
+        grade: formData.grade!,
+        sex: formData.sex!,
+        phone: formData.phone!,
+        dateOfBirth: formData.dateOfBirth,
+        emailAddress: formData.emailAddress,
+        address: formData.address,
+        school: formData.school,
+        department: formData.department,
+        academicYear: formData.academicYear,
+        guardianFullName: formData.guardianFullName,
+        emergencyContactName: formData.emergencyContactName,
+        emergencyContactPhone: formData.emergencyContactPhone,
+        nationality: formData.nationality,
+        bloodType: formData.bloodType,
+        photoPath: officialPhotoPath,
+        status: formData.status as any,
+        customFields: customFieldValues,
+      };
 
+      try {
         const result = await createStudentAction(payload);
         if (result.success && result.studentId) {
           setSuccessId(result.studentId);
@@ -333,7 +335,14 @@ export default function RegisterPage() {
           setErrorMessage(result.error || "Failed to register student.");
         }
       } catch (err: any) {
-        setErrorMessage(err?.message || "Communication failure while registering student.");
+        console.warn("Server communication failure, safely preserving to durable outbox:", err);
+        try {
+          const outboxId = await enqueueOutboxItem(payload);
+          setQueuedOutboxId(outboxId);
+          setErrorMessage(null);
+        } catch {
+          setErrorMessage(err?.message || "Communication failure while registering student.");
+        }
       }
     });
   };
@@ -362,6 +371,7 @@ export default function RegisterPage() {
     setEditedPhotoPreview(null);
     setOfficialPhotoPath(null);
     setSuccessId(null);
+    setQueuedOutboxId(null);
     setErrorMessage(null);
   };
 
@@ -443,6 +453,30 @@ export default function RegisterPage() {
               <span>Print Receipt</span>
             </Link>
           </div>
+        </div>
+      )}
+
+      {/* Outbox Queued Banner */}
+      {queuedOutboxId && (
+        <div className="rounded-xl border-2 border-amber-500 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs text-amber-950">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-amber-600 shrink-0" />
+            <div>
+              <div className="text-sm font-bold text-amber-900">
+                Network Interrupted — Safely Enqueued to Durable Outbox
+              </div>
+              <div className="text-xs text-amber-800 font-mono">
+                Item #{formData.studentId} is secured in your local IndexedDB station outbox. It will auto-retry and sync when connection is restored.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetForm}
+            className="rounded-lg bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-amber-700 transition-all shadow-xs"
+          >
+            Enroll Next Student
+          </button>
         </div>
       )}
 

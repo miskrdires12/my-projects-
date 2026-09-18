@@ -109,6 +109,17 @@ export default async function StudentsPage({
   const uniqueGrades = grades.map((g) => g.grade).filter(Boolean);
   const uniqueDepartments = departments.map((d) => d.department!).filter(Boolean);
 
+  const isAdmin = session.role === "ADMIN";
+  const sanitizedStudents = students.map((s) => {
+    if (!isAdmin) {
+      const copy = { ...s };
+      delete (copy as any).senderId;
+      delete (copy as any).senderName;
+      return copy;
+    }
+    return s;
+  });
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Page Header */}
@@ -176,7 +187,7 @@ export default async function StudentsPage({
 
       {/* Interactive Directory Table with True Server-Side Pagination */}
       <StudentDirectoryClient
-        students={students as any}
+        students={sanitizedStudents as any}
         totalCount={totalCount}
         currentPage={page}
         pageSize={pageSize}

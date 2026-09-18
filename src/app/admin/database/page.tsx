@@ -1,8 +1,10 @@
 import React from "react";
-import { Database, Activity, HardDrive, CheckCircle2 } from "lucide-react";
+import { Database } from "lucide-react";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { getStorageQuotaMetrics } from "@/lib/storage-quota-monitor";
+import { DatabaseAdminClient } from "@/components/admin/DatabaseAdminClient";
 
 export default async function AdminDatabasePage() {
   const session = await getSession();
@@ -10,70 +12,61 @@ export default async function AdminDatabasePage() {
     redirect("/dashboard?error=forbidden");
   }
 
-  const [studentCount, userCount, templateCount, auditLogs] = await Promise.all([
+  const [
+    quota,
+    lastReport,
+    studentRows,
+    verifiedPhotosCount,
+    missingPhotosCount,
+    auditLogs,
+  ] = await Promise.all([
+    getStorageQuotaMetrics(),
+    prisma.storageReconciliationReport.findFirst({
+      orderBy: { createdAt: "desc" },
+    }),
     prisma.student.count(),
-    prisma.user.count(),
-    prisma.cardTemplate.count(),
+    prisma.student.count({ where: { photoIntegrityStatus: "PHOTO_VERIFIED" } }),
+    prisma.student.count({ where: { photoIntegrityStatus: "PHOTO_MISSING" } }),
     prisma.auditLog.findMany({
-      take: 15,
+      take: 20,
       orderBy: { createdAt: "desc" },
       include: { user: { select: { username: true, role: true } } },
     }),
   ]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-7xl mx-auto pb-16">
       <div className="border-b border-border pb-5">
         <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <Database className="h-5 w-5 text-accent" />
-          <span>System Health & Database Telemetry</span>
+          <span>System Health, Quota Telemetry &amp; Storage Lifecycle</span>
         </h1>
         <p className="text-xs text-foreground-muted mt-1">
-          Monitor persistence metrics, operational throughput, and system audit logs
+          Real-time storage quota gauges, bidirectional reconciliation runner, and cryptographically auditable security telemetry
         </p>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="rounded-xl border border-border bg-surface p-5 shadow-card">
-          <div className="flex items-center justify-between text-xs text-foreground-muted font-mono uppercase">
-            <span>Student Storage</span>
-            <HardDrive className="h-4 w-4 text-accent" />
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-bold font-mono text-foreground">{studentCount}</span>
-            <span className="text-[11px] text-foreground-muted">Total Rows</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-surface p-5 shadow-card">
-          <div className="flex items-center justify-between text-xs text-foreground-muted font-mono uppercase">
-            <span>Identity Operators</span>
-            <Activity className="h-4 w-4 text-accent" />
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-bold font-mono text-foreground">{userCount}</span>
-            <span className="text-[11px] text-foreground-muted">Accounts Provisioned</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-surface p-5 shadow-card">
-          <div className="flex items-center justify-between text-xs text-foreground-muted font-mono uppercase">
-            <span>Vector Card Templates</span>
-            <CheckCircle2 className="h-4 w-4 text-accent" />
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-3xl font-bold font-mono text-foreground">{templateCount}</span>
-            <span className="text-[11px] text-accent font-medium">Active CR80 Designs</span>
-          </div>
-        </div>
-      </div>
+      {/* Storage Quota Telemetry, Health Gauges & Reconciliation Client */}
+      <DatabaseAdminClient
+        quota={quota}
+        studentRows={studentRows}
+        verifiedPhotosCount={verifiedPhotosCount}
+        missingPhotosCount={missingPhotosCount}
+        lastReport={lastReport}
+      />
 
       {/* System Audit Log Stream */}
       <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-card">
-        <div className="border-b border-border px-6 py-4 bg-surface-secondary">
-          <h2 className="text-sm font-semibold text-foreground">Operational Audit Log Stream</h2>
-          <p className="text-xs text-foreground-muted">Cryptographically auditable security and CRUD telemetry</p>
+        <div className="border-b border-border px-6 py-4 bg-surface-secondary flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Operational Audit Log Stream</h2>
+            <p className="text-xs text-foreground-muted">
+              Tamper-evident logs of student creations, deletions, storage purges, and security events
+            </p>
+          </div>
+          <span className="text-[10px] font-mono text-foreground-muted uppercase">
+            Append-Only Audit Trail
+          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -97,7 +90,7 @@ export default async function AdminDatabasePage() {
               ) : (
                 auditLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-surface-secondary/50">
-                    <td className="px-6 py-3 text-foreground-muted">
+                    <td className="px-6 py-3 text-foreground-muted whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleTimeString()} • {new Date(log.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-3 font-semibold text-accent">{log.action}</td>
@@ -105,7 +98,7 @@ export default async function AdminDatabasePage() {
                     <td className="px-6 py-3 text-foreground-muted">
                       {log.user ? `${log.user.username} (${log.user.role})` : "SYSTEM / GUEST"}
                     </td>
-                    <td className="px-6 py-3 text-foreground-subtle truncate max-w-xs">
+                    <td className="px-6 py-3 text-foreground-subtle truncate max-w-md">
                       {log.metadata ?? "—"}
                     </td>
                   </tr>

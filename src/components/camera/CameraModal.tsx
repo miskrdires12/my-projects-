@@ -19,6 +19,8 @@ import {
   FlipHorizontal,
   Upload,
   Sparkles,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 export interface CameraModalProps {
@@ -53,6 +55,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [capturedPreview, setCapturedPreview] = useState<string | null>(null);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
+  const [zoomMinMax, setZoomMinMax] = useState<{ min: number; max: number }>({ min: 1.0, max: 3.5 });
+  const [hasHardwareZoom, setHasHardwareZoom] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -140,6 +145,15 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         await videoRef.current.play();
       }
 
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        const caps = (videoTrack.getCapabilities && (videoTrack.getCapabilities() as any)) || {};
+        if (caps.zoom) {
+          setHasHardwareZoom(true);
+          setZoomMinMax({ min: caps.zoom.min || 1.0, max: Math.min(caps.zoom.max || 4.0, 4.0) });
+        }
+      }
+
       setCameraState("streaming");
       loadDevices();
       return;
@@ -221,6 +235,21 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   };
 
   /**
+   * Adjusts hardware or digital zoom level (1.0x to 3.5x).
+   */
+  const handleZoomChange = (newZoom: number) => {
+    const clamped = Math.min(Math.max(newZoom, zoomMinMax.min), zoomMinMax.max);
+    setZoomLevel(clamped);
+
+    if (hasHardwareZoom && streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track && (track as any).applyConstraints) {
+        track.applyConstraints({ advanced: [{ zoom: clamped } as any] }).catch(() => {});
+      }
+    }
+  };
+
+  /**
    * Captures the current video frame, crops to 3:4 portrait ID aspect ratio,
    * scales to max 600×800 bounds, and compresses to JPEG.
    */
@@ -266,6 +295,12 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       destH = Math.round(destH * scale);
     }
 
+    // Apply Zoom Crop to frame coordinates
+    const zoomedSourceW = sourceW / zoomLevel;
+    const zoomedSourceH = sourceH / zoomLevel;
+    const zoomedSourceX = sourceX + (sourceW - zoomedSourceW) / 2;
+    const zoomedSourceY = sourceY + (sourceH - zoomedSourceH) / 2;
+
     const canvas = canvasRef.current || document.createElement("canvas");
     canvas.width = destW;
     canvas.height = destH;
@@ -279,7 +314,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       ctx.scale(-1, 1);
     }
 
-    ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, destW, destH);
+    ctx.drawImage(video, zoomedSourceX, zoomedSourceY, zoomedSourceW, zoomedSourceH, 0, 0, destW, destH);
 
     const dataUrl = canvas.toDataURL("image/jpeg", compressionQuality);
     canvas.toBlob(
@@ -420,6 +455,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const handleRetake = () => {
     setCapturedPreview(null);
     setCapturedBlob(null);
+    setZoomLevel(1.0);
     startCamera();
   };
 
@@ -510,9 +546,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             ref={videoRef}
             playsInline
             muted
-            className={`h-full w-full object-cover transition-opacity duration-200 ${
+            style={{
+              transform: `${facingMode === "user" ? "scaleX(-1) " : ""}scale(${zoomLevel})`,
+              transformOrigin: "center center",
+            }}
+            className={`h-full w-full object-cover transition-transform duration-75 ${
               cameraState === "streaming" ? "opacity-100" : "opacity-0"
-            } ${facingMode === "user" ? "-scale-x-100" : ""}`}
+            }`}
           />
 
           {/* Captured Review Preview */}
@@ -541,6 +581,39 @@ export const CameraModal: React.FC<CameraModalProps> = ({
               {/* Viewport badge */}
               <div className="absolute top-4 rounded border border-neutral-700 bg-black/80 px-2.5 py-1 text-[10px] font-mono text-white">
                 3:4 ID PASSPORT SPEC (600×800)
+              </div>
+
+              {/* Camera Zoom Control Slider */}
+              <div className="absolute bottom-4 z-20 flex items-center gap-2 rounded-full border border-neutral-700 bg-black/85 px-3 py-1.5 backdrop-blur-xs text-white pointer-events-auto shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => handleZoomChange(zoomLevel - 0.2)}
+                  className="rounded p-1 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </button>
+                <input
+                  type="range"
+                  min={zoomMinMax.min}
+                  max={zoomMinMax.max}
+                  step={0.1}
+                  value={zoomLevel}
+                  onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+                  className="w-24 sm:w-32 accent-white h-1 bg-neutral-700 rounded-lg cursor-pointer"
+                  title="Adjust Zoom"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleZoomChange(zoomLevel + 0.2)}
+                  className="rounded p-1 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </button>
+                <span className="font-mono text-[11px] font-bold text-white w-9 text-center">
+                  {Math.round(zoomLevel * 10) / 10}x
+                </span>
               </div>
             </div>
           )}

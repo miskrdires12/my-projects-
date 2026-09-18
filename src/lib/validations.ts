@@ -110,6 +110,12 @@ export const studentSchema = z.object({
   status: StudentStatusEnum.default("ACTIVE"),
   batchId: z.string().optional().nullable(),
 
+  // Sender Attribution & Storage Integrity
+  senderId: z.string().optional().nullable(),
+  senderName: z.string().optional().nullable(),
+  photoIntegrityStatus: z.string().optional().nullable(),
+  storageKey: z.string().optional().nullable(),
+
   // Dynamic Custom Fields mapping { fieldKey: value }
   customFields: z.record(z.string()).optional(),
 });

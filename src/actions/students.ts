@@ -17,6 +17,7 @@ import {
   type CustomFieldInput,
 } from "@/lib/validations";
 import { publishStudentSync, rehydrateDatabaseFromCloud } from "@/lib/sync-engine";
+import { executeSafeStudentDeletion } from "@/lib/safe-student-deletion";
 
 export interface StudentFilterParams {
   query?: string;
@@ -108,6 +109,11 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
 
     // Strict Requirement: QR codes are NEVER generated internally.
     // QR codes are imported as external image assets exclusively by the Receiver.
+    const senderId = session.userId || null;
+    const senderName = session.username || "Central Station";
+    const photoIntegrityStatus = data.photoPath ? "PHOTO_VERIFIED" : "PHOTO_ABSENT_INTENTIONAL";
+    const storageKey = data.storageKey || (data.photoPath ? data.photoPath.replace(/^\/+/, "") : null);
+
     const student = await prisma.student.create({
       data: {
         studentId: data.studentId,
@@ -131,6 +137,10 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
         nationalId,
         dateOfBirth: data.dateOfBirth || null,
         photoPath: data.photoPath || null,
+        storageKey,
+        photoIntegrityStatus,
+        senderId,
+        senderName,
         qrCodeData: null, // Populated exclusively when Receiver imports external QR images
         status: data.status,
         batchId: data.batchId || null,
@@ -296,36 +306,35 @@ export async function updateStudentAction(
 }
 
 /**
- * Permanently deletes a student record.
+ * Permanently and safely deletes a student record following the required workflow:
+ * ADMIN REQUEST -> VERIFY STUDENT -> IDENTIFY STORAGE OBJECTS -> SAFE PURGE -> REMOVE DB RECORD -> AUDIT LOG
  */
 export async function deleteStudentAction(id: string): Promise<StudentActionResult> {
   const session = await requireAuth("student:delete");
 
-  const student = await prisma.student.delete({
-    where: { id },
+  const result = await executeSafeStudentDeletion(id, {
+    userId: session.userId,
+    username: session.username,
+    role: session.role,
   });
 
-  await createSafeAuditLog({
-    userId: session.userId,
-    action: "STUDENT_DELETE",
-    entityType: "STUDENT",
-    entityId: student.id,
-    metadata: { studentId: student.studentId, name: student.fullName },
-  });
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
 
   // Broadcast deletion to Cloud Sync Bus
-  publishStudentSync("DELETE", student.studentId).catch(() => {});
+  publishStudentSync("DELETE", result.studentId).catch(() => {});
 
   revalidatePath("/students");
   revalidatePath("/dashboard");
-  return { success: true };
+  return { success: true, studentId: result.studentId };
 }
 
 /**
  * Retrieves paginated, multi-filtered, and searched students optimized for 20,000+ records.
  */
 export async function getStudentsAction(params: StudentFilterParams = {}) {
-  await requireAuth("student:read");
+  const session = await requireAuth("student:read");
 
   const {
     query,
@@ -424,8 +433,21 @@ export async function getStudentsAction(params: StudentFilterParams = {}) {
     }
   }
 
+  const isAdmin = session.role === "ADMIN";
+
+  // Sanitize sender attribution: Strictly available to ADMIN only
+  const sanitizedStudents = students.map((s) => {
+    if (!isAdmin) {
+      const copy = { ...s };
+      delete (copy as any).senderId;
+      delete (copy as any).senderName;
+      return copy;
+    }
+    return s;
+  });
+
   return {
-    students,
+    students: sanitizedStudents,
     pagination: {
       totalCount,
       page,

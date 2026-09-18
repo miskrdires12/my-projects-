@@ -38,6 +38,23 @@ interface ReceiverDashboardProps {
   notice?: string;
 }
 
+/**
+ * Receiver Anti-Inspection Helper:
+ * Renders text inside protected, non-selectable and masked DOM nodes.
+ */
+function renderMaskedSecure(text: string | null | undefined) {
+  if (!text) return "—";
+  return (
+    <span data-sb-protected="mask-receiver" className="inline-block pointer-events-none select-none">
+      {text.split("").map((ch, idx) => (
+        <span key={idx} data-sec={idx % 2 === 0 ? "1" : "0"} className="select-none">
+          {ch}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export default function RealtimeReceiverDashboard({ initialData, notice }: ReceiverDashboardProps) {
   const [data, setData] = useState(initialData);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -136,7 +153,11 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   }, [autoRefresh, fetchMetrics]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 text-white">
+    <div
+      className="space-y-6 max-w-7xl mx-auto pb-16 text-white select-none"
+      onContextMenu={(e) => e.preventDefault()}
+      onCopy={(e) => e.preventDefault()}
+    >
       {/* Notice Alert if redirected */}
       {notice === "receiver_facility_only" && (
         <div className="rounded-lg border border-neutral-700 bg-neutral-900 p-4 text-xs text-neutral-300 flex items-center gap-3">
@@ -550,8 +571,12 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               {data.missingPhotos.map((s) => (
                 <div key={s.id} className="py-2 flex items-center justify-between">
                   <div className="truncate pr-2">
-                    <div className="font-medium text-white truncate">{s.fullName}</div>
-                    <div className="text-[10px] font-mono text-neutral-400">{s.studentId}</div>
+                    <div className="font-medium text-white truncate">
+                      {renderMaskedSecure(s.fullName)}
+                    </div>
+                    <div className="text-[10px] font-mono text-neutral-400">
+                      {renderMaskedSecure(s.studentId)}
+                    </div>
                   </div>
                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-neutral-800 bg-neutral-900 text-neutral-300 shrink-0">
                     NO PHOTO
@@ -588,8 +613,12 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               {data.missingQRs.map((s) => (
                 <div key={s.id} className="py-2 flex items-center justify-between">
                   <div className="truncate pr-2">
-                    <div className="font-medium text-white truncate">{s.fullName}</div>
-                    <div className="text-[10px] font-mono text-neutral-400">{s.studentId}</div>
+                    <div className="font-medium text-white truncate">
+                      {renderMaskedSecure(s.fullName)}
+                    </div>
+                    <div className="text-[10px] font-mono text-neutral-400">
+                      {renderMaskedSecure(s.studentId)}
+                    </div>
                   </div>
                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-neutral-800 bg-neutral-900 text-neutral-300 shrink-0">
                     NO QR

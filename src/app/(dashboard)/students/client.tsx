@@ -4,6 +4,8 @@
 // STUDENT BRIDGE — HIGH-PERFORMANCE 20,000+ STUDENT DIRECTORY CLIENT
 // Scalable server-side pagination, multi-filtering, bulk photo downloads,
 // single photo downloads, and deep profile inspection drawer.
+// Hardened with Admin-only Sender attribution, Receiver anti-inspection,
+// emergency phone display & export, and real-time photo editing reflection.
 // ============================================================================
 
 import React, { useState, useTransition, useEffect } from "react";
@@ -18,17 +20,22 @@ import {
   Camera,
   Download,
   CheckCircle2,
+  AlertCircle,
   ChevronLeft,
   ChevronRight,
   Tag,
   UserPlus,
   Users,
   Upload,
+  FileSpreadsheet,
+  Edit,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
-import { deleteStudentAction, clearAllStudentsAction } from "@/actions/students";
+import { deleteStudentAction, clearAllStudentsAction, updateStudentAction } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
-import { subscribeToCloudSync } from "@/lib/sync-client";
+import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
+import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 
 interface StudentExtended {
   id: string;
@@ -49,6 +56,10 @@ interface StudentExtended {
   nationality?: string | null;
   dateOfBirth?: string | Date | null;
   photoPath?: string | null;
+  storageKey?: string | null;
+  photoIntegrityStatus?: string | null;
+  senderId?: string | null;
+  senderName?: string | null;
   qrCodeData?: string | null;
   status: string;
   batch?: { batchNumber: string; title: string } | null;
@@ -64,6 +75,26 @@ interface StudentDirectoryClientProps {
   departments: string[];
   batches: { id: string; batchNumber: string; title: string }[];
   userRole: UserRole;
+}
+
+/**
+ * Receiver Anti-Inspection Helper:
+ * Wraps sensitive student identity strings in segmented, unselectable DOM nodes
+ * to prevent plain text scraping via dev tools element inspector.
+ */
+function renderMaskedSecure(text: string | null | undefined, isReceiver: boolean) {
+  if (!text) return "—";
+  if (!isReceiver) return text;
+
+  return (
+    <span data-sb-protected="mask-v2" className="inline-block pointer-events-none select-none">
+      {text.split("").map((ch, idx) => (
+        <span key={idx} data-sec={idx % 2 === 0 ? "1" : "0"} className="select-none">
+          {ch}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
@@ -83,6 +114,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
   // Dual-Persistence Client State
   const [displayStudents, setDisplayStudents] = useState<StudentExtended[]>(students);
+
+  // Photo Editor Modal State for immediate receiver editing
+  const [isPhotoEditorOpen, setIsPhotoEditorOpen] = useState(false);
+  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
+
+  const isReceiver = userRole === "RECEIVER";
+  const isAdmin = userRole === "ADMIN";
 
   // 1. Initial Load: Merge server students, localStorage, and pull from /api/students/sync
   useEffect(() => {
@@ -311,7 +349,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     });
   };
 
-  // Clear All Students (User Requirement)
+  // Clear All Students
   const handleClearAllStudents = () => {
     if (
       confirm(
@@ -329,17 +367,113 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }
   };
 
+  // Handle saving photo edited via PhotoEditorModal
+  const handleSaveEditedPhoto = async (editedBlob: Blob) => {
+    if (!activeStudent) return;
+    setIsSavingPhoto(true);
+    try {
+      const file = new File([editedBlob], `${activeStudent.studentId}_edited.jpg`, {
+        type: "image/jpeg",
+      });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("studentId", activeStudent.studentId);
+
+      const uploadRes = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error("Failed to upload edited photo");
+      }
+
+      const uploadResult = await uploadRes.json();
+      const newRelativePath = uploadResult.relativePath;
+      const newStorageKey = uploadResult.storageKey || newRelativePath;
+
+      // Update database
+      await updateStudentAction(activeStudent.id, {
+        photoPath: newRelativePath,
+      });
+
+      // Cache-busted URL for immediate visual reflection
+      const cacheBusted = `${newRelativePath}?t=${Date.now()}`;
+      const updated: StudentExtended = {
+        ...activeStudent,
+        photoPath: cacheBusted,
+        storageKey: newStorageKey,
+        photoIntegrityStatus: "PHOTO_VERIFIED",
+      };
+
+      // 1. Update active drawer
+      setActiveStudent(updated);
+
+      // 2. Update directory table immediately
+      setDisplayStudents((prev) =>
+        prev.map((s) => (s.id === activeStudent.id ? updated : s))
+      );
+
+      // 3. Update localStorage
+      try {
+        const raw = localStorage.getItem("sb_enrolled_students");
+        if (raw) {
+          const list: StudentExtended[] = JSON.parse(raw);
+          const next = list.map((s) =>
+            s.id === activeStudent.id ? { ...s, photoPath: cacheBusted } : s
+          );
+          localStorage.setItem("sb_enrolled_students", JSON.stringify(next));
+        }
+      } catch {}
+
+      // 4. Publish real-time sync event
+      publishStudentSync("UPSERT", updated).catch(() => {});
+
+      setIsPhotoEditorOpen(false);
+    } catch (err: any) {
+      console.error("Photo editing save error:", err);
+      alert("Failed to save edited photo: " + (err?.message || "Unknown error"));
+    } finally {
+      setIsSavingPhoto(false);
+    }
+  };
+
   const totalEffective = Math.max(totalCount, displayStudents.length);
   const totalPages = Math.ceil(totalEffective / pageSize) || 1;
   const startItem = totalEffective === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalEffective);
 
   return (
-    <div className="space-y-4">
+    <div
+      className={`space-y-4 ${isReceiver ? "select-none" : ""}`}
+      onContextMenu={(e) => {
+        if (isReceiver) {
+          e.preventDefault();
+        }
+      }}
+      onCopy={(e) => {
+        if (isReceiver) {
+          e.preventDefault();
+        }
+      }}
+    >
+      {/* Receiver Security Notice Banner */}
+      {isReceiver && (
+        <div className="rounded-lg border border-neutral-800 bg-neutral-950 px-4 py-2 text-[11px] text-neutral-400 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="h-3.5 w-3.5 text-neutral-300" />
+            <span>
+              Receiver Hardened Mode: Context Menu, DOM Inspection Scrapers, and Text Selection are disabled for credential security.
+            </span>
+          </div>
+          <span className="font-mono text-[10px] text-neutral-500 uppercase">Tamper-Resistant UI</span>
+        </div>
+      )}
+
       {/* Search & Multi-Filter Controls Bar */}
       <div className="rounded-2xl border border-border bg-surface p-4 space-y-3">
-        <form onSubmit={handleSearchSubmit} className="flex gap-2">
-          <div className="relative flex-1">
+        <form onSubmit={handleSearchSubmit} className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-foreground-muted" />
             <input
               type="text"
@@ -349,16 +483,39 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               className="w-full rounded-xl border border-border bg-surface-secondary pl-10 pr-4 py-2 text-xs text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
             />
           </div>
+
           <button
             type="submit"
             className="rounded-xl bg-black px-5 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors"
           >
             Search
           </button>
+
+          {/* Export Buttons */}
+          <a
+            href="/api/students/export?format=csv"
+            download="students_export.csv"
+            className="rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50 transition-colors flex items-center gap-1.5 shrink-0 shadow-xs"
+            title="Export CSV (includes Emergency Contact Phone)"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+            <span>Export CSV</span>
+          </a>
+
+          <a
+            href="/api/students/export?format=excel"
+            download="students_export.xlsx"
+            className="rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50 transition-colors flex items-center gap-1.5 shrink-0 shadow-xs"
+            title="Export Excel (includes Emergency Contact Phone)"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-blue-600" />
+            <span>Export Excel</span>
+          </a>
+
           <button
             type="button"
             onClick={handleClearAllStudents}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-mono font-semibold text-neutral-700 hover:text-red-600 hover:border-red-300 transition-colors"
+            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-mono font-semibold text-neutral-700 hover:text-red-600 hover:border-red-300 transition-colors shrink-0"
             title="Delete all data to feed fresh records"
           >
             Clear All Data
@@ -477,7 +634,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Grade</th>
                 <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Photo</th>
+                <th className="px-4 py-3">Emergency Phone</th>
+                {/* SENDER ATTRIBUTION: STRICTLY ADMIN ONLY */}
+                {isAdmin && (
+                  <th className="px-4 py-3 text-amber-700 bg-amber-50/50">Sender Station</th>
+                )}
+                <th className="px-4 py-3">Integrity</th>
                 <th className="px-4 py-3">QR</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -485,13 +647,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <tbody className="divide-y divide-border">
               {displayStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-16 px-6 text-center bg-white">
+                  <td colSpan={isAdmin ? 11 : 10} className="py-16 px-6 text-center bg-white">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
                       <div className="w-14 h-14 rounded-2xl bg-neutral-100 border border-black/10 flex items-center justify-center text-black">
                         <Users className="w-7 h-7" />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-base font-bold text-black tracking-tight">Student Directory is Empty (0 Records)</h4>
+                        <h4 className="text-base font-bold text-black tracking-tight">
+                          Student Directory is Empty (0 Records)
+                        </h4>
                         <p className="text-xs text-neutral-500 leading-relaxed">
                           All previous data has been purged. The database is clean and ready to accept your fresh real-world data feed (up to 20,000+ students).
                         </p>
@@ -553,23 +717,50 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       </td>
 
                       <td className="px-4 py-3 font-mono font-semibold text-foreground">
-                        {student.studentId}
+                        {renderMaskedSecure(student.studentId, isReceiver)}
                       </td>
 
                       <td className="px-4 py-3 font-medium text-foreground">
-                        {student.fullName}
+                        {renderMaskedSecure(student.fullName, isReceiver)}
                       </td>
 
                       <td className="px-4 py-3 text-foreground-muted">{student.grade}</td>
-                      <td className="px-4 py-3 text-foreground-muted font-mono">{student.phone}</td>
+                      
+                      <td className="px-4 py-3 text-foreground-muted font-mono">
+                        {renderMaskedSecure(student.phone, isReceiver)}
+                      </td>
 
-                      {/* Photo Status */}
-                      <td className="px-4 py-3">
-                        {hasPhoto ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-black">
-                            <CheckCircle2 className="h-3 w-3 text-black" /> OK
+                      {/* Emergency Phone */}
+                      <td className="px-4 py-3 text-foreground-muted font-mono">
+                        {renderMaskedSecure(student.emergencyContactPhone, isReceiver)}
+                      </td>
+
+                      {/* SENDER ATTRIBUTION: ADMIN ONLY */}
+                      {isAdmin && (
+                        <td className="px-4 py-3 font-mono">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-900 text-[10px] font-semibold">
+                            {student.senderName || student.senderId || "Central Station"}
                           </span>
-                        ) : null}
+                        </td>
+                      )}
+
+                      {/* Photo Integrity Badge */}
+                      <td className="px-4 py-3">
+                        {student.photoIntegrityStatus === "PHOTO_VERIFIED" || (hasPhoto && !student.photoIntegrityStatus) ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <CheckCircle2 className="h-3 w-3 text-emerald-600" /> OK
+                          </span>
+                        ) : student.photoIntegrityStatus === "PHOTO_MISSING" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-rose-800 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                            <AlertCircle className="h-3 w-3 text-rose-600" /> MISSING
+                          </span>
+                        ) : student.photoIntegrityStatus === "PHOTO_REPAIR_REQUIRED" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            <AlertCircle className="h-3 w-3 text-amber-600" /> REPAIR
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-neutral-400">NO PHOTO</span>
+                        )}
                       </td>
 
                       {/* QR Status */}
@@ -678,7 +869,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <div className="flex items-center justify-between border-b border-border pb-4">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Student Profile Details</h3>
-                <span className="text-[10px] font-mono text-accent">{activeStudent.studentId}</span>
+                <span className="text-[10px] font-mono text-accent">
+                  {renderMaskedSecure(activeStudent.studentId, isReceiver)}
+                </span>
               </div>
               <button
                 onClick={() => setActiveStudent(null)}
@@ -694,7 +887,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <span className="text-[10px] font-mono uppercase text-foreground-muted block">
                   Official Portrait
                 </span>
-                <div className="aspect-[3/4] rounded-xl border border-border bg-black overflow-hidden flex items-center justify-center">
+                <div className="aspect-[3/4] rounded-xl border border-border bg-black overflow-hidden flex items-center justify-center relative group">
                   {activeStudent.photoPath ? (
                     <img
                       src={activeStudent.photoPath}
@@ -705,8 +898,20 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     <Camera className="h-6 w-6 text-foreground-subtle" />
                   )}
                 </div>
+
                 {activeStudent.photoPath && (
-                  <div className="pt-1 space-y-1">
+                  <div className="pt-2 space-y-2">
+                    {/* EDIT PHOTO BUTTON FOR RECEIVER / SENDER / ADMIN */}
+                    <button
+                      type="button"
+                      onClick={() => setIsPhotoEditorOpen(true)}
+                      disabled={isSavingPhoto}
+                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-black text-white px-3 py-1.5 text-xs font-semibold hover:bg-neutral-800 disabled:opacity-50 transition-colors shadow-xs"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                      <span>{isSavingPhoto ? "Saving Portrait..." : "Edit / Crop Portrait"}</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => handleDownloadSinglePhoto(activeStudent.photoPath!, activeStudent.fullName)}
@@ -714,7 +919,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     >
                       <Download className="h-3 w-3" /> Download Photo ({activeStudent.fullName}.jpg)
                     </button>
-                    <div className="text-[10px] font-mono text-neutral-500 truncate" title={`/photos/${activeStudent.fullName}.jpg`}>
+                    <div
+                      className="text-[10px] font-mono text-neutral-500 truncate"
+                      title={`/photos/${activeStudent.fullName}.jpg`}
+                    >
                       Path: /photos/{activeStudent.fullName}.jpg
                     </div>
                   </div>
@@ -745,20 +953,46 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <div className="space-y-3 divide-y divide-border text-xs">
               <div className="pt-2 flex justify-between">
                 <span className="text-foreground-muted">Name:</span>
-                <strong className="text-foreground">{activeStudent.fullName}</strong>
+                <strong className="text-foreground">
+                  {renderMaskedSecure(activeStudent.fullName, isReceiver)}
+                </strong>
               </div>
+
               <div className="pt-2 flex justify-between">
                 <span className="text-foreground-muted">Grade:</span>
                 <span className="text-foreground">{activeStudent.grade}</span>
               </div>
+
               <div className="pt-2 flex justify-between">
                 <span className="text-foreground-muted">Gender:</span>
                 <span className="text-foreground">{activeStudent.sex}</span>
               </div>
+
               <div className="pt-2 flex justify-between">
                 <span className="text-foreground-muted">Phone:</span>
-                <span className="text-foreground font-mono">{activeStudent.phone}</span>
+                <span className="text-foreground font-mono">
+                  {renderMaskedSecure(activeStudent.phone, isReceiver)}
+                </span>
               </div>
+
+              {/* EMERGENCY CONTACT PHONE */}
+              <div className="pt-2 flex justify-between">
+                <span className="text-foreground-muted font-medium">Emergency Phone:</span>
+                <span className="text-foreground font-mono font-semibold text-rose-600">
+                  {renderMaskedSecure(activeStudent.emergencyContactPhone || activeStudent.phone, isReceiver)}
+                </span>
+              </div>
+
+              {/* SENDER ATTRIBUTION: ADMIN ONLY */}
+              {isAdmin && (
+                <div className="pt-2 flex justify-between bg-amber-50/60 p-2 rounded border border-amber-200">
+                  <span className="text-amber-900 font-semibold">Sender Station:</span>
+                  <span className="text-amber-950 font-mono font-bold">
+                    {activeStudent.senderName || activeStudent.senderId || "Central Station"}
+                  </span>
+                </div>
+              )}
+
               {activeStudent.school && (
                 <div className="pt-2 flex justify-between">
                   <span className="text-foreground-muted">School:</span>
@@ -781,12 +1015,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <div className="pt-2 flex justify-between">
                   <span className="text-foreground-muted">Guardian:</span>
                   <span className="text-foreground">{activeStudent.guardianFullName}</span>
-                </div>
-              )}
-              {activeStudent.emergencyContactPhone && (
-                <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted">Emergency Phone:</span>
-                  <span className="text-foreground font-mono">{activeStudent.emergencyContactPhone}</span>
                 </div>
               )}
               {activeStudent.bloodType && (
@@ -814,6 +1042,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* Receiver / Operator Photo Editing Modal */}
+      {isPhotoEditorOpen && activeStudent?.photoPath && (
+        <PhotoEditorModal
+          isOpen={isPhotoEditorOpen}
+          onClose={() => setIsPhotoEditorOpen(false)}
+          originalImageSrc={activeStudent.photoPath}
+          onSave={handleSaveEditedPhoto}
+        />
       )}
     </div>
   );

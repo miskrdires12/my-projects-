@@ -1,10 +1,12 @@
 // ============================================================================
-// STUDENT BRIDGE — PHOTO UPLOAD & DUAL STORAGE (ORIGINAL + EDITED) API
+// STUDENT BRIDGE — PHOTO UPLOAD & MULTI-TIER PRIVATE STORAGE API
+// Generates Thumbnail, Preview, and Original tiers in private storage.
+// Enforces signed URLs, sets photo integrity status, and links metadata.
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { processAndSaveStudentPhoto } from "@/lib/image-processing";
+import { processAndStoreMultiTierPhoto } from "@/lib/storage-service";
 import prisma from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
@@ -14,7 +16,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // SENDER and ADMIN are authorized to upload student photos
+  // SENDER, RECEIVER, and ADMIN are authorized to upload student photos
   if (session.role !== "SENDER" && session.role !== "ADMIN" && session.role !== "RECEIVER") {
     return NextResponse.json(
       { error: "Forbidden: SENDER, RECEIVER, or ADMIN role required" },
@@ -25,28 +27,22 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file");
-    const originalFile = formData.get("originalFile");
     const studentId = formData.get("studentId") as string | null;
     const cropData = formData.get("cropData") as string | null;
     const filterData = formData.get("filterData") as string | null;
 
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json(
-        { error: "No edited/primary image file provided in request payload." },
+        { error: "No image file provided in request payload." },
         { status: 400 }
       );
     }
 
-    const editedBuffer = Buffer.from(await file.arrayBuffer());
-    const editedMime = file.type || "image/jpeg";
-    const editedResult = await processAndSaveStudentPhoto(editedBuffer, editedMime, "edited");
+    const inputBuffer = Buffer.from(await file.arrayBuffer());
+    const effectiveStudentId = studentId || `unassigned_${Date.now()}`;
 
-    let originalResult = editedResult;
-    if (originalFile && originalFile instanceof Blob) {
-      const originalBuffer = Buffer.from(await originalFile.arrayBuffer());
-      const originalMime = originalFile.type || "image/jpeg";
-      originalResult = await processAndSaveStudentPhoto(originalBuffer, originalMime, "original");
-    }
+    // Process all 3 tiers (thumbnail, preview, original) into private storage
+    const multiTier = await processAndStoreMultiTierPhoto(inputBuffer, effectiveStudentId);
 
     let photoRecord = null;
     if (studentId) {
@@ -59,19 +55,29 @@ export async function POST(request: NextRequest) {
           photoRecord = await prisma.studentPhoto.create({
             data: {
               studentId: student.id,
-              originalPath: originalResult.relativePath,
-              editedPath: editedResult.relativePath,
-              width: editedResult.width,
-              height: editedResult.height,
+              originalPath: multiTier.originalKey,
+              editedPath: multiTier.previewKey,
+              previewPath: multiTier.previewKey,
+              thumbnailPath: multiTier.thumbnailKey,
+              storageKey: multiTier.previewKey,
+              fileSizeBytes: multiTier.fileSizeBytes,
+              width: multiTier.width,
+              height: multiTier.height,
               cropData: cropData || null,
               filterData: filterData || null,
               status: "EDITED",
+              integrityStatus: "PHOTO_VERIFIED",
             },
           });
 
           await prisma.student.update({
             where: { id: student.id },
-            data: { photoPath: editedResult.relativePath },
+            data: {
+              photoPath: multiTier.previewUrl, // Serve signed preview URL for display
+              storageKey: multiTier.previewKey,
+              photoIntegrityStatus: "PHOTO_VERIFIED",
+              storageSyncAt: new Date(),
+            },
           });
         }
       } catch (dbErr) {
@@ -81,12 +87,19 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        relativePath: editedResult.relativePath,
-        originalPath: originalResult.relativePath,
-        fileName: editedResult.fileName,
-        width: editedResult.width,
-        height: editedResult.height,
+        success: true,
+        storageKey: multiTier.storageKey,
+        previewUrl: multiTier.previewUrl,
+        thumbnailUrl: multiTier.thumbnailUrl,
+        originalUrl: multiTier.originalUrl,
+        // Backwards compatibility with previous field names
+        relativePath: multiTier.previewUrl,
+        originalPath: multiTier.originalUrl,
+        fileName: multiTier.previewKey.split("/").pop(),
+        width: multiTier.width,
+        height: multiTier.height,
         photoId: photoRecord?.id ?? null,
+        photoIntegrityStatus: "PHOTO_VERIFIED",
       },
       { status: 201 }
     );
