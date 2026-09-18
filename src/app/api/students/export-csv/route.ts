@@ -73,6 +73,7 @@ async function handleExport(options: ExportOptions) {
         sex: true,
         grade: true,
         phone: true,
+        emergencyContactPhone: true,
         photoPath: true,
         bloodType: true,
       },
@@ -116,6 +117,7 @@ async function handleExport(options: ExportOptions) {
           { wch: 10 }, // Sex
           { wch: 14 }, // Grade
           { wch: 18 }, // Phone
+          { wch: 18 }, // EmergencyPhone
           { wch: 14 }, // BloodType
           { wch: 70 }, // @photo
         ]
@@ -125,6 +127,7 @@ async function handleExport(options: ExportOptions) {
           { wch: 10 }, // Sex
           { wch: 14 }, // Grade
           { wch: 18 }, // Phone
+          { wch: 18 }, // EmergencyPhone
           { wch: 70 }, // @photo
         ];
 

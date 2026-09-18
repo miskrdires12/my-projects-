@@ -25,6 +25,7 @@ import {
   X,
   RotateCcw,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { convertBlobTo300Dpi } from "@/lib/jpeg-dpi";
 
@@ -71,6 +72,8 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState<string>(originalImageSrc);
+  const [loadingImage, setLoadingImage] = useState<boolean>(true);
 
   // Active Bottom Tab
   const [activeTab, setActiveTab] = useState<ActiveTab>("crop");
@@ -185,19 +188,84 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     [getRenderedImageRect]
   );
 
-  // Initialize and load image
+  // Initialize and load image reliably with blob URL and CORS fallback
   useEffect(() => {
     if (!originalImageSrc) return;
+    let isCancelled = false;
+    let createdBlobUrl: string | null = null;
+    setLoadingImage(true);
     setIsImageLoaded(false);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = originalImageSrc;
-    img.onload = () => {
-      imageRef.current = img;
-      setIsImageLoaded(true);
-      resetToDefaultCrop(img);
+
+    const loadImageElement = (srcUrl: string) => {
+      const img = new Image();
+      // Only set crossOrigin if not a blob or data URI
+      if (!srcUrl.startsWith("blob:") && !srcUrl.startsWith("data:")) {
+        img.crossOrigin = "anonymous";
+      }
+      img.onload = () => {
+        if (isCancelled) return;
+        imageRef.current = img;
+        setResolvedSrc(srcUrl);
+        setIsImageLoaded(true);
+        setLoadingImage(false);
+        resetToDefaultCrop(img);
+      };
+      img.onerror = () => {
+        if (isCancelled) return;
+        // If failed with anonymous crossOrigin, retry without crossOrigin
+        if (img.crossOrigin) {
+          const fallbackImg = new Image();
+          fallbackImg.src = srcUrl;
+          fallbackImg.onload = () => {
+            if (isCancelled) return;
+            imageRef.current = fallbackImg;
+            setResolvedSrc(srcUrl);
+            setIsImageLoaded(true);
+            setLoadingImage(false);
+            resetToDefaultCrop(fallbackImg);
+          };
+          fallbackImg.onerror = () => {
+            if (isCancelled) return;
+            setLoadingImage(false);
+          };
+        } else {
+          setLoadingImage(false);
+        }
+      };
+      img.src = srcUrl;
     };
-  }, [originalImageSrc, resetToDefaultCrop]);
+
+    if (originalFile) {
+      createdBlobUrl = URL.createObjectURL(originalFile);
+      loadImageElement(createdBlobUrl);
+    } else if (originalImageSrc.startsWith("blob:") || originalImageSrc.startsWith("data:")) {
+      loadImageElement(originalImageSrc);
+    } else {
+      // Fetch as same-origin Blob to eliminate any CORS / canvas tainting issues
+      fetch(originalImageSrc)
+        .then((res) => {
+          if (!res.ok) throw new Error("Fetch failed");
+          return res.blob();
+        })
+        .then((blob) => {
+          if (isCancelled) return;
+          createdBlobUrl = URL.createObjectURL(blob);
+          loadImageElement(createdBlobUrl);
+        })
+        .catch(() => {
+          if (isCancelled) return;
+          // Fallback directly to image element
+          loadImageElement(originalImageSrc);
+        });
+    }
+
+    return () => {
+      isCancelled = true;
+      if (createdBlobUrl) {
+        URL.revokeObjectURL(createdBlobUrl);
+      }
+    };
+  }, [originalImageSrc, originalFile, resetToDefaultCrop]);
 
   // Recalculate container bounds on window resize
   useEffect(() => {
@@ -647,11 +715,19 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           className="relative aspect-[3/4] h-full max-h-[66vh] w-auto max-w-[95vw] bg-neutral-950 rounded-lg overflow-hidden flex items-center justify-center shadow-2xl border border-neutral-900"
           style={{ touchAction: "none" }}
         >
+          {/* Loading Indicator */}
+          {loadingImage && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-neutral-950/80 z-20 text-white font-mono text-xs">
+              <Loader2 className="h-7 w-7 animate-spin text-[#8fe617]" />
+              <span className="text-[#a4b8ad]">Preparing high-res photo...</span>
+            </div>
+          )}
+
           {/* Underlying Transformed Image */}
-          {isImageLoaded && originalImageSrc && (
+          {(isImageLoaded || !loadingImage) && (resolvedSrc || originalImageSrc) && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={originalImageSrc}
+              src={resolvedSrc || originalImageSrc}
               alt="Photo for editing"
               draggable={false}
               className="h-full w-full object-contain pointer-events-none"

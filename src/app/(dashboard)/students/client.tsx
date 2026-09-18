@@ -265,26 +265,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       (studentIdOrId) => {
         try {
           deleteStudentFromDB(studentIdOrId).catch(() => {});
-          const rawPerm = localStorage.getItem("sb_students_permanent_backup");
-          if (rawPerm) {
-            try {
-              const permList = JSON.parse(rawPerm);
-              const filtered = permList.filter(
-                (s: any) => s.id !== studentIdOrId && s.studentId !== studentIdOrId
-              );
-              localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filtered));
-            } catch {}
-          }
-          const rawPending = localStorage.getItem("sb_offline_pending_students");
-          if (rawPending) {
-            try {
-              const pendingList = JSON.parse(rawPending);
-              const filtered = pendingList.filter(
-                (s: any) => s.studentId !== studentIdOrId && s.id !== studentIdOrId
-              );
-              localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
-            } catch {}
-          }
+          localStorage.removeItem("sb_students_permanent_backup");
+          localStorage.removeItem("sb_enrolled_students");
+          localStorage.removeItem("sb_offline_pending_students");
           localStorage.removeItem("sb_deleted_student_ids");
         } catch {}
 
@@ -797,42 +780,23 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   };
 
   // Single Delete (Total Expunge across all tiers: DB, disk files, IndexedDB, local storage)
+  const [deleteTargetModal, setDeleteTargetModal] = useState<{ id: string; name: string; studentId?: string } | null>(null);
+  const [isDeletingRecord, setIsDeletingRecord] = useState(false);
+
   const handleDelete = (id: string, name: string, studentId?: string) => {
-    if (!confirm(`Are you sure you want to permanently delete student "${name}"?`)) return;
+    setDeleteTargetModal({ id, name, studentId });
+  };
+
+  const handleExecuteDelete = (type: "TEMPORARY" | "PERMANENT") => {
+    if (!deleteTargetModal) return;
+    const { id, studentId } = deleteTargetModal;
+    setIsDeletingRecord(true);
 
     try {
       deleteStudentFromDB(id).catch(() => {});
       if (studentId) deleteStudentFromDB(studentId).catch(() => {});
-
-      const raw = localStorage.getItem("sb_enrolled_students");
-      if (raw) {
-        const localList = parseSecureLocalList(raw);
-        const filtered = localList.filter(
-          (s: any) => s.id !== id && s.studentId !== studentId && s.id !== studentId
-        );
-        safeSaveLocalEnrolledStudents(filtered);
-      }
-
-      const rawPerm = localStorage.getItem("sb_students_permanent_backup");
-      if (rawPerm) {
-        try {
-          const permList = JSON.parse(rawPerm);
-          const filteredPerm = permList.filter(
-            (s: any) => s.id !== id && s.studentId !== studentId && s.id !== studentId && s.studentId !== id
-          );
-          localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filteredPerm));
-        } catch {}
-      }
-
-      const rawPending = localStorage.getItem("sb_offline_pending_students");
-      if (rawPending) {
-        try {
-          const pendingList = JSON.parse(rawPending);
-          const filtered = pendingList.filter((s: any) => s.studentId !== studentId && s.id !== id);
-          localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
-        } catch {}
-      }
-
+      localStorage.removeItem("sb_students_permanent_backup");
+      localStorage.removeItem("sb_enrolled_students");
       localStorage.removeItem("sb_deleted_student_ids");
       publishStudentSync("DELETE", studentId || id).catch(() => {});
     } catch {}
@@ -843,10 +807,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     if (activeStudent && (activeStudent.id === id || activeStudent.studentId === studentId)) {
       setActiveStudent(null);
     }
+    setDeleteTargetModal(null);
+    setIsDeletingRecord(false);
 
     startTransition(async () => {
       try {
-        const res = await deleteStudentAction(id, studentId);
+        const res = await deleteStudentAction(id, studentId, type);
         if (!res.success) {
           alert(res.error || "Failed to delete student record.");
         }
@@ -892,28 +858,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         safeSaveLocalEnrolledStudents(filtered);
       }
 
-      const rawPerm = localStorage.getItem("sb_students_permanent_backup");
-      if (rawPerm) {
-        try {
-          const permList = JSON.parse(rawPerm);
-          const filteredPerm = permList.filter(
-            (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
-          );
-          localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filteredPerm));
-        } catch {}
-      }
-
-      const rawPending = localStorage.getItem("sb_offline_pending_students");
-      if (rawPending) {
-        try {
-          const pendingList = JSON.parse(rawPending);
-          const filtered = pendingList.filter(
-            (s: any) => !selectedIds.has(s.id) && !selectedIds.has(s.studentId)
-          );
-          localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
-        } catch {}
-      }
-
+      localStorage.removeItem("sb_students_permanent_backup");
+      localStorage.removeItem("sb_enrolled_students");
+      localStorage.removeItem("sb_offline_pending_students");
       localStorage.removeItem("sb_deleted_student_ids");
 
       idsToDelete.forEach((id) => {
@@ -1055,6 +1002,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           { wch: 10 }, // Sex
           { wch: 14 }, // Grade
           { wch: 18 }, // Phone
+          { wch: 18 }, // EmergencyPhone
           { wch: 14 }, // BloodType
           { wch: 70 }, // @photo
         ]
@@ -1064,6 +1012,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           { wch: 10 }, // Sex
           { wch: 14 }, // Grade
           { wch: 18 }, // Phone
+          { wch: 18 }, // EmergencyPhone
           { wch: 70 }, // @photo
         ];
     XLSX.utils.book_append_sheet(wb, ws, "Students");
@@ -2497,6 +2446,88 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Temporary vs Permanent Delete Modal */}
+      {deleteTargetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-4 font-mono">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Student Record</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteTargetModal(null)}
+                className="text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-[#080808] dark:text-[#f2f7f4] font-bold">
+                {deleteTargetModal.name} ({deleteTargetModal.studentId || deleteTargetModal.id})
+              </p>
+              <p className="text-[#6b7771] dark:text-[#8a9e93]">
+                Please choose whether to remove this record temporarily from the Receiver workstation or expunge it permanently everywhere.
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {/* Option 1: Temporary Delete */}
+              <button
+                type="button"
+                disabled={isDeletingRecord}
+                onClick={() => handleExecuteDelete("TEMPORARY")}
+                className="w-full text-left p-3.5 rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-400 dark:hover:border-amber-600 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-700 dark:text-amber-300 text-xs">
+                    Temporary Delete (Hide from Receiver)
+                  </span>
+                  <span className="text-[10px] bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-md font-black">
+                    RECOMMENDED
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                  Removes the student from the Receiver queue and printing view. All demographic data and photos remain intact in Supabase database.
+                </p>
+              </button>
+
+              {/* Option 2: Permanent Delete */}
+              <button
+                type="button"
+                disabled={isDeletingRecord}
+                onClick={() => handleExecuteDelete("PERMANENT")}
+                className="w-full text-left p-3.5 rounded-2xl border border-red-300 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20 hover:border-red-500 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-red-600 dark:text-red-400 text-xs">
+                    Permanent Delete (Expunge Everywhere)
+                  </span>
+                  <span className="text-[10px] bg-red-200 dark:bg-red-900/60 text-red-800 dark:text-red-200 px-2 py-0.5 rounded-md font-black">
+                    IRREVERSIBLE
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                  Irreversibly erases this student record, photos, and files across Supabase database, cloud storage, and all connected workstations.
+                </p>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-[#eef5f1] dark:border-[#1c261e]">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetModal(null)}
+                className="px-4 py-2 text-xs font-bold text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

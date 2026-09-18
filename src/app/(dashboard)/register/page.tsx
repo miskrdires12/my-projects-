@@ -175,11 +175,13 @@ export default function RegisterPage() {
       }
     } catch {}
 
-    // Hydrate offline pending registrations from storage
+    // Hydrate offline pending registrations from secure storage
     try {
-      const rawQueue = localStorage.getItem("sb_offline_pending_students");
+      localStorage.removeItem("sb_offline_pending_students");
+      const rawQueue = localStorage.getItem("_sec_off_pend_q");
       if (rawQueue) {
-        const parsed = JSON.parse(rawQueue);
+        const jsonStr = decodeURIComponent(atob(rawQueue));
+        const parsed = JSON.parse(jsonStr);
         if (Array.isArray(parsed)) {
           setOfflinePendingQueue(parsed);
         }
@@ -272,7 +274,12 @@ export default function RegisterPage() {
 
     setOfflinePendingQueue(remainingQueue);
     try {
-      localStorage.setItem("sb_offline_pending_students", JSON.stringify(remainingQueue));
+      localStorage.removeItem("sb_offline_pending_students");
+      if (remainingQueue.length > 0) {
+        localStorage.setItem("_sec_off_pend_q", btoa(encodeURIComponent(JSON.stringify(remainingQueue))));
+      } else {
+        localStorage.removeItem("_sec_off_pend_q");
+      }
     } catch {}
     setIsSyncingOfflineQueue(false);
 

@@ -133,3 +133,35 @@ export async function deleteUserAction(id: string) {
     };
   }
 }
+
+export async function resetUserDeviceAction(userId: string) {
+  try {
+    const session = await requireAuth("user:update");
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        boundDeviceId: null,
+        boundDeviceInfo: null,
+      },
+    });
+
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "USER_DEVICE_RESET",
+      entityType: "USER",
+      entityId: userId,
+      metadata: { targetUserId: userId },
+    });
+
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (err: unknown) {
+    console.error("[resetUserDeviceAction] Failed to reset device lock:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to reset operator device lock",
+    };
+  }
+}
+

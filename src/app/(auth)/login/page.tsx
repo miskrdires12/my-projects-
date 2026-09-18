@@ -19,6 +19,7 @@ import {
   Sun,
 } from "lucide-react";
 import { loginAction, quickRoleLoginAction } from "@/actions/auth";
+import { getClientDeviceFingerprint } from "@/lib/device-id";
 
 type WorkstationRole = "SENDER" | "RECEIVER" | "ADMIN";
 
@@ -135,6 +136,11 @@ export default function LoginPage() {
     const formData = new FormData();
     formData.set("emailOrUsername", usernameOrEmail);
     formData.set("password", password);
+    try {
+      const fp = getClientDeviceFingerprint();
+      formData.set("deviceId", fp.deviceId);
+      formData.set("deviceInfo", fp.deviceInfo);
+    } catch {}
 
     startTransition(async () => {
       try {

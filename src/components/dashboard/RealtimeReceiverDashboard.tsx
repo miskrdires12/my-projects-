@@ -33,11 +33,13 @@ import {
   Square,
   FileSpreadsheet,
   Filter,
+  Trash2,
 } from "lucide-react";
 
 import JSZip from "jszip";
 import { subscribeToCloudSync } from "@/lib/sync-client";
 import { deleteStudentFromDB, reconcileLocalCacheWithServer } from "@/lib/idb-storage";
+import { deleteStudentAction } from "@/actions/students";
 import { TelegramStagePhoto } from "@/components/common/TelegramStagePhoto";
 import {
   getReceiverCsvPrefix,
@@ -84,6 +86,51 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [noticeVisible, setNoticeVisible] = useState(Boolean(notice));
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  // Deletion Modal State (Temporary vs Permanent)
+  const [deleteModalStudent, setDeleteModalStudent] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleExecuteDelete = async (type: "TEMPORARY" | "PERMANENT") => {
+    if (!deleteModalStudent) return;
+    const target = deleteModalStudent;
+    setIsDeleting(true);
+
+    try {
+      // Optimistic removal from receiver view
+      setAllStudentsList((list) =>
+        list.filter((s) => s.studentId !== target.studentId && s.id !== target.id)
+      );
+      setData((prev) => ({
+        ...prev,
+        totalStudents: Math.max(0, prev.totalStudents - 1),
+        photosCount: target.photoPath ? Math.max(0, prev.photosCount - 1) : prev.photosCount,
+        readyForPrintCount: target.photoPath ? Math.max(0, prev.readyForPrintCount - 1) : prev.readyForPrintCount,
+        recentStudents: (prev.recentStudents || []).filter(
+          (s: any) => s.studentId !== target.studentId && s.id !== target.id
+        ),
+      }));
+
+      deleteStudentFromDB(target.studentId || target.id).catch(() => {});
+
+      const res = await deleteStudentAction(target.id, target.studentId, type);
+      if (!res.success) {
+        alert(res.error || "Failed to process deletion.");
+      } else {
+        setExportNotice(
+          type === "TEMPORARY"
+            ? `Student ${target.fullName || target.studentId} removed from Receiver view (saved in Supabase DB).`
+            : `Student ${target.fullName || target.studentId} permanently expunged everywhere.`
+        );
+        setTimeout(() => setExportNotice(null), 4000);
+      }
+    } catch (err: any) {
+      alert("Error contacting server to delete student.");
+    } finally {
+      setIsDeleting(false);
+      setDeleteModalStudent(null);
+    }
+  };
 
   const playAudioChime = useCallback(() => {
     try {
@@ -286,42 +333,8 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       (deletedStudentId) => {
         try {
           deleteStudentFromDB(deletedStudentId).catch(() => {});
-          const rawPerm = localStorage.getItem("sb_students_permanent_backup");
-          if (rawPerm) {
-            try {
-              const permList = JSON.parse(rawPerm);
-              const filtered = permList.filter(
-                (s: any) => s.id !== deletedStudentId && s.studentId !== deletedStudentId
-              );
-              localStorage.setItem("sb_students_permanent_backup", JSON.stringify(filtered));
-            } catch {}
-          }
-          const rawEnrolled = localStorage.getItem("sb_enrolled_students");
-          if (rawEnrolled) {
-            try {
-              const enrolledList = JSON.parse(rawEnrolled);
-              const filtered = enrolledList.filter(
-                (s: any) => s.id !== deletedStudentId && s.studentId !== deletedStudentId
-              );
-              localStorage.setItem("sb_enrolled_students", JSON.stringify(filtered));
-            } catch {}
-          }
-          const rawPending = localStorage.getItem("sb_offline_pending_students");
-          if (rawPending) {
-            try {
-              const pendingList = JSON.parse(rawPending);
-              const filtered = pendingList.filter(
-                (s: any) => s.studentId !== deletedStudentId && s.id !== deletedStudentId
-              );
-              localStorage.setItem("sb_offline_pending_students", JSON.stringify(filtered));
-            } catch {}
-          }
-          try {
-            const rawDel = localStorage.getItem("sb_deleted_student_ids");
-            const delSet = new Set<string>(rawDel ? JSON.parse(rawDel) : []);
-            delSet.add(deletedStudentId);
-            localStorage.setItem("sb_deleted_student_ids", JSON.stringify(Array.from(delSet)));
-          } catch {}
+          localStorage.removeItem("sb_students_permanent_backup");
+          localStorage.removeItem("sb_enrolled_students");
         } catch {}
 
         setAllStudentsList((list) => list.filter((s) => s.studentId !== deletedStudentId && s.id !== deletedStudentId));
@@ -597,10 +610,17 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       "Grade",
       "Section",
       "Phone",
+      "Emergency Phone",
       "@photo",
       "8-Up Print Readiness",
       "Enrolled Date",
     ];
+
+    const emergency =
+      student.emergencyContactPhone ||
+      student.emergencyPhone ||
+      student.parentPhone ||
+      "";
 
     const row = [
       `"${(student.studentId || "").replace(/"/g, '""')}"`,
@@ -609,6 +629,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       `"${(student.grade || "").replace(/"/g, '""')}"`,
       `"${(student.department || student.section || "").replace(/"/g, '""')}"`,
       `"${formatPhoneForReceiver(student.phone)}"`,
+      `"${formatPhoneForReceiver(emergency)}"`,
       `"${getStudentPhotoLocalPath(student).replace(/"/g, '""')}"`,
       student.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
       `"${student.createdAt || new Date().toISOString()}"`,
@@ -2310,6 +2331,16 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                     >
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
+
+                    {/* Delete Action (Temporary vs Permanent) */}
+                    <button
+                      type="button"
+                      onClick={() => setDeleteModalStudent(s)}
+                      className="p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                      title={`Delete ${s.fullName || s.studentId}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
               );
@@ -2498,6 +2529,88 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Temporary vs Permanent Delete Modal */}
+      {deleteModalStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-4 font-mono">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Student Record</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteModalStudent(null)}
+                className="text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-[#080808] dark:text-[#f2f7f4] font-bold">
+                {deleteModalStudent.fullName || "Student"} ({deleteModalStudent.studentId})
+              </p>
+              <p className="text-[#6b7771] dark:text-[#8a9e93]">
+                Please choose whether to remove this record temporarily from the Receiver workstation or expunge it permanently everywhere.
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {/* Option 1: Temporary Delete */}
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleExecuteDelete("TEMPORARY")}
+                className="w-full text-left p-3.5 rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-400 dark:hover:border-amber-600 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-700 dark:text-amber-300 text-xs">
+                    Temporary Delete (Hide from Receiver)
+                  </span>
+                  <span className="text-[10px] bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-md font-black">
+                    RECOMMENDED
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                  Removes the student from the Receiver queue and printing view. All demographic data and photos remain intact in Supabase database.
+                </p>
+              </button>
+
+              {/* Option 2: Permanent Delete */}
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleExecuteDelete("PERMANENT")}
+                className="w-full text-left p-3.5 rounded-2xl border border-red-300 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20 hover:border-red-500 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-red-600 dark:text-red-400 text-xs">
+                    Permanent Delete (Expunge Everywhere)
+                  </span>
+                  <span className="text-[10px] bg-red-200 dark:bg-red-900/60 text-red-800 dark:text-red-200 px-2 py-0.5 rounded-md font-black">
+                    IRREVERSIBLE
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                  Irreversibly erases this student record, photos, and files across Supabase database, cloud storage, and all connected workstations.
+                </p>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-[#eef5f1] dark:border-[#1c261e]">
+              <button
+                type="button"
+                onClick={() => setDeleteModalStudent(null)}
+                className="px-4 py-2 text-xs font-bold text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

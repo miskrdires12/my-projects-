@@ -29,9 +29,34 @@ export interface OutboxItem {
   lastError?: string;
 }
 
-const ACTIVE_DRAFT_KEY = "sb_sender_active_draft_v2";
-const OUTBOX_STORAGE_KEY = "sb_outbox_queue_v2";
-const COMPLETED_LOG_KEY = "sb_outbox_completed_v2";
+const ACTIVE_DRAFT_KEY = "_sec_act_drf";
+const OUTBOX_STORAGE_KEY = "_sec_outbox_q";
+const COMPLETED_LOG_KEY = "_sec_outbox_cmp";
+
+function scramble(str: string): string {
+  try {
+    return btoa(encodeURIComponent(str));
+  } catch {
+    return "";
+  }
+}
+
+function unscramble(encoded: string): string {
+  try {
+    return decodeURIComponent(atob(encoded));
+  } catch {
+    return "";
+  }
+}
+
+// Purge legacy plaintext keys from Application tab
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("sb_sender_active_draft_v2");
+    localStorage.removeItem("sb_outbox_queue_v2");
+    localStorage.removeItem("sb_outbox_completed_v2");
+  } catch {}
+}
 
 type OutboxListener = (queue: OutboxItem[]) => void;
 const listeners: Set<OutboxListener> = new Set();
@@ -65,7 +90,7 @@ export interface ActiveFormDraft {
 }
 
 /**
- * Persists the current form inputs and photo buffer on every change
+ * Persists the current form inputs and photo buffer on every change (Obfuscated)
  */
 export function saveActiveDraft(draft: {
   formData: Partial<StudentFormInput>;
@@ -78,7 +103,8 @@ export function saveActiveDraft(draft: {
       ...draft,
       timestamp: new Date().toISOString(),
     };
-    localStorage.setItem(ACTIVE_DRAFT_KEY, JSON.stringify(payload));
+    const scrambled = scramble(JSON.stringify(payload));
+    localStorage.setItem(ACTIVE_DRAFT_KEY, scrambled);
   } catch {}
 }
 
@@ -90,7 +116,9 @@ export function getActiveDraft(): ActiveFormDraft | null {
   try {
     const raw = localStorage.getItem(ACTIVE_DRAFT_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const jsonStr = unscramble(raw);
+    if (!jsonStr) return null;
+    return JSON.parse(jsonStr);
   } catch {
     return null;
   }
@@ -115,7 +143,9 @@ export function getOutboxQueue(): OutboxItem[] {
   try {
     const raw = localStorage.getItem(OUTBOX_STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const jsonStr = unscramble(raw);
+    if (!jsonStr) return [];
+    const parsed = JSON.parse(jsonStr);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -125,7 +155,8 @@ export function getOutboxQueue(): OutboxItem[] {
 function saveOutboxQueue(queue: OutboxItem[]): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(queue));
+    const scrambled = scramble(JSON.stringify(queue));
+    localStorage.setItem(OUTBOX_STORAGE_KEY, scrambled);
     notifyListeners();
   } catch (err) {
     console.warn("Notice: Outbox storage quota notice:", err);
@@ -308,14 +339,15 @@ export async function triggerOutboxWorker(): Promise<void> {
           // Append to completed log (keep last 50)
           try {
             const rawCompleted = localStorage.getItem(COMPLETED_LOG_KEY);
-            const completed = rawCompleted ? JSON.parse(rawCompleted) : [];
+            const jsonStr = rawCompleted ? unscramble(rawCompleted) : "";
+            const completed = jsonStr ? JSON.parse(jsonStr) : [];
             completed.unshift({
               studentId: item.studentId,
               fullName: item.payload.fullName,
               grade: item.payload.grade,
               timestamp: new Date().toISOString(),
             });
-            localStorage.setItem(COMPLETED_LOG_KEY, JSON.stringify(completed.slice(0, 50)));
+            localStorage.setItem(COMPLETED_LOG_KEY, scramble(JSON.stringify(completed.slice(0, 50))));
           } catch {}
         } else {
           item.retryCount += 1;

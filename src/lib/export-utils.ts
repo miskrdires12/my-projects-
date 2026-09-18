@@ -6,7 +6,7 @@ export const RECEIVER_STUDENT_PHOTO_FOLDER = "C:\\Users\\athede\\Desktop\\studen
 
 /**
  * Receiver student photo excel headers:
- * ["StudentID", "Name", "Sex", "Grade", "Phone", "@photo"]
+ * ["StudentID", "Name", "Sex", "Grade", "Phone", "EmergencyPhone", "@photo"]
  */
 export const RECEIVER_EXCEL_HEADERS = [
   "StudentID",
@@ -14,6 +14,7 @@ export const RECEIVER_EXCEL_HEADERS = [
   "Sex",
   "Grade",
   "Phone",
+  "EmergencyPhone",
   "@photo",
 ] as const;
 
@@ -163,14 +164,14 @@ export function getStudentPhotoLocalPath(student: StudentPhotoIdentity, folderOv
 
 export function getReceiverExcelHeaders(includeBloodType: boolean = false): string[] {
   if (includeBloodType) {
-    return ["StudentID", "Name", "Sex", "Grade", "Phone", "BloodType", "@photo"];
+    return ["StudentID", "Name", "Sex", "Grade", "Phone", "EmergencyPhone", "BloodType", "@photo"];
   }
   return [...RECEIVER_EXCEL_HEADERS];
 }
 
 /**
  * Maps a student record into receiver columns:
- * [StudentID, Name, Sex, Grade, Phone, (BloodType?), @photo]
+ * [StudentID, Name, Sex, Grade, Phone, EmergencyPhone, (BloodType?), @photo]
  */
 export function formatStudentForReceiverExcel(
   student: {
@@ -179,17 +180,28 @@ export function formatStudentForReceiverExcel(
     sex?: string | null;
     grade: string;
     phone: string;
+    emergencyContactPhone?: string | null;
+    emergencyPhone?: string | null;
+    parentPhone?: string | null;
     photoPath?: string | null;
     bloodType?: string | null;
+    [key: string]: any;
   },
   includeBloodType: boolean = false
 ) {
+  const emergency =
+    student.emergencyContactPhone ||
+    student.emergencyPhone ||
+    student.parentPhone ||
+    "";
+
   const row = [
     student.studentId || "",
     student.fullName || "",
     student.sex || "Male",
     student.grade || "",
     formatPhoneForReceiver(student.phone),
+    formatPhoneForReceiver(emergency),
   ];
 
   if (includeBloodType) {

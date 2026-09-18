@@ -31,6 +31,7 @@ export interface StudentFilterParams {
   sortOrder?: "asc" | "desc";
   page?: number;
   pageSize?: number;
+  includeHidden?: boolean;
 }
 
 export interface StudentActionResult {
@@ -460,11 +461,13 @@ export async function updateStudentPhotoAction(
 }
 
 /**
- * Permanently deletes a student record safely across ephemeral containers and database engines.
+ * Deletes a student record either TEMPORARILY (hidden from Receiver workstation queue, preserved intact in Supabase DB)
+ * or PERMANENTLY (expunged from everywhere: Supabase DB, Supabase Storage, local disk, QR codes).
  */
 export async function deleteStudentAction(
   idOrStudentId: string,
-  optionalStudentId?: string
+  optionalStudentId?: string,
+  deleteType: "PERMANENT" | "TEMPORARY" = "TEMPORARY"
 ): Promise<StudentActionResult> {
   try {
     const session = await getSession();
@@ -492,67 +495,92 @@ export async function deleteStudentAction(
     const targetDbId = student?.id || idOrStudentId;
 
     if (student) {
-      // 1. Delete physical photo files from disk if present
-      const photosToDelete: string[] = [];
-      if (student.photoPath && !student.photoPath.startsWith("data:")) {
-        photosToDelete.push(student.photoPath);
-      }
-      try {
-        const dbPhotos = await prisma.studentPhoto.findMany({
-          where: { studentId: student.id },
-          select: { originalPath: true, editedPath: true },
-        });
-        dbPhotos.forEach((p) => {
-          if (p.originalPath && !p.originalPath.startsWith("data:")) photosToDelete.push(p.originalPath);
-          if (p.editedPath && !p.editedPath.startsWith("data:")) photosToDelete.push(p.editedPath);
-        });
-
-        const fs = await import("fs");
-        const path = await import("path");
-        photosToDelete.forEach((rel) => {
-          try {
-            const cleanRel = rel.split("?")[0].replace(/^\//, "");
-            const fullPath = path.join(process.cwd(), "public", cleanRel);
-            if (fs.existsSync(fullPath)) {
-              fs.unlinkSync(fullPath);
-            }
-          } catch {}
-        });
-      } catch {}
-
-      // Use Safe Student Deletion Pipeline (identifies strictly owned objects and guards against deleting shared assets)
-      try {
-        const { executeSafeStudentDeletion } = await import("@/lib/safe-student-deletion");
-        await executeSafeStudentDeletion(student.id, {
-          userId: session.userId,
-          username: session.username || "Operator",
-          role: session.role,
-        });
-      } catch (safeErr) {
-        console.warn("Notice: executeSafeStudentDeletion non-fatal fallback:", safeErr);
-        // Fallback to direct cascade deletion if needed
-        await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-        await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-        await prisma.studentQR.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-        await prisma.transferRecord.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-        await prisma.student.delete({ where: { id: student.id } }).catch((e) => {
-          console.warn("Prisma student delete warning:", e);
+      if (deleteType === "TEMPORARY") {
+        // TEMPORARY DELETE: Drop from Receiver queue / workstation, but preserve intact in Supabase database & storage
+        await prisma.student.update({
+          where: { id: student.id },
+          data: {
+            receiverHidden: true,
+            hiddenAt: new Date(),
+          },
         });
 
         await createSafeAuditLog({
           userId: session.userId,
-          action: "STUDENT_DELETE",
+          action: "STUDENT_RECEIVER_HIDE",
           entityType: "STUDENT",
           entityId: student.id,
-          metadata: { studentId: student.studentId, name: student.fullName },
+          metadata: {
+            studentId: student.studentId,
+            name: student.fullName,
+            mode: "TEMPORARY_RECEIVER_DELETE",
+          },
         });
+      } else {
+        // PERMANENT DELETE: Expunge from everywhere (DB, files, photos, storage)
+        // 1. Delete physical photo files from disk if present
+        const photosToDelete: string[] = [];
+        if (student.photoPath && !student.photoPath.startsWith("data:")) {
+          photosToDelete.push(student.photoPath);
+        }
+        try {
+          const dbPhotos = await prisma.studentPhoto.findMany({
+            where: { studentId: student.id },
+            select: { originalPath: true, editedPath: true },
+          });
+          dbPhotos.forEach((p) => {
+            if (p.originalPath && !p.originalPath.startsWith("data:")) photosToDelete.push(p.originalPath);
+            if (p.editedPath && !p.editedPath.startsWith("data:")) photosToDelete.push(p.editedPath);
+          });
+
+          const fs = await import("fs");
+          const path = await import("path");
+          photosToDelete.forEach((rel) => {
+            try {
+              const cleanRel = rel.split("?")[0].replace(/^\//, "");
+              const fullPath = path.join(process.cwd(), "public", cleanRel);
+              if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+              }
+            } catch {}
+          });
+        } catch {}
+
+        // Use Safe Student Deletion Pipeline (identifies strictly owned objects and guards against deleting shared assets)
+        try {
+          const { executeSafeStudentDeletion } = await import("@/lib/safe-student-deletion");
+          await executeSafeStudentDeletion(student.id, {
+            userId: session.userId,
+            username: session.username || "Operator",
+            role: session.role,
+          });
+        } catch (safeErr) {
+          console.warn("Notice: executeSafeStudentDeletion non-fatal fallback:", safeErr);
+          // Fallback to direct cascade deletion if needed
+          await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+          await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+          await prisma.studentQR.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+          await prisma.transferRecord.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+          await prisma.student.delete({ where: { id: student.id } }).catch((e) => {
+            console.warn("Prisma student delete warning:", e);
+          });
+
+          await createSafeAuditLog({
+            userId: session.userId,
+            action: "STUDENT_DELETE",
+            entityType: "STUDENT",
+            entityId: student.id,
+            metadata: { studentId: student.studentId, name: student.fullName },
+          });
+        }
       }
     }
 
-    // Always broadcast deletion to Cloud Sync Bus with BOTH identifiers so all devices drop it
+    // Always broadcast deletion to Cloud Sync Bus with BOTH identifiers so all receiver devices drop it
     await publishStudentSync("DELETE", {
       id: targetDbId,
       studentId: targetStudentId,
+      temporary: deleteType === "TEMPORARY",
     }).catch(() => {});
 
     if (targetStudentId && targetStudentId !== targetDbId) {
@@ -591,10 +619,15 @@ export async function getStudentsAction(params: StudentFilterParams = {}) {
     sortOrder = "desc",
     page = 1,
     pageSize = 25,
+    includeHidden = false,
   } = params;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};
+
+  if (!includeHidden) {
+    where.receiverHidden = { not: true };
+  }
 
   if (query && query.trim() !== "") {
     const q = query.trim();

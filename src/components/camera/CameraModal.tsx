@@ -60,9 +60,14 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isFlashlightOn, setIsFlashlightOn] = useState<boolean>(false);
   const [zoom, setZoom] = useState<number>(1.0);
+  const [isEnhancerActive, setIsEnhancerActive] = useState<boolean>(true);
+
+  const touchStartDistRef = useRef<number | null>(null);
+  const touchStartZoomRef = useRef<number>(1.0);
 
   const handleZoomChange = (newZoom: number) => {
-    setZoom(newZoom);
+    const clamped = Math.min(10, Math.max(0.6, parseFloat(newZoom.toFixed(1))));
+    setZoom(clamped);
     try {
       const stream = streamRef.current;
       if (stream) {
@@ -70,11 +75,45 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         if (track && "getCapabilities" in track) {
           const caps = (track as any).getCapabilities();
           if (caps && "zoom" in caps) {
-            (track as any).applyConstraints({ advanced: [{ zoom: newZoom }] }).catch(() => {});
+            (track as any).applyConstraints({ advanced: [{ zoom: clamped }] }).catch(() => {});
           }
         }
       }
     } catch {}
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStartDistRef.current = dist;
+      touchStartZoomRef.current = zoom;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchStartDistRef.current !== null) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = dist / touchStartDistRef.current;
+      const targetZoom = Math.min(10, Math.max(0.6, parseFloat((touchStartZoomRef.current * factor).toFixed(1))));
+      handleZoomChange(targetZoom);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartDistRef.current = null;
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.2 : -0.2;
+    const targetZoom = Math.min(10, Math.max(0.6, parseFloat((zoom + delta).toFixed(1))));
+    handleZoomChange(targetZoom);
   };
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -327,6 +366,11 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       sh = videoH / zoom;
       sx = (videoW - sw) / 2;
       sy = (videoH - sh) / 2;
+    }
+
+    // AI Studio Photo Remaster / Enhancer: auto lighting & crisp portrait curve
+    if (isEnhancerActive) {
+      ctx.filter = "contrast(106%) brightness(102%) saturate(106%)";
     }
 
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, destW, destH);
@@ -589,7 +633,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         )}
 
         {/* Viewport Area */}
-        <div className="relative aspect-[3/4] max-h-[460px] w-full bg-black flex items-center justify-center overflow-hidden select-none">
+        <div
+          className="relative aspect-[3/4] max-h-[460px] w-full bg-black flex items-center justify-center overflow-hidden select-none touch-none"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onWheel={handleWheel}
+        >
           {/* Live Video */}
           <video
             ref={videoRef}
@@ -641,13 +691,29 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 </div>
               </div>
 
-              {/* Viewport badge */}
-              <div className="absolute top-4 flex items-center gap-2">
+              {/* Top Control Badges: Ultra HD + Flash + Samsung AI Studio Enhancer */}
+              <div className="absolute top-4 flex items-center gap-2 pointer-events-auto">
                 <div className="rounded-full border border-neutral-800 bg-black/85 backdrop-blur-xs px-3 py-1 text-[10px] font-mono text-white flex items-center gap-1.5 shadow-md">
                   <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
                   <span className="text-white font-semibold">ULTRA HD</span>
-                  <span className="text-[#8fe617] font-bold">• 300 DPI AUTO</span>
+                  <span className="text-[#8fe617] font-bold">• 300 DPI</span>
                 </div>
+
+                {/* Samsung AI Studio Enhancer Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsEnhancerActive(!isEnhancerActive)}
+                  className={`rounded-full px-3 py-1 text-[10px] font-mono font-black flex items-center gap-1.5 transition-all shadow-md cursor-pointer ${
+                    isEnhancerActive
+                      ? "bg-[#8fe617] text-[#062404] shadow-[0_0_14px_rgba(143,230,23,0.5)] border border-[#8fe617]"
+                      : "bg-black/85 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                  title="AI Studio Enhancer: Auto-optimizes portrait lighting, skin detail, and contrast"
+                >
+                  <Sparkles className={`h-3 w-3 ${isEnhancerActive ? "text-[#062404]" : "text-neutral-400"}`} />
+                  <span>AI ENHANCER {isEnhancerActive ? "ON" : "OFF"}</span>
+                </button>
+
                 {isFlashlightOn && (
                   <div className="rounded-full border border-amber-400/90 bg-amber-400/25 backdrop-blur-xs px-2.5 py-1 text-[10px] font-mono font-bold text-amber-300 flex items-center gap-1 shadow-lg animate-pulse">
                     <Zap className="h-3 w-3 fill-amber-300 text-amber-300" />
@@ -663,32 +729,47 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             <div className="pointer-events-none absolute inset-0 z-20 ring-8 ring-white ring-inset shadow-[inset_0_0_90px_30px_rgba(255,255,255,0.75)] transition-all duration-200" />
           )}
 
-          {/* Smooth Zoom Controls Overlay (Hardware + Digital Center Cropping) */}
+          {/* Samsung Ultra Multi-Lens Zoom Dock (0.6x, 1x, 2x, 3x, 5x, 10x + Smooth Dial) */}
           {cameraState === "streaming" && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white shadow-lg pointer-events-auto">
-              <span className="text-[10px] font-mono font-bold text-[#8fe617]">ZOOM</span>
-              {[1, 1.5, 2, 3].map((z) => (
-                <button
-                  key={z}
-                  type="button"
-                  onClick={() => handleZoomChange(z)}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold transition-all cursor-pointer ${
-                    zoom === z ? "bg-[#8fe617] text-[#062404]" : "text-white/80 hover:text-white hover:bg-white/20"
-                  }`}
-                >
-                  {z}x
-                </button>
-              ))}
-              <input
-                type="range"
-                min="1"
-                max="3.5"
-                step="0.1"
-                value={zoom}
-                onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-                className="w-16 h-1 accent-[#8fe617] cursor-pointer ml-1"
-                aria-label="Camera Zoom"
-              />
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 bg-black/80 backdrop-blur-lg px-4 py-2 rounded-2xl border border-white/20 text-white shadow-2xl pointer-events-auto max-w-[92vw]">
+              {/* Samsung Ultra Circular Lens Buttons */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {[0.6, 1, 2, 3, 5, 10].map((level) => {
+                  const isActive = Math.abs(zoom - level) < 0.25;
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => handleZoomChange(level)}
+                      className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center text-[10px] sm:text-[11px] font-mono font-black transition-all cursor-pointer ${
+                        isActive
+                          ? "bg-[#8fe617] text-[#062404] ring-2 ring-[#8fe617] shadow-[0_0_12px_rgba(143,230,23,0.6)] scale-110"
+                          : "bg-neutral-900/90 text-neutral-300 hover:text-white hover:bg-neutral-800 border border-white/10"
+                      }`}
+                      title={`Zoom ${level}x`}
+                    >
+                      {level === 0.6 ? ".6" : `${level}`}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Samsung Smooth Zoom Fine-Tuning Dial */}
+              <div className="flex items-center gap-2 w-full pt-0.5">
+                <span className="text-[9px] font-mono font-bold text-[#8fe617] min-w-[28px]">
+                  {zoom.toFixed(1)}x
+                </span>
+                <input
+                  type="range"
+                  min="0.6"
+                  max="10"
+                  step="0.1"
+                  value={zoom}
+                  onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+                  className="w-36 sm:w-48 h-1 accent-[#8fe617] cursor-pointer"
+                  aria-label="Samsung Ultra Zoom Dial"
+                />
+              </div>
             </div>
           )}
 

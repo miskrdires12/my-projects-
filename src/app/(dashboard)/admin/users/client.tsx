@@ -25,8 +25,10 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
+  Smartphone,
+  RotateCcw,
 } from "lucide-react";
-import { createUserAction, deleteUserAction } from "@/actions/users";
+import { createUserAction, deleteUserAction, resetUserDeviceAction } from "@/actions/users";
 import type { UserRole } from "@/types/auth";
 
 export interface UserItem {
@@ -34,6 +36,12 @@ export interface UserItem {
   username: string;
   email: string;
   role: string;
+  boundDeviceId?: string | null;
+  boundDeviceInfo?: string | null;
+  lastLoginAt?: Date | string | null;
+  workSessionCount?: number;
+  totalWorkMinutes?: number;
+  lastActiveAt?: Date | string | null;
   createdAt: Date | string;
 }
 
@@ -160,6 +168,40 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
     });
   };
 
+  const handleResetDevice = (id: string, name: string) => {
+    if (
+      !confirm(
+        `Reset hardware device binding for operator "${name}"?\n\nThis will unbind their locked computer/phone so they can sign in on a new device.`
+      )
+    ) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    // Optimistic update: clear device binding locally
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === id ? { ...u, boundDeviceId: null, boundDeviceInfo: null } : u
+      )
+    );
+
+    startTransition(async () => {
+      const res = await resetUserDeviceAction(id);
+      if (!res.success) {
+        setErrorMessage(res.error ?? "Failed to unbind operator device");
+        router.refresh();
+      } else {
+        setSuccessMessage(
+          `Device lock for "${name}" was successfully cleared. They may now sign in on their authorized station.`
+        );
+        router.refresh();
+        setTimeout(() => setSuccessMessage(null), 4000);
+      }
+    });
+  };
+
   // Filtered users
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
@@ -201,13 +243,31 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
       )}
 
       {/* Operator Stat Badges */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-xs">
           <div className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">
             Total Operators
           </div>
           <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1">
             {totalCount}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-950/60 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 shadow-xs">
+          <div className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 uppercase font-bold">
+            Bound Devices
+          </div>
+          <div className="text-2xl font-black font-mono text-[#8fe617] mt-1">
+            {users.filter((u) => Boolean(u.boundDeviceId)).length}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-purple-200 dark:border-purple-950/60 bg-purple-50/50 dark:bg-purple-950/20 p-4 shadow-xs">
+          <div className="text-[10px] font-mono text-purple-700 dark:text-purple-400 uppercase font-bold">
+            Active Work Time
+          </div>
+          <div className="text-2xl font-black font-mono text-purple-600 dark:text-purple-400 mt-1">
+            {Math.round((users.reduce((acc, u) => acc + (u.totalWorkMinutes || 0), 0) / 60) * 10) / 10}h
           </div>
         </div>
 
@@ -220,21 +280,12 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
           </div>
         </div>
 
-        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-950/60 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 shadow-xs">
-          <div className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 uppercase font-bold">
-            Receivers (Printing)
-          </div>
-          <div className="text-2xl font-black font-mono text-[#8fe617] mt-1">
-            {receiverCount}
-          </div>
-        </div>
-
         <div className="rounded-2xl border border-blue-200 dark:border-blue-950/60 bg-blue-50/50 dark:bg-blue-950/20 p-4 shadow-xs">
           <div className="text-[10px] font-mono text-blue-700 dark:text-blue-400 uppercase font-bold">
-            Senders (Intake)
+            Intake / Printing
           </div>
           <div className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 mt-1">
-            {senderCount}
+            {senderCount + receiverCount}
           </div>
         </div>
       </div>
@@ -284,14 +335,15 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
                 <th className="px-5 py-3.5">Operator Identity</th>
                 <th className="px-5 py-3.5">Institutional Email</th>
                 <th className="px-5 py-3.5">Role Privilege</th>
-                <th className="px-5 py-3.5">Provisioned Date</th>
+                <th className="px-5 py-3.5">Authorized Device (1-Device Lock)</th>
+                <th className="px-5 py-3.5">Work Telemetry</th>
                 <th className="px-5 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef5f1] dark:divide-[#1c261e]">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                  <td colSpan={6} className="px-5 py-10 text-center text-[#6b7771] dark:text-[#8a9e93] font-mono">
                     No operators found matching your search criteria.
                   </td>
                 </tr>
@@ -315,7 +367,7 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
                         <span>{user.username}</span>
                         {isSelf && (
                           <span className="rounded-md bg-[#8fe617] px-2 py-0.5 text-[10px] font-mono font-black text-[#062404] shadow-xs">
-                            CURRENT SESSION
+                            CURRENT
                           </span>
                         )}
                       </td>
@@ -335,25 +387,78 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
                           {user.role}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-[#6b7771] dark:text-[#8a9e93]">
-                        {dateStr}
+                      <td className="px-5 py-3.5 font-mono text-xs">
+                        {user.boundDeviceId ? (
+                          <div className="flex flex-col gap-1">
+                            <div className="inline-flex items-center gap-1.5 rounded-md bg-[#8fe617]/15 border border-[#8fe617]/40 px-2 py-0.5 text-[10px] font-mono font-bold text-[#062404] dark:text-[#8fe617] w-fit">
+                              <Smartphone className="h-3 w-3 text-[#8fe617]" />
+                              <span>LOCKED (1 DEVICE)</span>
+                            </div>
+                            <span
+                              className="text-[11px] text-[#080808] dark:text-[#f2f7f4] font-bold truncate max-w-[200px]"
+                              title={user.boundDeviceInfo || user.boundDeviceId}
+                            >
+                              {user.boundDeviceInfo || `ID: ${user.boundDeviceId.slice(0, 12)}...`}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleResetDevice(user.id, user.username)}
+                              disabled={isPending}
+                              className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 hover:underline w-fit font-bold cursor-pointer mt-0.5"
+                              title="Unbind hardware device lock"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              <span>Unbind Device</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5 rounded-md bg-neutral-100 dark:bg-neutral-800/80 border border-neutral-300 dark:border-neutral-700 px-2 py-0.5 text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                            <Smartphone className="h-3 w-3 opacity-50" />
+                            <span>UNBOUND (Next login locks)</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-xs">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="text-[11px] font-bold text-[#080808] dark:text-[#f2f7f4]">
+                            {user.workSessionCount ?? 0} {user.workSessionCount === 1 ? "Session" : "Sessions"} • {user.totalWorkMinutes ?? 0}m active
+                          </div>
+                          <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                            {user.lastLoginAt
+                              ? `Last: ${new Date(user.lastLoginAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}`
+                              : `Joined ${dateStr}`}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        {!isSelf ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(user.id, user.username)}
-                            disabled={isPending}
-                            className="rounded-xl p-2 text-red-500 hover:text-white hover:bg-red-600 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-                            title={`Delete operator "${user.username}"`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        ) : (
-                          <span className="text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93]">
-                            Protected
-                          </span>
-                        )}
+                        <div className="flex items-center justify-end gap-1.5">
+                          {user.boundDeviceId && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetDevice(user.id, user.username)}
+                              disabled={isPending}
+                              className="rounded-xl p-2 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                              title={`Reset hardware device lock for "${user.username}"`}
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                          )}
+                          {!isSelf ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(user.id, user.username)}
+                              disabled={isPending}
+                              className="rounded-xl p-2 text-red-500 hover:text-white hover:bg-red-600 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                              title={`Delete operator "${user.username}"`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <span className="text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                              Protected
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
