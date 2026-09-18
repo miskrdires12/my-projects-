@@ -187,6 +187,9 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
         previewPath: finalPreviewPath,
         originalPhotoPath: finalOriginalPath,
         qrCodeData: null, // Populated exclusively when Receiver imports external QR images
+        senderId: session.userId || null,
+        senderName: session.username || (session.role === "ADMIN" ? "Admin" : "Station Operator"),
+        photoIntegrityStatus: finalPhotoPath ? "PHOTO_VERIFIED" : "PHOTO_MISSING",
         status: data.status,
         batchId: data.batchId || null,
       },
@@ -517,42 +520,33 @@ export async function deleteStudentAction(
         });
       } catch {}
 
-      // 1.5 Delete portrait objects from Supabase Storage bucket 'student data'
+      // Use Safe Student Deletion Pipeline (identifies strictly owned objects and guards against deleting shared assets)
       try {
-        const { deleteFromSupabaseBucket } = await import("@/lib/supabase-storage");
-        const safeGrade = (student.grade || "General").replace(/[/\\]/g, " - ").trim();
-        const safeStudentId = student.studentId.replace(/[/\\]/g, " - ").trim();
-        const safeFullName = student.fullName.replace(/[/\\]/g, " - ").trim();
-        const storagePath = `${safeGrade}/${safeStudentId}_${safeFullName}.jpg`;
-        const storagePreviewPath = `${safeGrade}/previews/${safeStudentId}_${safeFullName}.jpg`;
-        const storageThumbPath = `${safeGrade}/thumbnails/${safeStudentId}_${safeFullName}.jpg`;
-        await deleteFromSupabaseBucket(storagePath).catch(() => {});
-        await deleteFromSupabaseBucket(storagePreviewPath).catch(() => {});
-        await deleteFromSupabaseBucket(storageThumbPath).catch(() => {});
-      } catch (sbErr) {
-        console.warn("Notice: Supabase storage delete in deleteStudentAction non-fatal:", sbErr);
+        const { executeSafeStudentDeletion } = await import("@/lib/safe-student-deletion");
+        await executeSafeStudentDeletion(student.id, {
+          userId: session.userId,
+          username: session.username || "Operator",
+          role: session.role,
+        });
+      } catch (safeErr) {
+        console.warn("Notice: executeSafeStudentDeletion non-fatal fallback:", safeErr);
+        // Fallback to direct cascade deletion if needed
+        await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+        await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+        await prisma.studentQR.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+        await prisma.transferRecord.deleteMany({ where: { studentId: student.id } }).catch(() => {});
+        await prisma.student.delete({ where: { id: student.id } }).catch((e) => {
+          console.warn("Prisma student delete warning:", e);
+        });
+
+        await createSafeAuditLog({
+          userId: session.userId,
+          action: "STUDENT_DELETE",
+          entityType: "STUDENT",
+          entityId: student.id,
+          metadata: { studentId: student.studentId, name: student.fullName },
+        });
       }
-
-      // 2. Delete dependent child records first to satisfy foreign key constraints
-      await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-      await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-      await prisma.studentQR.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-      await prisma.transferRecord.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-
-      // 3. Delete student record permanently from database
-      await prisma.student.delete({
-        where: { id: student.id },
-      }).catch((e) => {
-        console.warn("Prisma student delete warning:", e);
-      });
-
-      await createSafeAuditLog({
-        userId: session.userId,
-        action: "STUDENT_DELETE",
-        entityType: "STUDENT",
-        entityId: student.id,
-        metadata: { studentId: student.studentId, name: student.fullName },
-      });
     }
 
     // Always broadcast deletion to Cloud Sync Bus with BOTH identifiers so all devices drop it
@@ -874,38 +868,49 @@ export async function exportStudentsCSVAction(): Promise<{ success: boolean; csv
       "Enrollment Date",
     ];
 
+    const session = await getSession();
+    if (session?.role === "ADMIN") {
+      headers.push("Sender Station");
+    }
+
     const escapeCSV = (str: any) => {
       if (str === null || str === undefined) return '""';
       const s = String(str);
       return `"${s.replace(/"/g, '""')}"`;
     };
 
-    const rows = students.map((s) => [
-      escapeCSV(s.studentId),
-      escapeCSV(s.fullName),
-      escapeCSV(s.grade),
-      escapeCSV(s.sex),
-      escapeCSV(s.phone),
-      escapeCSV(s.emailAddress || ""),
-      escapeCSV(s.department || ""),
-      escapeCSV(s.school || ""),
-      escapeCSV(s.academicYear || ""),
-      escapeCSV(s.dateOfBirth ? new Date(s.dateOfBirth).toISOString().split("T")[0] : ""),
-      escapeCSV(s.bloodType || ""),
-      escapeCSV(s.rollNumber || ""),
-      escapeCSV(s.nationalId || ""),
-      escapeCSV(s.nationality || ""),
-      escapeCSV(s.address || ""),
-      escapeCSV(s.cityRegion || ""),
-      escapeCSV(s.guardianFullName || ""),
-      escapeCSV(s.emergencyContactName || ""),
-      escapeCSV(s.emergencyContactPhone || ""),
-      escapeCSV(s.status),
-      escapeCSV(s.batch?.batchNumber || ""),
-      escapeCSV(s.photoPath || ""),
-      escapeCSV(s.qrCodeData || ""),
-      escapeCSV(new Date(s.createdAt).toISOString().split("T")[0]),
-    ]);
+    const rows = students.map((s) => {
+      const row = [
+        escapeCSV(s.studentId),
+        escapeCSV(s.fullName),
+        escapeCSV(s.grade),
+        escapeCSV(s.sex),
+        escapeCSV(s.phone),
+        escapeCSV(s.emailAddress || ""),
+        escapeCSV(s.department || ""),
+        escapeCSV(s.school || ""),
+        escapeCSV(s.academicYear || ""),
+        escapeCSV(s.dateOfBirth ? new Date(s.dateOfBirth).toISOString().split("T")[0] : ""),
+        escapeCSV(s.bloodType || ""),
+        escapeCSV(s.rollNumber || ""),
+        escapeCSV(s.nationalId || ""),
+        escapeCSV(s.nationality || ""),
+        escapeCSV(s.address || ""),
+        escapeCSV(s.cityRegion || ""),
+        escapeCSV(s.guardianFullName || ""),
+        escapeCSV(s.emergencyContactName || ""),
+        escapeCSV(s.emergencyContactPhone || ""),
+        escapeCSV(s.status),
+        escapeCSV(s.batch?.batchNumber || ""),
+        escapeCSV(s.photoPath || ""),
+        escapeCSV(s.qrCodeData || ""),
+        escapeCSV(new Date(s.createdAt).toISOString().split("T")[0]),
+      ];
+      if (session?.role === "ADMIN") {
+        row.push(escapeCSV((s as any).senderName || (s as any).senderId || "Direct / Central Station"));
+      }
+      return row;
+    });
 
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
 

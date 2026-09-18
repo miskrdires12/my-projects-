@@ -42,3 +42,6 @@ cpanel_staging/
 lean_staging/
 deploy.zip
 lean-deploy.zip
+
+# Local private storage fallback directory
+/storage/

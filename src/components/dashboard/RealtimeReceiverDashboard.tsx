@@ -716,6 +716,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       "Grade",
       "Section",
       "Phone",
+      "Emergency Phone",
       "@photo",
       "8-Up Print Readiness",
       "Enrolled Date",
@@ -728,6 +729,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       `"${(s.grade || "").replace(/"/g, '""')}"`,
       `"${(s.department || s.section || "").replace(/"/g, '""')}"`,
       `"${formatPhoneForReceiver(s.phone)}"`,
+      `"${formatPhoneForReceiver(s.emergencyContactPhone || s.parentPhone || "")}"`,
       `"${getStudentPhotoLocalPath(s).replace(/"/g, '""')}"`,
       s.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
       `"${s.createdAt || new Date().toISOString()}"`,
@@ -1141,7 +1143,11 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
   }, [isAllFilteredSelected, filteredStudents]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-20 text-[#080808] dark:text-[#f2f7f4] font-sans">
+    <div
+      className="space-y-6 max-w-7xl mx-auto pb-20 text-[#080808] dark:text-[#f2f7f4] font-sans select-none"
+      onContextMenu={(e) => e.preventDefault()}
+      onCopy={(e) => e.preventDefault()}
+    >
       {/* Notice Alert if redirected with animated borderless X dismissal */}
       {noticeVisible && (
         <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 text-xs text-[#3f4743] dark:text-[#8a9e93] flex items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">

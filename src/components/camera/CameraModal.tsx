@@ -59,6 +59,23 @@ export const CameraModal: React.FC<CameraModalProps> = ({
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const [isFlashlightOn, setIsFlashlightOn] = useState<boolean>(false);
+  const [zoom, setZoom] = useState<number>(1.0);
+
+  const handleZoomChange = (newZoom: number) => {
+    setZoom(newZoom);
+    try {
+      const stream = streamRef.current;
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        if (track && "getCapabilities" in track) {
+          const caps = (track as any).getCapabilities();
+          if (caps && "zoom" in caps) {
+            (track as any).applyConstraints({ advanced: [{ zoom: newZoom }] }).catch(() => {});
+          }
+        }
+      }
+    } catch {}
+  };
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -300,7 +317,19 @@ export const CameraModal: React.FC<CameraModalProps> = ({
       ctx.scale(-1, 1);
     }
 
-    ctx.drawImage(video, 0, 0, destW, destH);
+    // Apply digital zoom cropping if zoom > 1.0
+    let sx = 0;
+    let sy = 0;
+    let sw = videoW;
+    let sh = videoH;
+    if (zoom > 1.0) {
+      sw = videoW / zoom;
+      sh = videoH / zoom;
+      sx = (videoW - sw) / 2;
+      sy = (videoH - sh) / 2;
+    }
+
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, destW, destH);
 
     canvas.toBlob(
       async (rawBlob) => {
@@ -566,9 +595,13 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             ref={videoRef}
             playsInline
             muted
+            style={{
+              transform: `${facingMode === "user" ? "scaleX(-1) " : ""}scale(${zoom})`,
+              transformOrigin: "center center",
+            }}
             className={`h-full w-full object-cover transition-opacity duration-200 ${
               cameraState === "streaming" ? "opacity-100" : "opacity-0"
-            } ${facingMode === "user" ? "-scale-x-100" : ""}`}
+            }`}
           />
 
           {/* Captured Review Preview */}
@@ -628,6 +661,35 @@ export const CameraModal: React.FC<CameraModalProps> = ({
           {/* Flashlight Studio Fill-Light / Ring Light (High-intensity illumination on subject's face) */}
           {isFlashlightOn && cameraState === "streaming" && (
             <div className="pointer-events-none absolute inset-0 z-20 ring-8 ring-white ring-inset shadow-[inset_0_0_90px_30px_rgba(255,255,255,0.75)] transition-all duration-200" />
+          )}
+
+          {/* Smooth Zoom Controls Overlay (Hardware + Digital Center Cropping) */}
+          {cameraState === "streaming" && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white shadow-lg pointer-events-auto">
+              <span className="text-[10px] font-mono font-bold text-[#8fe617]">ZOOM</span>
+              {[1, 1.5, 2, 3].map((z) => (
+                <button
+                  key={z}
+                  type="button"
+                  onClick={() => handleZoomChange(z)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold transition-all cursor-pointer ${
+                    zoom === z ? "bg-[#8fe617] text-[#062404]" : "text-white/80 hover:text-white hover:bg-white/20"
+                  }`}
+                >
+                  {z}x
+                </button>
+              ))}
+              <input
+                type="range"
+                min="1"
+                max="3.5"
+                step="0.1"
+                value={zoom}
+                onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+                className="w-16 h-1 accent-[#8fe617] cursor-pointer ml-1"
+                aria-label="Camera Zoom"
+              />
+            </div>
           )}
 
           {/* Requesting / Loading State */}

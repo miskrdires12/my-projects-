@@ -19,6 +19,7 @@ const PUBLIC_PREFIXES = [
   "/images",
   "/api/uploads",
   "/api/photos",
+  "/api/storage",
 ];
 
 function getAuthSecret(): Uint8Array {

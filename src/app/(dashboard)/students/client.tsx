@@ -1361,7 +1361,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   }, [sortedStudents, activePage, activePageSize]);
 
   return (
-    <div className="space-y-4 pb-28">
+    <div
+      className={`space-y-4 pb-28 ${userRole === "RECEIVER" ? "select-none" : ""}`}
+      onContextMenu={userRole === "RECEIVER" ? (e) => e.preventDefault() : undefined}
+      onCopy={userRole === "RECEIVER" ? (e) => e.preventDefault() : undefined}
+    >
       {/* Grade Cohort Tabs (Clean, Sleek, Instant Filtering) */}
       {allAvailableGrades.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
@@ -2290,6 +2294,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <div className="pt-2 flex justify-between">
                   <span className="text-foreground-muted dark:text-[#8a9e93]">Blood Group:</span>
                   <span className="text-accent font-bold">{activeStudent.bloodType}</span>
+                </div>
+              )}
+              {userRole === "ADMIN" && ((activeStudent as any).senderName || (activeStudent as any).senderId) && (
+                <div className="pt-2 flex justify-between">
+                  <span className="text-foreground-muted dark:text-[#8a9e93]">Sender Station:</span>
+                  <span className="text-[#8fe617] font-mono text-xs font-semibold">{(activeStudent as any).senderName || (activeStudent as any).senderId}</span>
                 </div>
               )}
             </div>

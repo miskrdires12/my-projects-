@@ -123,6 +123,14 @@ export default async function StudentsPage({
   });
 
 
+  // Strict Privacy: Sender Attribution Visible to Admin Only
+  const sanitizedStudents = (students || []).map((s: any) => {
+    if (session.role !== "ADMIN") {
+      return { ...s, senderId: null, senderName: null };
+    }
+    return s;
+  });
+
   return (
     <div className="space-y-4 w-full px-4 sm:px-6 lg:px-8 pb-12">
       {/* Sleek Top Navigation Bar: Back to Dashboard */}
@@ -138,7 +146,7 @@ export default async function StudentsPage({
 
       {/* Interactive Directory Table with True Server-Side Pagination */}
       <StudentDirectoryClient
-        students={students as any}
+        students={sanitizedStudents as any}
         totalCount={totalCount}
         currentPage={page}
         pageSize={pageSize}
