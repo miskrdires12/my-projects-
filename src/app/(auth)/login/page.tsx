@@ -224,18 +224,6 @@ export default function LoginPage() {
           </div>
         </form>
 
-        {/* Official Production Link */}
-        <div className="mt-6 pt-4 border-t border-[#e2e7e4] dark:border-[#223126] text-center">
-          <a
-            href="https://my-projects-two-kappa.vercel.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[11px] font-mono text-[#6b7771] dark:text-[#9eb2a6] hover:text-[#8fe617] transition-colors"
-          >
-            <span>https://my-projects-two-kappa.vercel.app</span>
-          </a>
-        </div>
-
       </div>
     </div>
   );
