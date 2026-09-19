@@ -7,6 +7,12 @@
 
 import prisma from "@/lib/prisma";
 import { deleteFromStorage, storageObjectExists } from "@/lib/storage-service";
+import {
+  deleteMultipleFromSupabaseBucket,
+  extractSupabaseStorageKey,
+  invalidateSupabaseStorageCache,
+  listSupabaseStorageFiles,
+} from "@/lib/supabase-storage";
 import { createSafeAuditLog } from "@/lib/audit";
 
 export interface SafeDeletionResult {
@@ -58,59 +64,124 @@ export async function executeSafeStudentDeletion(
     };
   }
 
-  // 2. Identify All Related Storage Objects
-  const rawKeys: string[] = [];
-  if (student.photoPath) rawKeys.push(student.photoPath);
-  if (student.storageKey) rawKeys.push(student.storageKey);
+  // 2. Identify All Related Storage Objects (Supabase Cloud + Local Disks)
+  const rawSources: (string | null | undefined)[] = [
+    student.photoPath,
+    (student as any).originalPhotoPath,
+    student.storageKey,
+  ];
 
   for (const p of student.photos) {
-    if (p.originalPath) rawKeys.push(p.originalPath);
-    if (p.editedPath) rawKeys.push(p.editedPath);
-    if (p.previewPath) rawKeys.push(p.previewPath);
-    if (p.thumbnailPath) rawKeys.push(p.thumbnailPath);
-    if (p.storageKey) rawKeys.push(p.storageKey);
+    rawSources.push(p.originalPath, p.editedPath, p.previewPath, p.thumbnailPath, p.storageKey);
   }
 
   for (const qr of student.qrCodes) {
-    if (qr.imagePath) rawKeys.push(qr.imagePath);
+    rawSources.push(qr.imagePath);
   }
 
-  // Deduplicate and filter non-empty keys
-  const uniqueCandidateKeys = Array.from(
-    new Set(
-      rawKeys
-        .map((k) => normalizeKey(k))
-        .filter((k) => k && !k.startsWith("data:") && !k.startsWith("http"))
-    )
-  );
+  // Generate canonical paths inside bucket 'student data'
+  const safeGrade = (student.grade || "General").replace(/[/\\]/g, " - ").trim();
+  const safeStudentId = student.studentId.replace(/[/\\]/g, " - ").trim();
+  const safeFullName = student.fullName.replace(/[/\\]/g, " - ").trim();
+
+  // Add expected canonical and preview keys
+  rawSources.push(`${safeGrade}/${safeStudentId}_${safeFullName}.jpg`);
+  rawSources.push(`${safeGrade}/previews/${safeStudentId}_${safeFullName}.jpg`);
+  rawSources.push(`${safeGrade}/${safeStudentId}_${safeFullName}`);
+  rawSources.push(`${safeGrade}/previews/${safeStudentId}_${safeFullName}`);
+
+  // Also query Supabase folder for any versioned edits (e.g. SB-xxx_Name_v1726743999.jpg)
+  try {
+    const [gradeFiles, previewFiles] = await Promise.all([
+      listSupabaseStorageFiles(safeGrade),
+      listSupabaseStorageFiles(`${safeGrade}/previews`),
+    ]);
+
+    for (const item of gradeFiles || []) {
+      if (item.name && item.name.startsWith(`${safeStudentId}_`)) {
+        rawSources.push(`${safeGrade}/${item.name}`);
+      }
+    }
+    for (const item of previewFiles || []) {
+      if (item.name && item.name.startsWith(`${safeStudentId}_`)) {
+        rawSources.push(`${safeGrade}/previews/${item.name}`);
+      }
+    }
+  } catch (scanErr) {
+    console.warn("Notice: Listing candidate student versioned photos warning:", scanErr);
+  }
+
+  // Extract clean relative keys for Supabase Storage
+  const supabaseKeys: string[] = [];
+  const localKeys: string[] = [];
+
+  for (const src of rawSources) {
+    if (!src || src.startsWith("data:") || src.startsWith("blob:")) continue;
+
+    // Supabase bucket relative path
+    const extracted = extractSupabaseStorageKey(src);
+    if (extracted) {
+      supabaseKeys.push(extracted);
+    }
+
+    // Local / private normalized key
+    const normalized = normalizeKey(src);
+    if (normalized && !normalized.startsWith("http")) {
+      localKeys.push(normalized);
+    }
+  }
+
+  const uniqueSupabaseKeys = Array.from(new Set(supabaseKeys));
+  const uniqueLocalKeys = Array.from(new Set(localKeys));
 
   // 3. Cross-check against other students to prevent accidental deletion of shared assets
-  const safeKeysToDelete: string[] = [];
-  for (const key of uniqueCandidateKeys) {
+  const safeSupabaseToDelete: string[] = [];
+  for (const key of uniqueSupabaseKeys) {
     const otherStudentsSharing = await prisma.student.count({
       where: {
         id: { not: student.id },
-        OR: [{ photoPath: { contains: key } }, { storageKey: key }],
+        OR: [
+          { photoPath: { contains: key } },
+          { originalPhotoPath: { contains: key } },
+          { storageKey: key },
+        ],
       },
     });
 
     if (otherStudentsSharing === 0) {
-      safeKeysToDelete.push(key);
+      safeSupabaseToDelete.push(key);
     } else {
       console.warn(`Protection: Key ${key} is shared by another student. Skipping storage purge.`);
     }
   }
 
-  // 4. Delete Storage Objects
+  // 4. Delete Storage Objects directly from Supabase Cloud 'student data' bucket
   const deletedKeys: string[] = [];
-  for (const key of safeKeysToDelete) {
+  if (safeSupabaseToDelete.length > 0) {
+    try {
+      const deleteRes = await deleteMultipleFromSupabaseBucket(safeSupabaseToDelete);
+      if (deleteRes.success) {
+        deletedKeys.push(...safeSupabaseToDelete);
+      }
+    } catch (supabaseDelErr) {
+      console.warn("Notice: deleteMultipleFromSupabaseBucket failed:", supabaseDelErr);
+    }
+  }
+
+  // 4b. Also purge local storage cache / disk files
+  for (const key of uniqueLocalKeys) {
     try {
       await deleteFromStorage(key);
-      deletedKeys.push(key);
+      if (!deletedKeys.includes(key)) {
+        deletedKeys.push(key);
+      }
     } catch (storageErr) {
       console.warn(`Warning: Failed to delete storage object ${key}:`, storageErr);
     }
   }
+
+  // Invalidate Supabase Storage cache so Admin metrics update immediately
+  invalidateSupabaseStorageCache();
 
   // 5. Verify Deletion
   const remainingKeys: string[] = [];

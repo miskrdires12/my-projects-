@@ -27,6 +27,7 @@ import {
   RefreshCw,
   Clock,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { clearAuditLogsAction } from "@/actions/audit";
 import { deletePermanentlyFromSupabaseAction } from "@/actions/students";
@@ -846,6 +847,67 @@ export function DatabaseClient({
   const [statusLoading, setStatusLoading] = useState(true);
   const [pinging, setPinging] = useState(false);
 
+  // Storage Sync & Orphan Cleaner State
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncPurging, setSyncPurging] = useState(false);
+  const [syncAnalysis, setSyncAnalysis] = useState<{
+    totalStorageFiles: number;
+    activeStudentsCount: number;
+    activeFilesCount: number;
+    orphanedCount: number;
+    orphanedBytes: number;
+    orphanedSizeFormatted: string;
+    orphanedFiles: { path: string; size: number }[];
+  } | null>(null);
+
+  const handleOpenSyncModal = async () => {
+    setSyncModalOpen(true);
+    setSyncLoading(true);
+    try {
+      const res = await fetch("/api/admin/supabase-status/sync");
+      if (res.ok) {
+        const data = await res.json();
+        setSyncAnalysis(data);
+      } else {
+        setFeedback({ type: "error", message: "Failed to scan storage synchronization." });
+      }
+    } catch {
+      setFeedback({ type: "error", message: "Network error scanning storage synchronization." });
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  const handleExecuteSyncPurge = async () => {
+    if (!confirm("Are you sure you want to permanently purge all orphaned photos from Supabase Storage? This will synchronize the bucket with the database.")) return;
+    setSyncPurging(true);
+    try {
+      const res = await fetch("/api/admin/supabase-status/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "PURGE_ALL_ORPHANS" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFeedback({
+          type: "success",
+          message: data.message || `Purged ${data.purgedCount} orphaned photos! Storage is now synchronized.`,
+        });
+        fetchSupabaseStatus(true);
+        setSyncModalOpen(false);
+        setTimeout(() => setFeedback(null), 5000);
+      } else {
+        const err = await res.json();
+        setFeedback({ type: "error", message: err.error || "Purge failed." });
+      }
+    } catch {
+      setFeedback({ type: "error", message: "Network error purging orphaned photos." });
+    } finally {
+      setSyncPurging(false);
+    }
+  };
+
   const fetchSupabaseStatus = useCallback(async (force = false) => {
     try {
       if (force) setStatusLoading(true);
@@ -1239,22 +1301,50 @@ export function DatabaseClient({
           </div>
 
           {/* Card 2: Supabase Storage Bucket & Photos */}
-          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/80 dark:bg-[#161d19]/80 p-4">
-            <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">
-              <span>Storage Bucket &amp; Photos</span>
-              <HardDrive className="h-4 w-4 text-cyan-500" />
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/80 dark:bg-[#161d19]/80 p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">
+                <span>Storage Bucket &amp; Photos</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fetchSupabaseStatus(true)}
+                    disabled={statusLoading}
+                    title="Force Refresh Supabase Storage Telemetry"
+                    className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition text-[#6b7771] dark:text-[#8a9e93] hover:text-cyan-500 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${statusLoading ? "animate-spin text-cyan-500" : ""}`} />
+                  </button>
+                  <HardDrive className="h-4 w-4 text-cyan-500" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] truncate">
+                  {supabaseStatus ? `${supabaseStatus.storageFileCount.toLocaleString()} Photos` : "500 Photos"}
+                </span>
+                <span className="text-[10px] font-mono text-cyan-500 font-bold">
+                  {supabaseStatus?.storageSizeFormatted || "56.15 MB"}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center gap-1.5 text-[10px] font-mono text-cyan-600 dark:text-cyan-400 font-bold">
+                <CheckCircle2 className="h-3 w-3" />
+                <span>&apos;{supabaseStatus?.storageBucket || "student data"}&apos; • CDN Active</span>
+              </div>
             </div>
-            <div className="mt-2 flex items-baseline gap-1.5">
-              <span className="text-xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] truncate">
-                {supabaseStatus ? `${supabaseStatus.storageFileCount.toLocaleString()} Photos` : "500 Photos"}
+
+            {/* Quick Action: Storage Sync & Orphan Cleaner */}
+            <div className="mt-3 pt-2 border-t border-[#dce7e1] dark:border-[#223126] flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleOpenSyncModal}
+                className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 transition cursor-pointer"
+              >
+                <Sparkles className="h-3 w-3" />
+                <span>Sync &amp; Clean Storage</span>
+              </button>
+              <span className="text-[9px] font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                Live Cloud Sync
               </span>
-              <span className="text-[10px] font-mono text-cyan-500 font-bold">
-                {supabaseStatus?.storageSizeFormatted || "56.15 MB"}
-              </span>
-            </div>
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-mono text-cyan-600 dark:text-cyan-400 font-bold">
-              <CheckCircle2 className="h-3 w-3" />
-              <span>&apos;{supabaseStatus?.storageBucket || "student data"}&apos; • CDN Active</span>
             </div>
           </div>
 
@@ -1785,6 +1875,143 @@ export function DatabaseClient({
               >
                 Close Inspector
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Storage Synchronization & Orphan Cleaner Modal */}
+      {syncModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-xl rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-[#eef5f1] dark:border-[#1c261e]">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-500">
+                  <HardDrive className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black font-mono text-[#080808] dark:text-[#f2f7f4]">
+                    Supabase Storage &amp; Database Synchronizer
+                  </h3>
+                  <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                    Bucket: &apos;student data&apos; • Auto-cross references with PostgreSQL
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSyncModalOpen(false)}
+                className="p-1 rounded-xl text-[#6b7771] hover:text-[#080808] dark:hover:text-[#f2f7f4] cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {syncLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                <RefreshCw className="h-8 w-8 text-cyan-500 animate-spin" />
+                <p className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                  Scanning bucket &apos;student data&apos; and matching active students...
+                </p>
+              </div>
+            ) : syncAnalysis ? (
+              <div className="space-y-4 overflow-y-auto flex-1 pr-1 font-mono">
+                {/* Stats Matrix */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] block uppercase font-bold">Total in Bucket</span>
+                    <span className="text-lg font-black text-[#080808] dark:text-[#f2f7f4]">
+                      {syncAnalysis.totalStorageFiles}
+                    </span>
+                    <span className="text-[10px] text-cyan-500 block font-bold">Photos in Cloud</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-[#8fe617]/10 border border-[#8fe617]/30">
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] block uppercase font-bold">Active Records</span>
+                    <span className="text-lg font-black text-[#8fe617]">
+                      {syncAnalysis.activeFilesCount}
+                    </span>
+                    <span className="text-[10px] text-[#8fe617] block font-bold">
+                      {syncAnalysis.activeStudentsCount} Students
+                    </span>
+                  </div>
+                  <div className={`p-3 rounded-2xl border ${
+                    syncAnalysis.orphanedCount > 0
+                      ? "bg-amber-500/10 border-amber-500/30 text-amber-500"
+                      : "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
+                  }`}>
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] block uppercase font-bold">Orphaned Photos</span>
+                    <span className="text-lg font-black">
+                      {syncAnalysis.orphanedCount}
+                    </span>
+                    <span className="text-[10px] block font-bold">
+                      {syncAnalysis.orphanedSizeFormatted} Reclaimable
+                    </span>
+                  </div>
+                </div>
+
+                {/* Explanation */}
+                <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126] text-xs space-y-1 text-[#6b7771] dark:text-[#8a9e93]">
+                  <p className="font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    {syncAnalysis.orphanedCount > 0
+                      ? `Found ${syncAnalysis.orphanedCount} orphaned photo(s) in Supabase Storage.`
+                      : "✓ Supabase Storage is 100% synchronized with PostgreSQL."}
+                  </p>
+                  <p className="text-[11px]">
+                    {syncAnalysis.orphanedCount > 0
+                      ? "These are photos belonging to deleted students or previous test imports that still occupy cloud storage. Purging them will reclaim storage and update your Bucket count immediately."
+                      : "All storage files correspond to genuine enrolled students."}
+                  </p>
+                </div>
+
+                {/* Orphaned files preview list */}
+                {syncAnalysis.orphanedCount > 0 && (
+                  <div>
+                    <span className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4] block mb-1.5">
+                      Orphaned Files ({syncAnalysis.orphanedFiles.length} preview):
+                    </span>
+                    <div className="max-h-40 overflow-y-auto rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-black/5 dark:bg-black/40 p-2 text-[11px] space-y-1">
+                      {syncAnalysis.orphanedFiles.map((file) => (
+                        <div key={file.path} className="flex items-center justify-between text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]">
+                          <span className="truncate pr-2 font-mono">{file.path}</span>
+                          <span className="text-[10px] shrink-0 font-mono">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-between pt-3 border-t border-[#eef5f1] dark:border-[#1c261e]">
+              <button
+                type="button"
+                onClick={() => setSyncModalOpen(false)}
+                className="rounded-xl px-4 py-2 text-xs font-mono text-[#6b7771] hover:text-[#080808] dark:hover:text-[#f2f7f4] cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              {syncAnalysis && syncAnalysis.orphanedCount > 0 && (
+                <button
+                  type="button"
+                  disabled={syncPurging}
+                  onClick={handleExecuteSyncPurge}
+                  className="flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-mono font-bold px-4 py-2 text-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  {syncPurging ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>Purging Orphans...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Purge {syncAnalysis.orphanedCount} Orphan(s) ({syncAnalysis.orphanedSizeFormatted})</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

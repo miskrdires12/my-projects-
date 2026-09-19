@@ -66,6 +66,7 @@ export async function uploadToSupabaseBucket(
 
       if (res.ok) {
         console.log(`[Supabase Storage] ✓ Uploaded: ${cleanPath}`);
+        invalidateSupabaseStorageCache();
         return {
           success: true,
           publicUrl,
@@ -152,6 +153,7 @@ export async function deleteMultipleFromSupabaseBucket(
       return { success: false, deletedCount: 0, error: err };
     }
 
+    invalidateSupabaseStorageCache();
     return { success: true, deletedCount: validPaths.length };
   } catch (err: any) {
     return { success: false, deletedCount: 0, error: err?.message || "Failed to batch delete" };
@@ -180,6 +182,7 @@ export async function deleteFromSupabaseBucket(cleanPath: string): Promise<{ suc
       return { success: false, error: err };
     }
 
+    invalidateSupabaseStorageCache();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Failed to delete" };
@@ -295,6 +298,9 @@ export async function purgeAllSupabaseStorageObjects(): Promise<{ success: boole
       }
     }
 
+    if (deletedCount > 0) {
+      invalidateSupabaseStorageCache();
+    }
     return { success: true, count: deletedCount };
   } catch (err: any) {
     return { success: false, count: 0, error: err?.message };
@@ -316,6 +322,13 @@ export interface SupabaseStorageStats {
 }
 
 let cachedStorageStats: { data: SupabaseStorageStats; timestamp: number } | null = null;
+
+/**
+ * Invalidates in-memory storage statistics cache
+ */
+export function invalidateSupabaseStorageCache(): void {
+  cachedStorageStats = null;
+}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

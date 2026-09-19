@@ -9,7 +9,8 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 
-const BUCKET_NAME = process.env.SUPABASE_STORAGE_BUCKET || "student-photos";
+const BUCKET_NAME = process.env.SUPABASE_STORAGE_BUCKET || "student data";
+const ENCODED_BUCKET = encodeURIComponent(BUCKET_NAME);
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -93,7 +94,7 @@ export async function createSignedUrl(
     try {
       const cleanKey = storageKey.replace(/^\/+/, "");
       const res = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/sign/${BUCKET_NAME}/${cleanKey}`,
+        `${SUPABASE_URL}/storage/v1/object/sign/${ENCODED_BUCKET}/${encodeURI(cleanKey)}`,
         {
           method: "POST",
           headers: {
@@ -137,7 +138,7 @@ export async function uploadToStorage(
   // 1. Attempt upload to Supabase Storage if configured
   if (SUPABASE_URL && SUPABASE_KEY) {
     try {
-      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${cleanKey}`, {
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${ENCODED_BUCKET}/${encodeURI(cleanKey)}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${SUPABASE_KEY}`,
@@ -177,7 +178,7 @@ export async function downloadFromStorage(storageKey: string): Promise<Buffer | 
   // 1. Check Supabase Storage
   if (SUPABASE_URL && SUPABASE_KEY) {
     try {
-      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${cleanKey}`, {
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${ENCODED_BUCKET}/${encodeURI(cleanKey)}`, {
         headers: {
           Authorization: `Bearer ${SUPABASE_KEY}`,
           apiKey: SUPABASE_KEY,
@@ -208,7 +209,7 @@ export async function storageObjectExists(storageKey: string): Promise<boolean> 
 
   if (SUPABASE_URL && SUPABASE_KEY) {
     try {
-      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/info/${BUCKET_NAME}/${cleanKey}`, {
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/info/${ENCODED_BUCKET}/${encodeURI(cleanKey)}`, {
         headers: {
           Authorization: `Bearer ${SUPABASE_KEY}`,
           apiKey: SUPABASE_KEY,
@@ -233,12 +234,26 @@ export async function storageObjectExists(storageKey: string): Promise<boolean> 
  * Deletes an object from private storage.
  */
 export async function deleteFromStorage(storageKey: string): Promise<boolean> {
-  const cleanKey = storageKey.replace(/^\/+/, "");
+  let cleanKey = storageKey.replace(/^\/+/, "");
+  try {
+    const decoded = decodeURIComponent(cleanKey);
+    const bucketMarker = "/student data/";
+    const idx = decoded.indexOf(bucketMarker);
+    if (idx !== -1) {
+      cleanKey = decoded.slice(idx + bucketMarker.length).replace(/^\/+/, "");
+    } else if (cleanKey.includes("student%20data/")) {
+      cleanKey = decodeURIComponent(cleanKey.split("student%20data/")[1]);
+    } else if (cleanKey.startsWith("storage/v1/object/public/")) {
+      cleanKey = cleanKey.replace(/^storage\/v1\/object\/public\/[^/]+\//, "");
+      cleanKey = decodeURIComponent(cleanKey);
+    }
+  } catch {}
+
   let deletedAny = false;
 
   if (SUPABASE_URL && SUPABASE_KEY) {
     try {
-      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}`, {
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${ENCODED_BUCKET}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${SUPABASE_KEY}`,
@@ -274,7 +289,7 @@ export async function listAllStorageObjects(): Promise<StorageObjectMeta[]> {
   // 1. Supabase Storage listing
   if (SUPABASE_URL && SUPABASE_KEY) {
     try {
-      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET_NAME}`, {
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${ENCODED_BUCKET}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${SUPABASE_KEY}`,

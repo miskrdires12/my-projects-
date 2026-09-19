@@ -21,6 +21,7 @@ import { publishStudentSync, rehydrateDatabaseFromCloud } from "@/lib/sync-engin
 import {
   extractSupabaseStorageKey,
   deleteMultipleFromSupabaseBucket,
+  invalidateSupabaseStorageCache,
 } from "@/lib/supabase-storage";
 
 export interface StudentFilterParams {
@@ -452,7 +453,8 @@ export async function updateStudentPhotoAction(
         extractSupabaseStorageKey(student.originalPhotoPath),
       ].filter((k): k is string => Boolean(k) && k !== newKey);
       if (oldKeys.length > 0) {
-        deleteMultipleFromSupabaseBucket(oldKeys).catch(() => {});
+        await deleteMultipleFromSupabaseBucket(oldKeys).catch(() => {});
+        invalidateSupabaseStorageCache();
       }
     }
 
@@ -616,8 +618,10 @@ export async function deleteStudentAction(
       await publishStudentSync("DELETE", targetStudentId).catch(() => {});
     }
 
+    invalidateSupabaseStorageCache();
     revalidatePath("/students");
     revalidatePath("/dashboard");
+    revalidatePath("/admin/database");
     revalidatePath("/print-engine");
     return { success: true, studentId: targetDbId };
   } catch (error: any) {
@@ -1112,6 +1116,7 @@ export async function deletePermanentlyFromSupabaseAction(params: {
       // 4. Broadcast DELETE to all clients
       await publishStudentSync("DELETE" as any, { studentId: student.studentId, id: student.id });
 
+      invalidateSupabaseStorageCache();
       revalidatePath("/dashboard");
       revalidatePath("/students");
       revalidatePath("/admin/database");
