@@ -397,8 +397,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         photoPath: newRelativePath,
       });
 
-      // Cache-busted URL for immediate visual reflection
-      const cacheBusted = `${newRelativePath}?t=${Date.now()}`;
+      // Safe cache-busted URL for immediate visual reflection
+      const separator = newRelativePath.includes("?") ? "&" : "?";
+      const cacheBusted = `${newRelativePath}${separator}t=${Date.now()}`;
       const updated: StudentExtended = {
         ...activeStudent,
         photoPath: cacheBusted,
@@ -637,7 +638,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <th className="px-4 py-3">Emergency Phone</th>
                 {/* SENDER ATTRIBUTION: STRICTLY ADMIN ONLY */}
                 {isAdmin && (
-                  <th className="px-4 py-3 text-amber-700 bg-amber-50/50">Sender Station</th>
+                  <th className="px-4 py-3 text-amber-800 bg-amber-50/70 font-semibold">Data Sent By</th>
                 )}
                 <th className="px-4 py-3">Integrity</th>
                 <th className="px-4 py-3">QR</th>
@@ -738,8 +739,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       {/* SENDER ATTRIBUTION: ADMIN ONLY */}
                       {isAdmin && (
                         <td className="px-4 py-3 font-mono">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-900 text-[10px] font-semibold">
-                            {student.senderName || student.senderId || "Central Station"}
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-900 text-[10px] font-semibold" title={`Sent by: ${student.senderName || student.senderId || "Central Station"}`}>
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
+                            <span>{student.senderName || student.senderId || "Central Station"}</span>
                           </span>
                         </td>
                       )}
@@ -985,11 +987,27 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
               {/* SENDER ATTRIBUTION: ADMIN ONLY */}
               {isAdmin && (
-                <div className="pt-2 flex justify-between bg-amber-50/60 p-2 rounded border border-amber-200">
-                  <span className="text-amber-900 font-semibold">Sender Station:</span>
-                  <span className="text-amber-950 font-mono font-bold">
-                    {activeStudent.senderName || activeStudent.senderId || "Central Station"}
-                  </span>
+                <div className="pt-2.5 pb-2.5 px-3 rounded-lg border border-amber-300 bg-amber-50/80 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono uppercase font-bold text-amber-900 tracking-wider">
+                      Data Sent By (Worker Attribution)
+                    </span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-200/70 text-amber-950 font-semibold uppercase">
+                      Admin Audit
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-0.5">
+                    <span className="text-amber-900 font-medium">Worker / Station:</span>
+                    <span className="text-black font-mono font-bold">
+                      {activeStudent.senderName || activeStudent.senderId || "Central Station"}
+                    </span>
+                  </div>
+                  {activeStudent.senderId && (
+                    <div className="flex items-center justify-between text-[11px] text-amber-800/80 font-mono">
+                      <span>Sender Identifier:</span>
+                      <span className="truncate max-w-[160px]">{activeStudent.senderId}</span>
+                    </div>
+                  )}
                 </div>
               )}
 

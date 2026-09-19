@@ -129,51 +129,50 @@ export async function getSession(): Promise<SessionPayload | null> {
 export async function login(credentials: {
   emailOrUsername: string;
   passwordPlain: string;
+  deviceId?: string;
+  deviceInfo?: string;
   ipAddress?: string;
 }): Promise<LoginResponse> {
   const trimmed = credentials.emailOrUsername.trim().toLowerCase();
 
-  const DEMO_PRESETS: Record<
-    string,
-    { username: string; email: string; role: UserRole; pass: string }
-  > = {
-    "sender@studentbridge.internal": {
-      username: "sender",
-      email: "sender@studentbridge.internal",
-      role: "SENDER",
-      pass: "Password123!",
-    },
-    sender: {
-      username: "sender",
-      email: "sender@studentbridge.internal",
-      role: "SENDER",
-      pass: "Password123!",
-    },
-    "receiver@studentbridge.internal": {
-      username: "receiver",
-      email: "receiver@studentbridge.internal",
-      role: "RECEIVER",
-      pass: "Password123!",
-    },
-    receiver: {
-      username: "receiver",
-      email: "receiver@studentbridge.internal",
-      role: "RECEIVER",
-      pass: "Password123!",
-    },
-    "admin@studentbridge.internal": {
-      username: "admin",
-      email: "admin@studentbridge.internal",
-      role: "ADMIN",
-      pass: "AdminPassword123!",
-    },
-    admin: {
-      username: "admin",
-      email: "admin@studentbridge.internal",
-      role: "ADMIN",
-      pass: "AdminPassword123!",
-    },
-  };
+  // 1. REJECT ANY DEFAULT DEMO EMAILS, USERNAMES, OR DEFAULT PASSWORDS
+  const DEFAULT_CREDENTIAL_IDENTIFIERS = [
+    "sender@studentbridge.internal",
+    "receiver@studentbridge.internal",
+    "admin@studentbridge.internal",
+    "sender",
+    "receiver",
+    "admin",
+    "demo",
+    "test",
+    "operator",
+    "guest",
+  ];
+
+  const DEFAULT_PASSWORDS = [
+    "Password123!",
+    "AdminPassword123!",
+    "password",
+    "password123",
+    "admin",
+    "admin123",
+    "sender123",
+    "receiver123",
+    "123456",
+    "12345678",
+    "demo123",
+  ];
+
+  if (
+    DEFAULT_CREDENTIAL_IDENTIFIERS.includes(trimmed) ||
+    DEFAULT_PASSWORDS.includes(credentials.passwordPlain)
+  ) {
+    return {
+      success: false,
+      error:
+        "ACCESS REJECTED: Default demo credentials have been permanently decommissioned and disabled by security policy. You must sign in using your administrator-provisioned account.",
+    };
+  }
 
   let user: any = null;
   try {
@@ -186,102 +185,138 @@ export async function login(credentials: {
     console.warn("Notice: Prisma lookup in login:", dbErr);
   }
 
-  // 1. If user is found in database
-  if (user) {
-    let isValid = false;
-    try {
-      isValid = await verifyPassword(credentials.passwordPlain, user.passwordHash);
-    } catch {
-      isValid = false;
-    }
+  if (!user) {
+    return {
+      success: false,
+      error: "Invalid username or password. Ensure your administrator has provisioned your account.",
+    };
+  }
 
-    // Secondary check against known demo passwords in case hash differs
-    if (!isValid) {
-      const demo = DEMO_PRESETS[trimmed];
-      if (demo && credentials.passwordPlain === demo.pass) {
-        isValid = true;
+  let isValid = false;
+  try {
+    isValid = await verifyPassword(credentials.passwordPlain, user.passwordHash);
+  } catch {
+    isValid = false;
+  }
+
+  if (!isValid) {
+    return { success: false, error: "Invalid credentials." };
+  }
+
+  // 2. ENFORCE 1 DEVICE = 1 ROLE & HARDWARE DEVICE LOCKING
+  const deviceId = credentials.deviceId;
+  if (deviceId && deviceId !== "unknown-device" && deviceId.trim().length > 0) {
+    // Check if this physical hardware is already bound to a role
+    try {
+      const existingDeviceBinding = await prisma.deviceBinding.findUnique({
+        where: { deviceId },
+      });
+
+      if (existingDeviceBinding) {
+        if (existingDeviceBinding.role !== user.role) {
+          return {
+            success: false,
+            error: `ACCESS REJECTED (1 DEVICE = 1 ROLE ENFORCEMENT): This hardware machine is bound exclusively for "${existingDeviceBinding.role}" operations. Logins with "${user.role}" are strictly prohibited on this physical device.`,
+          };
+        }
+      } else {
+        // Enforce new binding for this device with this user's role
+        await prisma.deviceBinding.create({
+          data: {
+            deviceId,
+            role: user.role,
+            boundBy: user.username,
+            boundEmail: user.email,
+            deviceInfo: credentials.deviceInfo,
+          },
+        });
       }
+    } catch (deviceBindingErr) {
+      console.warn("Notice: device binding check:", deviceBindingErr);
     }
 
-    if (!isValid) {
-      return { success: false, error: "Invalid credentials" };
+    // Check if user is already locked to another device (Master Admin exempt from lockout)
+    const isMasterAdmin = user.email === "miskrdires11@gmail.com";
+    if (user.boundDeviceId && user.boundDeviceId !== deviceId && !isMasterAdmin) {
+      return {
+        success: false,
+        error: `HARDWARE DEVICE LOCK ACTIVE: Your account is bound to another device. Contact the administrator to release your device lock.`,
+      };
     }
 
-    const sessionPayload: Omit<SessionPayload, "iat" | "exp"> = {
-      userId: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role as UserRole,
-    };
-
-    const token = await signSessionToken(sessionPayload);
-    await setSessionCookie(token);
-
-    try {
-      await prisma.auditLog.create({
-        data: {
-          userId: user.id,
-          action: "AUTH_LOGIN",
-          entityType: "USER",
-          entityId: user.id,
-          ipAddress: credentials.ipAddress,
-          metadata: JSON.stringify({ role: user.role }),
-        },
-      });
-    } catch {
-      // Non-fatal
+    // If user has no boundDeviceId, record this device
+    if (!user.boundDeviceId) {
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            boundDeviceId: deviceId,
+            boundDeviceInfo: credentials.deviceInfo,
+          },
+        });
+      } catch {}
     }
-
-    return {
-      success: true,
-      user: sessionPayload,
-    };
   }
 
-  // 2. Fallback check for demo presets if DB didn't find the user (e.g. fresh Vercel serverless /tmp db)
-  const demoMatch = DEMO_PRESETS[trimmed];
-  if (demoMatch && credentials.passwordPlain === demoMatch.pass) {
-    const sessionPayload: Omit<SessionPayload, "iat" | "exp"> = {
-      userId: `system-${demoMatch.username}`,
-      username: demoMatch.username,
-      email: demoMatch.email,
-      role: demoMatch.role,
-    };
+  const sessionPayload: Omit<SessionPayload, "iat" | "exp"> = {
+    userId: user.id,
+    username: user.username,
+    email: user.email,
+    role: user.role as UserRole,
+  };
 
-    const token = await signSessionToken(sessionPayload);
-    await setSessionCookie(token);
+  const token = await signSessionToken(sessionPayload);
+  await setSessionCookie(token);
 
-    // Auto-seed into DB if possible
-    try {
-      const hash = await hashPassword(demoMatch.pass);
-      await prisma.user.upsert({
-        where: { username: demoMatch.username },
-        update: {},
-        create: {
-          id: `system-${demoMatch.username}`,
-          username: demoMatch.username,
-          email: demoMatch.email,
-          passwordHash: hash,
-          role: demoMatch.role,
-        },
-      });
-    } catch {
-      // Non-fatal
-    }
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        lastActiveAt: new Date(),
+        sessionStartedAt: new Date(),
+        currentStatus: "ACTIVE_WORKING",
+        workSessionCount: { increment: 1 },
+      },
+    });
 
-    return {
-      success: true,
-      user: sessionPayload,
-    };
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "AUTH_LOGIN",
+        entityType: "USER",
+        entityId: user.id,
+        ipAddress: credentials.ipAddress,
+        metadata: JSON.stringify({
+          role: user.role,
+          deviceId: credentials.deviceId,
+          sessionStart: new Date(),
+        }),
+      },
+    });
+  } catch {
+    // Non-fatal
   }
 
-  return { success: false, error: "Invalid username or password" };
+  return {
+    success: true,
+    user: sessionPayload,
+  };
 }
 
 export async function logout(ipAddress?: string): Promise<void> {
   const session = await getSession();
   if (session) {
     try {
+      await prisma.user.update({
+        where: { id: session.userId },
+        data: {
+          sessionEndedAt: new Date(),
+          lastActiveAt: new Date(),
+          currentStatus: "COMPLETED",
+        },
+      });
+
       await prisma.auditLog.create({
         data: {
           userId: session.userId,

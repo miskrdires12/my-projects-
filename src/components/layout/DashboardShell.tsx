@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -24,6 +24,10 @@ import {
   Camera,
   Menu,
   X,
+  Cloud,
+  AlertTriangle,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 
@@ -43,6 +47,29 @@ export default function DashboardShell({ session, children }: DashboardShellProp
   const isSender = role === "SENDER";
   const isReceiver = role === "RECEIVER";
   const isAdmin = role === "ADMIN";
+
+  const [telemetry, setTelemetry] = useState<any>(null);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let isMounted = true;
+    const checkTelemetry = async () => {
+      try {
+        const res = await fetch("/api/admin/supabase-status");
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) setTelemetry(data);
+        }
+      } catch {}
+    };
+
+    checkTelemetry();
+    const timer = setInterval(checkTelemetry, 8000);
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [isAdmin]);
 
   const closeMobile = () => setMobileOpen(false);
 
@@ -346,6 +373,23 @@ export default function DashboardShell({ session, children }: DashboardShellProp
         </nav>
       </div>
 
+      {/* Official Live Deployment Link */}
+      <div className="border-t border-neutral-200 px-4 py-2.5 bg-neutral-50/70">
+        <div className="flex items-center justify-between text-[9px] uppercase font-mono font-bold text-neutral-400">
+          <span>Official Deployment</span>
+          <Globe className="h-3 w-3 text-emerald-600" />
+        </div>
+        <a
+          href="https://my-projects-two-kappa.vercel.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-[11px] font-mono text-black hover:text-accent font-semibold truncate mt-1 group"
+        >
+          <ExternalLink className="h-3 w-3 shrink-0 text-neutral-400 group-hover:text-black" />
+          <span className="truncate">https://my-projects-two-kappa.vercel.app</span>
+        </a>
+      </div>
+
       {/* User Identity & Sign Out */}
       <div className="border-t border-neutral-200 p-4 bg-neutral-50">
         <div className="flex items-center justify-between">
@@ -447,6 +491,51 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 <span className="sm:hidden">Print</span>
               </Link>
             )}
+
+            {/* Admin Real-Time Database & Supabase Telemetry Pill */}
+            {isAdmin && telemetry && (
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/admin/database"
+                  className="hidden lg:inline-flex items-center gap-2 rounded-full border border-neutral-300 bg-neutral-100 hover:bg-neutral-200 px-3 py-1 text-[11px] font-mono text-black transition-colors"
+                  title="Real-Time Telemetry: Click to open Database & Supabase monitor"
+                >
+                  <span className="flex items-center gap-1 font-semibold">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    DB: {telemetry.database?.latencyMs ?? 0}ms
+                  </span>
+                  <span className="text-neutral-400">|</span>
+                  <span className="flex items-center gap-1 text-neutral-700">
+                    <Cloud className="h-3 w-3" />
+                    {telemetry.supabase?.status === "CONNECTED" ? "Supa: Live" : "Supa: Standby"}
+                  </span>
+                </Link>
+
+                {telemetry.inactivityTimer?.isApproachingPauseLimit && (
+                  <Link
+                    href="/admin/database"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-400 bg-amber-50 px-2.5 py-1 text-[10px] font-mono font-bold text-amber-900 animate-pulse hover:bg-amber-100 transition-colors"
+                    title="Free-tier Supabase pauses after 7 days of inactivity. Click to send Keep-Alive Touch Ping!"
+                  >
+                    <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                    <span>7d Pause in {telemetry.inactivityTimer.daysRemaining}d</span>
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {/* Official Deployment Link */}
+            <a
+              href="https://my-projects-two-kappa.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-neutral-50 hover:bg-neutral-100 hover:border-black px-3 py-1 text-[11px] font-mono text-neutral-700 hover:text-black transition-colors"
+              title="Open Official Production Deployment"
+            >
+              <Globe className="h-3 w-3 text-emerald-600" />
+              <span>https://my-projects-two-kappa.vercel.app</span>
+              <ExternalLink className="h-3 w-3 text-neutral-400" />
+            </a>
 
             <div className="hidden sm:flex items-center gap-2 rounded-full border border-neutral-300 bg-neutral-50 px-3 py-1 text-[11px] font-mono text-neutral-600">
               <span className="h-2 w-2 rounded-full bg-black" />

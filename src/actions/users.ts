@@ -80,3 +80,35 @@ export async function deleteUserAction(id: string) {
   revalidatePath("/admin/users");
   return { success: true };
 }
+
+export async function resetUserDeviceAction(id: string) {
+  const session = await requireAuth("user:create");
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (user && user.boundDeviceId) {
+    try {
+      await prisma.deviceBinding.deleteMany({
+        where: { deviceId: user.boundDeviceId },
+      });
+    } catch {}
+  }
+
+  await prisma.user.update({
+    where: { id },
+    data: {
+      boundDeviceId: null,
+      boundDeviceInfo: null,
+    },
+  });
+
+  await createSafeAuditLog({
+    userId: session.userId,
+    action: "USER_DEVICE_RESET",
+    entityType: "USER",
+    entityId: id,
+  });
+
+  revalidatePath("/admin/users");
+  return { success: true };
+}
+

@@ -34,9 +34,16 @@ export async function loginAction(
       };
     }
 
+    const deviceId =
+      (formData.get("deviceId") as string)?.trim() || "unknown-device";
+    const deviceInfo =
+      (formData.get("deviceInfo") as string)?.trim() || "Browser Device";
+
     const result = await login({
       emailOrUsername: parsed.data.emailOrUsername,
       passwordPlain: parsed.data.password,
+      deviceId,
+      deviceInfo,
     });
 
     if (!result.success || !result.user) {

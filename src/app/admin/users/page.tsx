@@ -11,17 +11,44 @@ export default async function AdminUsersPage() {
     redirect("/dashboard?error=forbidden");
   }
 
-  const users = await prisma.user.findMany({
+  const rawUsers = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
       username: true,
       email: true,
       role: true,
+      status: true,
+      currentStatus: true,
+      sessionStartedAt: true,
+      sessionEndedAt: true,
+      lastLoginAt: true,
+      lastActiveAt: true,
+      workSessionCount: true,
+      totalWorkMinutes: true,
+      boundDeviceId: true,
+      boundDeviceInfo: true,
       createdAt: true,
       updatedAt: true,
     },
   });
+
+  const users = await Promise.all(
+    rawUsers.map(async (u) => {
+      const sentCount = await prisma.student.count({
+        where: {
+          OR: [
+            { senderId: u.id },
+            { senderName: u.username },
+          ],
+        },
+      });
+      return {
+        ...u,
+        studentsSentCount: sentCount,
+      };
+    })
+  );
 
   return (
     <div className="space-y-6">

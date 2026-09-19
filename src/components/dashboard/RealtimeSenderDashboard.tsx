@@ -14,9 +14,12 @@ import {
   ChevronDown,
   Shield,
   Clock,
+  AlertCircle,
+  ArrowRight,
 } from "lucide-react";
 
 import { subscribeToCloudSync } from "@/lib/sync-client";
+import { getOutboxItems } from "@/lib/indexeddb-outbox";
 
 interface SenderDashboardProps {
   initialData: {
@@ -38,10 +41,24 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [unsentCount, setUnsentCount] = useState(0);
+
+  const checkUnsentData = useCallback(async () => {
+    let count = 0;
+    try {
+      const draft = localStorage.getItem("sb_student_draft");
+      if (draft) count++;
+      const items = await getOutboxItems();
+      const pending = items.filter((i) => i.state !== "SYNCHRONIZED").length;
+      count += pending;
+    } catch {}
+    setUnsentCount(count);
+  }, []);
 
   useEffect(() => {
     setLastUpdated(new Date().toLocaleTimeString());
-  }, []);
+    checkUnsentData();
+  }, [checkUnsentData]);
 
   // Listen to Global Cloud Sync Bus in real-time
   useEffect(() => {
@@ -267,6 +284,32 @@ export default function RealtimeSenderDashboard({ initialData, notice }: SenderD
           </div>
         </div>
       </div>
+
+      {/* Unsent Data Alert Banner for Sender */}
+      {unsentCount > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-950/20">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400 shrink-0">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="font-bold text-amber-200 uppercase tracking-wide text-xs">
+                ⚠️ Unsent Data Detected ({unsentCount} Record{unsentCount > 1 ? "s" : ""} / Photo{unsentCount > 1 ? "s" : ""})
+              </div>
+              <div className="text-[11px] text-amber-300/80 mt-0.5">
+                I have not sent this data yet. Please review uncommitted drafts or offline outbox items to transmit to Receiver.
+              </div>
+            </div>
+          </div>
+          <Link
+            href="/register"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-amber-400 px-3.5 py-1.5 text-xs font-bold text-black hover:bg-amber-300 transition-colors shadow-xs"
+          >
+            <span>Transmit Now</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Monochrome Primary KPI Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

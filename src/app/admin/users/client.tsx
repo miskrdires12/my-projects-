@@ -1,21 +1,43 @@
 "use client";
 
 // ============================================================================
-// STUDENT BRIDGE — ADMIN USER MANAGEMENT CLIENT
+// STUDENT BRIDGE — ADMIN USER & WORKER LIFECYCLE MANAGEMENT CLIENT
+// Tracks workers from starting to final status, shows data sent by who,
+// and manages hardware device bindings and role privileges.
 // ============================================================================
 
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { UserPlus, Trash2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
-import { createUserAction, deleteUserAction } from "@/actions/users";
+import {
+  UserPlus,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  RotateCcw,
+  Clock,
+  Send,
+} from "lucide-react";
+import { createUserAction, deleteUserAction, resetUserDeviceAction } from "@/actions/users";
 import type { UserRole } from "@/types/auth";
 
-interface UserItem {
+export interface UserItem {
   id: string;
   username: string;
   email: string;
   role: string;
-  createdAt: Date;
+  status?: string | null;
+  currentStatus?: string | null;
+  sessionStartedAt?: Date | string | null;
+  sessionEndedAt?: Date | string | null;
+  lastLoginAt?: Date | string | null;
+  lastActiveAt?: Date | string | null;
+  workSessionCount?: number;
+  totalWorkMinutes?: number;
+  boundDeviceId?: string | null;
+  boundDeviceInfo?: string | null;
+  studentsSentCount?: number;
+  createdAt: Date | string;
 }
 
 interface UsersClientProps {
@@ -74,6 +96,22 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
     });
   };
 
+  const handleResetDevice = (id: string, name: string) => {
+    if (!confirm(`Reset and unbind device authorization for operator "${name}"? They will be able to bind a new device on next login.`)) {
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await resetUserDeviceAction(id);
+      if (!res.success) {
+        setErrorMessage("Failed to reset worker device lock.");
+      } else {
+        setSuccessMessage(`Device lock reset for "${name}". Worker can now authenticate on a new device.`);
+        router.refresh();
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       {errorMessage && (
@@ -90,81 +128,177 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="text-xs font-mono text-foreground-muted">
-          TOTAL REGISTERED OPERATORS: <strong className="text-foreground">{initialUsers.length}</strong>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="text-xs font-mono text-foreground-muted flex items-center gap-3">
+          <span>TOTAL PROVISIONED WORKERS: <strong className="text-foreground">{initialUsers.length}</strong></span>
+          <span>•</span>
+          <span className="text-emerald-400 flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            {initialUsers.filter(u => u.currentStatus === "ACTIVE_WORKING").length} ACTIVE NOW
+          </span>
         </div>
 
         <button
           type="button"
           onClick={() => setIsCreateOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-xs font-bold text-black hover:bg-accent-hover shadow-glow-sm transition-all"
+          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-xs font-bold text-black hover:bg-accent-hover shadow-glow-sm transition-all self-start sm:self-auto"
         >
           <UserPlus className="h-4 w-4" />
-          <span>Provision Operator</span>
+          <span>Provision Worker Account</span>
         </button>
       </div>
 
-      {/* Users Table */}
+      {/* Workers Lifecycle & Telemetry Table */}
       <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-card">
-        <table className="w-full text-left text-xs">
-          <thead className="border-b border-border bg-surface-secondary text-foreground-muted font-mono uppercase text-[11px]">
-            <tr>
-              <th className="px-5 py-3">Username</th>
-              <th className="px-5 py-3">Institutional Email</th>
-              <th className="px-5 py-3">Role Privilege</th>
-              <th className="px-5 py-3">Created Date</th>
-              <th className="px-5 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {initialUsers.map((user) => {
-              const isSelf = user.id === currentUserId;
-              return (
-                <tr key={user.id} className="hover:bg-surface-secondary/50">
-                  <td className="px-5 py-3.5 font-semibold text-foreground flex items-center gap-2">
-                    <span>{user.username}</span>
-                    {isSelf && (
-                      <span className="rounded bg-surface-tertiary border border-border px-1.5 py-0.5 text-[10px] font-mono text-accent">
-                        YOU
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-foreground-muted">{user.email}</td>
-                  <td className="px-5 py-3.5 font-mono">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                        user.role === "ADMIN"
-                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                          : user.role === "SENDER"
-                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/30"
-                          : "bg-surface-tertiary text-foreground-muted"
-                      }`}
-                    >
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-foreground-muted">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    {!isSelf && (
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(user.id, user.username)}
-                        disabled={isPending}
-                        className="rounded p-1.5 text-foreground-muted hover:text-red-400 hover:bg-surface-secondary transition-colors"
-                        title="Delete User"
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="border-b border-border bg-surface-secondary text-foreground-muted font-mono uppercase text-[11px]">
+              <tr>
+                <th className="px-5 py-3">Worker / Identity</th>
+                <th className="px-5 py-3">Role</th>
+                <th className="px-5 py-3">Shift Status</th>
+                <th className="px-5 py-3">Work Shift (Start → Final)</th>
+                <th className="px-5 py-3">Data Sent</th>
+                <th className="px-5 py-3">Authorized Device</th>
+                <th className="px-5 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {initialUsers.map((user) => {
+                const isSelf = user.id === currentUserId;
+                const isWorking = user.currentStatus === "ACTIVE_WORKING";
+                const isCompleted = user.currentStatus === "COMPLETED";
+
+                const startTimeFormatted = user.sessionStartedAt
+                  ? new Date(user.sessionStartedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                  : user.lastLoginAt
+                  ? new Date(user.lastLoginAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                  : "—";
+
+                const finalTimeFormatted = user.sessionEndedAt
+                  ? new Date(user.sessionEndedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                  : user.lastActiveAt && !isWorking
+                  ? new Date(user.lastActiveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                  : isWorking
+                  ? "In Progress..."
+                  : "—";
+
+                return (
+                  <tr key={user.id} className="hover:bg-surface-secondary/50 transition-colors">
+                    {/* Worker / Identity */}
+                    <td className="px-5 py-3.5">
+                      <div className="font-semibold text-foreground flex items-center gap-1.5">
+                        <span>{user.username}</span>
+                        {isSelf && (
+                          <span className="rounded bg-surface-tertiary border border-border px-1.5 py-0.2 text-[9px] font-mono text-accent">
+                            YOU
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-foreground-muted font-mono">{user.email}</div>
+                    </td>
+
+                    {/* Role */}
+                    <td className="px-5 py-3.5 font-mono">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase ${
+                          user.role === "ADMIN"
+                            ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                            : user.role === "SENDER"
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                            : "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+                        }`}
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                        {user.role}
+                      </span>
+                    </td>
+
+                    {/* Shift Status */}
+                    <td className="px-5 py-3.5">
+                      {isWorking ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-0.5 text-[10px] font-mono font-bold text-emerald-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                          ACTIVE WORKING
+                        </span>
+                      ) : isCompleted ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 px-2.5 py-0.5 text-[10px] font-mono font-medium text-blue-400">
+                          <CheckCircle2 className="h-3 w-3" />
+                          FINALIZED SHIFT
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-surface-tertiary px-2 py-0.5 text-[10px] font-mono text-foreground-muted">
+                          OFFLINE
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Work Shift (Start -> Final) */}
+                    <td className="px-5 py-3.5 font-mono text-[11px]">
+                      <div className="text-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3 text-accent shrink-0" />
+                        <span>Start: <strong className="text-foreground">{startTimeFormatted}</strong></span>
+                      </div>
+                      <div className="text-foreground-muted text-[10px] mt-0.5 pl-4">
+                        Final: <span className={isWorking ? "text-emerald-400 font-semibold" : ""}>{finalTimeFormatted}</span>
+                      </div>
+                    </td>
+
+                    {/* Data Sent */}
+                    <td className="px-5 py-3.5 font-mono">
+                      <div className="flex items-center gap-1.5 text-foreground font-semibold">
+                        <Send className="h-3 w-3 text-accent" />
+                        <span>{user.studentsSentCount ?? 0}</span>
+                        <span className="text-[10px] text-foreground-muted font-normal">records</span>
+                      </div>
+                      <div className="text-[10px] text-foreground-muted">
+                        {user.workSessionCount ?? 0} sessions
+                      </div>
+                    </td>
+
+                    {/* Authorized Device */}
+                    <td className="px-5 py-3.5">
+                      {user.boundDeviceInfo || user.boundDeviceId ? (
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-foreground font-mono truncate max-w-[150px]" title={user.boundDeviceInfo || user.boundDeviceId || ""}>
+                            {user.boundDeviceInfo || "Hardware Bound"}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleResetDevice(user.id, user.username)}
+                            disabled={isPending}
+                            className="p-1 rounded text-foreground-muted hover:text-amber-400 hover:bg-surface-tertiary transition-colors"
+                            title="Reset Hardware Lock / Unbind"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] font-mono text-foreground-muted italic">
+                          Any Device (Unbound)
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-5 py-3.5 text-right">
+                      {!isSelf && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(user.id, user.username)}
+                          disabled={isPending}
+                          className="rounded p-1.5 text-foreground-muted hover:text-red-400 hover:bg-surface-secondary transition-colors"
+                          title="Delete Worker Account"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Create User Modal */}

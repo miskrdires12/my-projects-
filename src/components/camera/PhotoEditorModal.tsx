@@ -24,6 +24,8 @@ import {
   Check,
   X,
   Palette,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 export interface PhotoEditorProps {
@@ -99,17 +101,80 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  // Load Source Image
-  useEffect(() => {
+  // Image loading & error states
+  const [isLoadingImage, setIsLoadingImage] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  // Load Source Image with resilient blob conversion
+  const loadImage = useCallback(async () => {
     if (!originalImageSrc) return;
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = originalImageSrc;
-    img.onload = () => {
-      imageRef.current = img;
-      renderCanvas();
-    };
+    setIsLoadingImage(true);
+    setLoadError(null);
+
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+
+    try {
+      let finalSrc = originalImageSrc;
+
+      // For remote or relative paths, fetch binary first for 100% same-origin canvas compatibility
+      if (!originalImageSrc.startsWith("data:") && !originalImageSrc.startsWith("blob:")) {
+        try {
+          const res = await fetch(originalImageSrc, { cache: "no-store" });
+          if (res.ok) {
+            const blob = await res.blob();
+            finalSrc = URL.createObjectURL(blob);
+            objectUrlRef.current = finalSrc;
+          }
+        } catch {
+          // fallback to originalImageSrc if network fetch fails
+        }
+      }
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        imageRef.current = img;
+        setIsLoadingImage(false);
+        renderCanvas();
+      };
+      img.onerror = () => {
+        // Fallback retry without crossOrigin
+        const fallback = new Image();
+        fallback.onload = () => {
+          imageRef.current = fallback;
+          setIsLoadingImage(false);
+          renderCanvas();
+        };
+        fallback.onerror = () => {
+          setIsLoadingImage(false);
+          setLoadError("Failed to load student portrait into Studio. Click below to retry.");
+        };
+        fallback.src = originalImageSrc;
+      };
+      img.src = finalSrc;
+    } catch (err: any) {
+      setIsLoadingImage(false);
+      setLoadError(err?.message || "Failed to load portrait.");
+    }
   }, [originalImageSrc]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setHistory([DEFAULT_STATE]);
+      setHistoryIndex(0);
+      loadImage();
+    }
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+  }, [isOpen, loadImage]);
 
   // Push new state to history
   const updateState = useCallback(
@@ -434,6 +499,25 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           {/* Main Canvas Viewer */}
           <div className="relative flex flex-1 items-center justify-center bg-black/60 p-6 overflow-hidden select-none">
             <div className="relative border-2 border-dashed border-accent/40 rounded-xl overflow-hidden shadow-2xl bg-black">
+              {isLoadingImage && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 text-white">
+                  <Loader2 className="h-8 w-8 animate-spin text-accent mb-2" />
+                  <span className="text-xs font-mono">Initializing Studio Portrait...</span>
+                </div>
+              )}
+              {loadError && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-10 text-white p-4 text-center">
+                  <AlertCircle className="h-8 w-8 text-rose-400 mb-2" />
+                  <span className="text-xs text-rose-300 font-semibold mb-3 max-w-xs">{loadError}</span>
+                  <button
+                    type="button"
+                    onClick={loadImage}
+                    className="px-4 py-1.5 bg-accent text-black font-semibold text-xs rounded-lg hover:bg-accent-hover shadow-glow"
+                  >
+                    Retry Loading Portrait
+                  </button>
+                </div>
+              )}
               <canvas
                 ref={canvasRef}
                 onMouseDown={handleMouseDown}

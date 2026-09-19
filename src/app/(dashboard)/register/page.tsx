@@ -121,13 +121,25 @@ export default function RegisterPage() {
     return () => clearTimeout(timer);
   }, [formData.studentId]);
 
+  // Helper to capitalize first letter of each word (Title Case)
+  const toTitleCase = (str: string) => {
+    return str.replace(/(?:^|\s|-)\S/g, (match) => match.toUpperCase());
+  };
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    let finalValue: any = value;
+    if (name === "dateOfBirth") {
+      finalValue = new Date(value);
+    } else if (name === "fullName") {
+      // Auto-capitalize each word so both names start with capital letter
+      finalValue = toTitleCase(value);
+    }
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "dateOfBirth" ? new Date(value) : value,
+      [name]: finalValue,
     }));
   };
 
@@ -240,6 +252,16 @@ export default function RegisterPage() {
     // Validate 5 required fields
     if (!formData.fullName?.trim()) {
       setErrorMessage("Name is required.");
+      return;
+    }
+
+    // Enforce both names start with a Capital letter
+    const nameWords = formData.fullName.trim().split(/\s+/).filter(Boolean);
+    const allCapitalized = nameWords.every((w) => /^[A-Z]/.test(w));
+    if (nameWords.length < 2 || !allCapitalized) {
+      setErrorMessage(
+        "Both First and Last names must start with a Capital letter (e.g. Miskr Dires)."
+      );
       return;
     }
     if (!formData.studentId?.trim()) {
@@ -511,17 +533,48 @@ export default function RegisterPage() {
               {/* Name */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-foreground mb-1">
-                  Name <span className="text-accent">*</span>
+                  Name (Both Names Must Start With Capital Letter) <span className="text-accent">*</span>
                 </label>
                 <input
                   type="text"
                   name="fullName"
                   value={formData.fullName}
                   onChange={handleChange}
+                  onBlur={() => {
+                    if (formData.fullName) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        fullName: toTitleCase((prev.fullName || "").trim()),
+                      }));
+                    }
+                  }}
                   placeholder="e.g. Miskr Dires"
                   required
                   className="w-full rounded-lg border border-border bg-surface-secondary px-3.5 py-2.5 text-xs text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none"
                 />
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[10px] text-foreground-muted font-mono">
+                    Both names must start with a Capital letter (e.g. Miskr Dires)
+                  </span>
+                  {(() => {
+                    const words = (formData.fullName || "").trim().split(/\s+/).filter(Boolean);
+                    if (words.length >= 2 && words.every((w) => /^[A-Z]/.test(w))) {
+                      return (
+                        <span className="text-[10px] font-mono text-emerald-400 font-semibold flex items-center gap-1">
+                          ✓ Title Case Verified
+                        </span>
+                      );
+                    }
+                    if (words.length > 0) {
+                      return (
+                        <span className="text-[10px] font-mono text-amber-400 font-medium">
+                          Ensure 2+ Capitalized Names
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
               </div>
 
               {/* Student ID */}
@@ -848,14 +901,33 @@ export default function RegisterPage() {
               <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
                 Official Photograph
               </h3>
-              {officialPhotoPath ? (
-                <span className="flex items-center gap-1 text-[10px] text-black font-mono font-bold">
-                  <CheckCircle2 className="h-3 w-3" /> ATTACHED
+              {successId ? (
+                <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-mono font-bold">
+                  <CheckCircle2 className="h-3 w-3" /> SENT TO RECEIVER
+                </span>
+              ) : officialPhotoPath ? (
+                <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold">
+                  <AlertCircle className="h-3 w-3 text-amber-400 animate-pulse" /> NOT SENT
                 </span>
               ) : (
                 <span className="text-[10px] text-neutral-400 font-mono">PENDING</span>
               )}
             </div>
+
+            {/* Unsent Notification Alert for Sender */}
+            {officialPhotoPath && !successId && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-start gap-2.5 animate-in fade-in">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                <div>
+                  <div className="font-bold text-amber-200 uppercase tracking-wide text-[11px]">
+                    ⚠️ Unsent Data Notice
+                  </div>
+                  <div className="text-[11px] text-amber-300/90 mt-0.5 leading-relaxed">
+                    I have not sent the data yet. Complete the form and click <strong className="text-white">&quot;Register &amp; Commit Credential&quot;</strong> to transmit this student and photo to the Receiver.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Photo Preview Box */}
             <div className="relative aspect-[3/4] w-full rounded-xl border border-neutral-300 bg-neutral-100 overflow-hidden flex items-center justify-center group shadow-xs">

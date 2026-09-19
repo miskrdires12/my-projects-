@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   HardDrive,
   ShieldCheck,
@@ -10,6 +10,13 @@ import {
   Activity,
   Server,
   Layers,
+  Cloud,
+  Zap,
+  AlertTriangle,
+  Clock,
+  Radio,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
 import type { StorageQuotaMetrics } from "@/lib/storage-quota-monitor";
 
@@ -48,6 +55,56 @@ export const DatabaseAdminClient: React.FC<DatabaseAdminClientProps> = ({
   const [isPurging, setIsPurging] = useState(false);
   const [report, setReport] = useState<any>(initialReport);
   const [purgeFeedback, setPurgeFeedback] = useState<string | null>(null);
+
+  // Real-time Supabase & Database Telemetry
+  const [telemetry, setTelemetry] = useState<any>(null);
+  const [isPinging, setIsPinging] = useState(false);
+  const [pingFeedback, setPingFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTelemetry = async () => {
+      try {
+        const res = await fetch("/api/admin/supabase-status");
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) setTelemetry(data);
+        }
+      } catch {}
+    };
+
+    fetchTelemetry();
+    const interval = setInterval(fetchTelemetry, 5000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const runKeepAlivePing = async () => {
+    setIsPinging(true);
+    setPingFeedback(null);
+    try {
+      const res = await fetch("/api/admin/supabase-status", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPingFeedback(data.message || "Keep-alive touch recorded! Inactivity timer reset.");
+        // Immediately refresh telemetry
+        const refreshRes = await fetch("/api/admin/supabase-status");
+        if (refreshRes.ok) {
+          setTelemetry(await refreshRes.json());
+        }
+      } else {
+        alert("Keep-alive ping failed: " + (data.error || "Unknown error"));
+      }
+    } catch (err: any) {
+      alert("Failed to send keep-alive touch: " + err.message);
+    } finally {
+      setIsPinging(false);
+    }
+  };
 
   const runReconciliation = async () => {
     setIsReconciling(true);
@@ -112,8 +169,195 @@ export const DatabaseAdminClient: React.FC<DatabaseAdminClientProps> = ({
       ? "text-yellow-500 bg-yellow-500/10 border-yellow-500/30"
       : "text-emerald-500 bg-emerald-500/10 border-emerald-500/30";
 
+  const supaConnected = telemetry?.supabase?.status === "CONNECTED";
+  const daysRemaining = telemetry?.inactivityTimer?.daysRemaining ?? 7;
+  const isApproachingPause = telemetry?.inactivityTimer?.isApproachingPauseLimit;
+  const isCriticalPause = telemetry?.inactivityTimer?.isCriticalPauseLimit;
+
   return (
     <div className="space-y-6">
+      {/* Real-time Supabase & Inactivity Pause Guardian Card */}
+      <div className="rounded-xl border-2 border-black bg-neutral-950 text-white p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <Cloud className="h-5 w-5 text-white" />
+              <h2 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
+                <span>Real-Time Supabase &amp; Database Heartbeat</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white text-black">
+                  <Radio className="h-2.5 w-2.5 animate-pulse text-emerald-600" />
+                  LIVE TELEMETRY
+                </span>
+              </h2>
+            </div>
+            <p className="text-xs text-neutral-400">
+              Live latency polling, free-tier 7-day inactivity pause protection, and cloud storage capacity gauges
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href="https://my-projects-two-kappa.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3.5 py-2 text-xs font-mono font-semibold text-neutral-200 hover:text-white hover:border-white transition-colors shadow-xs"
+              title="Open Official Live Deployment"
+            >
+              <Globe className="h-3.5 w-3.5 text-emerald-400" />
+              <span>https://my-projects-two-kappa.vercel.app</span>
+              <ExternalLink className="h-3 w-3 text-neutral-400" />
+            </a>
+
+            <button
+              type="button"
+              onClick={runKeepAlivePing}
+              disabled={isPinging}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white text-black px-4 py-2 text-xs font-bold hover:bg-neutral-200 disabled:opacity-50 transition-colors shadow-sm"
+              title="Resets the 7-day free tier inactivity pause counter"
+            >
+              <Zap className={`h-3.5 w-3.5 ${isPinging ? "animate-spin text-amber-500" : "text-amber-500 fill-amber-500"}`} />
+              <span>{isPinging ? "Pinging Cloud..." : "Keep-Alive Touch Ping"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Inactivity Pause Warning Banner (Approaching limit or critical) */}
+        {isApproachingPause && (
+          <div className={`rounded-lg border p-3.5 text-xs flex items-start gap-3 ${
+            isCriticalPause 
+              ? "border-red-500/80 bg-red-950/80 text-red-200 animate-pulse" 
+              : "border-amber-500/80 bg-amber-950/80 text-amber-200"
+          }`}>
+            <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${isCriticalPause ? "text-red-400" : "text-amber-400"}`} />
+            <div className="space-y-1 flex-1">
+              <div className="font-bold uppercase tracking-wider text-[11px]">
+                {isCriticalPause ? "CRITICAL: SUPABASE FREE-TIER PAUSE IMMINENT (<24H)" : "ATTENTION: 7-DAY INACTIVITY PAUSE REMINDER"}
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                Supabase projects on the Free tier automatically pause after 7 consecutive days of inactivity. Only{" "}
+                <strong className="font-mono text-white underline">{daysRemaining} days</strong> remain before cloud pause. Click <strong>&quot;Keep-Alive Touch Ping&quot;</strong> above to refresh database activity and reset the countdown timer.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Feedback Banner */}
+        {pingFeedback && (
+          <div className="rounded-lg border border-emerald-500/50 bg-emerald-950/50 p-3 text-xs text-emerald-200 flex items-center gap-2 font-mono">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span>{pingFeedback}</span>
+          </div>
+        )}
+
+        {/* Telemetry Metric Gauges */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* DB Latency & Health */}
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900/90 p-4 space-y-2">
+            <div className="flex items-center justify-between text-xs text-neutral-400 font-mono uppercase">
+              <span>Database Query Latency</span>
+              <Server className="h-3.5 w-3.5 text-neutral-400" />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono text-white">
+                {telemetry?.database?.latencyMs !== undefined ? `${telemetry.database.latencyMs}ms` : "—"}
+              </span>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                telemetry?.database?.status === "HEALTHY"
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  : "bg-red-500/20 text-red-400 border border-red-500/30"
+              }`}>
+                {telemetry?.database?.status || "CHECKING"}
+              </span>
+            </div>
+            <div className="text-[10px] font-mono text-neutral-400">
+              Prisma Pool • {studentRows.toLocaleString()} Student Records
+            </div>
+          </div>
+
+          {/* Supabase Status */}
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900/90 p-4 space-y-2">
+            <div className="flex items-center justify-between text-xs text-neutral-400 font-mono uppercase">
+              <span>Supabase REST API</span>
+              <Cloud className="h-3.5 w-3.5 text-neutral-400" />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono text-white">
+                {telemetry?.supabase?.latencyMs !== null && telemetry?.supabase?.latencyMs !== undefined
+                  ? `${telemetry.supabase.latencyMs}ms`
+                  : supaConnected ? "LIVE" : "STANDBY"}
+              </span>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                supaConnected
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  : "bg-neutral-800 text-neutral-300 border border-neutral-700"
+              }`}>
+                {telemetry?.supabase?.status || "STANDBY"}
+              </span>
+            </div>
+            <div className="text-[10px] font-mono text-neutral-400 truncate" title={telemetry?.supabase?.projectRef}>
+              Project: {telemetry?.supabase?.projectRef || "Local Hybrid"}
+            </div>
+          </div>
+
+          {/* 7-Day Inactivity Tracker */}
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900/90 p-4 space-y-2">
+            <div className="flex items-center justify-between text-xs text-neutral-400 font-mono uppercase">
+              <span>Inactivity Pause Timer</span>
+              <Clock className="h-3.5 w-3.5 text-neutral-400" />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono text-white">
+                {telemetry?.inactivityTimer?.daysRemaining !== undefined
+                  ? `${telemetry.inactivityTimer.daysRemaining}d`
+                  : "7.0d"}
+              </span>
+              <span className="text-[10px] font-mono text-neutral-400">remaining / 7d limit</span>
+            </div>
+            {/* Progress bar of 7-day limit */}
+            <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  daysRemaining <= 2 ? "bg-red-500" : daysRemaining <= 4 ? "bg-amber-400" : "bg-emerald-400"
+                }`}
+                style={{ width: `${Math.min(100, ((7 - daysRemaining) / 7) * 100)}%` }}
+              />
+            </div>
+            <div className="text-[10px] font-mono text-neutral-500 flex justify-between">
+              <span>Inactive: {telemetry?.inactivityTimer?.daysInactive ?? 0}d</span>
+              <span>Pause at 7d</span>
+            </div>
+          </div>
+
+          {/* Free-Tier Storage Limit (1 GB) */}
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900/90 p-4 space-y-2">
+            <div className="flex items-center justify-between text-xs text-neutral-400 font-mono uppercase">
+              <span>Supabase Free Storage (1 GB)</span>
+              <HardDrive className="h-3.5 w-3.5 text-neutral-400" />
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-bold font-mono text-white">
+                {telemetry?.storage?.percentUsed !== undefined ? `${telemetry.storage.percentUsed}%` : `${quota.percentageUsed.toFixed(1)}%`}
+              </span>
+              <span className="text-[11px] font-mono text-neutral-400">
+                {formatBytes(quota.totalBytesUsed)} / 1 GB
+              </span>
+            </div>
+            <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  quota.percentageUsed >= 90 ? "bg-red-500" : quota.percentageUsed >= 80 ? "bg-amber-400" : "bg-emerald-400"
+                }`}
+                style={{ width: `${Math.min(100, quota.percentageUsed)}%` }}
+              />
+            </div>
+            <div className="text-[10px] font-mono text-neutral-500 flex justify-between">
+              <span>{quota.totalObjectsCount} photos</span>
+              <span>{formatBytes(quota.remainingCapacityBytes)} free</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Top Telemetry & Quota Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Storage Quota Usage */}

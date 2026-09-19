@@ -79,7 +79,7 @@ export function verifySignedToken(
  */
 export async function createSignedUrl(
   storageKey: string,
-  expiresInSeconds: number = 3600
+  expiresInSeconds: number = 2592000 // 30 days
 ): Promise<string> {
   if (!storageKey) return "";
 
@@ -411,11 +411,11 @@ export async function processAndStoreMultiTierPhoto(
     uploadToStorage(thumbnailKey, thumbBuffer, "image/jpeg"),
   ]);
 
-  // Generate initial signed URLs (1 hour TTL)
+  // Generate initial signed URLs (30 days TTL)
   const [originalUrl, previewUrl, thumbnailUrl] = await Promise.all([
-    createSignedUrl(originalKey, 3600),
-    createSignedUrl(previewKey, 3600),
-    createSignedUrl(thumbnailKey, 3600),
+    createSignedUrl(originalKey, 2592000),
+    createSignedUrl(previewKey, 2592000),
+    createSignedUrl(thumbnailKey, 2592000),
   ]);
 
   const origMeta = await sharp(originalBuffer).metadata();

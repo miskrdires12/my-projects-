@@ -36,19 +36,30 @@ model Organization {
 // ----------------------------------------------------------------------------
 
 model User {
-  id             String        @id @default(cuid())
-  username       String        @unique
-  email          String        @unique
-  passwordHash   String
-  role           String        @default("RECEIVER") // SENDER | RECEIVER | ADMIN
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  auditLogs      AuditLog[]
+  id               String        @id @default(cuid())
+  username         String        @unique
+  email            String        @unique
+  passwordHash     String
+  role             String        @default("RECEIVER") // SENDER | RECEIVER | ADMIN
+  status           String        @default("ACTIVE")   // ACTIVE | INACTIVE | SUSPENDED
+  currentStatus    String        @default("OFFLINE")  // OFFLINE | ACTIVE_WORKING | COMPLETED
+  sessionStartedAt DateTime?
+  sessionEndedAt   DateTime?
+  lastLoginAt      DateTime?
+  lastActiveAt     DateTime?
+  workSessionCount Int           @default(0)
+  totalWorkMinutes Int           @default(0)
+  boundDeviceId    String?
+  boundDeviceInfo  String?
+  organizationId   String?
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  auditLogs        AuditLog[]
 
   @@index([role])
   @@index([organizationId])
+  @@index([currentStatus])
   @@map("users")
 }
 
@@ -93,6 +104,10 @@ model Student {
   photoIntegrityStatus  String              @default("PHOTO_PENDING") // PHOTO_VERIFIED | PHOTO_MISSING | PHOTO_PENDING | PHOTO_REPAIR_REQUIRED | PHOTO_ABSENT_INTENTIONAL
   storageKey            String?
   storageSyncAt         DateTime?
+
+  // Receiver Visibility / Soft Deletion
+  receiverHidden        Boolean             @default(false)
+  hiddenAt              DateTime?
 
   // Status & Relational Partitioning
   status                String              @default("ACTIVE") // ACTIVE | INACTIVE | ARCHIVED | SUSPENDED
@@ -414,4 +429,23 @@ model StorageReconciliationReport {
 
   @@index([createdAt])
   @@map("storage_reconciliation_reports")
+}
+
+// ----------------------------------------------------------------------------
+// HARDWARE DEVICE TO ROLE BINDING (1 DEVICE = 1 ROLE ENFORCEMENT)
+// ----------------------------------------------------------------------------
+
+model DeviceBinding {
+  id         String   @id @default(cuid())
+  deviceId   String   @unique
+  role       String   // SENDER | RECEIVER | ADMIN
+  boundBy    String   // username of operator
+  boundEmail String?
+  deviceInfo String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([deviceId])
+  @@index([role])
+  @@map("device_bindings")
 }

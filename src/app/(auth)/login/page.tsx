@@ -4,9 +4,20 @@
 // STUDENT BRIDGE — ENTERPRISE AUTHENTICATION PORTAL
 // ============================================================================
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Key, User, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  Shield,
+  Key,
+  User,
+  ArrowRight,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Globe,
+  ExternalLink,
+  Laptop,
+} from "lucide-react";
 import { loginAction } from "@/actions/auth";
 
 export default function LoginPage() {
@@ -17,12 +28,19 @@ export default function LoginPage() {
 
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [deviceId, setDeviceId] = useState<string>("");
 
-  const handleQuickFill = (user: string, pass: string) => {
-    setUsernameOrEmail(user);
-    setPassword(pass);
-    setErrorMessage(null);
-  };
+  useEffect(() => {
+    try {
+      let id = localStorage.getItem("sb_hardware_device_id");
+      if (!id) {
+        id = "dev-" + Math.random().toString(36).substring(2, 9) + "-" + Date.now().toString(36);
+        localStorage.setItem("sb_hardware_device_id", id);
+      }
+      setDeviceId(id);
+      document.cookie = `sb_device_id=${id}; path=/; max-age=31536000; SameSite=Lax`;
+    } catch {}
+  }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -31,6 +49,13 @@ export default function LoginPage() {
     const formData = new FormData();
     formData.set("emailOrUsername", usernameOrEmail);
     formData.set("password", password);
+    formData.set("deviceId", deviceId || "browser-device");
+    formData.set(
+      "deviceInfo",
+      typeof navigator !== "undefined"
+        ? `${navigator.platform} • ${navigator.userAgent.slice(0, 90)}`
+        : "Browser Client"
+    );
 
     startTransition(async () => {
       try {
@@ -63,8 +88,8 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground font-mono">
             STUDENT <span className="text-accent">BRIDGE</span>
           </h1>
-          <p className="text-xs text-foreground-muted mt-1 tracking-wider uppercase">
-            Institutional Identity & Management Portal
+          <p className="text-xs text-foreground-muted mt-1 tracking-wider uppercase font-mono">
+            Institutional Identity &amp; Management Portal
           </p>
         </div>
 
@@ -78,9 +103,9 @@ export default function LoginPage() {
           </div>
 
           {errorMessage && (
-            <div className="mb-5 flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-400 animate-in fade-in">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{errorMessage}</span>
+            <div className="mb-5 flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-400 animate-in fade-in">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{errorMessage}</span>
             </div>
           )}
 
@@ -93,26 +118,26 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-foreground-muted mb-1.5 uppercase tracking-wider">
-                Username or Institutional Email
+              <label className="block text-xs font-medium text-foreground-muted mb-1.5 uppercase tracking-wider font-mono">
+                Gmail / Email Address
               </label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-foreground-muted">
                   <User className="h-4 w-4" />
                 </div>
                 <input
-                  type="text"
+                  type="email"
                   required
                   value={usernameOrEmail}
                   onChange={(e) => setUsernameOrEmail(e.target.value)}
-                  placeholder="admin@studentbridge.internal"
+                  placeholder="name@gmail.com"
                   className="w-full rounded-lg border border-border bg-surface-secondary py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-foreground-subtle focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-foreground-muted mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-medium text-foreground-muted mb-1.5 uppercase tracking-wider font-mono">
                 Password
               </label>
               <div className="relative">
@@ -138,74 +163,48 @@ export default function LoginPage() {
               {isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Authorizing Session...</span>
+                  <span>Signing In...</span>
                 </>
               ) : (
                 <>
-                  <span>Authenticate Session</span>
+                  <span>Sign In</span>
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Quick Role Selection Buttons */}
-          <div className="mt-6 pt-5 border-t border-border space-y-3">
-            <p className="text-[11px] font-mono text-foreground-muted uppercase tracking-wider">
-              Select Operational Role Environment:
-            </p>
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickFill("sender@studentbridge.internal", "Password123!")}
-                className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 text-left transition-colors"
-              >
-                <div>
-                  <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                    SENDER WORKSTATION
-                  </div>
-                  <div className="text-[11px] text-foreground-muted mt-0.5">
-                    Data enrollment, webcam capture, photo editor, batches & receipts
-                  </div>
-                </div>
-                <span className="text-[11px] font-mono text-emerald-400 shrink-0">sender →</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickFill("receiver@studentbridge.internal", "Password123!")}
-                className="flex items-center justify-between p-2.5 rounded-xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-left transition-colors"
-              >
-                <div>
-                  <div className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-blue-400" />
-                    RECEIVER FACILITY (20,000+)
-                  </div>
-                  <div className="text-[11px] text-foreground-muted mt-0.5">
-                    Inbound batches, 20k directory, external QR, photo zip, designer, print engine
-                  </div>
-                </div>
-                <span className="text-[11px] font-mono text-blue-400 shrink-0">receiver →</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickFill("admin@studentbridge.internal", "AdminPassword123!")}
-                className="flex items-center justify-between p-2 rounded-lg border border-border bg-surface-secondary hover:bg-surface-tertiary text-left transition-colors"
-              >
-                <div className="text-xs font-semibold text-accent flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5" />
-                  ADMINISTRATOR CONSOLE (ALL MODULES)
-                </div>
-                <span className="text-[11px] font-mono text-accent shrink-0">admin →</span>
-              </button>
+          {/* Security & 1 Device = 1 Role Enforcement Notice */}
+          <div className="mt-6 pt-5 border-t border-border space-y-2 text-center">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-neutral-700 bg-neutral-900 text-[10px] font-mono text-neutral-300">
+              <Laptop className="h-3 w-3 text-accent" />
+              <span>1 Device = 1 Role Hardware Enforcement Active</span>
             </div>
+            <p className="text-xs text-foreground-muted">
+              Role credentials and device authorizations are provisioned exclusively by the Administrator. Default demo credentials are permanently disabled.
+            </p>
           </div>
         </div>
 
+        {/* Official Production Portfolio & Deployment Link */}
+        <div className="mt-6 text-center space-y-2">
+          <div className="text-[11px] uppercase tracking-wider font-mono text-neutral-400">
+            Official Production Deployment
+          </div>
+          <a
+            href="https://my-projects-two-kappa.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-neutral-700 bg-neutral-900/90 text-xs font-mono text-white hover:border-white hover:bg-neutral-800 transition-all shadow-md group"
+          >
+            <Globe className="h-3.5 w-3.5 text-emerald-400 group-hover:rotate-12 transition-transform" />
+            <span className="font-semibold text-white">https://my-projects-two-kappa.vercel.app</span>
+            <ExternalLink className="h-3 w-3 text-neutral-400 group-hover:text-white transition-colors" />
+          </a>
+        </div>
+
         {/* Security Notice */}
-        <div className="mt-6 text-center text-[11px] text-foreground-subtle flex items-center justify-center gap-1.5">
+        <div className="mt-4 text-center text-[11px] text-foreground-subtle flex items-center justify-center gap-1.5">
           <Shield className="h-3.5 w-3.5 text-accent" />
           <span>Server-side cryptographic token verification active</span>
         </div>
