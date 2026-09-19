@@ -96,6 +96,16 @@ async function handleExport(options: ExportOptions) {
   const headers = getReceiverExcelHeaders(hasBloodType);
   const dataRows = allStudents.map((s) => formatStudentForReceiverExcel(s, hasBloodType));
 
+  // Update Receiver operator encoded metrics
+  if (session.userId && allStudents.length > 0) {
+    try {
+      await prisma.user.update({
+        where: { id: session.userId },
+        data: { recordsEncoded: { increment: allStudents.length } },
+      });
+    } catch {}
+  }
+
   const dateTag = new Date().toISOString().split("T")[0];
   let fileCategory = "AllGrades";
   if (ids) {

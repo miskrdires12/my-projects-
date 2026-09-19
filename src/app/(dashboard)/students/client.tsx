@@ -76,7 +76,14 @@ interface StudentExtended {
   qrCodeData?: string | null;
   status: string;
   batch?: { batchNumber: string; title: string } | null;
-  customValues?: { customField: { label: string; fieldKey: string }; value: string }[];
+  senderId?: string | null;
+  senderName?: string | null;
+  customValues?: {
+    value: string;
+    customField: {
+      label: string;
+    };
+  }[];
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
 }
@@ -637,6 +644,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       document.body.appendChild(a);
       a.click();
 
+      // Track encode metric for receiver download
+      fetch("/api/users/record-encode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: withPhotos.length }),
+      }).catch(() => {});
+
       setTimeout(() => {
         try {
           document.body.removeChild(a);
@@ -730,6 +744,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       a.download = `${cleanName}.jpg`;
       document.body.appendChild(a);
       a.click();
+
+      // Track encode metric for receiver single photo download
+      fetch("/api/users/record-encode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: 1 }),
+      }).catch(() => {});
 
       // Safe timeout for revokeObjectURL (3.5s ensures browser finishes reading blob before revocation)
       setTimeout(() => {
@@ -1024,8 +1045,14 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       ? `Grade_${targetGrade.replace(/[^a-zA-Z0-9_-]/g, "_")}`
       : `All_${listToExport.length}`;
     const fileName = `Student_Credentials_${scopeLabel}_${dateTag}.xlsx`;
-
     XLSX.writeFile(wb, fileName);
+
+    // Track encode metric for receiver Excel download
+    fetch("/api/users/record-encode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count: listToExport.length }),
+    }).catch(() => {});
   };
 
   const handleExportCSV = (selectedOnly: boolean = false, overrideGrade?: string) => {
@@ -1086,6 +1113,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+
+    // Track encode metric for receiver CSV download
+    fetch("/api/users/record-encode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count: listToExport.length }),
+    }).catch(() => {});
   };
 
   // Download all selected students together into 1 combined CSV or Excel file (Client-Side Instant Export)
@@ -1133,8 +1167,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         if (res.ok) {
           const uploadRes = await res.json();
           if (uploadRes.relativePath) {
-            // Append cache-busting timestamp so browser immediately displays new crop
-            finalPath = `${uploadRes.relativePath}?t=${Date.now()}`;
+            // Append cache-busting timestamp safely for HTTP/relative paths (never corrupt data URIs)
+            if (uploadRes.relativePath.startsWith("data:")) {
+              finalPath = uploadRes.relativePath;
+            } else {
+              const sep = uploadRes.relativePath.includes("?") ? "&" : "?";
+              finalPath = `${uploadRes.relativePath}${sep}t=${Date.now()}`;
+            }
           }
         }
       } catch (uploadErr) {
@@ -1597,6 +1636,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     )}
                   </button>
                 </th>
+                <th className="px-4 py-3.5">Sent By</th>
                 <th className="px-4 py-3.5">Photo Status</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
@@ -1604,7 +1644,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <tbody className="divide-y divide-border dark:divide-[#223126]">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
+                  <td colSpan={10} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
                       <div className="w-16 h-16 rounded-2xl bg-surface-secondary dark:bg-[#161e19] border border-border dark:border-[#223126] flex items-center justify-center text-accent">
                         <Users className="w-8 h-8 text-[#8fe617]" />
@@ -1736,6 +1776,19 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
                       <td className="px-4 py-3.5 text-sm font-medium text-foreground dark:text-[#f2f7f4]">{student.grade}</td>
                       <td className="px-4 py-3.5 text-sm font-mono text-foreground-muted dark:text-[#8a9e93]">{student.phone}</td>
+
+                      {/* Data Sent By Attribution */}
+                      <td className="px-4 py-3.5">
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] text-foreground dark:text-[#f2f7f4]"
+                          title={student.senderName || "Self / Direct Station"}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617] shrink-0" />
+                          <span className="truncate max-w-[130px] font-semibold text-[11px]">
+                            {student.senderName || "Direct Station"}
+                          </span>
+                        </span>
+                      </td>
 
                       {/* Photo Status */}
                       <td className="px-4 py-3.5">
@@ -2245,12 +2298,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <span className="text-accent font-bold">{activeStudent.bloodType}</span>
                 </div>
               )}
-              {userRole === "ADMIN" && ((activeStudent as any).senderName || (activeStudent as any).senderId) && (
-                <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted dark:text-[#8a9e93]">Sender Station:</span>
-                  <span className="text-[#8fe617] font-mono text-xs font-semibold">{(activeStudent as any).senderName || (activeStudent as any).senderId}</span>
-                </div>
-              )}
+              <div className="pt-2 flex justify-between items-center">
+                <span className="text-foreground-muted dark:text-[#8a9e93]">Data Sent By:</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-[#8fe617]/15 text-[#8fe617] border border-[#8fe617]/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
+                  {activeStudent.senderName || (activeStudent as any).senderId || "Direct Station"}
+                </span>
+              </div>
             </div>
 
             {/* Custom Fields Section */}

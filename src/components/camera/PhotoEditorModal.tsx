@@ -188,9 +188,13 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     [getRenderedImageRect]
   );
 
-  // Initialize and load image reliably with blob URL and CORS fallback
+  // Initialize and load image reliably with blob URL, data URI sanitization, and CORS proxy fallback
   useEffect(() => {
-    if (!originalImageSrc) return;
+    if (!originalImageSrc && !originalFile) {
+      setLoadingImage(false);
+      return;
+    }
+
     let isCancelled = false;
     let createdBlobUrl: string | null = null;
     setLoadingImage(true);
@@ -215,7 +219,6 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         // If failed with anonymous crossOrigin, retry without crossOrigin
         if (img.crossOrigin) {
           const fallbackImg = new Image();
-          fallbackImg.src = srcUrl;
           fallbackImg.onload = () => {
             if (isCancelled) return;
             imageRef.current = fallbackImg;
@@ -226,38 +229,71 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           };
           fallbackImg.onerror = () => {
             if (isCancelled) return;
+            setResolvedSrc(srcUrl);
             setLoadingImage(false);
           };
+          fallbackImg.src = srcUrl;
         } else {
+          setResolvedSrc(srcUrl);
           setLoadingImage(false);
         }
       };
       img.src = srcUrl;
     };
 
-    if (originalFile) {
-      createdBlobUrl = URL.createObjectURL(originalFile);
-      loadImageElement(createdBlobUrl);
-    } else if (originalImageSrc.startsWith("blob:") || originalImageSrc.startsWith("data:")) {
-      loadImageElement(originalImageSrc);
-    } else {
-      // Fetch as same-origin Blob to eliminate any CORS / canvas tainting issues
-      fetch(originalImageSrc)
-        .then((res) => {
-          if (!res.ok) throw new Error("Fetch failed");
-          return res.blob();
-        })
-        .then((blob) => {
-          if (isCancelled) return;
-          createdBlobUrl = URL.createObjectURL(blob);
-          loadImageElement(createdBlobUrl);
-        })
-        .catch(() => {
-          if (isCancelled) return;
-          // Fallback directly to image element
-          loadImageElement(originalImageSrc);
-        });
-    }
+    const startLoading = async () => {
+      if (originalFile) {
+        createdBlobUrl = URL.createObjectURL(originalFile);
+        loadImageElement(createdBlobUrl);
+        return;
+      }
+
+      let cleanSrc = originalImageSrc;
+      // Strip any corrupting query parameter from base64 data URIs
+      if (cleanSrc.startsWith("data:")) {
+        cleanSrc = cleanSrc.split("?")[0];
+        loadImageElement(cleanSrc);
+        return;
+      }
+
+      if (cleanSrc.startsWith("blob:")) {
+        loadImageElement(cleanSrc);
+        return;
+      }
+
+      // Step 1: Attempt direct same-origin/CORS blob fetch
+      try {
+        const res = await fetch(cleanSrc, { mode: "cors" });
+        if (res.ok) {
+          const blob = await res.blob();
+          if (!isCancelled && blob.size > 0) {
+            createdBlobUrl = URL.createObjectURL(blob);
+            loadImageElement(createdBlobUrl);
+            return;
+          }
+        }
+      } catch {}
+
+      // Step 2: Fallback to same-origin proxy /api/uploads?file=... to avoid canvas tainting
+      try {
+        const proxyRes = await fetch(`/api/uploads?file=${encodeURIComponent(cleanSrc)}`);
+        if (proxyRes.ok) {
+          const blob = await proxyRes.blob();
+          if (!isCancelled && blob.size > 0) {
+            createdBlobUrl = URL.createObjectURL(blob);
+            loadImageElement(createdBlobUrl);
+            return;
+          }
+        }
+      } catch {}
+
+      // Step 3: Direct URL load fallback
+      if (!isCancelled) {
+        loadImageElement(cleanSrc);
+      }
+    };
+
+    startLoading();
 
     return () => {
       isCancelled = true;
@@ -637,9 +673,8 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
 
     ctx.restore();
 
-    exportCanvas.toBlob(
-      async (blob) => {
-        if (!blob) return;
+    const finalizeExport = async (blob: Blob) => {
+      try {
         const blob300Dpi = await convertBlobTo300Dpi(blob);
         const originalBlob = originalFile
           ? new Blob([originalFile], { type: originalFile.type })
@@ -657,10 +692,52 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           backgroundColor: "#ffffff",
         });
         onClose();
-      },
-      "image/jpeg",
-      0.88
-    );
+      } catch (finalizeErr) {
+        console.warn("Notice: Error converting DPI, saving raw blob:", finalizeErr);
+        onSave(blob, null, {
+          crop: { ...cropBox },
+          zoom,
+          rotation,
+          brightness,
+          contrast,
+          exposure: 0,
+          saturation,
+          sharpness: 0,
+          backgroundColor: "#ffffff",
+        });
+        onClose();
+      }
+    };
+
+    try {
+      exportCanvas.toBlob(
+        async (blob) => {
+          if (blob) {
+            await finalizeExport(blob);
+          } else {
+            try {
+              const dataUrl = exportCanvas.toDataURL("image/jpeg", 0.88);
+              const res = await fetch(dataUrl);
+              const fallbackBlob = await res.blob();
+              await finalizeExport(fallbackBlob);
+            } catch (fallbackErr) {
+              console.error("Canvas export failed:", fallbackErr);
+            }
+          }
+        },
+        "image/jpeg",
+        0.88
+      );
+    } catch {
+      try {
+        const dataUrl = exportCanvas.toDataURL("image/jpeg", 0.88);
+        const res = await fetch(dataUrl);
+        const fallbackBlob = await res.blob();
+        await finalizeExport(fallbackBlob);
+      } catch (err) {
+        console.error("Critical canvas export error:", err);
+      }
+    }
   };
 
   if (!isOpen) return null;

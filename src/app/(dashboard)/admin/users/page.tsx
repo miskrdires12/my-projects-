@@ -54,6 +54,8 @@ export default async function AdminUsersPage() {
         workSessionCount: true,
         totalWorkMinutes: true,
         lastActiveAt: true,
+        recordsSentSingle: true,
+        recordsEncoded: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -61,6 +63,26 @@ export default async function AdminUsersPage() {
   } catch (err) {
     console.warn("[AdminUsersPage] Resilient fallback on users query:", err);
   }
+
+  // Count existing students sent by each operator if recordsSentSingle is not yet populated
+  const usersWithMetrics = await Promise.all(
+    (users || []).map(async (u) => {
+      let sentCount = u.recordsSentSingle || 0;
+      if (sentCount === 0 && u.id) {
+        try {
+          const dbSentCount = await prisma.student.count({
+            where: { senderId: u.id },
+          });
+          sentCount = dbSentCount;
+        } catch {}
+      }
+      return {
+        ...u,
+        recordsSentSingle: sentCount,
+        recordsEncoded: u.recordsEncoded || 0,
+      };
+    })
+  );
 
 
   return (
@@ -101,7 +123,7 @@ export default async function AdminUsersPage() {
         </div>
       </div>
 
-      <UsersClient initialUsers={users} currentUserId={session.userId} />
+      <UsersClient initialUsers={usersWithMetrics} currentUserId={session.userId} />
     </div>
   );
 }

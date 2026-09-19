@@ -123,13 +123,8 @@ export default async function StudentsPage({
   });
 
 
-  // Strict Privacy: Sender Attribution Visible to Admin Only
-  const sanitizedStudents = (students || []).map((s: any) => {
-    if (session.role !== "ADMIN") {
-      return { ...s, senderId: null, senderName: null };
-    }
-    return s;
-  });
+  // Sender Attribution visible in student directory for all authenticated users
+  const sanitizedStudents = students || [];
 
   return (
     <div className="space-y-4 w-full px-4 sm:px-6 lg:px-8 pb-12">

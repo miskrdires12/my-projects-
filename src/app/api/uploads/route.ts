@@ -7,6 +7,10 @@ import { getSession } from "@/lib/auth";
 import { processAndSaveStudentPhoto } from "@/lib/image-processing";
 import prisma from "@/lib/prisma";
 import { publishStudentSync } from "@/lib/sync-engine";
+import {
+  extractSupabaseStorageKey,
+  deleteMultipleFromSupabaseBucket,
+} from "@/lib/supabase-storage";
 
 export async function POST(request: NextRequest) {
   // 1. Enforce authentication
@@ -85,15 +89,32 @@ export async function POST(request: NextRequest) {
         });
 
         if (student) {
+          // Identify and delete previous photo(s) from Supabase Storage bucket 'student data'
+          const oldKeysToDelete = [
+            extractSupabaseStorageKey(student.photoPath),
+            extractSupabaseStorageKey(student.previewPath),
+            extractSupabaseStorageKey(student.originalPhotoPath),
+          ].filter(Boolean) as string[];
+
+          if (oldKeysToDelete.length > 0) {
+            try {
+              await deleteMultipleFromSupabaseBucket(oldKeysToDelete);
+              console.log(`[Uploads] Cleaned up ${oldKeysToDelete.length} previous Supabase photo(s) for student ${student.studentId}`);
+            } catch (delErr) {
+              console.warn("[Uploads] Notice: Old Supabase photo cleanup warning:", delErr);
+            }
+          }
+
           const finalThumbnail = progressive?.thumbnailPath || null;
           const finalPreview = progressive?.previewPath || null;
           const finalOriginal = progressive?.originalPath || originalResult.relativePath;
+          const finalPhotoUrl = finalPreview || finalOriginal || editedResult.relativePath;
 
           photoRecord = await prisma.studentPhoto.create({
             data: {
               studentId: student.id,
               originalPath: finalOriginal,
-              editedPath: editedResult.relativePath,
+              editedPath: finalPhotoUrl,
               thumbnailPath: finalThumbnail,
               previewPath: finalPreview,
               width: progressive?.width || editedResult.width,
@@ -107,7 +128,7 @@ export async function POST(request: NextRequest) {
           const updatedStudent = await prisma.student.update({
             where: { id: student.id },
             data: {
-              photoPath: editedResult.relativePath,
+              photoPath: finalPhotoUrl,
               thumbnailPath: finalThumbnail,
               previewPath: finalPreview,
               originalPhotoPath: finalOriginal,
@@ -140,9 +161,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const primaryReturnPath = progressive?.previewPath || progressive?.originalPath || editedResult.relativePath;
+
     return NextResponse.json(
       {
-        relativePath: editedResult.relativePath,
+        relativePath: primaryReturnPath,
         originalPath: progressive?.originalPath || originalResult.relativePath,
         thumbnailPath: progressive?.thumbnailPath || null,
         previewPath: progressive?.previewPath || null,
@@ -218,8 +241,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Handle remote external URL redirect
+    // Stream remote external image with CORS headers so canvas can safely ingest without tainting
     if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
+      try {
+        const remoteRes = await fetch(photoPath);
+        if (remoteRes.ok) {
+          const buffer = Buffer.from(await remoteRes.arrayBuffer());
+          const contentType = remoteRes.headers.get("content-type") || "image/jpeg";
+          return new NextResponse(buffer, {
+            headers: {
+              "Content-Type": contentType,
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=86400",
+            },
+          });
+        }
+      } catch {}
       return NextResponse.redirect(photoPath);
     }
 

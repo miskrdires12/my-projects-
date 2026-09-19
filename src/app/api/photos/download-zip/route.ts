@@ -289,8 +289,15 @@ export async function POST(request: NextRequest) {
 
     const zipFilename = `Student_Photos_${scopeLabel}_Grade_Section_${timestamp}.zip`;
 
-    // Audit log the download
+    // Audit log and update Receiver operator encoded metrics
     try {
+      if (session.userId && totalCount > 0) {
+        await prisma.user.update({
+          where: { id: session.userId },
+          data: { recordsEncoded: { increment: totalCount } },
+        });
+      }
+
       await prisma.auditLog.create({
         data: {
           userId: session.userId,

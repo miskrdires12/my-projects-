@@ -92,6 +92,73 @@ export async function uploadToSupabaseBucket(
 }
 
 /**
+ * Extracts the clean relative path within the 'student data' bucket from a full URL or path
+ */
+export function extractSupabaseStorageKey(urlOrPath: string | null | undefined): string | null {
+  if (!urlOrPath) return null;
+  if (urlOrPath.startsWith("data:") || urlOrPath.startsWith("blob:")) return null;
+
+  try {
+    let clean = decodeURIComponent(urlOrPath.split("?")[0]);
+    // Match bucket marker
+    const bucketMarker = "/student data/";
+    const markerIdx = clean.indexOf(bucketMarker);
+    if (markerIdx !== -1) {
+      return clean.slice(markerIdx + bucketMarker.length).replace(/^\/+/, "");
+    }
+    const publicMarker = "/object/public/";
+    const pubIdx = clean.indexOf(publicMarker);
+    if (pubIdx !== -1) {
+      const remainder = clean.slice(pubIdx + publicMarker.length).replace(/^\/+/, "");
+      if (remainder.startsWith("student data/")) {
+        return remainder.slice("student data/".length);
+      }
+      return remainder;
+    }
+    // If it's already a relative path inside bucket (e.g. "Grade 10/STU001.jpg")
+    if (!clean.startsWith("http://") && !clean.startsWith("https://") && !clean.startsWith("/api/")) {
+      return clean.replace(/^\/+/, "");
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deletes multiple file paths from Supabase Storage bucket 'student data'
+ */
+export async function deleteMultipleFromSupabaseBucket(
+  cleanPaths: string[]
+): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+  const validPaths = Array.from(new Set(cleanPaths.filter(Boolean)));
+  if (validPaths.length === 0) return { success: true, deletedCount: 0 };
+
+  const { supabaseUrl, apiKey } = getSupabaseConfig();
+
+  try {
+    const res = await fetch(`${supabaseUrl}/storage/v1/object/${ENCODED_BUCKET}`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "apikey": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prefixes: validPaths }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      return { success: false, deletedCount: 0, error: err };
+    }
+
+    return { success: true, deletedCount: validPaths.length };
+  } catch (err: any) {
+    return { success: false, deletedCount: 0, error: err?.message || "Failed to batch delete" };
+  }
+}
+
+/**
  * Deletes a single file path from Supabase Storage bucket 'student data'
  */
 export async function deleteFromSupabaseBucket(cleanPath: string): Promise<{ success: boolean; error?: string }> {

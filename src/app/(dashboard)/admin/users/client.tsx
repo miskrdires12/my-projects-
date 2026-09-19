@@ -27,6 +27,8 @@ import {
   ChevronUp,
   Smartphone,
   RotateCcw,
+  Upload,
+  Download,
 } from "lucide-react";
 import { createUserAction, deleteUserAction, resetUserDeviceAction } from "@/actions/users";
 import type { UserRole } from "@/types/auth";
@@ -42,6 +44,8 @@ export interface UserItem {
   workSessionCount?: number;
   totalWorkMinutes?: number;
   lastActiveAt?: Date | string | null;
+  recordsSentSingle?: number;
+  recordsEncoded?: number;
   createdAt: Date | string;
 }
 
@@ -80,8 +84,6 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
   // Statistics calculation
   const totalCount = users.length;
   const adminCount = users.filter((u) => u.role === "ADMIN").length;
-  const receiverCount = users.filter((u) => u.role === "RECEIVER").length;
-  const senderCount = users.filter((u) => u.role === "SENDER").length;
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,7 +245,7 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
       )}
 
       {/* Operator Stat Badges */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-xs">
           <div className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">
             Total Operators
@@ -262,6 +264,24 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
           </div>
         </div>
 
+        <div className="rounded-2xl border border-blue-200 dark:border-blue-950/60 bg-blue-50/50 dark:bg-blue-950/20 p-4 shadow-xs">
+          <div className="text-[10px] font-mono text-blue-700 dark:text-blue-400 uppercase font-bold">
+            Single Sent Total
+          </div>
+          <div className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 mt-1">
+            {users.reduce((acc, u) => acc + (u.recordsSentSingle || 0), 0)}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#8fe617]/40 bg-[#8fe617]/10 p-4 shadow-xs">
+          <div className="text-[10px] font-mono text-[#062404] dark:text-[#8fe617] uppercase font-bold">
+            Data Encoded (DL)
+          </div>
+          <div className="text-2xl font-black font-mono text-[#062404] dark:text-[#8fe617] mt-1">
+            {users.reduce((acc, u) => acc + (u.recordsEncoded || 0), 0)}
+          </div>
+        </div>
+
         <div className="rounded-2xl border border-purple-200 dark:border-purple-950/60 bg-purple-50/50 dark:bg-purple-950/20 p-4 shadow-xs">
           <div className="text-[10px] font-mono text-purple-700 dark:text-purple-400 uppercase font-bold">
             Active Work Time
@@ -277,15 +297,6 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
           </div>
           <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1">
             {adminCount}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-blue-200 dark:border-blue-950/60 bg-blue-50/50 dark:bg-blue-950/20 p-4 shadow-xs">
-          <div className="text-[10px] font-mono text-blue-700 dark:text-blue-400 uppercase font-bold">
-            Intake / Printing
-          </div>
-          <div className="text-2xl font-black font-mono text-blue-600 dark:text-blue-400 mt-1">
-            {senderCount + receiverCount}
           </div>
         </div>
       </div>
@@ -336,6 +347,7 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
                 <th className="px-5 py-3.5">Institutional Email</th>
                 <th className="px-5 py-3.5">Role Privilege</th>
                 <th className="px-5 py-3.5">Authorized Device (1-Device Lock)</th>
+                <th className="px-5 py-3.5">Work Output (Sent / Encoded)</th>
                 <th className="px-5 py-3.5">Work Telemetry</th>
                 <th className="px-5 py-3.5 text-right">Actions</th>
               </tr>
@@ -343,7 +355,7 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
             <tbody className="divide-y divide-[#eef5f1] dark:divide-[#1c261e]">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                  <td colSpan={7} className="px-5 py-10 text-center text-[#6b7771] dark:text-[#8a9e93] font-mono">
                     No operators found matching your search criteria.
                   </td>
                 </tr>
@@ -417,6 +429,27 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
                             <span>UNBOUND (Next login locks)</span>
                           </div>
                         )}
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-xs">
+                        <div className="flex flex-col gap-1.5">
+                          <div
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40 w-fit"
+                            title="Total single student records enrolled/sent by this operator"
+                          >
+                            <Upload className="h-3 w-3 text-blue-500 shrink-0" />
+                            <span className="font-black font-mono">{user.recordsSentSingle || 0}</span>
+                            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">sent in single</span>
+                          </div>
+
+                          <div
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#8fe617]/15 text-[#062404] dark:text-[#8fe617] border border-[#8fe617]/35 w-fit"
+                            title="Total records encoded / downloaded as file by receiver"
+                          >
+                            <Download className="h-3 w-3 text-[#8fe617] shrink-0" />
+                            <span className="font-black font-mono">{user.recordsEncoded || 0}</span>
+                            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">data encoded</span>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 font-mono text-xs">
                         <div className="flex flex-col gap-0.5">

@@ -6,7 +6,7 @@
 // Silicon Labs Obsidian & Neon Lemon Green Design System
 // ============================================================================
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useEffect, useCallback, useTransition } from "react";
 import {
   Activity,
   HardDrive,
@@ -23,6 +23,10 @@ import {
   ExternalLink,
   Cloud,
   ShieldAlert,
+  Zap,
+  RefreshCw,
+  Clock,
+  ShieldCheck,
 } from "lucide-react";
 import { clearAuditLogsAction } from "@/actions/audit";
 import { deletePermanentlyFromSupabaseAction } from "@/actions/students";
@@ -58,6 +62,22 @@ interface DatabaseClientProps {
   gradeCohorts: { grade: string; count: number }[];
   userRoles: { role: string; count: number }[];
   initialAuditLogs: AuditLogItem[];
+}
+
+export interface SupabaseStatusData {
+  databaseConnected: boolean;
+  databaseLatencyMs: number;
+  storageConnected: boolean;
+  storageBucket: string;
+  storageFileCount: number;
+  poolerHost: string;
+  region: string;
+  sslMode: string;
+  lastActivity: string;
+  daysSinceActivity: number;
+  daysUntilPause: number;
+  pauseWarningActive: boolean;
+  timestamp: string;
 }
 
 /**
@@ -300,6 +320,52 @@ export function DatabaseClient({
   const [supabaseDeleteId, setSupabaseDeleteId] = useState("");
   const [supabaseWipeConfirmation, setSupabaseWipeConfirmation] = useState("");
   const [isSupabaseDeleting, setIsSupabaseDeleting] = useState(false);
+
+  // Live Supabase Status Telemetry & Keep-Alive State
+  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatusData | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [pinging, setPinging] = useState(false);
+
+  const fetchSupabaseStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/supabase-status");
+      if (res.ok) {
+        const data = await res.json();
+        setSupabaseStatus(data);
+      }
+    } catch {
+    } finally {
+      setStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSupabaseStatus();
+    const interval = setInterval(fetchSupabaseStatus, 15000);
+    return () => clearInterval(interval);
+  }, [fetchSupabaseStatus]);
+
+  const handleKeepAlivePing = async () => {
+    setPinging(true);
+    try {
+      const res = await fetch("/api/admin/supabase-status", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setFeedback({
+          type: "success",
+          message: data.message || `Supabase keep-alive registered (${data.latencyMs}ms)`,
+        });
+        fetchSupabaseStatus();
+        setTimeout(() => setFeedback(null), 4000);
+      } else {
+        setFeedback({ type: "error", message: "Supabase keep-alive ping failed" });
+      }
+    } catch {
+      setFeedback({ type: "error", message: "Network error sending keep-alive ping" });
+    } finally {
+      setPinging(false);
+    }
+  };
 
   // 1. Photo Linkage Distribution Data
   const photoChartData: ChartSegment[] = [
@@ -576,6 +642,136 @@ export function DatabaseClient({
           </button>
         </div>
       )}
+
+      {/* ────────────────────────────────────────────────────────────────────
+          SUPABASE CLOUD INFRASTRUCTURE & STORAGE TELEMETRY PANEL
+         ──────────────────────────────────────────────────────────────────── */}
+      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm relative overflow-hidden">
+        {/* Glow Accent Top Right */}
+        <div className="absolute -top-20 -right-20 w-48 h-48 rounded-full bg-[#8fe617]/10 blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[#dce7e1] dark:border-[#223126] pb-5">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-[#8fe617]/15 border border-[#8fe617]/40 flex items-center justify-center text-[#062404] dark:text-[#8fe617] shadow-xs">
+              <Cloud className="h-6 w-6 text-[#8fe617]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-black tracking-tight text-[#080808] dark:text-[#f2f7f4]">
+                  Supabase Cloud Status &amp; Telemetry
+                </h3>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase bg-[#8fe617]/20 text-[#062404] dark:text-[#8fe617] border border-[#8fe617]/40">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617] animate-ping" />
+                  {supabaseStatus?.databaseConnected ? "Online & Active" : statusLoading ? "Checking..." : "Degraded"}
+                </span>
+              </div>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
+                PostgreSQL pooler: {supabaseStatus?.poolerHost || "aws-1-eu-west-1.pooler.supabase.com"} • Region: {supabaseStatus?.region || "AWS EU-West (Ireland)"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={fetchSupabaseStatus}
+              disabled={statusLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] transition-colors cursor-pointer disabled:opacity-50"
+              title="Refresh telemetry"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${statusLoading ? "animate-spin text-[#8fe617]" : ""}`} />
+              <span>Refresh</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleKeepAlivePing}
+              disabled={pinging}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#8fe617] text-[#062404] text-xs font-mono font-black hover:brightness-105 transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Touch database to reset 7-day inactivity timer"
+            >
+              <Zap className={`h-3.5 w-3.5 stroke-[2.5] ${pinging ? "animate-bounce" : ""}`} />
+              <span>{pinging ? "Sending Ping..." : "Send Keep-Alive Touch Ping"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Telemetry Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
+          {/* Card 1: Database Latency */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/80 dark:bg-[#161d19]/80 p-4">
+            <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">
+              <span>Database Latency</span>
+              <Activity className="h-4 w-4 text-[#8fe617]" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4]">
+                {supabaseStatus ? `${supabaseStatus.databaseLatencyMs}ms` : "—"}
+              </span>
+              <span className="text-[10px] font-mono text-[#8fe617] font-bold">
+                {supabaseStatus && supabaseStatus.databaseLatencyMs < 100 ? "Excellent" : "Operational"}
+              </span>
+            </div>
+            <div className="mt-1 text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono truncate">
+              SSL: {supabaseStatus?.sslMode || "require"} • Pooler port 5432
+            </div>
+          </div>
+
+          {/* Card 2: Supabase Storage Bucket */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/80 dark:bg-[#161d19]/80 p-4">
+            <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">
+              <span>Storage Bucket</span>
+              <HardDrive className="h-4 w-4 text-cyan-500" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-lg font-black font-mono text-[#080808] dark:text-[#f2f7f4] truncate">
+                &apos;{supabaseStatus?.storageBucket || "student data"}&apos;
+              </span>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] font-mono text-cyan-600 dark:text-cyan-400 font-bold">
+              <CheckCircle2 className="h-3 w-3" />
+              <span>Cloud Storage CDN Connected</span>
+            </div>
+          </div>
+
+          {/* Card 3: 7-Day Pause Protection */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/80 dark:bg-[#161d19]/80 p-4">
+            <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">
+              <span>7-Day Pause Guard</span>
+              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4]">
+                {supabaseStatus ? `${supabaseStatus.daysUntilPause}d safe` : "7d safe"}
+              </span>
+              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                Active
+              </span>
+            </div>
+            <div className="mt-1 text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono truncate">
+              {supabaseStatus?.daysSinceActivity === 0
+                ? "Active today • Timer refreshed"
+                : `${supabaseStatus?.daysSinceActivity || 0}d since activity`}
+            </div>
+          </div>
+
+          {/* Card 4: Last Activity Touch */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/80 dark:bg-[#161d19]/80 p-4">
+            <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">
+              <span>Last Active Ping</span>
+              <Clock className="h-4 w-4 text-amber-500" />
+            </div>
+            <div className="mt-2 text-sm font-bold font-mono text-[#080808] dark:text-[#f2f7f4] truncate">
+              {supabaseStatus?.lastActivity
+                ? new Date(supabaseStatus.lastActivity).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                : "Just now"}
+            </div>
+            <div className="mt-1 text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+              Auto-polled every 15 seconds
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Core Database Metrics Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

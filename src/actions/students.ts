@@ -18,6 +18,10 @@ import {
   type CustomFieldInput,
 } from "@/lib/validations";
 import { publishStudentSync, rehydrateDatabaseFromCloud } from "@/lib/sync-engine";
+import {
+  extractSupabaseStorageKey,
+  deleteMultipleFromSupabaseBucket,
+} from "@/lib/supabase-storage";
 
 export interface StudentFilterParams {
   query?: string;
@@ -195,6 +199,18 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
         batchId: data.batchId || null,
       },
     });
+
+    // Update Operator Metrics: Increment single records sent counter
+    if (session.userId) {
+      try {
+        await prisma.user.update({
+          where: { id: session.userId },
+          data: { recordsSentSingle: { increment: 1 } },
+        });
+      } catch (userErr) {
+        console.warn("Notice: Operator metrics non-fatal update warning:", userErr);
+      }
+    }
 
     // Save custom field values if provided
     if (data.customFields && Object.keys(data.customFields).length > 0) {
@@ -425,6 +441,18 @@ export async function updateStudentPhotoAction(
 
     if (!student) {
       return { success: false, error: "Student not found." };
+    }
+
+    // Clean up previous photo in Supabase Storage if different
+    if (student.photoPath && student.photoPath !== photoPath) {
+      const oldKeys = [
+        extractSupabaseStorageKey(student.photoPath),
+        extractSupabaseStorageKey(student.previewPath),
+        extractSupabaseStorageKey(student.originalPhotoPath),
+      ].filter(Boolean) as string[];
+      if (oldKeys.length > 0) {
+        deleteMultipleFromSupabaseBucket(oldKeys).catch(() => {});
+      }
     }
 
     const updated = await prisma.student.update({
