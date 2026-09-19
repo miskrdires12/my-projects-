@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
         studentId: studentId || "STU",
         fullName: studentFullName || "student",
         grade: studentGrade || "General",
+        isEdited: Boolean(studentId),
       });
     } catch (progErr) {
       console.warn("Notice: Progressive generation notice:", progErr);
@@ -89,12 +90,31 @@ export async function POST(request: NextRequest) {
         });
 
         if (student) {
-          // Identify and delete previous photo(s) from Supabase Storage bucket 'student data'
-          const oldKeysToDelete = [
+          const finalThumbnail = progressive?.thumbnailPath || null;
+          const finalPreview = progressive?.previewPath || null;
+          const finalOriginal = progressive?.originalPath || originalResult.relativePath;
+          const finalPhotoUrl = finalPreview || finalOriginal || editedResult.relativePath;
+
+          // Collect new keys that were just uploaded to Supabase Storage
+          const newKeys = [
+            extractSupabaseStorageKey(finalPhotoUrl),
+            extractSupabaseStorageKey(finalOriginal),
+            extractSupabaseStorageKey(finalPreview),
+            extractSupabaseStorageKey(finalThumbnail),
+          ].filter(Boolean) as string[];
+
+          // Identify previous photo(s) from Supabase Storage bucket 'student data'
+          const candidateOldKeys = [
             extractSupabaseStorageKey(student.photoPath),
             extractSupabaseStorageKey(student.previewPath),
             extractSupabaseStorageKey(student.originalPhotoPath),
+            extractSupabaseStorageKey(student.thumbnailPath),
           ].filter(Boolean) as string[];
+
+          // STRICT SAFETY: Never delete a key that was just uploaded
+          const oldKeysToDelete = candidateOldKeys.filter(
+            (k) => !newKeys.includes(k)
+          );
 
           if (oldKeysToDelete.length > 0) {
             try {
@@ -104,11 +124,6 @@ export async function POST(request: NextRequest) {
               console.warn("[Uploads] Notice: Old Supabase photo cleanup warning:", delErr);
             }
           }
-
-          const finalThumbnail = progressive?.thumbnailPath || null;
-          const finalPreview = progressive?.previewPath || null;
-          const finalOriginal = progressive?.originalPath || originalResult.relativePath;
-          const finalPhotoUrl = finalPreview || finalOriginal || editedResult.relativePath;
 
           photoRecord = await prisma.studentPhoto.create({
             data: {

@@ -443,13 +443,14 @@ export async function updateStudentPhotoAction(
       return { success: false, error: "Student not found." };
     }
 
-    // Clean up previous photo in Supabase Storage if different
+    // Clean up previous photo in Supabase Storage if different, but NEVER delete the new key
+    const newKey = extractSupabaseStorageKey(photoPath);
     if (student.photoPath && student.photoPath !== photoPath) {
       const oldKeys = [
         extractSupabaseStorageKey(student.photoPath),
         extractSupabaseStorageKey(student.previewPath),
         extractSupabaseStorageKey(student.originalPhotoPath),
-      ].filter(Boolean) as string[];
+      ].filter((k): k is string => Boolean(k) && k !== newKey);
       if (oldKeys.length > 0) {
         deleteMultipleFromSupabaseBucket(oldKeys).catch(() => {});
       }

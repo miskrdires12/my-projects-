@@ -26,6 +26,8 @@ import {
   RotateCcw,
   Sparkles,
   Loader2,
+  AlertCircle,
+  UploadCloud,
 } from "lucide-react";
 import { convertBlobTo300Dpi } from "@/lib/jpeg-dpi";
 
@@ -34,6 +36,8 @@ export interface PhotoEditorProps {
   onClose: () => void;
   originalImageSrc: string;
   originalFile?: File | null;
+  studentId?: string;
+  fallbackImageSrc?: string;
   onSave: (editedBlob: Blob, originalBlob: Blob | null, metadata: PhotoMetadata) => void;
   onRetake?: () => void;
 }
@@ -66,6 +70,8 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
   onClose,
   originalImageSrc,
   originalFile,
+  studentId,
+  fallbackImageSrc,
   onSave,
   onRetake,
 }) => {
@@ -74,6 +80,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [resolvedSrc, setResolvedSrc] = useState<string>(originalImageSrc);
   const [loadingImage, setLoadingImage] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<boolean>(false);
 
   // Active Bottom Tab
   const [activeTab, setActiveTab] = useState<ActiveTab>("crop");
@@ -188,7 +195,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     [getRenderedImageRect]
   );
 
-  // Initialize and load image reliably with blob URL, data URI sanitization, and CORS proxy fallback
+  // Initialize and load image reliably with blob URL, data URI sanitization, and multi-tier fallbacks
   useEffect(() => {
     if (!originalImageSrc && !originalFile) {
       setLoadingImage(false);
@@ -196,9 +203,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
     }
 
     let isCancelled = false;
-    let createdBlobUrl: string | null = null;
     setLoadingImage(true);
     setIsImageLoaded(false);
+    setLoadError(false);
 
     const loadImageElement = (srcUrl: string) => {
       const img = new Image();
@@ -212,6 +219,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         setResolvedSrc(srcUrl);
         setIsImageLoaded(true);
         setLoadingImage(false);
+        setLoadError(false);
         resetToDefaultCrop(img);
       };
       img.onerror = () => {
@@ -225,26 +233,32 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             setResolvedSrc(srcUrl);
             setIsImageLoaded(true);
             setLoadingImage(false);
+            setLoadError(false);
             resetToDefaultCrop(fallbackImg);
           };
           fallbackImg.onerror = () => {
             if (isCancelled) return;
-            setResolvedSrc(srcUrl);
+            setIsImageLoaded(false);
             setLoadingImage(false);
+            setLoadError(true);
           };
           fallbackImg.src = srcUrl;
         } else {
-          setResolvedSrc(srcUrl);
+          setIsImageLoaded(false);
           setLoadingImage(false);
+          setLoadError(true);
         }
       };
       img.src = srcUrl;
     };
 
     const startLoading = async () => {
+      setLoadError(false);
+      setLoadingImage(true);
+
       if (originalFile) {
-        createdBlobUrl = URL.createObjectURL(originalFile);
-        loadImageElement(createdBlobUrl);
+        const fileBlobUrl = URL.createObjectURL(originalFile);
+        loadImageElement(fileBlobUrl);
         return;
       }
 
@@ -267,8 +281,8 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         if (res.ok) {
           const blob = await res.blob();
           if (!isCancelled && blob.size > 0) {
-            createdBlobUrl = URL.createObjectURL(blob);
-            loadImageElement(createdBlobUrl);
+            const blobUrl = URL.createObjectURL(blob);
+            loadImageElement(blobUrl);
             return;
           }
         }
@@ -280,14 +294,48 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
         if (proxyRes.ok) {
           const blob = await proxyRes.blob();
           if (!isCancelled && blob.size > 0) {
-            createdBlobUrl = URL.createObjectURL(blob);
-            loadImageElement(createdBlobUrl);
+            const blobUrl = URL.createObjectURL(blob);
+            loadImageElement(blobUrl);
             return;
           }
         }
       } catch {}
 
-      // Step 3: Direct URL load fallback
+      // Step 3: Fallback to single photo download endpoint by studentId
+      if (studentId) {
+        try {
+          const singleRes = await fetch(`/api/photos/download-single?id=${encodeURIComponent(studentId)}`);
+          if (singleRes.ok) {
+            const blob = await singleRes.blob();
+            if (!isCancelled && blob.size > 0) {
+              const blobUrl = URL.createObjectURL(blob);
+              loadImageElement(blobUrl);
+              return;
+            }
+          }
+        } catch {}
+      }
+
+      // Step 4: Fallback to alternate fallbackImageSrc (e.g. previewPath or thumbnailPath)
+      if (fallbackImageSrc && fallbackImageSrc !== cleanSrc) {
+        try {
+          if (fallbackImageSrc.startsWith("data:") || fallbackImageSrc.startsWith("blob:")) {
+            loadImageElement(fallbackImageSrc);
+            return;
+          }
+          const fbRes = await fetch(fallbackImageSrc);
+          if (fbRes.ok) {
+            const blob = await fbRes.blob();
+            if (!isCancelled && blob.size > 0) {
+              const blobUrl = URL.createObjectURL(blob);
+              loadImageElement(blobUrl);
+              return;
+            }
+          }
+        } catch {}
+      }
+
+      // Step 5: Direct URL load fallback
       if (!isCancelled) {
         loadImageElement(cleanSrc);
       }
@@ -297,11 +345,8 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
 
     return () => {
       isCancelled = true;
-      if (createdBlobUrl) {
-        URL.revokeObjectURL(createdBlobUrl);
-      }
     };
-  }, [originalImageSrc, originalFile, resetToDefaultCrop]);
+  }, [originalImageSrc, originalFile, studentId, fallbackImageSrc, resetToDefaultCrop]);
 
   // Recalculate container bounds on window resize
   useEffect(() => {
@@ -801,10 +846,10 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
           )}
 
           {/* Underlying Transformed Image */}
-          {(isImageLoaded || !loadingImage) && (resolvedSrc || originalImageSrc) && (
+          {isImageLoaded && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={resolvedSrc || originalImageSrc}
+              src={resolvedSrc}
               alt="Photo for editing"
               draggable={false}
               className="h-full w-full object-contain pointer-events-none"
@@ -820,7 +865,50 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
             />
           )}
 
+          {/* Clean Failure / Recovery State */}
+          {!loadingImage && (!isImageLoaded || loadError) && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center gap-3 bg-neutral-950 z-20">
+              <div className="h-12 w-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm font-mono font-bold text-white">Portrait Retrieval Notice</p>
+                <p className="text-xs text-[#8a9e93] font-mono mt-1 max-w-xs">
+                  The previous portrait binary is being updated or unavailable. Select a replacement image or retry loading.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8fe617] text-[#062404] text-xs font-mono font-bold hover:brightness-105 transition-all cursor-pointer">
+                  <UploadCloud className="h-3.5 w-3.5" />
+                  <span>Choose Photo File</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        const url = URL.createObjectURL(f);
+                        const img = new Image();
+                        img.onload = () => {
+                          imageRef.current = img;
+                          setResolvedSrc(url);
+                          setIsImageLoaded(true);
+                          setLoadingImage(false);
+                          setLoadError(false);
+                          resetToDefaultCrop(img);
+                        };
+                        img.src = url;
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* Phone-Like Crop Box: 1px Crisp White Border & Delicate Corners */}
+          {isImageLoaded && (
           <div
             className="absolute border border-white/90 pointer-events-auto select-none"
             style={{
@@ -915,6 +1003,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorProps> = ({
               <div className="h-7 w-1 bg-white/90 rounded-full shadow-xs" />
             </div>
           </div>
+          )}
         </div>
       </div>
 

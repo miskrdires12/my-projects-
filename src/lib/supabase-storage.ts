@@ -300,3 +300,111 @@ export async function purgeAllSupabaseStorageObjects(): Promise<{ success: boole
     return { success: false, count: 0, error: err?.message };
   }
 }
+
+export interface SupabaseFolderStat {
+  name: string;
+  fileCount: number;
+  sizeBytes: number;
+  sizeFormatted: string;
+}
+
+export interface SupabaseStorageStats {
+  totalFiles: number;
+  totalSizeBytes: number;
+  totalSizeFormatted: string;
+  folders: SupabaseFolderStat[];
+}
+
+let cachedStorageStats: { data: SupabaseStorageStats; timestamp: number } | null = null;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+/**
+ * Recursively scans Supabase Storage bucket 'student data' and returns total files,
+ * total size in bytes/MB, and folder breakdown. Cached for 15s.
+ */
+export async function getSupabaseStorageStats(forceRefresh = false): Promise<SupabaseStorageStats> {
+  const now = Date.now();
+  if (!forceRefresh && cachedStorageStats && now - cachedStorageStats.timestamp < 15000) {
+    return cachedStorageStats.data;
+  }
+
+  const { supabaseUrl, apiKey } = getSupabaseConfig();
+  const folderStats: SupabaseFolderStat[] = [];
+  let grandTotalFiles = 0;
+  let grandTotalBytes = 0;
+
+  async function scanPrefix(prefix = ""): Promise<{ files: number; bytes: number }> {
+    try {
+      const res = await fetch(`${supabaseUrl}/storage/v1/object/list/${ENCODED_BUCKET}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "apikey": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prefix,
+          limit: 1000,
+          offset: 0,
+          sortBy: { column: "name", order: "asc" },
+        }),
+      });
+
+      if (!res.ok) return { files: 0, bytes: 0 };
+      const items = await res.json();
+      let pFiles = 0;
+      let pBytes = 0;
+
+      for (const item of items) {
+        const fullItemPath = prefix ? `${prefix}/${item.name}` : item.name;
+        if (item.id === null) {
+          // Subfolder
+          const sub = await scanPrefix(fullItemPath);
+          pFiles += sub.files;
+          pBytes += sub.bytes;
+
+          // If top-level folder, track it in folderStats
+          if (!prefix) {
+            folderStats.push({
+              name: item.name,
+              fileCount: sub.files,
+              sizeBytes: sub.bytes,
+              sizeFormatted: formatBytes(sub.bytes),
+            });
+          }
+        } else {
+          pFiles++;
+          const sz = item.metadata?.size || 0;
+          pBytes += sz;
+        }
+      }
+
+      return { files: pFiles, bytes: pBytes };
+    } catch {
+      return { files: 0, bytes: 0 };
+    }
+  }
+
+  const rootResult = await scanPrefix("");
+  grandTotalFiles = rootResult.files;
+  grandTotalBytes = rootResult.bytes;
+
+  // Sort folders by file count descending
+  folderStats.sort((a, b) => b.fileCount - a.fileCount);
+
+  const stats: SupabaseStorageStats = {
+    totalFiles: grandTotalFiles,
+    totalSizeBytes: grandTotalBytes,
+    totalSizeFormatted: formatBytes(grandTotalBytes),
+    folders: folderStats,
+  };
+
+  cachedStorageStats = { data: stats, timestamp: now };
+  return stats;
+}

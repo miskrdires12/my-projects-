@@ -28,6 +28,7 @@ export interface StudentPhotoMetadata {
   studentId: string;
   fullName: string;
   grade: string;
+  isEdited?: boolean;
 }
 
 /**
@@ -74,7 +75,8 @@ export async function writeLocalDesktopBackup(
   const safeGrade = sanitizeFsName(meta.grade || "General", "General");
   const safeStudentId = sanitizeFsName(meta.studentId, "STU");
   const safeFullName = sanitizeFsName(meta.fullName, "Student");
-  const filename = `${safeStudentId}_${safeFullName}.jpg`;
+  const versionTag = meta.isEdited ? `_v${Date.now()}` : "";
+  const filename = `${safeStudentId}_${safeFullName}${versionTag}.jpg`;
 
   const candidateDirs = getLocalDesktopBackupBaseDirs();
   const successfulPaths: string[] = [];
@@ -102,9 +104,10 @@ export async function generate3PhasePhotos(
   fileBuffer: Buffer,
   meta: StudentPhotoMetadata
 ): Promise<ProgressivePhotoResult> {
-  const safeName = `${sanitizeFsName(meta.fullName, "student")}.jpg`;
+  const safeName = sanitizeFsName(meta.fullName, "student");
   const safeStudentId = sanitizeFsName(meta.studentId, "STU");
-  const baseSafeName = `${safeStudentId}_${safeName}`;
+  const versionTag = meta.isEdited ? `_v${Date.now()}` : "";
+  const baseSafeName = `${safeStudentId}_${safeName}${versionTag}.jpg`;
 
   // 1. Probe source image metadata
   let probe: sharp.Metadata;

@@ -5,50 +5,88 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { listSupabaseStorageFiles } from "@/lib/supabase-storage";
+import { getSupabaseStorageStats } from "@/lib/supabase-storage";
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session || session.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized: Admin role required" }, { status: 403 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const forceRefresh = searchParams.get("refresh") === "true";
+
   const startMs = Date.now();
   let dbOk = false;
   let dbLatencyMs = 0;
-  let storageOk = false;
-  let storageFileCount = 0;
-  let lastActiveAt: Date | null = null;
 
   // 1. Measure DB ping latency
   try {
     await prisma.$queryRaw`SELECT 1`;
     dbLatencyMs = Date.now() - startMs;
     dbOk = true;
-  } catch (err) {
+  } catch {
     dbLatencyMs = Date.now() - startMs;
     dbOk = false;
   }
 
-  // 2. Test Supabase Storage Bucket ('student data')
+  // 2. Fetch comprehensive Supabase Storage bucket stats ('student data')
+  let storageStats = {
+    totalFiles: 0,
+    totalSizeBytes: 0,
+    totalSizeFormatted: "0 B",
+    folders: [] as any[],
+  };
+  let storageOk = false;
   try {
-    const files = await listSupabaseStorageFiles("");
-    storageOk = Array.isArray(files);
-    storageFileCount = files?.length || 0;
+    storageStats = await getSupabaseStorageStats(forceRefresh);
+    storageOk = true;
   } catch {
     storageOk = false;
   }
 
-  // 3. Compute 7-day inactivity pause safety status
+  // 3. Database Data Inventory Counts (Students, Users, Batches, AuditLogs, Photos)
+  let studentsCount = 0;
+  let studentsWithPhotos = 0;
+  let usersCount = 0;
+  let batchesCount = 0;
+  let auditLogsCount = 0;
+  let studentPhotosCatalogCount = 0;
+  let lastActiveAt: Date | null = null;
+
   try {
-    const latestStudent = await prisma.student.findFirst({
-      orderBy: { updatedAt: "desc" },
-      select: { updatedAt: true },
-    });
-    const latestUser = await prisma.user.findFirst({
-      orderBy: { lastActiveAt: "desc" },
-      select: { lastActiveAt: true },
-    });
+    const [
+      stCount,
+      stWithPhotos,
+      uCount,
+      bCount,
+      aCount,
+      spCount,
+      latestStudent,
+      latestUser,
+    ] = await Promise.all([
+      prisma.student.count(),
+      prisma.student.count({ where: { photoPath: { not: null } } }),
+      prisma.user.count(),
+      prisma.transferBatch.count(),
+      prisma.auditLog.count(),
+      prisma.studentPhoto.count(),
+      prisma.student.findFirst({
+        orderBy: { updatedAt: "desc" },
+        select: { updatedAt: true },
+      }),
+      prisma.user.findFirst({
+        orderBy: { lastActiveAt: "desc" },
+        select: { lastActiveAt: true },
+      }),
+    ]);
+
+    studentsCount = stCount;
+    studentsWithPhotos = stWithPhotos;
+    usersCount = uCount;
+    batchesCount = bCount;
+    auditLogsCount = aCount;
+    studentPhotosCatalogCount = spCount;
 
     const dates = [latestStudent?.updatedAt, latestUser?.lastActiveAt].filter(Boolean) as Date[];
     if (dates.length > 0) {
@@ -56,6 +94,10 @@ export async function GET(_request: NextRequest) {
     }
   } catch {}
 
+  const studentsWithoutPhotos = Math.max(0, studentsCount - studentsWithPhotos);
+  const totalDatabaseRecords = studentsCount + usersCount + batchesCount + auditLogsCount + studentPhotosCatalogCount;
+
+  // 4. Compute 7-day inactivity pause safety status
   const now = Date.now();
   const lastActiveTime = lastActiveAt ? lastActiveAt.getTime() : now;
   const daysSinceActivity = Math.max(0, Math.round((now - lastActiveTime) / (1000 * 60 * 60 * 24)));
@@ -66,7 +108,20 @@ export async function GET(_request: NextRequest) {
     databaseLatencyMs: dbLatencyMs,
     storageConnected: storageOk,
     storageBucket: "student data",
-    storageFileCount,
+    storageFileCount: storageStats.totalFiles,
+    storageSizeBytes: storageStats.totalSizeBytes,
+    storageSizeFormatted: storageStats.totalSizeFormatted,
+    storageFolders: storageStats.folders,
+    database: {
+      studentsCount,
+      studentsWithPhotos,
+      studentsWithoutPhotos,
+      usersCount,
+      batchesCount,
+      auditLogsCount,
+      studentPhotosCatalogCount,
+      totalDatabaseRecords,
+    },
     poolerHost: "aws-1-eu-west-1.pooler.supabase.com",
     region: "AWS EU-West (Ireland)",
     sslMode: "require",

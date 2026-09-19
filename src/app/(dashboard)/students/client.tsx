@@ -1157,8 +1157,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       const form = new FormData();
       form.append("file", editedBlob, safePhotoName);
       form.append("studentId", studentToUpdate.studentId);
+      form.append("fullName", studentToUpdate.fullName || "");
+      form.append("grade", studentToUpdate.grade || "");
 
       let finalPath = dataUri;
+      let uploadResultData: any = null;
       try {
         const res = await fetch("/api/uploads", {
           method: "POST",
@@ -1166,14 +1169,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         });
         if (res.ok) {
           const uploadRes = await res.json();
+          uploadResultData = uploadRes;
           if (uploadRes.relativePath) {
-            // Append cache-busting timestamp safely for HTTP/relative paths (never corrupt data URIs)
-            if (uploadRes.relativePath.startsWith("data:")) {
-              finalPath = uploadRes.relativePath;
-            } else {
-              const sep = uploadRes.relativePath.includes("?") ? "&" : "?";
-              finalPath = `${uploadRes.relativePath}${sep}t=${Date.now()}`;
-            }
+            finalPath = uploadRes.relativePath;
           }
         }
       } catch (uploadErr) {
@@ -1195,6 +1193,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       const updatedStudent: StudentExtended = {
         ...studentToUpdate,
         photoPath: finalPath,
+        originalPhotoPath: uploadResultData?.originalPath || studentToUpdate.originalPhotoPath || finalPath,
+        previewPath: uploadResultData?.previewPath || studentToUpdate.previewPath || finalPath,
+        thumbnailPath: uploadResultData?.thumbnailPath || studentToUpdate.thumbnailPath || dataUri,
       };
 
       // 1. Persist to secure client vault
@@ -2341,10 +2342,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       )}
 
       {/* Student Photo Crop & Edit Studio Modal */}
-      {editingStudent && editingStudent.photoPath && (
+      {editingStudent && (editingStudent.photoPath || editingStudent.originalPhotoPath || editingStudent.thumbnailPath) && (
         <PhotoEditorModal
           isOpen={Boolean(editingStudent)}
-          originalImageSrc={editingStudent.photoPath}
+          studentId={editingStudent.id || editingStudent.studentId}
+          originalImageSrc={
+            editingStudent.originalPhotoPath ||
+            editingStudent.previewPath ||
+            editingStudent.photoPath ||
+            editingStudent.thumbnailPath ||
+            ""
+          }
+          fallbackImageSrc={
+            editingStudent.photoPath ||
+            editingStudent.thumbnailPath ||
+            undefined
+          }
           onClose={() => setEditingStudent(null)}
           onSave={handleSaveEditedPhoto}
         />
