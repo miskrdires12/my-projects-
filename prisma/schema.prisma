@@ -456,3 +456,22 @@ model UserWorkSession {
   @@index([startedAt])
   @@map("user_work_sessions")
 }
+
+// ----------------------------------------------------------------------------
+// HARDWARE DEVICE ROLE BINDING (1 DEVICE = 1 ROLE)
+// ----------------------------------------------------------------------------
+
+model DeviceBinding {
+  id         String   @id @default(cuid())
+  deviceId   String   @unique
+  role       String
+  boundBy    String?
+  boundEmail String?
+  deviceInfo String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([deviceId])
+  @@index([role])
+  @@map("device_bindings")
+}

@@ -135,59 +135,26 @@ export async function login(credentials: {
 }): Promise<LoginResponse> {
   const trimmed = credentials.emailOrUsername.trim().toLowerCase();
 
-  const DEMO_PRESETS: Record<
-    string,
-    { username: string; email: string; role: UserRole; pass: string }
-  > = {
-    "miskrdires11@gmail.com": {
-      username: "miskrdires11",
-      email: "miskrdires11@gmail.com",
-      role: "ADMIN",
-      pass: "sukuna24th",
-    },
-    miskrdires11: {
-      username: "miskrdires11",
-      email: "miskrdires11@gmail.com",
-      role: "ADMIN",
-      pass: "sukuna24th",
-    },
-    "sender@studentbridge.internal": {
-      username: "sender",
-      email: "sender@studentbridge.internal",
-      role: "SENDER",
-      pass: "Password123!",
-    },
-    sender: {
-      username: "sender",
-      email: "sender@studentbridge.internal",
-      role: "SENDER",
-      pass: "Password123!",
-    },
-    "receiver@studentbridge.internal": {
-      username: "receiver",
-      email: "receiver@studentbridge.internal",
-      role: "RECEIVER",
-      pass: "Password123!",
-    },
-    receiver: {
-      username: "receiver",
-      email: "receiver@studentbridge.internal",
-      role: "RECEIVER",
-      pass: "Password123!",
-    },
-    "admin@studentbridge.internal": {
-      username: "admin",
-      email: "admin@studentbridge.internal",
-      role: "ADMIN",
-      pass: "AdminPassword123!",
-    },
-    admin: {
-      username: "admin",
-      email: "admin@studentbridge.internal",
-      role: "ADMIN",
-      pass: "AdminPassword123!",
-    },
-  };
+  const ADMIN_EMAIL = "miskrdires11@gmail.com";
+  const ADMIN_PASS = "sukuna24th";
+
+  // Reject default demo credentials
+  const isDefaultDemoAttempt =
+    trimmed.includes("studentbridge.internal") ||
+    trimmed === "sender" ||
+    trimmed === "receiver" ||
+    trimmed === "admin" ||
+    credentials.passwordPlain === "Password123!" ||
+    credentials.passwordPlain === "AdminPassword123!";
+
+  if (isDefaultDemoAttempt) {
+    return {
+      success: false,
+      error: "ACCESS REJECTED: Default credentials are permanently disabled. You must sign in using your administrator-provisioned account.",
+    };
+  }
+
+  const isAdminAttempt = trimmed === ADMIN_EMAIL || trimmed === "miskrdires11";
 
   let user: any = null;
   try {
@@ -206,17 +173,21 @@ export async function login(credentials: {
   // 1. If user is found in database
   if (user) {
     let isValid = false;
-    try {
-      isValid = await verifyPassword(credentials.passwordPlain, user.passwordHash);
-    } catch {
-      isValid = false;
-    }
 
-    // Secondary check against known demo passwords in case hash differs
-    if (!isValid) {
-      const demo = DEMO_PRESETS[trimmed];
-      if (demo && credentials.passwordPlain === demo.pass) {
-        isValid = true;
+    if (isAdminAttempt) {
+      isValid = credentials.passwordPlain === ADMIN_PASS;
+      if (!isValid) {
+        try {
+          isValid = await verifyPassword(credentials.passwordPlain, user.passwordHash);
+        } catch {
+          isValid = false;
+        }
+      }
+    } else {
+      try {
+        isValid = await verifyPassword(credentials.passwordPlain, user.passwordHash);
+      } catch {
+        isValid = false;
       }
     }
 
@@ -224,9 +195,40 @@ export async function login(credentials: {
       return { success: false, error: "Invalid credentials" };
     }
 
-    // Single-Device Lock Check:
-    // If account has an active bound device and a different device tries to sign in,
-    // block access and require Administrator reset.
+    const targetRole: UserRole = user.role as UserRole;
+    const targetEmail: string = user.email;
+
+    // 1 Device = 1 Role Hardware Enforcement:
+    if (credentials.deviceId) {
+      try {
+        const existingBinding = await prisma.deviceBinding.findUnique({
+          where: { deviceId: credentials.deviceId },
+        });
+
+        if (existingBinding) {
+          if (existingBinding.role !== targetRole) {
+            return {
+              success: false,
+              error: `ACCESS REJECTED (1 DEVICE = 1 ROLE): This physical device is locked exclusively to '${existingBinding.role}' operations. Logins with '${targetRole}' are strictly prohibited on this physical device.`,
+            };
+          }
+        } else {
+          // Permanently bind this physical device to the first role used
+          await prisma.deviceBinding.create({
+            data: {
+              deviceId: credentials.deviceId,
+              role: targetRole,
+              boundEmail: targetEmail,
+              deviceInfo: credentials.deviceInfo || "Registered Device",
+            },
+          });
+        }
+      } catch (bindErr) {
+        console.warn("Notice: Device binding verification warning:", bindErr);
+      }
+    }
+
+    // Single-Device User Lock Check:
     if (
       user.boundDeviceId &&
       credentials.deviceId &&
@@ -306,36 +308,64 @@ export async function login(credentials: {
     };
   }
 
-  // 2. Fallback check for demo presets if DB didn't find the user (e.g. fresh Vercel serverless /tmp db)
-  const demoMatch = DEMO_PRESETS[trimmed];
-  if (demoMatch && credentials.passwordPlain === demoMatch.pass) {
-    const sessionPayload: Omit<SessionPayload, "iat" | "exp"> = {
-      userId: `system-${demoMatch.username}`,
-      username: demoMatch.username,
-      email: demoMatch.email,
-      role: demoMatch.role,
+  // 2. Master Admin Seed / Fallback if not yet in database
+  if (isAdminAttempt && credentials.passwordPlain === ADMIN_PASS) {
+    const adminPayload: Omit<SessionPayload, "iat" | "exp"> = {
+      userId: "master-admin",
+      username: "miskrdires11",
+      email: ADMIN_EMAIL,
+      role: "ADMIN",
     };
 
-    const token = await signSessionToken(sessionPayload);
+    // 1 Device = 1 Role Hardware Enforcement:
+    if (credentials.deviceId) {
+      try {
+        const existingBinding = await prisma.deviceBinding.findUnique({
+          where: { deviceId: credentials.deviceId },
+        });
+
+        if (existingBinding) {
+          if (existingBinding.role !== "ADMIN") {
+            return {
+              success: false,
+              error: `ACCESS REJECTED (1 DEVICE = 1 ROLE): This physical device is locked exclusively to '${existingBinding.role}' operations. Logins with 'ADMIN' are strictly prohibited on this physical device.`,
+            };
+          }
+        } else {
+          await prisma.deviceBinding.create({
+            data: {
+              deviceId: credentials.deviceId,
+              role: "ADMIN",
+              boundEmail: ADMIN_EMAIL,
+              deviceInfo: credentials.deviceInfo || "Registered Device",
+            },
+          });
+        }
+      } catch (bindErr) {
+        console.warn("Notice: Device binding verification warning:", bindErr);
+      }
+    }
+
+    const token = await signSessionToken(adminPayload);
     await setSessionCookie(token);
 
-    // Auto-seed into DB if possible
     try {
-      const hash = await hashPassword(demoMatch.pass);
+      const hash = await hashPassword(ADMIN_PASS);
       await prisma.user.upsert({
-        where: { username: demoMatch.username },
+        where: { email: ADMIN_EMAIL },
         update: {
-          boundDeviceId: credentials.deviceId || null,
-          boundDeviceInfo: credentials.deviceInfo || null,
+          passwordHash: hash,
+          role: "ADMIN",
           lastLoginAt: new Date(),
-          workSessionCount: { increment: 1 },
+          boundDeviceId: credentials.deviceId || undefined,
+          boundDeviceInfo: credentials.deviceInfo || undefined,
         },
         create: {
-          id: `system-${demoMatch.username}`,
-          username: demoMatch.username,
-          email: demoMatch.email,
+          id: "master-admin",
+          username: "miskrdires11",
+          email: ADMIN_EMAIL,
           passwordHash: hash,
-          role: demoMatch.role,
+          role: "ADMIN",
           boundDeviceId: credentials.deviceId || null,
           boundDeviceInfo: credentials.deviceInfo || null,
           lastLoginAt: new Date(),
@@ -348,7 +378,7 @@ export async function login(credentials: {
 
     return {
       success: true,
-      user: sessionPayload,
+      user: adminPayload,
     };
   }
 
@@ -465,22 +495,11 @@ export async function loginWithGoogle(googleUser: {
  * Server-side preset role authentication.
  * Keeps demo credentials strictly on the server and completely hidden from client DOM/inspectors.
  */
-export async function loginAsPresetRole(targetRole: "SENDER" | "RECEIVER" | "ADMIN"): Promise<LoginResponse> {
-  const mapping: Record<string, { username: string; email: string; pass: string }> = {
-    SENDER: { username: "sender", email: "sender@studentbridge.internal", pass: "Password123!" },
-    RECEIVER: { username: "receiver", email: "receiver@studentbridge.internal", pass: "Password123!" },
-    ADMIN: { username: "admin", email: "admin@studentbridge.internal", pass: "AdminPassword123!" },
+export async function loginAsPresetRole(_targetRole: "SENDER" | "RECEIVER" | "ADMIN"): Promise<LoginResponse> {
+  return {
+    success: false,
+    error: "ACCESS REJECTED: Workstation quick-presets are disabled. Please sign in with your administrator-provisioned account.",
   };
-
-  const cred = mapping[targetRole];
-  if (!cred) {
-    return { success: false, error: "Invalid role environment specified" };
-  }
-
-  return login({
-    emailOrUsername: cred.email,
-    passwordPlain: cred.pass,
-  });
 }
 
 export async function logout(ipAddress?: string): Promise<void> {

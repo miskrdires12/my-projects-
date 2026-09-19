@@ -414,6 +414,17 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             <span>{isSigningOut ? "Signing Out..." : "Sign Out"}</span>
           </button>
         </div>
+
+        <div className="mt-2.5 text-center">
+          <a
+            href="https://my-projects-two-kappa.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] transition-colors"
+          >
+            https://my-projects-two-kappa.vercel.app
+          </a>
+        </div>
       </div>
     </div>
   );
@@ -469,6 +480,15 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 </span>
               </div>
             </Link>
+
+            <a
+              href="https://my-projects-two-kappa.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/80 dark:bg-[#111713]/80 text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:border-[#8fe617] transition-all ml-2"
+            >
+              <span>https://my-projects-two-kappa.vercel.app</span>
+            </a>
           </div>
 
           <div className="flex items-center gap-2.5">

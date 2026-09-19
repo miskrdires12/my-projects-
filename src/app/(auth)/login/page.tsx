@@ -15,45 +15,10 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  Check,
   Sun,
 } from "lucide-react";
-import { loginAction, quickRoleLoginAction } from "@/actions/auth";
+import { loginAction } from "@/actions/auth";
 import { getClientDeviceFingerprint } from "@/lib/device-id";
-
-type WorkstationRole = "SENDER" | "RECEIVER" | "ADMIN";
-
-interface PresetConfig {
-  title: string;
-  subtitle: string;
-  email: string;
-  pass: string;
-  dest: string;
-}
-
-const ROLE_PRESETS: Record<WorkstationRole, PresetConfig> = {
-  SENDER: {
-    title: "Sender Station",
-    subtitle: "300 DPI Studio • Fast Registration • ID Generation",
-    email: "sender@studentbridge.internal",
-    pass: "Password123!",
-    dest: "/register",
-  },
-  RECEIVER: {
-    title: "Receiver Workstation",
-    subtitle: "Batch Review • 8-Up Print Engine • Student Directory",
-    email: "receiver@studentbridge.internal",
-    pass: "Password123!",
-    dest: "/dashboard",
-  },
-  ADMIN: {
-    title: "Administrator Portal",
-    subtitle: "Security Roles • System Settings • Database Sync",
-    email: "admin@studentbridge.internal",
-    pass: "AdminPassword123!",
-    dest: "/dashboard",
-  },
-};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -61,7 +26,6 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successRole, setSuccessRole] = useState<string | null>(null);
 
-  const [selectedRole, setSelectedRole] = useState<WorkstationRole | null>(null);
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -98,41 +62,11 @@ export default function LoginPage() {
     }
   };
 
-  // When user clicks a workstation option, populate it inside the signin box
-  const handleSelectRole = (role: WorkstationRole) => {
-    setSelectedRole(role);
-    setUsernameOrEmail(ROLE_PRESETS[role].email);
-    setPassword(ROLE_PRESETS[role].pass);
-    setErrorMessage(null);
-  };
-
   // Submit signin and navigate to the selected workstation page
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    // If a preset workstation is selected and matches the fields, execute instant preset login
-    if (
-      selectedRole &&
-      usernameOrEmail.trim().toLowerCase() === ROLE_PRESETS[selectedRole].email.toLowerCase()
-    ) {
-      startTransition(async () => {
-        try {
-          const result = await quickRoleLoginAction(selectedRole);
-          if (!result.success || !result.data) {
-            setErrorMessage(result.error ?? "Failed to initialize workstation");
-          } else {
-            setSuccessRole(result.data.role);
-            router.push(ROLE_PRESETS[selectedRole].dest);
-          }
-        } catch (err: any) {
-          setErrorMessage(err?.message || "Workstation connection failed");
-        }
-      });
-      return;
-    }
-
-    // Otherwise standard credentials authentication
     const formData = new FormData();
     formData.set("emailOrUsername", usernameOrEmail);
     formData.set("password", password);
@@ -204,7 +138,7 @@ export default function LoginPage() {
             SignIn
           </h1>
           <p className="text-xs text-[#6b7771] dark:text-[#9eb2a6] mt-0.5">
-            Select your workstation or enter operator credentials
+            Enter your credentials to access the workstation
           </p>
         </div>
 
@@ -228,39 +162,21 @@ export default function LoginPage() {
 
         {/* Credential Form */}
         <form onSubmit={handleSubmit} className="space-y-3.5">
-          {/* Active Selected Workstation Pill inside the signin box */}
-          {selectedRole && (
-            <div className="flex items-center justify-between p-2.5 rounded-2xl bg-[#8fe617]/15 dark:bg-[#8fe617]/20 border border-[#8fe617] text-xs font-bold text-[#062404] dark:text-[#8fe617] animate-in fade-in duration-200">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#8fe617] animate-pulse" />
-                <span>
-                  Workstation: <strong>{ROLE_PRESETS[selectedRole].title}</strong>
-                </span>
-              </div>
-              <span className="text-[10px] font-mono uppercase bg-[#8fe617] text-[#062404] px-2 py-0.5 rounded-full font-black">
-                Active
-              </span>
-            </div>
-          )}
-
-          {/* Username Field */}
+          {/* Operator Gmail Field */}
           <div>
             <label className="block text-[10px] font-bold text-[#38433d] dark:text-[#9eb2a6] uppercase tracking-wider mb-1.5 font-mono">
-              Username or Email
+              Operator Gmail
             </label>
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#7d8b83] dark:text-[#6c8074]">
                 <User className="h-4 w-4 stroke-[1.8]" />
               </div>
               <input
-                type="text"
+                type="email"
                 required
                 value={usernameOrEmail}
-                onChange={(e) => {
-                  setUsernameOrEmail(e.target.value);
-                  setSelectedRole(null);
-                }}
-                placeholder="operator@studentbridge.internal"
+                onChange={(e) => setUsernameOrEmail(e.target.value)}
+                placeholder="name@gmail.com"
                 className="w-full rounded-2xl border border-[#d2dad5] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#18221b] py-3 pl-10 pr-3.5 text-xs font-semibold text-[#111814] dark:text-[#f2f7f4] placeholder:text-[#88968e] dark:placeholder:text-[#6c8074] focus:bg-white dark:focus:bg-[#1c2820] focus:border-[#8fe617] focus:outline-none focus:ring-2 focus:ring-[#8fe617]/30 transition-all shadow-inner"
               />
             </div>
@@ -279,10 +195,7 @@ export default function LoginPage() {
                 type="password"
                 required
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setSelectedRole(null);
-                }}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
                 className="w-full rounded-2xl border border-[#d2dad5] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#18221b] py-3 pl-10 pr-3.5 text-xs font-semibold text-[#111814] dark:text-[#f2f7f4] placeholder:text-[#88968e] dark:placeholder:text-[#6c8074] focus:bg-white dark:focus:bg-[#1c2820] focus:border-[#8fe617] focus:outline-none focus:ring-2 focus:ring-[#8fe617]/30 transition-all shadow-inner"
               />
@@ -311,109 +224,16 @@ export default function LoginPage() {
           </div>
         </form>
 
-        {/* Operational Role Selectors without Left Icons */}
-        <div className="mt-6 pt-5 border-t border-[#e2e7e4] dark:border-[#223126] space-y-2.5">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-[#38433d] dark:text-[#9eb2a6] uppercase tracking-wider font-mono">
-              Select Workstation:
-            </p>
-            <span className="text-[10px] font-mono font-bold text-[#6b7771] dark:text-[#6c8074]">Fills Sign In Box</span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2.5">
-            {/* SENDER */}
-            <button
-              type="button"
-              onClick={() => handleSelectRole("SENDER")}
-              className={`relative overflow-hidden rounded-2xl p-3.5 text-left transition-all group cursor-pointer shadow-xs active:scale-[0.99] ${
-                selectedRole === "SENDER"
-                  ? "border-2 border-[#8fe617] bg-[#8fe617]/10 ring-2 ring-[#8fe617]/40 shadow-[0_4px_16px_rgba(143,230,23,0.22)]"
-                  : "border border-[#d6ddd8] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#161f19] hover:border-[#8fe617]"
-              }`}
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-[#8fe617]/15 via-[#8fe617]/25 to-transparent -translate-x-full group-hover:translate-x-0 transition-transform duration-300 ease-out pointer-events-none" />
-              <div className="relative z-10 flex items-center justify-between">
-                <div>
-                  <span className="text-sm font-bold text-[#111814] dark:text-[#f2f7f4] block">
-                    Sender Station
-                  </span>
-                  <p className="text-[10px] text-[#6b7771] dark:text-[#9eb2a6] mt-0.5">
-                    300 DPI Studio • Fast Registration • ID Generation
-                  </p>
-                </div>
-                {selectedRole === "SENDER" ? (
-                  <div className="flex items-center gap-1 text-[10px] font-mono font-black uppercase text-[#062404] bg-[#8fe617] px-2 py-0.5 rounded-full shrink-0">
-                    <Check className="h-3 w-3 stroke-[3]" />
-                    <span>Selected</span>
-                  </div>
-                ) : (
-                  <ArrowRight className="h-4 w-4 text-[#5c6b63] dark:text-[#9eb2a6] group-hover:text-[#062404] dark:group-hover:text-[#8fe617] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
-                )}
-              </div>
-            </button>
-
-            {/* RECEIVER */}
-            <button
-              type="button"
-              onClick={() => handleSelectRole("RECEIVER")}
-              className={`relative overflow-hidden rounded-2xl p-3.5 text-left transition-all group cursor-pointer shadow-xs active:scale-[0.99] ${
-                selectedRole === "RECEIVER"
-                  ? "border-2 border-[#8fe617] bg-[#8fe617]/10 ring-2 ring-[#8fe617]/40 shadow-[0_4px_16px_rgba(143,230,23,0.22)]"
-                  : "border border-[#d6ddd8] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#161f19] hover:border-[#8fe617]"
-              }`}
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-[#8fe617]/15 via-[#8fe617]/25 to-transparent -translate-x-full group-hover:translate-x-0 transition-transform duration-300 ease-out pointer-events-none" />
-              <div className="relative z-10 flex items-center justify-between">
-                <div>
-                  <span className="text-sm font-bold text-[#111814] dark:text-[#f2f7f4] block">
-                    Receiver Workstation
-                  </span>
-                  <p className="text-[10px] text-[#6b7771] dark:text-[#9eb2a6] mt-0.5">
-                    Batch Review • 8-Up Print Engine • Student Directory
-                  </p>
-                </div>
-                {selectedRole === "RECEIVER" ? (
-                  <div className="flex items-center gap-1 text-[10px] font-mono font-black uppercase text-[#062404] bg-[#8fe617] px-2 py-0.5 rounded-full shrink-0">
-                    <Check className="h-3 w-3 stroke-[3]" />
-                    <span>Selected</span>
-                  </div>
-                ) : (
-                  <ArrowRight className="h-4 w-4 text-[#5c6b63] dark:text-[#9eb2a6] group-hover:text-[#062404] dark:group-hover:text-[#8fe617] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
-                )}
-              </div>
-            </button>
-
-            {/* ADMIN */}
-            <button
-              type="button"
-              onClick={() => handleSelectRole("ADMIN")}
-              className={`relative overflow-hidden rounded-2xl p-3.5 text-left transition-all group cursor-pointer shadow-xs active:scale-[0.99] ${
-                selectedRole === "ADMIN"
-                  ? "border-2 border-[#8fe617] bg-[#8fe617]/10 ring-2 ring-[#8fe617]/40 shadow-[0_4px_16px_rgba(143,230,23,0.22)]"
-                  : "border border-[#d6ddd8] dark:border-[#223126] bg-[#edf2ef] dark:bg-[#161f19] hover:border-[#8fe617]"
-              }`}
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-[#8fe617]/15 via-[#8fe617]/25 to-transparent -translate-x-full group-hover:translate-x-0 transition-transform duration-300 ease-out pointer-events-none" />
-              <div className="relative z-10 flex items-center justify-between">
-                <div>
-                  <span className="text-sm font-bold text-[#111814] dark:text-[#f2f7f4] block">
-                    Administrator Portal
-                  </span>
-                  <p className="text-[10px] text-[#6b7771] dark:text-[#9eb2a6] mt-0.5">
-                    Security Roles • System Settings • Database Sync
-                  </p>
-                </div>
-                {selectedRole === "ADMIN" ? (
-                  <div className="flex items-center gap-1 text-[10px] font-mono font-black uppercase text-[#062404] bg-[#8fe617] px-2 py-0.5 rounded-full shrink-0">
-                    <Check className="h-3 w-3 stroke-[3]" />
-                    <span>Selected</span>
-                  </div>
-                ) : (
-                  <ArrowRight className="h-4 w-4 text-[#5c6b63] dark:text-[#9eb2a6] group-hover:text-[#062404] dark:group-hover:text-[#8fe617] group-hover:translate-x-1 transition-all stroke-[2] shrink-0" />
-                )}
-              </div>
-            </button>
-          </div>
+        {/* Official Production Link */}
+        <div className="mt-6 pt-4 border-t border-[#e2e7e4] dark:border-[#223126] text-center">
+          <a
+            href="https://my-projects-two-kappa.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[11px] font-mono text-[#6b7771] dark:text-[#9eb2a6] hover:text-[#8fe617] transition-colors"
+          >
+            <span>https://my-projects-two-kappa.vercel.app</span>
+          </a>
         </div>
 
       </div>
