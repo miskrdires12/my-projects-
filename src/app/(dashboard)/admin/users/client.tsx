@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { createUserAction, deleteUserAction, resetUserDeviceAction } from "@/actions/users";
 import type { UserRole } from "@/types/auth";
+import { SenderTelemetryView } from "@/components/admin/SenderTelemetryView";
+import type { FullSenderTelemetryResponse } from "@/actions/sender-telemetry";
 
 export interface UserItem {
   id: string;
@@ -69,9 +71,10 @@ interface UsersClientProps {
   initialUsers: UserItem[];
   currentUserId: string;
   systemCadence?: SystemCadence;
+  initialTelemetry?: FullSenderTelemetryResponse | null;
 }
 
-export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentUserId, systemCadence }) => {
+export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentUserId, systemCadence, initialTelemetry }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -79,7 +82,7 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
   const [users, setUsers] = useState<UserItem[]>(initialUsers);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("ALL");
-  const [breakdownView, setBreakdownView] = useState<"senders" | "cadence">("senders");
+  const [breakdownView, setBreakdownView] = useState<"telemetry" | "senders" | "cadence">("telemetry");
 
   // Modal State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -346,6 +349,18 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
             <div className="flex items-center p-1 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
               <button
                 type="button"
+                onClick={() => setBreakdownView("telemetry")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  breakdownView === "telemetry"
+                    ? "bg-[#8fe617] text-[#062404] shadow-xs"
+                    : "text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Zap className="h-3 w-3" />
+                <span>Speed &amp; Intervals Telemetry</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setBreakdownView("senders")}
                 className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
                   breakdownView === "senders"
@@ -374,7 +389,9 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
           </div>
         </div>
 
-        {breakdownView === "senders" ? (
+        {breakdownView === "telemetry" ? (
+          <SenderTelemetryView initialData={initialTelemetry} />
+        ) : breakdownView === "senders" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {users.filter((u) => u.role === "SENDER" || (u.studentsRegistered || 0) > 0).length === 0 ? (
               <div className="col-span-full py-6 text-center text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">

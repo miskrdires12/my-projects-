@@ -31,6 +31,7 @@ import {
   Zap,
   Link2,
   RefreshCw,
+  QrCode,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -2305,6 +2306,35 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
                   {activeStudent.senderName || (activeStudent as any).senderId || "Direct Station"}
                 </span>
+              </div>
+
+              {/* Real Scannable QR Code */}
+              <div className="pt-3 border-t border-border dark:border-[#223126] flex items-center justify-between p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#161e19] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="space-y-0.5">
+                  <div className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                    <QrCode className="h-4 w-4 text-[#8fe617]" />
+                    <span>Real Verified QR Code</span>
+                  </div>
+                  <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                    Auto-encoded canonical payload
+                  </div>
+                  <a
+                    href={`/api/qr?studentId=${encodeURIComponent(activeStudent.studentId)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-[10px] font-bold text-[#8fe617] hover:underline pt-1"
+                  >
+                    Open Full Resolution PNG ↗
+                  </a>
+                </div>
+                <div className="text-center shrink-0">
+                  <img
+                    src={`/api/qr?studentId=${encodeURIComponent(activeStudent.studentId)}`}
+                    alt="Student QR Code"
+                    className="w-16 h-16 rounded-xl border-2 border-[#8fe617]/60 bg-white p-1 shadow-xs"
+                  />
+                  <span className="block text-[8px] font-mono font-bold text-[#8fe617] mt-0.5">SCANNABLE</span>
+                </div>
               </div>
             </div>
 

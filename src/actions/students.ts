@@ -23,6 +23,7 @@ import {
   deleteMultipleFromR2Bucket,
   invalidateR2StorageCache,
 } from "@/lib/r2-storage";
+import { createStudentQRPayload, generateQRDataUrl } from "@/lib/qr-generator";
 
 
 
@@ -166,8 +167,16 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
       }
     }
 
-    // Strict Requirement: QR codes are NEVER generated internally.
-    // QR codes are imported as external image assets exclusively by the Receiver.
+    // Automatic Real QR Code Generation: Each encoded student is assigned a verified QR payload
+    const canonicalQrData =
+      data.qrCodeData?.trim() ||
+      createStudentQRPayload({
+        studentId: data.studentId.trim(),
+        fullName: data.fullName.trim(),
+        rollNumber: rollNumber || "",
+        grade: data.grade.trim(),
+      });
+
     const student = await prisma.student.create({
       data: {
         studentId: data.studentId.trim(),
@@ -194,7 +203,7 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
         thumbnailPath: finalThumbnailPath,
         previewPath: finalPreviewPath,
         originalPhotoPath: finalOriginalPath,
-        qrCodeData: null, // Populated exclusively when Receiver imports external QR images
+        qrCodeData: canonicalQrData,
         senderId: session.userId || null,
         senderName: session.username || (session.role === "ADMIN" ? "Admin" : "Station Operator"),
         photoIntegrityStatus: finalPhotoPath ? "PHOTO_VERIFIED" : "PHOTO_MISSING",
@@ -202,6 +211,23 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
         batchId: data.batchId || null,
       },
     });
+
+    // Auto-create StudentQR record with real QR Data URL for instant rendering & receiver verification
+    try {
+      const qrDataUrl = await generateQRDataUrl(canonicalQrData);
+      await prisma.studentQR.create({
+        data: {
+          studentId: student.id,
+          fileName: `${student.studentId}_qr.png`,
+          imagePath: qrDataUrl,
+          mimeType: "image/png",
+          matchedMethod: "AUTO_REGISTRATION",
+          status: "MATCHED",
+        },
+      });
+    } catch (qrErr) {
+      console.warn("Notice: StudentQR auto-creation non-fatal warning:", qrErr);
+    }
 
     // Update Operator Metrics: Increment single records sent counter
     if (session.userId) {
@@ -1356,6 +1382,79 @@ export async function getRegistrationCadenceAction(): Promise<{
       dailyCadence: [],
       monthlyCadence: [],
     };
+  }
+}
+
+/**
+ * Ensures all existing student records have a real, verified QR code payload.
+ * Backfills records that currently have null or empty qrCodeData.
+ */
+export async function backfillMissingQRCodesAction(): Promise<{ success: boolean; count: number }> {
+  try {
+    const studentsWithoutQR = await prisma.student.findMany({
+      where: {
+        OR: [
+          { qrCodeData: null },
+          { qrCodeData: "" },
+        ],
+      },
+      select: {
+        id: true,
+        studentId: true,
+        fullName: true,
+        rollNumber: true,
+        grade: true,
+      },
+      take: 500,
+    });
+
+    let updated = 0;
+    for (const s of studentsWithoutQR) {
+      const qrPayload = createStudentQRPayload({
+        studentId: s.studentId,
+        fullName: s.fullName,
+        rollNumber: s.rollNumber || "",
+        grade: s.grade,
+      });
+
+      await prisma.student.update({
+        where: { id: s.id },
+        data: { qrCodeData: qrPayload },
+      });
+
+      try {
+        const qrDataUrl = await generateQRDataUrl(qrPayload);
+        await prisma.studentQR.upsert({
+          where: { id: `auto_qr_${s.id}` },
+          update: {
+            imagePath: qrDataUrl,
+            status: "MATCHED",
+          },
+          create: {
+            id: `auto_qr_${s.id}`,
+            studentId: s.id,
+            fileName: `${s.studentId}_qr.png`,
+            imagePath: qrDataUrl,
+            mimeType: "image/png",
+            matchedMethod: "AUTO_SYSTEM",
+            status: "MATCHED",
+          },
+        });
+      } catch {}
+
+      updated++;
+    }
+
+    if (updated > 0) {
+      revalidatePath("/students");
+      revalidatePath("/print-engine");
+      revalidatePath("/designer");
+    }
+
+    return { success: true, count: updated };
+  } catch (err: any) {
+    console.error("Backfill QR codes error:", err);
+    return { success: false, count: 0 };
   }
 }
 

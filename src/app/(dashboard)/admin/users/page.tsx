@@ -4,6 +4,7 @@ import { Shield, ArrowLeft, LogOut, ShieldAlert } from "lucide-react";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { logoutAction } from "@/actions/auth";
+import { getSenderTelemetryAction } from "@/actions/sender-telemetry";
 import { UsersClient } from "./client";
 
 export const metadata = {
@@ -178,6 +179,13 @@ export default async function AdminUsersPage() {
     console.warn("[AdminUsersPage] Registration cadence history error:", histErr);
   }
 
+  let initialTelemetry = null;
+  try {
+    initialTelemetry = await getSenderTelemetryAction();
+  } catch (telErr) {
+    console.warn("[AdminUsersPage] Telemetry fetch notice:", telErr);
+  }
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto text-[#080808] dark:text-[#f2f7f4]">
       {/* Top Breadcrumb & Action Bar */}
@@ -198,7 +206,7 @@ export default async function AdminUsersPage() {
             <span>Operator Provisioning &amp; RBAC Control</span>
           </h1>
           <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-1 font-mono">
-            Control institutional access privileges, provision operator credentials, and manage workstation accounts
+            Control institutional access privileges, provision operator credentials, and monitor sender velocity &amp; intervals
           </p>
         </div>
 
@@ -225,6 +233,7 @@ export default async function AdminUsersPage() {
           dailyHistory,
           monthlyHistory,
         }}
+        initialTelemetry={initialTelemetry}
       />
     </div>
   );

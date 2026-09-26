@@ -85,6 +85,15 @@ export async function POST(request: Request) {
           }
         }
 
+        const canonicalQr =
+          s.qrCodeData ||
+          JSON.stringify({
+            id: s.studentId,
+            name: s.fullName,
+            roll: s.rollNumber || "",
+            grade: s.grade || "General",
+          });
+
         const studentData = {
           fullName: s.fullName,
           phone: s.phone || "N/A",
@@ -105,7 +114,9 @@ export async function POST(request: Request) {
           thumbnailPath,
           previewPath,
           originalPhotoPath,
-          qrCodeData: s.qrCodeData || `STUDENT:${s.studentId}`,
+          qrCodeData: canonicalQr,
+          senderId: s.senderId || null,
+          senderName: s.senderName || null,
           status: s.status || "ACTIVE",
         };
 

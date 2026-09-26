@@ -17,6 +17,7 @@ import {
   LogOut,
   Bell,
   CheckCircle2,
+  Zap,
 } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import { getRecentAuditNotificationsAction } from "@/actions/audit";
@@ -355,6 +356,19 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 >
                   <Shield className="h-4 w-4 shrink-0 text-amber-500" />
                   <span>Provision Operators &amp; RBAC</span>
+                </Link>
+
+                <Link
+                  href="/admin/telemetry"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/admin/telemetry"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Zap className="h-4 w-4 shrink-0 text-[#8fe617]" />
+                  <span>Sender Telemetry &amp; Velocity</span>
                 </Link>
 
                 <Link

@@ -87,6 +87,7 @@ export default function RegisterPage() {
     sex: string;
     folderSaved?: boolean;
     supabaseUploaded?: boolean;
+    qrCodeData?: string;
   } | null>(null);
   const [autoResetTimer, setAutoResetTimer] = useState<number>(3);
 
@@ -603,6 +604,15 @@ export default function RegisterPage() {
           customFields: customFieldValues,
         };
 
+        // Real QR Code Payload: Auto-generated for instant verification & receiver sync
+        const qrPayload = JSON.stringify({
+          id: payload.studentId,
+          name: payload.fullName,
+          roll: formData.rollNumber || "",
+          grade: payload.grade,
+        });
+        payload.qrCodeData = qrPayload;
+
         // Construct standard record for IndexedDB and sync
         const record = {
           id: formData.studentId!,
@@ -622,7 +632,7 @@ export default function RegisterPage() {
           bloodType: payload.bloodType && payload.bloodType.trim() !== "Unknown" ? payload.bloodType.trim() : null,
           nationality: payload.nationality || null,
           photoPath: officialPhotoPath && !officialPhotoPath.startsWith("blob:") ? officialPhotoPath : null,
-          qrCodeData: null,
+          qrCodeData: qrPayload,
           status: payload.status || "ACTIVE",
           createdAt: new Date().toISOString(),
           customValues: Object.entries(customFieldValues).map(([k, v]) => ({
@@ -670,6 +680,7 @@ export default function RegisterPage() {
           sex: payload.sex,
           folderSaved: true,
           supabaseUploaded: true,
+          qrCodeData: qrPayload,
         });
       } catch (err: any) {
         setIsDelivering(false);
@@ -1328,18 +1339,36 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            {/* Student Preview Card */}
-            <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-3 text-left space-y-1.5 font-mono text-xs">
-              <div className="font-bold text-[#080808] dark:text-[#f2f7f4] text-sm truncate">
-                {sentSuccessfullyData.fullName}
+            {/* Student Preview Card with Real QR Code */}
+            <div className="rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] p-3 text-left space-y-2 font-mono text-xs">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-[#080808] dark:text-[#f2f7f4] text-sm truncate">
+                    {sentSuccessfullyData.fullName}
+                  </div>
+                  <div className="text-[#3f4743] dark:text-[#a4b8ad] mt-0.5">
+                    ID: <strong className="text-[#080808] dark:text-[#f2f7f4]">{sentSuccessfullyData.studentId}</strong>
+                  </div>
+                  <div className="text-[#3f4743] dark:text-[#a4b8ad]">
+                    Class: {sentSuccessfullyData.grade} • {sentSuccessfullyData.sex}
+                  </div>
+                </div>
+
+                {/* Scannable Real QR Preview */}
+                {sentSuccessfullyData.qrCodeData && (
+                  <div className="shrink-0 text-center">
+                    <img
+                      src={`/api/qr?data=${encodeURIComponent(sentSuccessfullyData.qrCodeData)}`}
+                      alt="Student QR"
+                      className="w-14 h-14 rounded-lg border border-[#8fe617]/60 bg-white p-0.5 shadow-xs"
+                    />
+                    <span className="block text-[8px] font-bold text-[#8fe617] mt-0.5">REAL QR</span>
+                  </div>
+                )}
               </div>
-              <div className="text-[#3f4743] dark:text-[#a4b8ad]">
-                ID: <strong className="text-[#080808] dark:text-[#f2f7f4]">{sentSuccessfullyData.studentId}</strong>
-              </div>
-              <div className="text-[#3f4743] dark:text-[#a4b8ad]">
-                Class: {sentSuccessfullyData.grade} • {sentSuccessfullyData.sex}
-              </div>
+
               <div className="pt-1.5 border-t border-[#dce7e1] dark:border-[#26332b] space-y-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                <div>✓ Real QR Code Auto-Encoded &amp; Assigned</div>
                 <div>✓ Host PC Backup Folder (Desktop)</div>
                 <div>✓ Supabase Cloud PostgreSQL DB</div>
                 <div>✓ Supabase Storage Bucket (&apos;student data&apos;)</div>
