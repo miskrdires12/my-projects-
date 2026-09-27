@@ -34,6 +34,7 @@ import {
   FileSpreadsheet,
   Filter,
   Trash2,
+  QrCode,
 } from "lucide-react";
 
 import JSZip from "jszip";
@@ -577,9 +578,11 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       alert("This student does not have an attached photo.");
       return;
     }
-    const cleanId = (student.studentId || "student").replace(/[/\\]/g, "_");
-    const cleanName = (student.fullName || "photo").replace(/[/\\]/g, "_");
-    const filename = `${cleanId}_${cleanName}.jpg`;
+    const cleanName = (student.fullName || student.studentId || "photo")
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .replace(/\s+/g, " ") || "Student_Portrait";
+    const filename = `${cleanName}.jpg`;
 
     try {
       const res = await fetch(student.photoPath);
@@ -596,9 +599,39 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
           URL.revokeObjectURL(url);
         } catch {}
       }, 500);
-      setExportNotice(`Downloaded photo for ${student.fullName}`);
+      setExportNotice(`Downloaded photo: ${filename}`);
     } catch {
       window.open(student.photoPath, "_blank");
+    }
+  }, []);
+
+  const handleDownloadSingleStudentQR = useCallback(async (student: any) => {
+    const cleanName = (student.fullName || student.studentId || "Student")
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .replace(/\s+/g, " ") || "Student_QR";
+    const sId = student.studentId || student.id;
+    const filename = `${cleanName}.png`;
+
+    try {
+      const res = await fetch(`/api/qr?studentId=${encodeURIComponent(sId)}&name=${encodeURIComponent(cleanName)}&download=1`);
+      if (!res.ok) throw new Error("Failed to fetch QR");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+      setExportNotice(`Downloaded QR photo: ${filename}`);
+    } catch {
+      window.open(`/api/qr?studentId=${encodeURIComponent(sId)}&name=${encodeURIComponent(cleanName)}&download=1`, "_blank");
     }
   }, []);
 
@@ -2313,6 +2346,16 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                       </button>
                     )}
 
+                    {/* 1-Click Single Student QR Photo Download */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleStudentQR(s)}
+                      className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-all cursor-pointer"
+                      title={`Download QR photo for ${s.fullName} (${s.fullName}.png)`}
+                    >
+                      <QrCode className="h-3.5 w-3.5 text-[#8fe617]" />
+                    </button>
+
                     {/* 1-Click Single Student CSV Download (Issue 3) */}
                     <button
                       type="button"
@@ -2517,9 +2560,19 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
                   type="button"
                   onClick={() => handleDownloadSingleStudentPhoto(inspectingPhotoStudent)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8fe617] text-[#062404] text-xs font-mono font-bold hover:bg-[#7ed112] transition-colors cursor-pointer shadow-xs"
+                  title={`Download portrait photo for ${inspectingPhotoStudent.fullName}`}
                 >
                   <Download className="h-3.5 w-3.5" />
                   <span>Download Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSingleStudentQR(inspectingPhotoStudent)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-500/50 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 text-xs font-mono font-bold transition-colors cursor-pointer shadow-xs"
+                  title={`Download QR photo for ${inspectingPhotoStudent.fullName}`}
+                >
+                  <QrCode className="h-3.5 w-3.5 text-sky-400" />
+                  <span>Download QR</span>
                 </button>
                 <button
                   type="button"

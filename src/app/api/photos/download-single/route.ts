@@ -53,14 +53,26 @@ export async function GET(request: NextRequest) {
 
     const cleanName = studentName
       .trim()
-      .replace(/[\\/:*?"<>|]/g, "_")
-      .replace(/\s+/g, " ") || "Student_Photo";
+      .replace(/[\\/:*?"<>|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || "Student_Portrait";
 
     const filename = `${cleanName}.jpg`;
+    // Clean ASCII fallback without quotes or illegal chars
+    const asciiFilename = cleanName.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "") + ".jpg";
+    const utf8Filename = encodeURIComponent(filename);
+    const contentDisposition = `attachment; filename="${asciiFilename}"; filename*=UTF-8''${utf8Filename}`;
 
-    // 1. Remote CDN URL (Supabase Storage)
+    const defaultHeaders = {
+      "Content-Disposition": contentDisposition,
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+      "Cache-Control": "public, max-age=86400",
+    };
+
+    // 1. Remote CDN URL (Cloudflare R2 / Supabase Storage)
     if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
-      const res = await fetch(photoPath, { signal: AbortSignal.timeout(10000) });
+      const res = await fetch(photoPath, { signal: AbortSignal.timeout(15000) });
       if (!res.ok) {
         return NextResponse.json(
           { error: `Failed to fetch image from CDN: ${res.statusText}` },
@@ -74,10 +86,9 @@ export async function GET(request: NextRequest) {
       return new Response(buffer, {
         status: 200,
         headers: {
+          ...defaultHeaders,
           "Content-Type": contentType,
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
           "Content-Length": String(buffer.length),
-          "Cache-Control": "public, max-age=3600",
         },
       });
     }
@@ -92,10 +103,9 @@ export async function GET(request: NextRequest) {
       return new Response(buffer, {
         status: 200,
         headers: {
+          ...defaultHeaders,
           "Content-Type": "image/jpeg",
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
           "Content-Length": String(buffer.length),
-          "Cache-Control": "public, max-age=3600",
         },
       });
     }
@@ -110,8 +120,8 @@ export async function GET(request: NextRequest) {
         return new Response(buffer, {
           status: 200,
           headers: {
+            ...defaultHeaders,
             "Content-Type": mime,
-            "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
             "Content-Length": String(buffer.length),
           },
         });

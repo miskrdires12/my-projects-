@@ -347,6 +347,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   });
 
   const [downloadingSingleStudentId, setDownloadingSingleStudentId] = useState<string | null>(null);
+  const [downloadingSingleQRId, setDownloadingSingleQRId] = useState<string | null>(null);
 
   // Table Column Interactive Sorting (A-Z / Z-A / Default Newest First)
   const [sortField, setSortField] = useState<keyof StudentExtended | null>(null);
@@ -792,6 +793,81 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       setTimeout(() => setSingleDownloadToast((p) => ({ ...p, show: false })), 4000);
     } finally {
       if (studentId) setDownloadingSingleStudentId(null);
+    }
+  };
+
+  // Single QR Photo Direct Download by Real Student Name
+  const handleDownloadSingleQR = async (student: StudentExtended) => {
+    const sId = student.studentId || student.id;
+    const cleanName =
+      (student.fullName || "Student")
+        .trim()
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .replace(/\s+/g, " ") || "Student_QR";
+
+    setDownloadingSingleQRId(student.id);
+    setSingleDownloadToast({
+      show: true,
+      studentName: `${cleanName} (QR)`,
+      status: "downloading",
+      message: "Fetching QR photo...",
+    });
+
+    try {
+      const downloadUrl = `/api/qr?studentId=${encodeURIComponent(sId)}&name=${encodeURIComponent(cleanName)}&download=1`;
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error("Could not fetch QR code image");
+      const blob = await response.blob();
+
+      const bytes = blob.size;
+      const mb = (bytes / (1024 * 1024)).toFixed(2);
+      const sizeFormatted =
+        bytes < 1024 * 1024
+          ? `${(bytes / 1024).toFixed(1)} KB`
+          : `${mb} MB`;
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${cleanName}.png`;
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        } catch {}
+      }, 3500);
+
+      setSingleDownloadToast({
+        show: true,
+        studentName: cleanName,
+        status: "success",
+        sizeFormatted,
+        message: `✓ Downloaded QR photo: ${cleanName}.png (${sizeFormatted})`,
+      });
+
+      setTimeout(() => {
+        setSingleDownloadToast((prev) =>
+          prev.status === "success" ? { ...prev, show: false } : prev
+        );
+      }, 4500);
+    } catch (err: any) {
+      console.warn("Direct blob QR download failed, opening browser stream:", err);
+      window.open(
+        `/api/qr?studentId=${encodeURIComponent(sId)}&name=${encodeURIComponent(cleanName)}&download=1`,
+        "_blank"
+      );
+      setSingleDownloadToast({
+        show: true,
+        studentName: cleanName,
+        status: "error",
+        message: "Triggered native browser QR download",
+      });
+      setTimeout(() => setSingleDownloadToast((p) => ({ ...p, show: false })), 4000);
+    } finally {
+      setDownloadingSingleQRId(null);
     }
   };
 
@@ -1917,6 +1993,21 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             </>
                           )}
 
+                          {/* 1-Click Single Student QR Photo Download */}
+                          <button
+                            type="button"
+                            disabled={downloadingSingleQRId === student.id}
+                            onClick={() => handleDownloadSingleQR(student)}
+                            className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-[#8fe617] transition-colors cursor-pointer disabled:opacity-50"
+                            title={`Download QR Photo (${student.fullName}.png)`}
+                          >
+                            {downloadingSingleQRId === student.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-[#8fe617]" />
+                            ) : (
+                              <QrCode className="h-4 w-4 text-[#8fe617]" />
+                            )}
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => setActiveStudent(student)}
@@ -2042,28 +2133,46 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 const singleSel = filteredStudents.find(
                   (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
                 );
-                if (!singleSel || !singleSel.photoPath) return null;
+                if (!singleSel) return null;
                 return (
-                  <button
-                    type="button"
-                    disabled={downloadingSingleStudentId === singleSel.id}
-                    onClick={() =>
-                      handleDownloadSinglePhoto(
-                        singleSel.originalPhotoPath || singleSel.photoPath!,
-                        singleSel.fullName,
-                        singleSel.id
-                      )
-                    }
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#8fe617]/50 bg-[#8fe617]/15 hover:bg-[#8fe617]/25 text-xs font-semibold text-[#8fe617] transition-colors cursor-pointer disabled:opacity-50"
-                    title={`Download photo for ${singleSel.fullName}`}
-                  >
-                    {downloadingSingleStudentId === singleSel.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8fe617]" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5 text-[#8fe617]" />
+                  <>
+                    {singleSel.photoPath && (
+                      <button
+                        type="button"
+                        disabled={downloadingSingleStudentId === singleSel.id}
+                        onClick={() =>
+                          handleDownloadSinglePhoto(
+                            singleSel.originalPhotoPath || singleSel.photoPath!,
+                            singleSel.fullName,
+                            singleSel.id
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#8fe617]/50 bg-[#8fe617]/15 hover:bg-[#8fe617]/25 text-xs font-semibold text-[#8fe617] transition-colors cursor-pointer disabled:opacity-50"
+                        title={`Download portrait photo for ${singleSel.fullName}`}
+                      >
+                        {downloadingSingleStudentId === singleSel.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8fe617]" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5 text-[#8fe617]" />
+                        )}
+                        <span>Download Photo (1)</span>
+                      </button>
                     )}
-                    <span>Download Photo (1)</span>
-                  </button>
+                    <button
+                      type="button"
+                      disabled={downloadingSingleQRId === singleSel.id}
+                      onClick={() => handleDownloadSingleQR(singleSel)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-500/50 bg-sky-500/15 hover:bg-sky-500/25 text-xs font-semibold text-sky-400 transition-colors cursor-pointer disabled:opacity-50"
+                      title={`Download QR photo for ${singleSel.fullName}`}
+                    >
+                      {downloadingSingleQRId === singleSel.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+                      ) : (
+                        <QrCode className="h-3.5 w-3.5 text-sky-400" />
+                      )}
+                      <span>Download QR Photo (1)</span>
+                    </button>
+                  </>
                 );
               })()}
 
@@ -2310,7 +2419,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
               {/* Real Scannable QR Code */}
               <div className="pt-3 border-t border-border dark:border-[#223126] flex items-center justify-between p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#161e19] border border-[#dce7e1] dark:border-[#223126]">
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   <div className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
                     <QrCode className="h-4 w-4 text-[#8fe617]" />
                     <span>Real Verified QR Code</span>
@@ -2318,22 +2427,43 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
                     Auto-encoded canonical payload
                   </div>
-                  <a
-                    href={`/api/qr?studentId=${encodeURIComponent(activeStudent.studentId)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-block text-[10px] font-bold text-[#8fe617] hover:underline pt-1"
-                  >
-                    Open Full Resolution PNG ↗
-                  </a>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={downloadingSingleQRId === activeStudent.id}
+                      onClick={() => handleDownloadSingleQR(activeStudent)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#8fe617] text-[#062404] hover:bg-[#7ecc10] transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                      title={`Download QR photo saved as ${activeStudent.fullName}.png`}
+                    >
+                      {downloadingSingleQRId === activeStudent.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[#062404]" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      <span>Download QR Photo</span>
+                    </button>
+                    <a
+                      href={`/api/qr?studentId=${encodeURIComponent(activeStudent.studentId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] font-semibold text-foreground-muted hover:text-foreground transition-colors"
+                      title="Open full resolution PNG in new tab"
+                    >
+                      Open ↗
+                    </a>
+                  </div>
                 </div>
-                <div className="text-center shrink-0">
+                <div
+                  className="text-center shrink-0 cursor-pointer group/qr p-1 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  onClick={() => handleDownloadSingleQR(activeStudent)}
+                  title={`Click to download QR photo for ${activeStudent.fullName}`}
+                >
                   <img
                     src={`/api/qr?studentId=${encodeURIComponent(activeStudent.studentId)}`}
                     alt="Student QR Code"
-                    className="w-16 h-16 rounded-xl border-2 border-[#8fe617]/60 bg-white p-1 shadow-xs"
+                    className="w-16 h-16 rounded-xl border-2 border-[#8fe617]/60 bg-white p-1 shadow-xs group-hover/qr:scale-105 transition-transform"
                   />
-                  <span className="block text-[8px] font-mono font-bold text-[#8fe617] mt-0.5">SCANNABLE</span>
+                  <span className="block text-[8px] font-mono font-bold text-[#8fe617] mt-0.5 group-hover/qr:underline">CLICK TO SAVE</span>
                 </div>
               </div>
             </div>

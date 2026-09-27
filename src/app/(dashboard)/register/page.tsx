@@ -1356,13 +1356,30 @@ export default function RegisterPage() {
 
                 {/* Scannable Real QR Preview */}
                 {sentSuccessfullyData.qrCodeData && (
-                  <div className="shrink-0 text-center">
+                  <div
+                    className="shrink-0 text-center cursor-pointer group/qr p-1 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                    onClick={() => {
+                      const cleanName = (sentSuccessfullyData.fullName || sentSuccessfullyData.studentId || "Student")
+                        .trim()
+                        .replace(/[\\/:*?"<>|]/g, "_")
+                        .replace(/\s+/g, " ") || "Student_QR";
+                      const a = document.createElement("a");
+                      a.href = `/api/qr?data=${encodeURIComponent(sentSuccessfullyData.qrCodeData!)}&name=${encodeURIComponent(cleanName)}&studentId=${encodeURIComponent(sentSuccessfullyData.studentId)}&download=1`;
+                      a.download = `${cleanName}.png`;
+                      document.body.appendChild(a);
+                      a.click();
+                      setTimeout(() => {
+                        try { document.body.removeChild(a); } catch {}
+                      }, 500);
+                    }}
+                    title={`Click to download QR photo (${sentSuccessfullyData.fullName}.png)`}
+                  >
                     <img
-                      src={`/api/qr?data=${encodeURIComponent(sentSuccessfullyData.qrCodeData)}`}
+                      src={`/api/qr?data=${encodeURIComponent(sentSuccessfullyData.qrCodeData)}&name=${encodeURIComponent(sentSuccessfullyData.fullName || "")}`}
                       alt="Student QR"
-                      className="w-14 h-14 rounded-lg border border-[#8fe617]/60 bg-white p-0.5 shadow-xs"
+                      className="w-14 h-14 rounded-lg border border-[#8fe617]/60 bg-white p-0.5 shadow-xs group-hover/qr:scale-105 transition-transform"
                     />
-                    <span className="block text-[8px] font-bold text-[#8fe617] mt-0.5">REAL QR</span>
+                    <span className="block text-[8px] font-bold text-[#8fe617] mt-0.5 group-hover/qr:underline">SAVE QR</span>
                   </div>
                 )}
               </div>
