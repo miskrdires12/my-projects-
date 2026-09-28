@@ -6,7 +6,7 @@ export const RECEIVER_STUDENT_PHOTO_FOLDER = "C:\\Users\\athede\\Desktop\\studen
 
 /**
  * Receiver student photo excel headers:
- * ["StudentID", "Name", "Sex", "Grade", "Phone", "EmergencyPhone", "@photo"]
+ * ["StudentID", "Name", "Sex", "Grade", "Phone", "EmergencyPhone", "@photo", "@qr"]
  */
 export const RECEIVER_EXCEL_HEADERS = [
   "StudentID",
@@ -16,6 +16,7 @@ export const RECEIVER_EXCEL_HEADERS = [
   "Phone",
   "EmergencyPhone",
   "@photo",
+  "@qr",
 ] as const;
 
 export interface StudentPhotoIdentity {
@@ -162,16 +163,68 @@ export function getStudentPhotoLocalPath(student: StudentPhotoIdentity, folderOv
   return `${cleanFolder}${sep}${fileName}`;
 }
 
+/**
+ * Generates the local QR code filename for a student preserving full name and spacing.
+ * Requirement:
+ * If student's name is "Yeah tarekegn", produces "Yeah tarekegn.png".
+ * Sanitizes only illegal filesystem characters (/ \ : * ? " < > |).
+ */
+export function getStudentQrFileName(student: StudentPhotoIdentity): string {
+  // 1. Format based on student's full legal name: e.g. "Yeah tarekegn" -> "Yeah tarekegn.png"
+  if (student.fullName && student.fullName.trim()) {
+    let safeName = student.fullName
+      .replace(/[/\\]/g, " - ")
+      .replace(/[:*?"<>|]/g, "")
+      .replace(/[\x00-\x1F\x7F]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    safeName = safeName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "");
+
+    if (safeName.length > 0) {
+      return `${safeName}.png`;
+    }
+  }
+
+  // 2. Fallback to studentId if available
+  if (student.studentId && student.studentId.trim()) {
+    let safeId = student.studentId
+      .replace(/[/\\]/g, " - ")
+      .replace(/[:*?"<>|]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (safeId.length > 0) {
+      return `${safeId}.png`;
+    }
+  }
+
+  return "qr.png";
+}
+
+/**
+ * Generates the exact local file path required for the @qr column:
+ * e.g. "C:\Users\athede\Desktop\students project for 17000\Yeah tarekegn.png"
+ * Uses the exact same folder path configured for photos.
+ */
+export function getStudentQrLocalPath(student: StudentPhotoIdentity, folderOverride?: string): string {
+  const fileName = getStudentQrFileName(student);
+  if (!fileName) return "";
+  const folder = folderOverride || getReceiverPhotoFolder();
+  const sep = folder.includes("/") ? "/" : "\\";
+  const cleanFolder = folder.endsWith("/") || folder.endsWith("\\") ? folder.slice(0, -1) : folder;
+  return `${cleanFolder}${sep}${fileName}`;
+}
+
 export function getReceiverExcelHeaders(includeBloodType: boolean = false): string[] {
   if (includeBloodType) {
-    return ["StudentID", "Name", "Sex", "Grade", "Phone", "EmergencyPhone", "BloodType", "@photo"];
+    return ["StudentID", "Name", "Sex", "Grade", "Phone", "EmergencyPhone", "BloodType", "@photo", "@qr"];
   }
   return [...RECEIVER_EXCEL_HEADERS];
 }
 
 /**
  * Maps a student record into receiver columns:
- * [StudentID, Name, Sex, Grade, Phone, EmergencyPhone, (BloodType?), @photo]
+ * [StudentID, Name, Sex, Grade, Phone, EmergencyPhone, (BloodType?), @photo, @qr]
  */
 export function formatStudentForReceiverExcel(
   student: {
@@ -210,6 +263,7 @@ export function formatStudentForReceiverExcel(
   }
 
   row.push(getStudentPhotoLocalPath(student));
+  row.push(getStudentQrLocalPath(student));
   return row;
 }
 

@@ -130,6 +130,7 @@ async function handleExport(options: ExportOptions) {
           { wch: 18 }, // EmergencyPhone
           { wch: 14 }, // BloodType
           { wch: 70 }, // @photo
+          { wch: 70 }, // @qr
         ]
       : [
           { wch: 18 }, // StudentID
@@ -139,6 +140,7 @@ async function handleExport(options: ExportOptions) {
           { wch: 18 }, // Phone
           { wch: 18 }, // EmergencyPhone
           { wch: 70 }, // @photo
+          { wch: 70 }, // @qr
         ];
 
     XLSX.utils.book_append_sheet(wb, ws, "Students");

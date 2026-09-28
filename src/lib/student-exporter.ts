@@ -5,6 +5,7 @@
 // ============================================================================
 
 import * as XLSX from "xlsx";
+import { getStudentPhotoLocalPath, getStudentQrLocalPath } from "./export-utils";
 
 export interface StudentExportItem {
   id: string;
@@ -54,6 +55,8 @@ export function formatStudentsForExport(
       "Residential Address": s.address || "N/A",
       "Photo Available": s.photoPath ? "YES" : "NO",
       "Photo Integrity": s.photoIntegrityStatus || (s.photoPath ? "PHOTO_VERIFIED" : "PHOTO_MISSING"),
+      "@photo": getStudentPhotoLocalPath(s),
+      "@qr": getStudentQrLocalPath(s),
       "Enrollment Status": s.status,
       "Registration Date": typeof s.createdAt === "string" ? s.createdAt : s.createdAt.toISOString().split("T")[0],
     };
@@ -95,6 +98,8 @@ export function generateExcelBuffer(
     { wch: 28 }, // Address
     { wch: 16 }, // Photo Available
     { wch: 18 }, // Photo Integrity
+    { wch: 70 }, // @photo
+    { wch: 70 }, // @qr
     { wch: 16 }, // Status
     { wch: 16 }, // Date
     ...(includeSender ? [{ wch: 24 }] : []), // Sender Station

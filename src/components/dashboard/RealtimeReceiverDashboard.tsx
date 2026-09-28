@@ -45,6 +45,7 @@ import { TelegramStagePhoto } from "@/components/common/TelegramStagePhoto";
 import {
   getReceiverCsvPrefix,
   getStudentPhotoLocalPath,
+  getStudentQrLocalPath,
   formatPhoneForReceiver,
 } from "@/lib/export-utils";
 
@@ -645,6 +646,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       "Phone",
       "Emergency Phone",
       "@photo",
+      "@qr",
       "8-Up Print Readiness",
       "Enrolled Date",
     ];
@@ -664,6 +666,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       `"${formatPhoneForReceiver(student.phone)}"`,
       `"${formatPhoneForReceiver(emergency)}"`,
       `"${getStudentPhotoLocalPath(student).replace(/"/g, '""')}"`,
+      `"${getStudentQrLocalPath(student).replace(/"/g, '""')}"`,
       student.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
       `"${student.createdAt || new Date().toISOString()}"`,
     ];
@@ -772,6 +775,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       "Phone",
       "Emergency Phone",
       "@photo",
+      "@qr",
       "8-Up Print Readiness",
       "Enrolled Date",
     ];
@@ -785,6 +789,7 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
       `"${formatPhoneForReceiver(s.phone)}"`,
       `"${formatPhoneForReceiver(s.emergencyContactPhone || s.parentPhone || "")}"`,
       `"${getStudentPhotoLocalPath(s).replace(/"/g, '""')}"`,
+      `"${getStudentQrLocalPath(s).replace(/"/g, '""')}"`,
       s.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
       `"${s.createdAt || new Date().toISOString()}"`,
     ]);

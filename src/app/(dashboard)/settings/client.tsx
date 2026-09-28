@@ -266,6 +266,11 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
       ? "Grade_10\\"
       : ""
   }Yeah tarekegn.jpg`;
+  const sampleQrPathPreview = `${receiverSettings.photoFolder.replace(/[/\\]+$/, "")}\\${
+    receiverSettings.photoFolderStructure === "by-grade"
+      ? "Grade_10\\"
+      : ""
+  }Yeah tarekegn.png`;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20 text-[#080808] dark:text-[#f2f7f4] font-sans">
@@ -643,17 +648,28 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
                 </div>
               </div>
 
-              {/* Live Preview of @photo column */}
-              <div className="rounded-2xl border border-[#8fe617]/30 bg-[#8fe617]/5 p-3.5 space-y-1.5 font-mono text-xs">
+              {/* Live Preview of @photo & @qr columns */}
+              <div className="rounded-2xl border border-[#8fe617]/30 bg-[#8fe617]/5 p-3.5 space-y-2.5 font-mono text-xs">
                 <div className="flex items-center justify-between text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-bold uppercase">
-                  <span>Excel / CSV @photo Column Live Preview</span>
-                  <span className="text-[#8fe617]">NAME ONLY (NO STUDENT ID)</span>
+                  <span>Excel / CSV @photo &amp; @qr Columns Live Preview</span>
+                  <span className="text-[#8fe617]">NAME ONLY (SAME DESKTOP PATH)</span>
                 </div>
-                <div className="text-xs font-bold text-[#080808] dark:text-[#8fe617] break-all bg-white dark:bg-[#070908] p-2.5 rounded-xl border border-[#dce7e1] dark:border-[#223126]">
-                  {samplePhotoPathPreview}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-[#8fe617] bg-[#8fe617]/10 px-1.5 py-0.5 rounded w-14 text-center">@photo</span>
+                    <div className="text-xs font-bold text-[#080808] dark:text-[#8fe617] break-all bg-white dark:bg-[#070908] p-2 rounded-xl border border-[#dce7e1] dark:border-[#223126] flex-1">
+                      {samplePhotoPathPreview}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-[#38bdf8] bg-[#38bdf8]/10 px-1.5 py-0.5 rounded w-14 text-center">@qr</span>
+                    <div className="text-xs font-bold text-[#080808] dark:text-[#38bdf8] break-all bg-white dark:bg-[#070908] p-2 rounded-xl border border-[#dce7e1] dark:border-[#223126] flex-1">
+                      {sampleQrPathPreview}
+                    </div>
+                  </div>
                 </div>
                 <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
-                  Notice: In receiver photo exports, photos are named strictly after student full names without student IDs.
+                  Notice: In receiver photo &amp; QR exports, files are named strictly after student full names in the same local directory.
                 </p>
               </div>
 
