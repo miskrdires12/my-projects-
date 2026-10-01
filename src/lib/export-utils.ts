@@ -43,23 +43,31 @@ export function formatPhoneForReceiver(phone?: string | null): string {
     cleaned = cleaned.substring(1);
   }
 
+  // If starts with 07 (e.g. 0712345678), replace leading 07 with 2517
+  if (cleaned.startsWith("07")) {
+    return "2517" + cleaned.substring(2);
+  }
+
   // If starts with 09 (e.g. 0912345678), replace leading 09 with 2519
   if (cleaned.startsWith("09")) {
     return "2519" + cleaned.substring(2);
   }
 
-  // If starts with 25109 (common typo), convert to 2519
+  // If starts with 25107 or 25109 (common typos)
+  if (cleaned.startsWith("25107")) {
+    return "2517" + cleaned.substring(5);
+  }
   if (cleaned.startsWith("25109")) {
     return "2519" + cleaned.substring(5);
   }
 
-  // If starts with 2519 already, return as is
-  if (cleaned.startsWith("2519")) {
+  // If starts with 2517 or 2519 already, return as is
+  if (cleaned.startsWith("2517") || cleaned.startsWith("2519")) {
     return cleaned;
   }
 
-  // If 9 digits starting with 9 (e.g. 912345678), prepend 251
-  if (cleaned.startsWith("9") && cleaned.length === 9) {
+  // If 9 digits starting with 7 or 9, prepend 251
+  if ((cleaned.startsWith("7") || cleaned.startsWith("9")) && cleaned.length === 9) {
     return "251" + cleaned;
   }
 

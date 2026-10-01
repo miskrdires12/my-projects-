@@ -12,27 +12,26 @@ async function main() {
   console.log("🌱 Starting Student Bridge database seeding...");
 
   // 1. Seed Roles & Users
-  const passwordHash = await bcrypt.hash("Password123!", 12);
-  const adminHash = await bcrypt.hash("AdminPassword123!", 12);
+  const passHash = await bcrypt.hash("sukuna24th", 12);
 
   const users = [
     {
-      username: "admin",
-      email: "admin@studentbridge.internal",
-      passwordHash: adminHash,
+      username: "miskrdires11",
+      email: "miskrdires11@gmail.com",
+      passwordHash: passHash,
+      role: "SUPER_ADMIN" as const,
+    },
+    {
+      username: "miskrdires1",
+      email: "miskrdires1@gmail.com",
+      passwordHash: passHash,
       role: "ADMIN" as const,
     },
     {
-      username: "sender",
-      email: "sender@studentbridge.internal",
-      passwordHash,
+      username: "miskrdires12",
+      email: "miskrdires12@gmail.com",
+      passwordHash: passHash,
       role: "SENDER" as const,
-    },
-    {
-      username: "receiver",
-      email: "receiver@studentbridge.internal",
-      passwordHash,
-      role: "RECEIVER" as const,
     },
   ];
 

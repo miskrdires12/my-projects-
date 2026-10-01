@@ -2,7 +2,7 @@
 // STUDENT BRIDGE — AUTHENTICATION & RBAC TYPE DEFINITIONS
 // ============================================================================
 
-export type UserRole = "SENDER" | "RECEIVER" | "ADMIN";
+export type UserRole = "SUPER_ADMIN" | "ADMIN" | "RECEIVER" | "SENDER";
 
 export interface SessionPayload {
   userId: string;

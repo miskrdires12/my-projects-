@@ -32,6 +32,8 @@ import {
   Link2,
   RefreshCw,
   QrCode,
+  Pencil,
+  ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -41,6 +43,7 @@ import {
   clearAllStudentsAction,
   deleteMultipleStudentsAction,
   updateStudentPhotoAction,
+  updateStudentAction,
 } from "@/actions/students";
 import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
@@ -51,43 +54,9 @@ import {
 } from "@/lib/export-utils";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 import { ResilientStudentPhoto } from "@/components/ui/ResilientStudentPhoto";
-
-interface StudentExtended {
-  id: string;
-  studentId: string;
-  fullName: string;
-  grade: string;
-  sex: string;
-  phone: string;
-  department?: string | null;
-  school?: string | null;
-  emailAddress?: string | null;
-  address?: string | null;
-  academicYear?: string | null;
-  guardianFullName?: string | null;
-  emergencyContactPhone?: string | null;
-  emergencyContactName?: string | null;
-  bloodType?: string | null;
-  nationality?: string | null;
-  dateOfBirth?: string | Date | null;
-  photoPath?: string | null;
-  thumbnailPath?: string | null;
-  previewPath?: string | null;
-  originalPhotoPath?: string | null;
-  qrCodeData?: string | null;
-  status: string;
-  batch?: { batchNumber: string; title: string } | null;
-  senderId?: string | null;
-  senderName?: string | null;
-  customValues?: {
-    value: string;
-    customField: {
-      label: string;
-    };
-  }[];
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-}
+import EditStudentModal from "@/components/students/EditStudentModal";
+import ReceiverMistakeAnalyzer from "@/components/students/ReceiverMistakeAnalyzer";
+import type { StudentExtended } from "@/types/student";
 
 interface StudentDirectoryClientProps {
   students: StudentExtended[];
@@ -306,13 +275,20 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [selectedGrade, setSelectedGrade] = useState(searchParams.get("grade") || "ALL");
   const [selectedDept, setSelectedDept] = useState(searchParams.get("department") || "ALL");
   const [selectedPhotoStatus, setSelectedPhotoStatus] = useState(searchParams.get("photoStatus") || "ALL");
+  const [selectedBranch, setSelectedBranch] = useState(searchParams.get("branch") || "ALL");
+  const [selectedSchool, setSelectedSchool] = useState(searchParams.get("school") || "ALL");
+
+  // Edit Student and Mistake Analyzer Modal States
+  const [editingStudentData, setEditingStudentData] = useState<StudentExtended | null>(null);
+  const [isMistakeAnalyzerOpen, setIsMistakeAnalyzerOpen] = useState(false);
 
   // Selection state for bulk operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeStudent, setActiveStudent] = useState<StudentExtended | null>(null);
   const [isDownloadingPhotos, setIsDownloadingPhotos] = useState(false);
+  const [isDownloadingQRs, setIsDownloadingQRs] = useState(false);
 
-  // Photo ZIP Download Progress & Real-Time MB Metrics State
+  // Photo & QR ZIP Download Progress & Real-Time MB Metrics State
   const [zipProgress, setZipProgress] = useState<{
     isOpen: boolean;
     status: "idle" | "fetching" | "compressing" | "ready" | "error";
@@ -323,6 +299,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     currentFileName: string;
     zipSizeBytes?: number;
     errorMessage?: string;
+    archiveType?: "photos" | "qrs";
   }>({
     isOpen: false,
     status: "idle",
@@ -331,6 +308,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     downloadedBytes: 0,
     speedMBps: 0,
     currentFileName: "",
+    archiveType: "photos",
   });
 
   // Single Photo Download Toast State (with MB metrics)
@@ -669,6 +647,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         speedMBps: 0,
         currentFileName: zipFileName,
         zipSizeBytes: zipBlob.size,
+        archiveType: "photos",
       });
     } catch (err: any) {
       console.error("ZIP creation error:", err);
@@ -676,9 +655,166 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         ...prev,
         status: "error",
         errorMessage: err?.message || "Failed to generate ZIP archive.",
+        archiveType: "photos",
       }));
     } finally {
       setIsDownloadingPhotos(false);
+    }
+  };
+
+  // Bulk QR Code Download with Real-Time Progress, Speed & Metrics Modal
+  const handleBulkDownloadQRs = async () => {
+    const targetStudents =
+      selectedIds.size > 0
+        ? filteredStudents.filter(
+            (s) => selectedIds.has(s.id) || (s.studentId && selectedIds.has(s.studentId))
+          )
+        : filteredStudents;
+
+    if (targetStudents.length === 0) {
+      alert("No student found to download in this view.");
+      return;
+    }
+
+    if (targetStudents.length === 1) {
+      await handleDownloadSingleQR(targetStudents[0]);
+      return;
+    }
+
+    setIsDownloadingQRs(true);
+    setZipProgress({
+      isOpen: true,
+      status: "fetching",
+      current: 0,
+      total: targetStudents.length,
+      downloadedBytes: 0,
+      speedMBps: 0,
+      currentFileName: "Connecting to student QR engine...",
+      archiveType: "qrs",
+    });
+
+    const startTime = Date.now();
+    let accumulatedBytes = 0;
+    let completedCount = 0;
+
+    try {
+      const zip = new JSZip();
+      const CONCURRENCY = 6;
+
+      for (let i = 0; i < targetStudents.length; i += CONCURRENCY) {
+        const batch = targetStudents.slice(i, i + CONCURRENCY);
+
+        await Promise.all(
+          batch.map(async (student) => {
+            const sId = student.studentId || student.id;
+            let cleanName = (student.fullName || sId || "student")
+              .replace(/[/\\]/g, " - ")
+              .replace(/[:*?"<>|]/g, "")
+              .replace(/\s+/g, " ")
+              .trim();
+            cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
+            const qrFileName = `${cleanName}.png`;
+
+            // Organize strictly into Grade and Section Folders (e.g. Grade_9/Section_A/)
+            const { gradeFolder, sectionFolder } = resolveGradeAndSection(student);
+            const targetFolder = zip.folder(gradeFolder)?.folder(sectionFolder) || zip;
+            const fullPathLabel = `${gradeFolder}/${sectionFolder}/${qrFileName}`;
+
+            try {
+              const downloadUrl = `/api/qr?studentId=${encodeURIComponent(sId)}&name=${encodeURIComponent(cleanName)}&download=1`;
+              const res = await fetch(downloadUrl);
+              if (res.ok) {
+                const blob = await res.blob();
+                accumulatedBytes += blob.size;
+                targetFolder.file(qrFileName, blob);
+              }
+            } catch (qrErr) {
+              console.warn(`Failed to package QR for ${sId}:`, qrErr);
+            } finally {
+              completedCount++;
+              const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.1);
+              const speed = (accumulatedBytes / (1024 * 1024)) / elapsedSec;
+
+              setZipProgress({
+                isOpen: true,
+                status: "fetching",
+                current: completedCount,
+                total: targetStudents.length,
+                downloadedBytes: accumulatedBytes,
+                speedMBps: Number(speed.toFixed(2)),
+                currentFileName: fullPathLabel,
+                archiveType: "qrs",
+              });
+            }
+          })
+        );
+      }
+
+      // Step 2: ZIP Compression Phase
+      setZipProgress((prev) => ({
+        ...prev,
+        status: "compressing",
+        currentFileName: "Compressing into Grade & Section QR ZIP archive...",
+      }));
+
+      const zipBlob = await zip.generateAsync(
+        {
+          type: "blob",
+          compression: "DEFLATE",
+          compressionOptions: { level: 5 },
+        },
+        (metadata) => {
+          setZipProgress((prev) => ({
+            ...prev,
+            status: "compressing",
+            currentFileName: `Compressing QR archive: ${metadata.percent.toFixed(0)}%`,
+          }));
+        }
+      );
+
+      // Step 3: Trigger Browser Download with Metrics
+      const dateTag = new Date().toISOString().split("T")[0];
+      const scopeLabel =
+        selectedIds.size > 0
+          ? `Selected_${targetStudents.length}`
+          : `All_${targetStudents.length}`;
+      const zipFileName = `Student_QRs_Grade_Section_${scopeLabel}_${dateTag}.zip`;
+
+      const url = window.URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = zipFileName;
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        } catch {}
+      }, 4000);
+
+      setZipProgress({
+        isOpen: true,
+        status: "ready",
+        current: targetStudents.length,
+        total: targetStudents.length,
+        downloadedBytes: accumulatedBytes,
+        speedMBps: 0,
+        currentFileName: zipFileName,
+        zipSizeBytes: zipBlob.size,
+        archiveType: "qrs",
+      });
+    } catch (err: any) {
+      console.error("QR ZIP creation error:", err);
+      setZipProgress((prev) => ({
+        ...prev,
+        status: "error",
+        errorMessage: err?.message || "Failed to generate QR ZIP archive.",
+        archiveType: "qrs",
+      }));
+    } finally {
+      setIsDownloadingQRs(false);
     }
   };
 
@@ -1332,6 +1468,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         const phone = (s.phone || "").toLowerCase();
         const dept = (s.department || "").toLowerCase();
         const school = (s.school || "").toLowerCase();
+        const address = (s.address || "").toLowerCase();
         const grade = (s.grade || "").toLowerCase();
         const email = (s.emailAddress || "").toLowerCase();
         const guardian = (s.guardianFullName || "").toLowerCase();
@@ -1347,6 +1484,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           phone.includes(q) ||
           dept.includes(q) ||
           school.includes(q) ||
+          address.includes(q) ||
           grade.includes(q) ||
           email.includes(q) ||
           guardian.includes(q) ||
@@ -1356,6 +1494,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           Boolean(customMatch)
         );
       });
+    }
+
+    // Filter by Branch / Location
+    if (selectedBranch && selectedBranch !== "ALL") {
+      list = list.filter((s) => (s.address || "").toLowerCase().includes(selectedBranch.toLowerCase()));
+    }
+
+    // Filter by School
+    if (selectedSchool && selectedSchool !== "ALL") {
+      list = list.filter((s) => (s.school || "").toLowerCase().includes(selectedSchool.toLowerCase()));
     }
 
     // Filter by Grade
@@ -1380,7 +1528,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }
 
     return list;
-  }, [displayStudents, searchQuery, selectedGrade, selectedDept, selectedPhotoStatus]);
+  }, [displayStudents, searchQuery, selectedGrade, selectedDept, selectedPhotoStatus, selectedBranch, selectedSchool]);
 
   const totalEffective = filteredStudents.length;
   const totalPages = Math.ceil(totalEffective / activePageSize) || 1;
@@ -1535,6 +1683,44 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           </button>
           <button
             type="button"
+            disabled={isDownloadingQRs}
+            onClick={handleBulkDownloadQRs}
+            className="h-11 px-5 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+            title="Download all student QR code cards organized into Grade & Section folders (ZIP archive)"
+          >
+            {isDownloadingQRs ? (
+              <Loader2 className="h-4 w-4 text-sky-400 animate-spin" />
+            ) : (
+              <QrCode className="h-4 w-4 text-sky-400" />
+            )}
+            <span>
+              {isDownloadingQRs
+                ? "Packaging QRs..."
+                : selectedIds.size > 0
+                ? `Download QRs ZIP (${selectedIds.size})`
+                : "Download QRs (.zip)"}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={handleClearAllStudents}
+            className="h-11 px-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Delete all data to feed fresh records"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Clear All Data</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsMistakeAnalyzerOpen(true)}
+            className="h-11 px-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
+            title="Scan student records for missing photos, slash marks, uncapitalized names, and format errors"
+          >
+            <ShieldAlert className="h-4 w-4 text-amber-500" />
+            <span>Mistake Analyzer</span>
+          </button>
+          <button
+            type="button"
             onClick={handleClearAllStudents}
             className="h-11 px-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
             title="Delete all data to feed fresh records"
@@ -1554,8 +1740,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           </button>
         </form>
 
-        {/* 3-Column Streamlined Filters Grid (QR removed) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+        {/* 5-Column Multi-Filters Grid (Grade, Branch, School, Dept, Photo) */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
           {/* Grade Filter */}
           <select
             value={selectedGrade}
@@ -1563,7 +1749,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               setSelectedGrade(e.target.value);
               applyFilters({ grade: e.target.value });
             }}
-            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3.5 text-sm text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors"
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3 text-xs text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
           >
             <option value="ALL">All Grades</option>
             {grades.map((g) => (
@@ -1573,6 +1759,41 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             ))}
           </select>
 
+          {/* Branch / Section Filter */}
+          <select
+            value={selectedBranch}
+            onChange={(e) => {
+              setSelectedBranch(e.target.value);
+              applyFilters({ branch: e.target.value });
+            }}
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3 text-xs text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
+          >
+            <option value="ALL">All Branches</option>
+            <option value="Adama">Adama Section</option>
+            <option value="Addis Ababa">Addis Ababa Section</option>
+            <option value="Mojjo">Mojjo Section</option>
+          </select>
+
+          {/* School Filter */}
+          <select
+            value={selectedSchool}
+            onChange={(e) => {
+              setSelectedSchool(e.target.value);
+              applyFilters({ school: e.target.value });
+            }}
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3 text-xs text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
+          >
+            <option value="ALL">All Schools</option>
+            <option value="Sena Yerosen">Sena Yerosen</option>
+            <option value="Debebech">Debebech</option>
+            <option value="Yacine">Yacine</option>
+            <option value="Odda">Odda</option>
+            <option value="YMS">YMS</option>
+            <option value="Adika Youth">Adika Youth</option>
+            <option value="School Of America">School Of America</option>
+            <option value="Mojjo">Mojjo</option>
+          </select>
+
           {/* Department Filter */}
           <select
             value={selectedDept}
@@ -1580,7 +1801,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               setSelectedDept(e.target.value);
               applyFilters({ department: e.target.value });
             }}
-            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3.5 text-sm text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors"
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3 text-xs text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
           >
             <option value="ALL">All Departments</option>
             {departments.map((d) => (
@@ -1597,7 +1818,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               setSelectedPhotoStatus(e.target.value);
               applyFilters({ photoStatus: e.target.value });
             }}
-            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3.5 text-sm text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors"
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3 text-xs text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
           >
             <option value="ALL">Photo: All</option>
             <option value="HAS_PHOTO">Photo: Available</option>
@@ -1716,6 +1937,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     )}
                   </button>
                 </th>
+                <th className="px-4 py-3.5">School</th>
+                <th className="px-4 py-3.5">Branch / Location</th>
                 <th className="px-4 py-3.5">Sent By</th>
                 <th className="px-4 py-3.5">Photo Status</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
@@ -1724,7 +1947,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <tbody className="divide-y divide-border dark:divide-[#223126]">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
+                  <td colSpan={12} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
                       <div className="w-16 h-16 rounded-2xl bg-surface-secondary dark:bg-[#161e19] border border-border dark:border-[#223126] flex items-center justify-center text-accent">
                         <Users className="w-8 h-8 text-[#8fe617]" />
@@ -1856,6 +2079,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
                       <td className="px-4 py-3.5 text-sm font-medium text-foreground dark:text-[#f2f7f4]">{student.grade}</td>
                       <td className="px-4 py-3.5 text-sm font-mono text-foreground-muted dark:text-[#8a9e93]">{student.phone}</td>
+
+                      {/* School Column */}
+                      <td className="px-4 py-3.5 text-sm font-semibold text-foreground dark:text-[#f2f7f4] max-w-[140px] truncate" title={student.school || "Unassigned"}>
+                        {student.school || "—"}
+                      </td>
+
+                      {/* Branch / Location Column */}
+                      <td className="px-4 py-3.5 text-sm font-mono text-foreground-muted dark:text-[#8a9e93] max-w-[120px] truncate" title={student.address || "General"}>
+                        {student.address || "General"}
+                      </td>
 
                       {/* Data Sent By Attribution */}
                       <td className="px-4 py-3.5">
@@ -2010,6 +2243,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             )}
                           </button>
 
+                          {/* 1-Click Edit Student Record */}
+                          <button
+                            type="button"
+                            onClick={() => setEditingStudentData(student)}
+                            className="rounded-lg p-2 text-sky-500 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 transition-colors cursor-pointer"
+                            title={`Edit Student Data (${student.fullName})`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => setActiveStudent(student)}
@@ -2058,6 +2301,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
+                <option value={250}>250</option>
+                <option value={500}>500</option>
               </select>
             </div>
           </div>
@@ -2192,6 +2437,22 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <Download className="h-3.5 w-3.5 text-[#8fe617]" />
                 )}
                 <span>Photos ZIP {selectedIds.size > 1 ? `(${selectedIds.size})` : "(1)"}</span>
+              </button>
+
+              {/* Download Selected QRs ZIP */}
+              <button
+                type="button"
+                onClick={handleBulkDownloadQRs}
+                disabled={isDownloadingQRs}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-800/80 bg-sky-950/60 hover:bg-sky-900/80 text-xs font-medium text-sky-300 transition-colors disabled:opacity-50 cursor-pointer"
+                title="Download selected student QR codes organized by grade and section (.zip)"
+              >
+                {isDownloadingQRs ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
+                ) : (
+                  <QrCode className="h-3.5 w-3.5 text-sky-400" />
+                )}
+                <span>QRs ZIP {selectedIds.size > 1 ? `(${selectedIds.size})` : "(1)"}</span>
               </button>
 
               {/* Batch Print 8-Up Engine */}
@@ -2561,17 +2822,23 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <div>
                   <h3 className="font-bold text-sm text-white">
                     {zipProgress.status === "ready"
-                      ? "Photos ZIP Ready!"
+                      ? zipProgress.archiveType === "qrs"
+                        ? "QR Codes ZIP Ready!"
+                        : "Photos ZIP Ready!"
                       : zipProgress.status === "compressing"
                       ? "Generating ZIP Archive..."
                       : zipProgress.status === "error"
                       ? "Download Error"
+                      : zipProgress.archiveType === "qrs"
+                      ? "Downloading Student QR Codes"
                       : "Downloading Student Portraits"}
                   </h3>
                   <p className="text-xs text-neutral-400">
                     {zipProgress.status === "ready"
                       ? "Organized in Grade & Section folders"
-                      : `${zipProgress.current} of ${zipProgress.total} portraits processed`}
+                      : `${zipProgress.current} of ${zipProgress.total} ${
+                          zipProgress.archiveType === "qrs" ? "QR codes" : "portraits"
+                        } processed`}
                   </p>
                 </div>
               </div>
@@ -2656,7 +2923,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 </div>
               ) : zipProgress.status === "error" ? (
                 <span className="text-red-400 font-sans">
-                  {zipProgress.errorMessage || "Failed to download photos."}
+                  {zipProgress.errorMessage ||
+                    (zipProgress.archiveType === "qrs"
+                      ? "Failed to download QR codes."
+                      : "Failed to download photos.")}
                 </span>
               ) : (
                 <span className="truncate">{zipProgress.currentFileName}</span>
@@ -2790,6 +3060,35 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           </div>
         </div>
       )}
+
+      {/* Edit Student Record Modal (Requirement 4) */}
+      <EditStudentModal
+        student={editingStudentData}
+        isOpen={Boolean(editingStudentData)}
+        onClose={() => setEditingStudentData(null)}
+        onSaved={(updated) => {
+          setDisplayStudents((prev) =>
+            prev.map((s) => (s.id === updated.id || s.studentId === updated.studentId ? updated : s))
+          );
+        }}
+      />
+
+      {/* Receiver Mistake & Quality Analyzer (Requirement 13 & 9) */}
+      <ReceiverMistakeAnalyzer
+        students={displayStudents}
+        isOpen={isMistakeAnalyzerOpen}
+        onClose={() => setIsMistakeAnalyzerOpen(false)}
+        onEditStudent={(s) => setEditingStudentData(s)}
+        onAutoFixName={async (s, fixedName) => {
+          const updated = { ...s, fullName: fixedName };
+          setDisplayStudents((prev) =>
+            prev.map((item) => (item.id === s.id ? updated : item))
+          );
+          updateStudentAction(s.id, { fullName: fixedName }).catch(() => {});
+          saveStudentToDB(updated as any).catch(() => {});
+          publishStudentSync("UPSERT", updated as any).catch(() => {});
+        }}
+      />
     </div>
   );
 };

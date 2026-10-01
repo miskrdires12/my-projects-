@@ -17,6 +17,8 @@ export default async function StudentsPage({
     batchId?: string;
     department?: string;
     photoStatus?: string;
+    school?: string;
+    branch?: string;
     page?: string;
     pageSize?: string;
   };
@@ -26,15 +28,23 @@ export default async function StudentsPage({
     redirect("/login");
   }
 
+  // ADMIN role is strictly restricted to controlling senders and telemetry — MUST NOT see student data or photos
+  if (session.role === "ADMIN") {
+    redirect("/admin/telemetry");
+  }
+
   const query = searchParams.q ?? "";
   const grade = searchParams.grade ?? "ALL";
   const status = searchParams.status ?? "ALL";
   const batchId = searchParams.batchId ?? "ALL";
   const department = searchParams.department ?? "ALL";
   const photoStatus = searchParams.photoStatus ?? "ALL";
+  const schoolFilter = searchParams.school ?? "ALL";
+  const branchFilter = searchParams.branch ?? "ALL";
 
   const page = Math.max(1, parseInt(searchParams.page || "1", 10));
-  const pageSize = Math.min(100, Math.max(10, parseInt(searchParams.pageSize || "25", 10)));
+  // Requirement 11: Support up to 500 students in a single page
+  const pageSize = Math.min(500, Math.max(10, parseInt(searchParams.pageSize || "25", 10)));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};
@@ -48,6 +58,7 @@ export default async function StudentsPage({
       { phone: { contains: q, mode: "insensitive" } },
       { department: { contains: q, mode: "insensitive" } },
       { school: { contains: q, mode: "insensitive" } },
+      { address: { contains: q, mode: "insensitive" } },
     ];
   }
 
@@ -55,6 +66,8 @@ export default async function StudentsPage({
   if (status !== "ALL") where.status = status;
   if (batchId !== "ALL") where.batchId = batchId;
   if (department !== "ALL") where.department = department;
+  if (schoolFilter !== "ALL") where.school = { contains: schoolFilter, mode: "insensitive" };
+  if (branchFilter !== "ALL") where.address = { contains: branchFilter, mode: "insensitive" };
 
   if (photoStatus === "HAS_PHOTO") {
     where.photoPath = { not: null };

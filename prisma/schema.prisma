@@ -477,3 +477,63 @@ model DeviceBinding {
   @@index([role])
   @@map("device_bindings")
 }
+
+// ----------------------------------------------------------------------------
+// SENDER TASK ASSIGNMENT & EFFICIENCY TRACKING (SUPER ADMIN & ADMIN)
+// ----------------------------------------------------------------------------
+
+model SenderTask {
+  id              String    @id @default(cuid())
+  title           String
+  description     String?
+  assignedToId    String    // Sender User ID
+  assignedToEmail String
+  assignedByRole  String    @default("SUPER_ADMIN") // SUPER_ADMIN | ADMIN
+  assignedByEmail String
+  school          String?
+  section         String?   // Adama | Addis Ababa | Mojjo
+  targetCount     Int       @default(100)
+  completedCount  Int       @default(0)
+  status          String    @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | CANCELLED
+  deadline        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([assignedToId])
+  @@index([status])
+  @@map("sender_tasks")
+}
+
+// ----------------------------------------------------------------------------
+// SENDER MISTAKES & RECEIVER CORRECTION AUDITING
+// ----------------------------------------------------------------------------
+
+model SenderMistake {
+  id          String   @id @default(cuid())
+  studentId   String
+  studentName String
+  senderId    String?
+  senderName  String?
+  fieldName   String
+  oldValue    String?
+  newValue    String?
+  correctedBy String?  // Receiver user email/name
+  createdAt   DateTime @default(now())
+
+  @@index([senderId])
+  @@map("sender_mistakes")
+}
+
+// ----------------------------------------------------------------------------
+// GLOBAL SYSTEM SETTINGS (CONFIGURED BY SUPER ADMIN, APPLIED TO ALL USERS)
+// ----------------------------------------------------------------------------
+
+model SystemSetting {
+  id        String   @id @default("global")
+  key       String   @unique
+  value     String   // JSON string
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}

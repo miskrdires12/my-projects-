@@ -47,12 +47,10 @@ export function formatStudentsForExport(
       "Emergency Phone": s.emergencyContactPhone || s.phone || "N/A",
       "Emergency Contact Name": s.emergencyContactName || s.guardianFullName || "N/A",
       "Guardian Full Name": s.guardianFullName || "N/A",
-      "School": s.school || "N/A",
       "Department": s.department || "N/A",
       "Academic Year": s.academicYear || "N/A",
       "Email Address": s.emailAddress || "N/A",
       "Blood Type": s.bloodType || "N/A",
-      "Residential Address": s.address || "N/A",
       "Photo Available": s.photoPath ? "YES" : "NO",
       "Photo Integrity": s.photoIntegrityStatus || (s.photoPath ? "PHOTO_VERIFIED" : "PHOTO_MISSING"),
       "@photo": getStudentPhotoLocalPath(s),
@@ -80,7 +78,7 @@ export function generateExcelBuffer(
   const rows = formatStudentsForExport(students, includeSender);
   const worksheet = XLSX.utils.json_to_sheet(rows);
 
-  // Set column widths for polished presentation
+  // Set column widths for polished presentation (School & Location excluded per requirement 7)
   worksheet["!cols"] = [
     { wch: 18 }, // Student ID
     { wch: 25 }, // Full Name
@@ -90,12 +88,10 @@ export function generateExcelBuffer(
     { wch: 18 }, // Emergency Phone
     { wch: 22 }, // Emergency Contact Name
     { wch: 22 }, // Guardian Full Name
-    { wch: 22 }, // School
     { wch: 20 }, // Department
     { wch: 14 }, // Academic Year
     { wch: 24 }, // Email
     { wch: 12 }, // Blood Type
-    { wch: 28 }, // Address
     { wch: 16 }, // Photo Available
     { wch: 18 }, // Photo Integrity
     { wch: 70 }, // @photo

@@ -115,9 +115,10 @@ export default function DashboardShell({ session, children }: DashboardShellProp
   };
 
   const role = session.role;
+  const isSuperAdmin = role === "SUPER_ADMIN" || session.username === "miskrdires11";
+  const isAdmin = role === "ADMIN" && !isSuperAdmin;
   const isSender = role === "SENDER";
   const isReceiver = role === "RECEIVER";
-  const isAdmin = role === "ADMIN";
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -126,7 +127,7 @@ export default function DashboardShell({ session, children }: DashboardShellProp
       <div>
         {/* Brand Header with Silicon Labs Logo */}
         <div className="flex h-16 items-center justify-between border-b border-[#dce7e1] dark:border-[#223126] px-5 bg-white dark:bg-[#111613]">
-          <Link href={isSender ? "/register" : "/dashboard"} onClick={closeMenu} className="flex items-center gap-3 group">
+          <Link href={isSender ? "/register" : isAdmin ? "/admin/telemetry" : "/dashboard"} onClick={closeMenu} className="flex items-center gap-3 group">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f7faf9] dark:bg-[#070908] border-2 border-[#dce7e1] dark:border-[#223126] p-1.5 shadow-xs group-hover:border-[#8fe617] group-hover:shadow-[0_0_15px_rgba(143,230,23,0.35)] transition-all overflow-hidden shrink-0">
               <img
                 src="/logo.png"
@@ -140,7 +141,13 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 <span className="text-[#080808] bg-[#8fe617] px-1 rounded text-xs font-black">LABS</span>
               </div>
               <div className="text-[10px] uppercase tracking-wider font-mono font-semibold text-[#6b7771] dark:text-[#8a9e93]">
-                {isSender ? "Sender Workstation" : isReceiver ? "Receiver Facility" : "Admin Console"}
+                {isSuperAdmin
+                  ? "Super Admin Console"
+                  : isAdmin
+                  ? "Sender Supervision Admin"
+                  : isSender
+                  ? "Sender Workstation"
+                  : "Receiver Facility"}
               </div>
             </div>
           </Link>
@@ -269,12 +276,12 @@ export default function DashboardShell({ session, children }: DashboardShellProp
             </div>
           )}
 
-          {/* ADMIN ENVIRONMENT - Unified Master Operations & System Administration */}
-          {isAdmin && (
+          {/* SUPER ADMIN ENVIRONMENT — Unrestricted Master Control */}
+          {isSuperAdmin && (
             <div className="space-y-1.5 pt-2 border-t border-[#dce7e1] dark:border-[#223126]">
               <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 pb-1">
                 <Shield className="h-3 w-3 text-[#8fe617]" />
-                <span>Institutional Administrator</span>
+                <span>Super Administrator (Full System Control)</span>
               </div>
 
               {/* Core Operations Console */}
@@ -343,19 +350,19 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 <span>Student Registration</span>
               </Link>
 
-              {/* Administrative Privileges */}
+              {/* Administrative Control */}
               <div className="pt-2 mt-2 border-t border-[#dce7e1] dark:border-[#223126] space-y-1.5">
                 <Link
-                  href="/admin/users"
+                  href="/admin/tasks"
                   onClick={closeMenu}
                   className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
-                    pathname === "/admin/users"
+                    pathname === "/admin/tasks"
                       ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
                       : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
                   }`}
                 >
-                  <Shield className="h-4 w-4 shrink-0 text-amber-500" />
-                  <span>Provision Operators &amp; RBAC</span>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <span>Task Giving &amp; Efficiency</span>
                 </Link>
 
                 <Link
@@ -369,6 +376,32 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                 >
                   <Zap className="h-4 w-4 shrink-0 text-[#8fe617]" />
                   <span>Sender Telemetry &amp; Velocity</span>
+                </Link>
+
+                <Link
+                  href="/admin/reports"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/admin/reports"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Database className="h-4 w-4 shrink-0 text-cyan-400" />
+                  <span>Daily / Weekly / Monthly Reports</span>
+                </Link>
+
+                <Link
+                  href="/admin/users"
+                  onClick={closeMenu}
+                  className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                    pathname === "/admin/users"
+                      ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                      : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                  }`}
+                >
+                  <Shield className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span>Provision Operators &amp; RBAC</span>
                 </Link>
 
                 <Link
@@ -394,9 +427,87 @@ export default function DashboardShell({ session, children }: DashboardShellProp
                   }`}
                 >
                   <Settings className="h-4 w-4 shrink-0 text-emerald-500" />
-                  <span>Admin System Settings</span>
+                  <span>Global System Settings</span>
                 </Link>
               </div>
+            </div>
+          )}
+
+          {/* ADMIN ENVIRONMENT — Strictly Sender Supervision Only (No Student Data / Photos) */}
+          {isAdmin && (
+            <div className="space-y-1.5 pt-2 border-t border-[#dce7e1] dark:border-[#223126]">
+              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-bold flex items-center gap-1.5 pb-1">
+                <Shield className="h-3 w-3 text-amber-500" />
+                <span>Sender Supervisor Admin</span>
+              </div>
+              <p className="px-3 text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono leading-tight">
+                Restricted to controlling senders, assigning tasks &amp; viewing status only.
+              </p>
+
+              <Link
+                href="/admin/telemetry"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/admin/telemetry"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Zap className="h-4 w-4 shrink-0 text-[#8fe617]" />
+                <span>Sender Telemetry &amp; Status</span>
+              </Link>
+
+              <Link
+                href="/admin/tasks"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/admin/tasks"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span>Task Giving &amp; Progress</span>
+              </Link>
+
+              <Link
+                href="/admin/reports"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/admin/reports"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Database className="h-4 w-4 shrink-0 text-cyan-400" />
+                <span>Daily / Weekly / Monthly Reports</span>
+              </Link>
+
+              <Link
+                href="/sender/receipts"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/sender/receipts"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-400" />
+                <span>Sender Audit Receipts</span>
+              </Link>
+
+              <Link
+                href="/settings"
+                onClick={closeMenu}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 transition-all cool-btn-hover ${
+                  pathname === "/settings"
+                    ? "bg-[#8fe617] text-[#062404] font-bold shadow-[0_0_15px_rgba(143,230,23,0.35)] scale-[1.01]"
+                    : "text-[#3f4743] dark:text-[#a4b8ad] hover:bg-[#eef5f1] dark:hover:bg-[#161d19] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                <Settings className="h-4 w-4 shrink-0 text-emerald-500" />
+                <span>Admin Settings</span>
+              </Link>
             </div>
           )}
         </nav>

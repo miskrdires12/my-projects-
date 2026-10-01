@@ -9,6 +9,40 @@ import type { UserRole, PermissionAction } from "@/types/auth";
  * Security principle: Least Privilege. All operations are denied by default.
  */
 const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionAction[]> = {
+  SUPER_ADMIN: [
+    "dashboard:view",
+    "student:create",
+    "student:read",
+    "student:update",
+    "student:delete",
+    "student:archive",
+    "student:bulk_import",
+    "student:export",
+    "student:photo_capture",
+    "student:photo_upload",
+    "student:qr_generate",
+    "student:qr_scan",
+    "print:generate",
+    "print:template_edit",
+    "user:create",
+    "user:read",
+    "user:update",
+    "user:delete",
+    "user:role_assign",
+    "system:metrics_read",
+    "system:audit_read",
+    "database:manage",
+    "settings:update",
+  ],
+  ADMIN: [
+    // Admin is strictly restricted to controlling senders, sender tasks, and sender telemetry.
+    // Prohibited from accessing student data and photos.
+    "dashboard:view",
+    "user:read",
+    "system:metrics_read",
+    "system:audit_read",
+    "settings:update",
+  ],
   SENDER: [
     "dashboard:view",
     "student:create",
@@ -36,31 +70,6 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionAction[]> = {
     "student:qr_scan",       // External QR image import & matching
     "print:generate",
     "print:template_edit",   // ID card designer & template versioning
-    "settings:update",
-  ],
-  ADMIN: [
-    "dashboard:view",
-    "student:create",
-    "student:read",
-    "student:update",
-    "student:delete",
-    "student:archive",
-    "student:bulk_import",
-    "student:export",
-    "student:photo_capture",
-    "student:photo_upload",
-    "student:qr_generate",
-    "student:qr_scan",
-    "print:generate",
-    "print:template_edit",
-    "user:create",
-    "user:read",
-    "user:update",
-    "user:delete",
-    "user:role_assign",
-    "system:metrics_read",
-    "system:audit_read",
-    "database:manage",
     "settings:update",
   ],
 } as const;
@@ -99,24 +108,44 @@ export function canAccessRoute(role: UserRole | undefined | null, pathname: stri
     return false;
   }
 
-  // Admin has unrestricted access to all routes
-  if (role === "ADMIN") {
+  // Super Admin has full unrestricted master access across the entire system
+  if (role === "SUPER_ADMIN") {
     return true;
+  }
+
+  // ADMIN: Controls ONLY senders and their status. Strictly blocked from seeing student data & photos!
+  if (role === "ADMIN") {
+    if (
+      pathname.startsWith("/students") ||
+      pathname.startsWith("/designer") ||
+      pathname.startsWith("/bulker") ||
+      pathname.startsWith("/print-engine") ||
+      pathname.startsWith("/receiver") ||
+      pathname.startsWith("/admin/database")
+    ) {
+      return false; // Prohibited from accessing student data, student photos, or raw database
+    }
+    // Can access sender telemetry, tasks, sender reports, receipts, and settings
+    return (
+      pathname === "/" ||
+      pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/sender") ||
+      pathname.startsWith("/settings")
+    );
   }
 
   // ── STRICT ADMIN-ONLY routes (Operator Provisioning, RBAC, Database & logs) ───────
   if (pathname.startsWith("/admin")) {
-    return false; // Strictly ADMIN only
+    return false;
   }
 
   // ── SENDER-ONLY routes ─────────────────────────────────────────────────
-  // Student registration, photo folder matching, dispatch batches, receipts
   if (pathname.startsWith("/register") || pathname.startsWith("/sender")) {
     return role === "SENDER";
   }
 
   // ── RECEIVER-ONLY routes ───────────────────────────────────────────────
-  // Excel importer, QR importer, photo download ZIP, ID designer, Bulker, Print Engine
   if (
     pathname.startsWith("/receiver") ||
     pathname.startsWith("/designer") ||
@@ -127,7 +156,6 @@ export function canAccessRoute(role: UserRole | undefined | null, pathname: stri
   }
 
   // ── SHARED AUTHENTICATED routes ────────────────────────────────────────
-  // Dashboard, Student Directory, & Settings — all operational roles have access to their scoped view
   if (
     pathname === "/" ||
     pathname.startsWith("/dashboard") ||
@@ -137,6 +165,5 @@ export function canAccessRoute(role: UserRole | undefined | null, pathname: stri
     return true;
   }
 
-  // Default: deny unknown routes
   return false;
 }

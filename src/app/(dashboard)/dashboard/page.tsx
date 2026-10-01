@@ -18,10 +18,15 @@ export default async function DashboardPage({
   const isSender = role === "SENDER";
 
   // ──────────────────────────────────────────────────────────────────────────
-  // SENDER PLATFORM REDIRECT (Only Registration & Settings)
+  // SENDER & ADMIN PLATFORM REDIRECTS
+  // Senders redirect to registration station; Admin strictly supervises senders
   // ──────────────────────────────────────────────────────────────────────────
   if (isSender) {
     redirect("/register");
+  }
+
+  if (role === "ADMIN") {
+    redirect("/admin/telemetry");
   }
 
   // ──────────────────────────────────────────────────────────────────────────

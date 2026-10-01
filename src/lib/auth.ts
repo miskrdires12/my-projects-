@@ -135,8 +135,20 @@ export async function login(credentials: {
 }): Promise<LoginResponse> {
   const trimmed = credentials.emailOrUsername.trim().toLowerCase();
 
-  const ADMIN_EMAIL = "miskrdires11@gmail.com";
-  const ADMIN_PASS = "sukuna24th";
+  // Pre-provisioned institution roles specified:
+  // 1. miskrdires11@gmail.com / sukuna24th -> SUPER_ADMIN
+  // 2. miskrdires1@gmail.com / sukuna24th -> ADMIN
+  // 3. miskrdires12@gmail.com / sukuna24th -> SENDER
+  const PRE_PROVISIONED: Record<string, { email: string; pass: string; role: UserRole; username: string }> = {
+    "miskrdires11@gmail.com": { email: "miskrdires11@gmail.com", pass: "sukuna24th", role: "SUPER_ADMIN", username: "miskrdires11" },
+    "miskrdires11": { email: "miskrdires11@gmail.com", pass: "sukuna24th", role: "SUPER_ADMIN", username: "miskrdires11" },
+    "miskrdires1@gmail.com": { email: "miskrdires1@gmail.com", pass: "sukuna24th", role: "ADMIN", username: "miskrdires1" },
+    "miskrdires1": { email: "miskrdires1@gmail.com", pass: "sukuna24th", role: "ADMIN", username: "miskrdires1" },
+    "miskrdires12@gmail.com": { email: "miskrdires12@gmail.com", pass: "sukuna24th", role: "SENDER", username: "miskrdires12" },
+    "miskrdires12": { email: "miskrdires12@gmail.com", pass: "sukuna24th", role: "SENDER", username: "miskrdires12" },
+  };
+
+  const preConfig = PRE_PROVISIONED[trimmed];
 
   // Reject default demo credentials
   const isDefaultDemoAttempt =
@@ -154,14 +166,12 @@ export async function login(credentials: {
     };
   }
 
-  const isAdminAttempt = trimmed === ADMIN_EMAIL || trimmed === "miskrdires11";
-
   let user: any = null;
   try {
     user = await prisma.user.findFirst({
       where: {
         OR: [
-          { email: { equals: trimmed, mode: "insensitive" } },
+          { email: { equals: preConfig ? preConfig.email : trimmed, mode: "insensitive" } },
           { username: { equals: trimmed, mode: "insensitive" } },
         ],
       },
@@ -174,14 +184,23 @@ export async function login(credentials: {
   if (user) {
     let isValid = false;
 
-    if (isAdminAttempt) {
-      isValid = credentials.passwordPlain === ADMIN_PASS;
+    if (preConfig) {
+      isValid = credentials.passwordPlain === preConfig.pass;
       if (!isValid) {
         try {
           isValid = await verifyPassword(credentials.passwordPlain, user.passwordHash);
         } catch {
           isValid = false;
         }
+      }
+      // Guarantee the user's role in DB matches pre-provisioned specification
+      if (isValid && user.role !== preConfig.role) {
+        try {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { role: preConfig.role },
+          });
+        } catch {}
       }
     } else {
       try {
@@ -195,7 +214,7 @@ export async function login(credentials: {
       return { success: false, error: "Invalid credentials" };
     }
 
-    const targetRole: UserRole = user.role as UserRole;
+    const targetRole: UserRole = (preConfig ? preConfig.role : user.role) as UserRole;
     const targetEmail: string = user.email;
 
     // 1 Device = 1 Role Hardware Enforcement:
@@ -213,7 +232,6 @@ export async function login(credentials: {
             };
           }
         } else {
-          // Permanently bind this physical device to the first role used
           await prisma.deviceBinding.create({
             data: {
               deviceId: credentials.deviceId,
@@ -228,7 +246,7 @@ export async function login(credentials: {
       }
     }
 
-    // Single-Device User Lock Check (strictly enforced for all accounts, including Admin):
+    // Single-Device User Lock Check
     if (
       user.boundDeviceId &&
       credentials.deviceId &&
@@ -256,12 +274,12 @@ export async function login(credentials: {
         data: updateData,
       });
 
-      // Record Work Session for Admin telemetry
+      // Record Work Session for telemetry
       await prisma.userWorkSession.create({
         data: {
           userId: user.id,
           userEmail: user.email,
-          role: user.role,
+          role: targetRole,
           deviceId: credentials.deviceId || "unknown",
           deviceInfo: credentials.deviceInfo || user.boundDeviceInfo || "Browser Device",
           startedAt: new Date(),
@@ -276,7 +294,7 @@ export async function login(credentials: {
       userId: user.id,
       username: user.username,
       email: user.email,
-      role: user.role as UserRole,
+      role: targetRole,
     };
 
     const token = await signSessionToken(sessionPayload);
@@ -291,15 +309,13 @@ export async function login(credentials: {
           entityId: user.id,
           ipAddress: credentials.ipAddress,
           metadata: JSON.stringify({
-            role: user.role,
+            role: targetRole,
             deviceId: credentials.deviceId,
             deviceInfo: credentials.deviceInfo,
           }),
         },
       });
-    } catch {
-      // Non-fatal
-    }
+    } catch {}
 
     return {
       success: true,
@@ -307,13 +323,13 @@ export async function login(credentials: {
     };
   }
 
-  // 2. Master Admin Seed / Fallback if not yet in database
-  if (isAdminAttempt && credentials.passwordPlain === ADMIN_PASS) {
-    const adminPayload: Omit<SessionPayload, "iat" | "exp"> = {
-      userId: "master-admin",
-      username: "miskrdires11",
-      email: ADMIN_EMAIL,
-      role: "ADMIN",
+  // 2. Pre-provisioned user fallback / self-healing bootstrap if not yet in database
+  if (preConfig && credentials.passwordPlain === preConfig.pass) {
+    const payload: Omit<SessionPayload, "iat" | "exp"> = {
+      userId: `user-${preConfig.username}`,
+      username: preConfig.username,
+      email: preConfig.email,
+      role: preConfig.role,
     };
 
     // 1 Device = 1 Role Hardware Enforcement:
@@ -323,19 +339,17 @@ export async function login(credentials: {
           where: { deviceId: credentials.deviceId },
         });
 
-        if (existingBinding) {
-          if (existingBinding.role !== "ADMIN") {
-            return {
-              success: false,
-              error: `ACCESS REJECTED (1 DEVICE = 1 ROLE): This physical device is locked exclusively to '${existingBinding.role}' operations. Logins with 'ADMIN' are strictly prohibited on this physical device.`,
-            };
-          }
-        } else {
+        if (existingBinding && existingBinding.role !== preConfig.role) {
+          return {
+            success: false,
+            error: `ACCESS REJECTED (1 DEVICE = 1 ROLE): This physical device is locked exclusively to '${existingBinding.role}' operations. Logins with '${preConfig.role}' are strictly prohibited on this physical device.`,
+          };
+        } else if (!existingBinding) {
           await prisma.deviceBinding.create({
             data: {
               deviceId: credentials.deviceId,
-              role: "ADMIN",
-              boundEmail: ADMIN_EMAIL,
+              role: preConfig.role,
+              boundEmail: preConfig.email,
               deviceInfo: credentials.deviceInfo || "Registered Device",
             },
           });
@@ -345,39 +359,37 @@ export async function login(credentials: {
       }
     }
 
-    const token = await signSessionToken(adminPayload);
+    const token = await signSessionToken(payload);
     await setSessionCookie(token);
 
     try {
-      const hash = await hashPassword(ADMIN_PASS);
+      const hash = await hashPassword(preConfig.pass);
       await prisma.user.upsert({
-        where: { email: ADMIN_EMAIL },
+        where: { email: preConfig.email },
         update: {
           passwordHash: hash,
-          role: "ADMIN",
+          role: preConfig.role,
           lastLoginAt: new Date(),
           boundDeviceId: credentials.deviceId || undefined,
           boundDeviceInfo: credentials.deviceInfo || undefined,
         },
         create: {
-          id: "master-admin",
-          username: "miskrdires11",
-          email: ADMIN_EMAIL,
+          id: `user-${preConfig.username}`,
+          username: preConfig.username,
+          email: preConfig.email,
           passwordHash: hash,
-          role: "ADMIN",
+          role: preConfig.role,
           boundDeviceId: credentials.deviceId || null,
           boundDeviceInfo: credentials.deviceInfo || null,
           lastLoginAt: new Date(),
           workSessionCount: 1,
         },
       });
-    } catch {
-      // Non-fatal
-    }
+    } catch {}
 
     return {
       success: true,
-      user: adminPayload,
+      user: payload,
     };
   }
 

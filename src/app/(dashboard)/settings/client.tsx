@@ -23,6 +23,8 @@ import {
   Camera,
   School,
   Sliders,
+  Globe,
+  Loader2,
 } from "lucide-react";
 import {
   getStudentCountFromDB,
@@ -31,6 +33,17 @@ import {
 import { clearAllStudentsAction } from "@/actions/students";
 import { publishStudentSync } from "@/lib/sync-client";
 import { RECEIVER_STUDENT_PHOTO_FOLDER } from "@/lib/export-utils";
+import {
+  getGlobalSystemSettingsAction,
+  updateGlobalSystemSettingsAction,
+  GlobalSystemSettings,
+} from "@/actions/settings";
+
+const SCHOOL_SECTIONS = {
+  Adama: ["Sena Yerosen", "Debebech", "Yacine", "Odda"],
+  "Addis Ababa": ["YMS", "Adika Youth", "School Of America"],
+  Mojjo: ["Mojjo"],
+};
 
 export interface ReceiverSettings {
   photoFolder: string;
@@ -86,18 +99,33 @@ interface SettingsClientProps {
 }
 
 export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }: SettingsClientProps) {
+  const isSuperAdmin = userRole === "SUPER_ADMIN";
   const isSenderRole = userRole === "SENDER";
   const isReceiverRole = userRole === "RECEIVER";
-  const isAdminRole = userRole === "ADMIN";
+  const isAdminOnly = userRole === "ADMIN";
+  const isAdminRole = isAdminOnly || isSuperAdmin;
 
-  // Tab State for Admin: "receiver" | "sender" | "maintenance"
-  const [adminTab, setAdminTab] = useState<"receiver" | "sender" | "maintenance">(
-    isSenderRole ? "sender" : "receiver"
+  // Tab State: "global" | "receiver" | "sender" | "maintenance"
+  const [adminTab, setAdminTab] = useState<"global" | "receiver" | "sender" | "maintenance">(
+    isSuperAdmin ? "global" : isSenderRole ? "sender" : isAdminOnly ? "sender" : "receiver"
   );
 
   // Settings States
   const [receiverSettings, setReceiverSettings] = useState<ReceiverSettings>(DEFAULT_RECEIVER_SETTINGS);
   const [senderSettings, setSenderSettings] = useState<SenderSettings>(DEFAULT_SENDER_SETTINGS);
+  const [globalSettings, setGlobalSettings] = useState<GlobalSystemSettings>({
+    defaultGrade: "10",
+    defaultAcademicYear: "2026-2027",
+    defaultSchool: "Sena Yerosen",
+    defaultSection: "Adama",
+    enforceAutoCapitalize: true,
+    enforceSlashRejection: true,
+    enforcePhonePrefix2517: true,
+    requirePhotoConfirmReminder: true,
+    defaultPageSize: 100,
+  });
+  const [savingGlobal, setSavingGlobal] = useState(false);
+  const [globalSavedSuccess, setGlobalSavedSuccess] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [studentCount, setStudentCount] = useState<number>(0);
   const [isClearingImmediate, setIsClearingImmediate] = useState(false);
@@ -105,6 +133,9 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
   // Load saved configurations on mount
   useEffect(() => {
     try {
+      getGlobalSystemSettingsAction().then((gs) => {
+        if (gs) setGlobalSettings(gs);
+      }).catch(() => {});
       const isDark = document.documentElement.classList.contains("dark");
       const savedTheme = (localStorage.getItem("sb_theme") as "light" | "dark") || (isDark ? "dark" : "light");
 
@@ -199,6 +230,23 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch {
       alert("Failed to save sender settings to local storage.");
+    }
+  };
+
+  const handleSaveGlobalSettings = async () => {
+    setSavingGlobal(true);
+    try {
+      const res = await updateGlobalSystemSettingsAction(globalSettings);
+      if (res.success) {
+        setGlobalSavedSuccess(true);
+        setTimeout(() => setGlobalSavedSuccess(false), 3000);
+      } else {
+        alert(res.error || "Failed to save global system settings.");
+      }
+    } catch (err: any) {
+      alert("Failed to update global settings: " + (err?.message || "Unknown error"));
+    } finally {
+      setSavingGlobal(false);
     }
   };
 
@@ -323,36 +371,56 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            disabled={savingGlobal}
             onClick={() => {
-              if (isSenderRole || (isAdminRole && adminTab === "sender")) {
+              if (adminTab === "global") {
+                handleSaveGlobalSettings();
+              } else if (isSenderRole || (isAdminRole && adminTab === "sender")) {
                 handleSaveSenderSettings();
               } else {
                 handleSaveReceiverSettings();
               }
             }}
-            className="flex items-center gap-2 rounded-xl bg-[#8fe617] px-5 py-2 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] shadow-[0_0_20px_rgba(143,230,23,0.35)] transition-all cursor-pointer"
+            className="flex items-center gap-2 rounded-xl bg-[#8fe617] px-5 py-2 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] shadow-[0_0_20px_rgba(143,230,23,0.35)] transition-all cursor-pointer disabled:opacity-50"
           >
-            <Save className="h-4 w-4 stroke-[2.5]" />
-            <span>Save Preferences</span>
+            {savingGlobal ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 stroke-[2.5]" />}
+            <span>{adminTab === "global" ? (savingGlobal ? "Saving Platform..." : "Save Global Settings") : "Save Preferences"}</span>
           </button>
         </div>
       </div>
 
-      {/* Admin Tab Switcher (Visible only when logged in as ADMIN) */}
+      {/* Super Admin & Admin Tab Switcher */}
       {isAdminRole && (
-        <div className="flex items-center gap-2 border-b border-[#dce7e1] dark:border-[#223126] pb-3">
-          <button
-            type="button"
-            onClick={() => setAdminTab("receiver")}
-            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              adminTab === "receiver"
-                ? "bg-[#8fe617] text-[#062404] shadow-xs"
-                : "border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#6b7771] dark:text-[#8a9e93]"
-            }`}
-          >
-            <Printer className="h-3.5 w-3.5" />
-            <span>Receiver Production Settings</span>
-          </button>
+        <div className="flex items-center gap-2 border-b border-[#dce7e1] dark:border-[#223126] pb-3 flex-wrap">
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setAdminTab("global")}
+              className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                adminTab === "global"
+                  ? "bg-[#8fe617] text-[#062404] shadow-xs"
+                  : "border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#6b7771] dark:text-[#8a9e93]"
+              }`}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span>Global Platform Settings (All Users)</span>
+            </button>
+          )}
+
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setAdminTab("receiver")}
+              className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                adminTab === "receiver"
+                  ? "bg-[#8fe617] text-[#062404] shadow-xs"
+                  : "border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#6b7771] dark:text-[#8a9e93]"
+              }`}
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span>Receiver Production Settings</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -367,18 +435,28 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
             <span>Sender Station Settings</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setAdminTab("maintenance")}
-            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              adminTab === "maintenance"
-                ? "bg-[#8fe617] text-[#062404] shadow-xs"
-                : "border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#6b7771] dark:text-[#8a9e93]"
-            }`}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>Database &amp; Roster Maintenance</span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setAdminTab("maintenance")}
+              className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                adminTab === "maintenance"
+                  ? "bg-[#8fe617] text-[#062404] shadow-xs"
+                  : "border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#6b7771] dark:text-[#8a9e93]"
+              }`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Database &amp; Roster Maintenance</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Global Saved Notification */}
+      {globalSavedSuccess && (
+        <div className="rounded-2xl border border-[#8fe617] bg-[#8fe617]/15 p-4 flex items-center gap-3 text-xs font-mono font-bold text-[#080808] dark:text-[#8fe617] shadow-sm animate-in fade-in duration-200">
+          <CheckCircle2 className="h-5 w-5 stroke-[2.5] text-[#8fe617]" />
+          <span>Global system settings saved successfully! All platform users will inherit these configurations.</span>
         </div>
       )}
 
@@ -387,6 +465,227 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
         <div className="rounded-2xl border border-[#8fe617] bg-[#8fe617]/15 p-4 flex items-center gap-3 text-xs font-mono font-bold text-[#080808] dark:text-[#8fe617] shadow-sm animate-in fade-in duration-200">
           <CheckCircle2 className="h-5 w-5 stroke-[2.5] text-[#8fe617]" />
           <span>Workstation preferences saved and applied immediately across active sessions.</span>
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────────── */}
+      {/* GLOBAL PLATFORM SETTINGS (SUPER ADMIN ONLY — APPLIES TO ALL USERS)         */}
+      {/* ────────────────────────────────────────────────────────────────────────── */}
+      {isSuperAdmin && adminTab === "global" && (
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-[#8fe617]/40 dark:border-[#8fe617]/30 bg-white dark:bg-[#111613] p-6 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
+                  <Globe className="h-5 w-5 text-[#8fe617]" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2">
+                    <span>Global Platform Configuration</span>
+                    <span className="text-[10px] bg-[#8fe617] text-[#062404] px-2 py-0.5 rounded font-black tracking-widest">
+                      SYSTEM-WIDE
+                    </span>
+                  </h2>
+                  <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+                    Modifications made here immediately apply to all Senders, Receivers, and Admins across every workstation.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveGlobalSettings}
+                disabled={savingGlobal}
+                className="flex items-center gap-2 rounded-xl bg-[#8fe617] px-4 py-2 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] shadow-[0_0_20px_rgba(143,230,23,0.3)] transition-all cursor-pointer disabled:opacity-50"
+              >
+                {savingGlobal ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span>Save to All Users</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+              {/* Default Section */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase tracking-wider block">
+                  Default Intake Section / Branch
+                </label>
+                <select
+                  value={globalSettings.defaultSection}
+                  onChange={(e) => {
+                    const sec = e.target.value;
+                    const availableSchools = SCHOOL_SECTIONS[sec as keyof typeof SCHOOL_SECTIONS] || [];
+                    setGlobalSettings((prev) => ({
+                      ...prev,
+                      defaultSection: sec,
+                      defaultSchool: availableSchools[0] || prev.defaultSchool,
+                    }));
+                  }}
+                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-hidden focus:border-[#8fe617]"
+                >
+                  <option value="Adama">Adama</option>
+                  <option value="Addis Ababa">Addis Ababa</option>
+                  <option value="Mojjo">Mojjo</option>
+                </select>
+                <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                  Default branch pre-selected on student intake forms.
+                </p>
+              </div>
+
+              {/* Default School */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase tracking-wider block">
+                  Default School Name
+                </label>
+                <select
+                  value={globalSettings.defaultSchool}
+                  onChange={(e) => setGlobalSettings((prev) => ({ ...prev, defaultSchool: e.target.value }))}
+                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-hidden focus:border-[#8fe617]"
+                >
+                  {(SCHOOL_SECTIONS[globalSettings.defaultSection as keyof typeof SCHOOL_SECTIONS] || []).map((sch) => (
+                    <option key={sch} value={sch}>
+                      {sch}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                  School dropdown defaults to this institution.
+                </p>
+              </div>
+
+              {/* Default Grade */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase tracking-wider block">
+                  Default Academic Grade
+                </label>
+                <select
+                  value={globalSettings.defaultGrade}
+                  onChange={(e) => setGlobalSettings((prev) => ({ ...prev, defaultGrade: e.target.value }))}
+                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-hidden focus:border-[#8fe617]"
+                >
+                  {["Grade 9", "Grade 10", "Grade 11", "Grade 12", "Kg 1", "Kg 2", "Kg 3", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8"].map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Academic Year */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase tracking-wider block">
+                  Academic Year
+                </label>
+                <input
+                  type="text"
+                  value={globalSettings.defaultAcademicYear}
+                  onChange={(e) => setGlobalSettings((prev) => ({ ...prev, defaultAcademicYear: e.target.value }))}
+                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-hidden focus:border-[#8fe617]"
+                />
+              </div>
+
+              {/* Default Directory Page Size */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase tracking-wider block">
+                  Default Directory Page Size
+                </label>
+                <select
+                  value={globalSettings.defaultPageSize}
+                  onChange={(e) => setGlobalSettings((prev) => ({ ...prev, defaultPageSize: Number(e.target.value) }))}
+                  className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-hidden focus:border-[#8fe617]"
+                >
+                  <option value={50}>50 Students</option>
+                  <option value={100}>100 Students</option>
+                  <option value={250}>250 Students</option>
+                  <option value={500}>500 Students (High-Density)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Global Enforcements / Toggles */}
+            <div className="border-t border-[#eef5f1] dark:border-[#1c261e] pt-5 space-y-4">
+              <h3 className="text-xs font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                Global Platform Enforcements
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Auto Capitalize */}
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                  <input
+                    type="checkbox"
+                    id="enforceAutoCap"
+                    checked={globalSettings.enforceAutoCapitalize}
+                    onChange={(e) => setGlobalSettings((prev) => ({ ...prev, enforceAutoCapitalize: e.target.checked }))}
+                    className="mt-1 h-4 w-4 rounded accent-[#8fe617] cursor-pointer"
+                  />
+                  <label htmlFor="enforceAutoCap" className="cursor-pointer">
+                    <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                      Enforce Auto-Capitalization
+                    </span>
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block mt-0.5">
+                      Automatically converts names like "miskr dires" to "Miskr Dires" as senders type.
+                    </span>
+                  </label>
+                </div>
+
+                {/* Slash Rejection */}
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                  <input
+                    type="checkbox"
+                    id="enforceSlash"
+                    checked={globalSettings.enforceSlashRejection}
+                    onChange={(e) => setGlobalSettings((prev) => ({ ...prev, enforceSlashRejection: e.target.checked }))}
+                    className="mt-1 h-4 w-4 rounded accent-[#8fe617] cursor-pointer"
+                  />
+                  <label htmlFor="enforceSlash" className="cursor-pointer">
+                    <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                      Reject Slashes &amp; Formatting Marks (/)
+                    </span>
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block mt-0.5">
+                      Blocks submission with popup alert if "/" or invalid marks are typed by senders.
+                    </span>
+                  </label>
+                </div>
+
+                {/* Auto Phone +2517 */}
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                  <input
+                    type="checkbox"
+                    id="enforcePhone"
+                    checked={globalSettings.enforcePhonePrefix2517}
+                    onChange={(e) => setGlobalSettings((prev) => ({ ...prev, enforcePhonePrefix2517: e.target.checked }))}
+                    className="mt-1 h-4 w-4 rounded accent-[#8fe617] cursor-pointer"
+                  />
+                  <label htmlFor="enforcePhone" className="cursor-pointer">
+                    <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                      Auto-Prefix Ethiopian Mobile Numbers (+2517 / +2519)
+                    </span>
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block mt-0.5">
+                      Automatically converts numbers starting with "07" to "+2517" and "09" to "+2519".
+                    </span>
+                  </label>
+                </div>
+
+                {/* Photo Edit Reminder */}
+                <div className="flex items-start gap-3 p-3.5 rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908]">
+                  <input
+                    type="checkbox"
+                    id="requirePhotoReminder"
+                    checked={globalSettings.requirePhotoConfirmReminder}
+                    onChange={(e) => setGlobalSettings((prev) => ({ ...prev, requirePhotoConfirmReminder: e.target.checked }))}
+                    className="mt-1 h-4 w-4 rounded accent-[#8fe617] cursor-pointer"
+                  />
+                  <label htmlFor="requirePhotoReminder" className="cursor-pointer">
+                    <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block">
+                      Photo Studio Confirmation Reminder
+                    </span>
+                    <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono block mt-0.5">
+                      Prompts senders with a confirmation dialog to verify photo framing before submission.
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -585,9 +884,9 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
       )}
 
       {/* ────────────────────────────────────────────────────────────────────────── */}
-      {/* RECEIVER SETTINGS PANEL (Shown if role is RECEIVER, or Admin 'receiver')   */}
+      {/* RECEIVER SETTINGS PANEL (Shown if role is RECEIVER, or Super Admin 'receiver') */}
       {/* ────────────────────────────────────────────────────────────────────────── */}
-      {(isReceiverRole || (isAdminRole && adminTab === "receiver")) && (
+      {(isReceiverRole || (isSuperAdmin && adminTab === "receiver")) && (
         <div className="space-y-6">
           {/* Section 1: CSV & Local Photo File Path */}
           <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-5">
@@ -904,9 +1203,9 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
       )}
 
       {/* ────────────────────────────────────────────────────────────────────────── */}
-      {/* MAINTENANCE SECTION (Visible to Receiver or Admin 'maintenance' tab)       */}
+      {/* MAINTENANCE SECTION (Visible only to Super Admin 'maintenance' tab)         */}
       {/* ────────────────────────────────────────────────────────────────────────── */}
-      {(isReceiverRole || (isAdminRole && adminTab === "maintenance")) && (
+      {(isSuperAdmin && adminTab === "maintenance") && (
         <div className="rounded-3xl border border-red-200 dark:border-red-950/40 bg-white dark:bg-[#111613] p-6 shadow-sm space-y-5">
           <div className="flex items-center justify-between border-b border-red-100 dark:border-red-950/30 pb-3">
             <div className="flex items-center gap-3">

@@ -37,11 +37,12 @@ import {
   checkStudentIdAvailabilityAction,
   getSenderStatsAction,
 } from "@/actions/students";
+import { getSenderTasksAction } from "@/actions/tasks";
+import { getGlobalSystemSettingsAction } from "@/actions/settings";
 import type { StudentFormInput } from "@/lib/validations";
 import { CameraModal } from "@/components/camera/CameraModal";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 import { publishStudentSync, subscribeToCloudSync } from "@/lib/sync-client";
-import { formatPhoneForReceiver } from "@/lib/export-utils";
 import { saveStudentToDB, getAllStudentsFromDB } from "@/lib/idb-storage";
 import {
   saveActiveDraft,
@@ -108,6 +109,17 @@ export default function RegisterPage() {
   const [editedPhotoPreview, setEditedPhotoPreview] = useState<string | null>(null);
   const [officialPhotoPath, setOfficialPhotoPath] = useState<string | null>(null);
 
+  // Selected Section & School Dropdowns (Requirement 7)
+  const [selectedSection, setSelectedSection] = useState<string>("Adama");
+
+  // Photo Edit Reminder & Slash Mark Rejection (Requirement 6)
+  const [photoWasEdited, setPhotoWasEdited] = useState<boolean>(false);
+  const [showPhotoReminderModal, setShowPhotoReminderModal] = useState<boolean>(false);
+  const [slashAlertModal, setSlashAlertModal] = useState<{ isOpen: boolean; message: string } | null>(null);
+
+  // Active Assigned Tasks (Requirement 5)
+  const [activeTasks, setActiveTasks] = useState<any[]>([]);
+
   // Offline-First Queue & Network State
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== "undefined" ? navigator.onLine : true
@@ -164,6 +176,33 @@ export default function RegisterPage() {
             studentsWithPhotos: res.studentsWithPhotos,
             senderName: res.senderName,
           });
+        }
+      })
+      .catch(() => {});
+
+    // Fetch active assigned tasks for this sender (Requirement 5)
+    getSenderTasksAction()
+      .then((res) => {
+        if (res.success && res.tasks && res.tasks.length > 0) {
+          setActiveTasks(res.tasks);
+        }
+      })
+      .catch(() => {});
+
+    // Hydrate Super Admin Global System Settings (Requirement 12)
+    getGlobalSystemSettingsAction()
+      .then((settings) => {
+        if (settings) {
+          setFormData((prev) => ({
+            ...prev,
+            grade: prev.grade || settings.defaultGrade || "10",
+            school: prev.school || settings.defaultSchool || "Sena Yerosen",
+            address: prev.address || settings.defaultSection || "Adama",
+            academicYear: prev.academicYear || settings.defaultAcademicYear || "2026-2027",
+          }));
+          if (settings.defaultSection) {
+            setSelectedSection(settings.defaultSection);
+          }
         }
       })
       .catch(() => {});
@@ -419,6 +458,14 @@ export default function RegisterPage() {
     return () => clearTimeout(timer);
   }, [formData.studentId]);
 
+  const capitalizeWords = (str: string): string => {
+    if (!str) return "";
+    return str
+      .split(" ")
+      .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : ""))
+      .join(" ");
+  };
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -426,10 +473,23 @@ export default function RegisterPage() {
     let finalVal: any = value;
     if (name === "dateOfBirth") {
       finalVal = value ? new Date(value) : undefined;
-    } else if (name === "phone") {
-      let p = value;
-      if (p.startsWith("09")) {
-        p = "2519" + p.substring(2);
+    } else if (name === "fullName" || name === "guardianFullName") {
+      // Auto-capitalize student name and father/guardian name as typed (Requirement 3)
+      const words = value.split(" ");
+      finalVal = words
+        .map((word) => (word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : ""))
+        .join(" ");
+    } else if (name === "phone" || name === "emergencyContactPhone") {
+      // Auto +2517 for 07 start (Requirement 14) and +2519 for 09 start
+      let p = value.trim();
+      if (p.startsWith("07")) {
+        p = "+2517" + p.substring(2);
+      } else if (p.startsWith("09")) {
+        p = "+2519" + p.substring(2);
+      } else if (p.startsWith("2517")) {
+        p = "+2517" + p.substring(4);
+      } else if (p.startsWith("2519")) {
+        p = "+2519" + p.substring(4);
       }
       finalVal = p;
     }
@@ -440,13 +500,62 @@ export default function RegisterPage() {
     }));
   };
 
-  const handlePhoneBlur = () => {
-    if (formData.phone) {
+  const handleNameBlur = (fieldName: "fullName" | "guardianFullName") => {
+    if (formData[fieldName]) {
       setFormData((prev) => ({
         ...prev,
-        phone: formatPhoneForReceiver(prev.phone),
+        [fieldName]: capitalizeWords(prev[fieldName] || ""),
       }));
     }
+  };
+
+  const handlePhoneBlur = () => {
+    if (formData.phone) {
+      let p = formData.phone.trim();
+      if (p.startsWith("07")) p = "+2517" + p.substring(2);
+      else if (p.startsWith("09")) p = "+2519" + p.substring(2);
+      else if (p.startsWith("2517")) p = "+2517" + p.substring(4);
+      else if (p.startsWith("2519")) p = "+2519" + p.substring(4);
+      setFormData((prev) => ({
+        ...prev,
+        phone: p,
+      }));
+    }
+  };
+
+  const handleSectionChange = (sec: string) => {
+    setSelectedSection(sec);
+    const validSchools =
+      sec === "Adama"
+        ? ["Sena Yerosen", "Debebech", "Yacine", "Odda"]
+        : sec === "Addis Ababa"
+        ? ["YMS", "Adika Youth", "School Of America"]
+        : sec === "Mojjo"
+        ? ["Mojjo"]
+        : [];
+    const defaultSchoolForSec = validSchools[0] || "";
+    setFormData((prev) => ({
+      ...prev,
+      address: sec,
+      school: validSchools.includes(prev.school || "") ? prev.school : defaultSchoolForSec,
+    }));
+  };
+
+  const handleSchoolChange = (schoolName: string) => {
+    let sec = selectedSection;
+    if (["Sena Yerosen", "Debebech", "Yacine", "Odda"].includes(schoolName)) {
+      sec = "Adama";
+    } else if (["YMS", "Adika Youth", "School Of America"].includes(schoolName)) {
+      sec = "Addis Ababa";
+    } else if (["Mojjo"].includes(schoolName)) {
+      sec = "Mojjo";
+    }
+    setSelectedSection(sec);
+    setFormData((prev) => ({
+      ...prev,
+      school: schoolName,
+      address: sec,
+    }));
   };
 
   const handleCustomFieldChange = (key: string, value: string) => {
@@ -469,6 +578,7 @@ export default function RegisterPage() {
    */
   const handleWebcamCaptured = (file: File, previewUrl: string) => {
     setIsCameraOpen(false);
+    setPhotoWasEdited(false);
     setEditedPhotoPreview(previewUrl);
     const reader = new FileReader();
     reader.onload = () => {
@@ -493,6 +603,7 @@ export default function RegisterPage() {
    */
   const handlePhotoEditorSave = (editedBlob: Blob) => {
     setIsEditorOpen(false);
+    setPhotoWasEdited(true);
     const previewUrl = URL.createObjectURL(editedBlob);
     setEditedPhotoPreview(previewUrl);
 
@@ -511,6 +622,7 @@ export default function RegisterPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setPhotoWasEdited(false);
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
@@ -547,39 +659,9 @@ export default function RegisterPage() {
   };
 
   /**
-   * Fast Submit: Dual-saves to server and IndexedDB (unlimited capacity for 6,000 students/day).
+   * Executes student registration and multi-stage delivery pipeline.
    */
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    // Validate 5 required fields
-    if (!formData.fullName?.trim()) {
-      setErrorMessage("Full Name is required.");
-      return;
-    }
-    if (!formData.studentId?.trim()) {
-      setErrorMessage("Student ID is required.");
-      return;
-    }
-    if (!formData.grade?.trim()) {
-      setErrorMessage("Grade is required.");
-      return;
-    }
-    if (!formData.sex) {
-      setErrorMessage("Sex is required.");
-      return;
-    }
-    if (!formData.phone?.trim()) {
-      setErrorMessage("Phone number is required.");
-      return;
-    }
-
-    if (idAvailability.available === false) {
-      setErrorMessage(idAvailability.message || "Student ID is already taken.");
-      return;
-    }
-
+  const executeStudentSubmission = () => {
     startTransition(async () => {
       try {
         const payload: StudentFormInput = {
@@ -590,7 +672,7 @@ export default function RegisterPage() {
           phone: formData.phone!,
           dateOfBirth: formData.dateOfBirth,
           emailAddress: formData.emailAddress,
-          address: formData.address,
+          address: formData.address || selectedSection,
           school: formData.school,
           department: formData.department,
           academicYear: formData.academicYear,
@@ -622,7 +704,7 @@ export default function RegisterPage() {
           sex: payload.sex,
           phone: payload.phone,
           emailAddress: payload.emailAddress || null,
-          address: payload.address || null,
+          address: payload.address || selectedSection,
           school: payload.school || null,
           department: payload.department || null,
           academicYear: payload.academicYear || null,
@@ -672,6 +754,11 @@ export default function RegisterPage() {
           studentsWithPhotos: payload.photoPath ? prev.studentsWithPhotos + 1 : prev.studentsWithPhotos,
         }));
 
+        // If active task exists, increment completed count optimistically
+        setActiveTasks((prev) =>
+          prev.map((t, idx) => (idx === 0 ? { ...t, completedCount: t.completedCount + 1 } : t))
+        );
+
         // Show "Sent Successfully!" confirmation modal
         setSentSuccessfullyData({
           studentId: payload.studentId,
@@ -689,10 +776,75 @@ export default function RegisterPage() {
     });
   };
 
+  /**
+   * Fast Submit with Slash Mark Rejection & Photo Edit Quality Reminder (Requirement 6).
+   */
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    // 1. Prohibited character / slash rejection (Requirement 6)
+    const slashCheckList = [
+      { label: "Full Name", value: formData.fullName },
+      { label: "Student ID", value: formData.studentId },
+      { label: "Grade", value: formData.grade },
+      { label: "Phone Number", value: formData.phone },
+      { label: "School Name", value: formData.school },
+      { label: "Section / Branch", value: formData.address },
+      { label: "Guardian / Father Name", value: formData.guardianFullName },
+    ];
+    const slashMatch = slashCheckList.find(
+      (item) => item.value && (item.value.includes("/") || item.value.includes("\\"))
+    );
+    if (slashMatch) {
+      setSlashAlertModal({
+        isOpen: true,
+        message: `Remove any mark like / for senders! The "${slashMatch.label}" field contains prohibited mark "${slashMatch.value}". Slashes (/) and backslashes (\\) are rejected by the system.`,
+      });
+      return;
+    }
+
+    // 2. Validate required fields
+    if (!formData.fullName?.trim()) {
+      setErrorMessage("Full Name is required.");
+      return;
+    }
+    if (!formData.studentId?.trim()) {
+      setErrorMessage("Student ID is required.");
+      return;
+    }
+    if (!formData.grade?.trim()) {
+      setErrorMessage("Grade is required.");
+      return;
+    }
+    if (!formData.sex) {
+      setErrorMessage("Sex is required.");
+      return;
+    }
+    if (!formData.phone?.trim()) {
+      setErrorMessage("Phone number is required.");
+      return;
+    }
+
+    if (idAvailability.available === false) {
+      setErrorMessage(idAvailability.message || "Student ID is already taken.");
+      return;
+    }
+
+    // 3. Photo Edit Reminder (Requirement 6)
+    if (officialPhotoPath && !photoWasEdited) {
+      setShowPhotoReminderModal(true);
+      return;
+    }
+
+    executeStudentSubmission();
+  };
+
   const handleResetForm = () => {
     clearActiveDraft();
+    setPhotoWasEdited(false);
     let defaultGrade = "10";
-    let defaultSchool = "";
+    let defaultSchool = "Sena Yerosen";
     let defaultAcademicYear = "2026-2027";
     let idPrefix = "SB-";
     try {
@@ -713,7 +865,7 @@ export default function RegisterPage() {
       sex: "Male",
       phone: "",
       emailAddress: "",
-      address: "",
+      address: selectedSection || "Adama",
       school: defaultSchool,
       department: "",
       academicYear: defaultAcademicYear,
@@ -889,6 +1041,46 @@ export default function RegisterPage() {
         </div>
 
         {/* ====================================================================
+            ACTIVE ASSIGNED SENDER TASK BANNER (Requirement 5)
+           ==================================================================== */}
+        {activeTasks.length > 0 && (
+          <div className="rounded-2xl border-2 border-[#8fe617]/50 bg-[#8fe617]/10 dark:bg-[#8fe617]/5 p-3.5 shadow-sm space-y-2 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-[#8fe617] text-[#062404] font-black text-sm">
+                  🎯
+                </span>
+                <div>
+                  <div className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    Assigned Task: {activeTasks[0].title}
+                  </div>
+                  <div className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                    {activeTasks[0].school ? `School: ${activeTasks[0].school}` : ""}{" "}
+                    {activeTasks[0].section ? `• ${activeTasks[0].section} Section` : ""}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono font-black text-[#8fe617]">
+                  {activeTasks[0].completedCount} / {activeTasks[0].targetCount}
+                </span>
+                <span className="text-[10px] font-mono text-[#6b7771] dark:text-[#8a9e93] block">
+                  ({Math.min(100, Math.round((activeTasks[0].completedCount / (activeTasks[0].targetCount || 1)) * 100))}%)
+                </span>
+              </div>
+            </div>
+            <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-[#8fe617] rounded-full transition-all duration-300"
+                style={{
+                  width: `${Math.min(100, Math.round((activeTasks[0].completedCount / (activeTasks[0].targetCount || 1)) * 100))}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ====================================================================
             PORTRAIT CAMERA (EASY PHONE VIEWPORT, PURE 3:4 STUDIO)
            ==================================================================== */}
         <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] dark:border-t-2 dark:border-t-[#8fe617] bg-white dark:bg-[#111613] p-4 shadow-sm dark:shadow-[0_12px_32px_rgba(0,0,0,0.8),0_0_15px_rgba(143,230,23,0.06)] space-y-3 transition-all duration-200">
@@ -1037,7 +1229,7 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Full Name */}
+            {/* Full Name (Auto-Capitalized: e.g. miskr dires -> Miskr Dires) */}
             <div>
               <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
                 Full Name <span className="text-red-500">*</span>
@@ -1048,7 +1240,8 @@ export default function RegisterPage() {
                 name="fullName"
                 value={formData.fullName}
                 onChange={handleChange}
-                placeholder="e.g. Abebe Kebede"
+                onBlur={() => handleNameBlur("fullName")}
+                placeholder="e.g. Miskr Dires"
                 required
                 className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs text-[#080808] dark:text-[#f2f7f4] font-semibold placeholder:text-[#6b7771] dark:placeholder:text-[#8a9e93] focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] focus:outline-none transition-all"
               />
@@ -1121,7 +1314,69 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Phone Number */}
+            {/* Branch / Section Selection (Requirement 7) */}
+            <div>
+              <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
+                Section / Branch <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedSection}
+                  onChange={(e) => handleSectionChange(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all cursor-pointer"
+                >
+                  <option value="Adama">Adama Section</option>
+                  <option value="Addis Ababa">Addis Ababa Section</option>
+                  <option value="Mojjo">Mojjo Section</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#8fe617]">
+                  <ChevronDown className="h-4 w-4 stroke-[2.5]" />
+                </div>
+              </div>
+            </div>
+
+            {/* School Dropdown (Requirement 7: Sena Yerosen, Debebech, Yacine, Odda from adama section; YMS, Adika Youth, School Of America for adisababa section; and Mojjo for mojjo section) */}
+            <div>
+              <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
+                School Name <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  name="school"
+                  value={formData.school || ""}
+                  onChange={(e) => handleSchoolChange(e.target.value)}
+                  required
+                  className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all cursor-pointer"
+                >
+                  <option value="">-- Select School --</option>
+                  {(!selectedSection || selectedSection === "Adama") && (
+                    <optgroup label="Adama Section" className="font-bold text-[#080808] dark:text-[#8fe617]">
+                      <option value="Sena Yerosen">Sena Yerosen</option>
+                      <option value="Debebech">Debebech</option>
+                      <option value="Yacine">Yacine</option>
+                      <option value="Odda">Odda</option>
+                    </optgroup>
+                  )}
+                  {(!selectedSection || selectedSection === "Addis Ababa") && (
+                    <optgroup label="Addis Ababa Section" className="font-bold text-[#080808] dark:text-[#8fe617]">
+                      <option value="YMS">YMS</option>
+                      <option value="Adika Youth">Adika Youth</option>
+                      <option value="School Of America">School Of America</option>
+                    </optgroup>
+                  )}
+                  {(!selectedSection || selectedSection === "Mojjo") && (
+                    <optgroup label="Mojjo Section" className="font-bold text-[#080808] dark:text-[#8fe617]">
+                      <option value="Mojjo">Mojjo</option>
+                    </optgroup>
+                  )}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#8fe617]">
+                  <ChevronDown className="h-4 w-4 stroke-[2.5]" />
+                </div>
+              </div>
+            </div>
+
+            {/* Phone Number (Auto +2517 for 07 / +2519 for 09) */}
             <div>
               <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
                 Phone Number <span className="text-red-500">*</span>
@@ -1132,7 +1387,7 @@ export default function RegisterPage() {
                 value={formData.phone}
                 onChange={handleChange}
                 onBlur={handlePhoneBlur}
-                placeholder="251912345678"
+                placeholder="+2517... or +2519..."
                 required
                 className="w-full rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] placeholder:text-[#6b7771] dark:placeholder:text-[#8a9e93] hover:border-[#8fe617] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all"
               />
@@ -1145,23 +1400,12 @@ export default function RegisterPage() {
                 onClick={() => setShowOptionalFields(!showOptionalFields)}
                 className="flex items-center justify-between w-full text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] py-1 transition-colors"
               >
-                <span>{showOptionalFields ? "Hide Extra Details" : "+ More Details (School, DOB, Address)"}</span>
+                <span>{showOptionalFields ? "Hide Extra Details" : "+ More Details (DOB, Guardian, Address)"}</span>
                 {showOptionalFields ? <ChevronUp className="h-4 w-4 text-[#8fe617]" /> : <ChevronDown className="h-4 w-4" />}
               </button>
 
               {showOptionalFields && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
-                  <div>
-                    <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">School</label>
-                    <input
-                      type="text"
-                      name="school"
-                      value={formData.school || ""}
-                      onChange={handleChange}
-                      placeholder="School name"
-                      className="w-full rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all"
-                    />
-                  </div>
                   <div>
                     <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">Academic Year</label>
                     <input
@@ -1174,13 +1418,14 @@ export default function RegisterPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">Guardian Name</label>
+                    <label className="block text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] mb-1">Guardian / Father Name</label>
                     <input
                       type="text"
                       name="guardianFullName"
                       value={formData.guardianFullName || ""}
                       onChange={handleChange}
-                      placeholder="Guardian name"
+                      onBlur={() => handleNameBlur("guardianFullName")}
+                      placeholder="e.g. Dires Kebede"
                       className="w-full rounded-lg border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3 py-2 text-xs text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all"
                     />
                   </div>
@@ -1435,6 +1680,88 @@ export default function RegisterPage() {
             setIsCameraOpen(true);
           }}
         />
+      )}
+
+      {/* ====================================================================
+          SLASH MARK PROHIBITION REJECTION MODAL (Requirement 6)
+         ==================================================================== */}
+      {slashAlertModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl border-2 border-red-500/50 bg-white dark:bg-[#111613] p-6 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="h-16 w-16 mx-auto rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center text-red-500 animate-bounce">
+              <AlertCircle className="h-9 w-9 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="text-xs font-mono font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
+                Prohibited Mark Detected
+              </div>
+              <h3 className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+                Remove Any Mark Like &quot;/&quot; For Senders
+              </h3>
+              <p className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] mt-2 leading-relaxed">
+                {slashAlertModal.message}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSlashAlertModal(null)}
+              className="w-full py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-mono font-bold text-xs shadow-lg transition-all cursor-pointer"
+            >
+              I Will Fix It (OK)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          PHOTO EDIT & CROP REMINDER MODAL (Requirement 6)
+         ==================================================================== */}
+      {showPhotoReminderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl border-2 border-amber-500/50 bg-white dark:bg-[#111613] p-6 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="h-16 w-16 mx-auto rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-amber-500">
+              <Crop className="h-9 w-9 stroke-[2.2]" />
+            </div>
+            <div>
+              <div className="text-xs font-mono font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                Quality Control Reminder
+              </div>
+              <h3 className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+                Photo Has Not Been Cropped / Edited
+              </h3>
+              <p className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] mt-2 leading-relaxed">
+                The student portrait has been attached, but you have not adjusted or cropped it in the studio editor. Cropping ensures accurate 3:4 badge proportions and prevents card rejections.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPhotoReminderModal(false);
+                  if (editedPhotoPreview) {
+                    setEditorImageSrc(editedPhotoPreview);
+                    setIsEditorOpen(true);
+                  }
+                }}
+                className="w-full flex-1 py-3 rounded-2xl bg-[#8fe617] hover:bg-[#7ecc10] text-[#062404] font-mono font-black text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Crop className="h-4 w-4" />
+                <span>Edit &amp; Crop Now</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPhotoReminderModal(false);
+                  setPhotoWasEdited(true);
+                  executeStudentSubmission();
+                }}
+                className="w-full sm:w-auto px-4 py-3 rounded-2xl border border-[#dce7e1] dark:border-[#26332b] bg-white dark:bg-[#1c2420] text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+              >
+                Send Without Cropping
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

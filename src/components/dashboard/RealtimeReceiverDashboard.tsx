@@ -750,6 +750,65 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
     }
   }, [allStudentsList, data.recentStudents, selectedStudentIds, handleDownloadSingleStudentPhoto]);
 
+  const handleDownloadSelectedQRs = useCallback(async () => {
+    const sourceList = allStudentsList.length > 0 ? allStudentsList : (data.recentStudents || []);
+    const list = sourceList.filter((s) => selectedStudentIds.has(s.studentId || s.id));
+
+    if (list.length === 0) {
+      alert("Please select at least 1 student with a checkbox to download QR codes.");
+      return;
+    }
+
+    if (list.length === 1) {
+      await handleDownloadSingleStudentQR(list[0]);
+      return;
+    }
+
+    // Multiple: JSZip bundle organized by Grade
+    try {
+      setExportNotice(`Packaging ${list.length} selected QR codes into ZIP...`);
+      const zip = new JSZip();
+
+      for (const student of list) {
+        try {
+          const sId = student.studentId || student.id;
+          const cleanName = (student.fullName || sId || "Student")
+            .trim()
+            .replace(/[\\/:*?"<>|]/g, "_")
+            .replace(/\s+/g, " ") || "Student_QR";
+          const cleanGrade = (student.grade || "General").replace(/[/\\]/g, "_");
+          const filename = `${cleanName}.png`;
+
+          const downloadUrl = `/api/qr?studentId=${encodeURIComponent(sId)}&name=${encodeURIComponent(cleanName)}&download=1`;
+          const res = await fetch(downloadUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            zip.folder(cleanGrade)?.file(filename, blob);
+          }
+        } catch {}
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `selected_${list.length}_qrs_${new Date().toISOString().split("T")[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+
+      setExportNotice(`ZIP bundle with ${list.length} selected QR codes downloaded.`);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      alert("Failed creating QR ZIP: " + err?.message);
+    }
+  }, [allStudentsList, data.recentStudents, selectedStudentIds, handleDownloadSingleStudentQR]);
+
   const handleExportManifest = useCallback(() => {
     // If students are selected, export ONLY those selected; otherwise export all currently filtered!
     let list: any[] = [];
@@ -2162,6 +2221,15 @@ export default function RealtimeReceiverDashboard({ initialData, notice }: Recei
               >
                 <Camera className="h-3.5 w-3.5 text-[#8fe617]" />
                 <span>Download Selected Photos ({selectedStudentIds.size > 1 ? `${selectedStudentIds.size} ZIP` : "1 Photo"})</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadSelectedQRs}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold rounded-xl border border-sky-500/40 bg-sky-500/20 text-sky-700 dark:text-sky-300 hover:bg-sky-500/30 transition-all cursor-pointer active:scale-95"
+                title="Download selected student QR codes as individual PNGs in a ZIP"
+              >
+                <QrCode className="h-3.5 w-3.5 text-sky-500" />
+                <span>Download Selected QRs ({selectedStudentIds.size > 1 ? `${selectedStudentIds.size} ZIP` : "1 QR"})</span>
               </button>
               <button
                 type="button"

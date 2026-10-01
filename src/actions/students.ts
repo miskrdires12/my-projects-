@@ -241,6 +241,33 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
       }
     }
 
+    // Auto-update Active Sender Task Quota & Efficiency
+    try {
+      const senderEmail = session.email?.trim().toLowerCase();
+      if (senderEmail) {
+        const activeTask = await prisma.senderTask.findFirst({
+          where: {
+            assignedToEmail: senderEmail,
+            status: { in: ["PENDING", "IN_PROGRESS"] },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        if (activeTask) {
+          const nextCount = activeTask.completedCount + 1;
+          const isDone = nextCount >= activeTask.targetCount;
+          await prisma.senderTask.update({
+            where: { id: activeTask.id },
+            data: {
+              completedCount: nextCount,
+              status: isDone ? "COMPLETED" : "IN_PROGRESS",
+            },
+          });
+        }
+      }
+    } catch (taskErr) {
+      console.warn("Notice: SenderTask progress non-fatal update warning:", taskErr);
+    }
+
     // Save custom field values if provided
     if (data.customFields && Object.keys(data.customFields).length > 0) {
       try {
@@ -413,6 +440,33 @@ export async function updateStudentAction(
             value: String(val),
           },
         });
+      }
+    }
+  }
+
+  // Requirement 9: If updated by receiver, record mistake for the sender who originally submitted this record
+  if (session.role === "RECEIVER" && (existing.senderId || existing.senderName)) {
+    const fieldsToTrack = ["fullName", "studentId", "grade", "sex", "phone", "school", "cityRegion", "department", "emergencyContactPhone"];
+    for (const field of fieldsToTrack) {
+      const oldVal = (existing as any)[field];
+      const newVal = (updatePayload as any)[field];
+      if (newVal !== undefined && oldVal !== null && oldVal !== undefined && String(oldVal).trim() !== String(newVal).trim()) {
+        try {
+          await prisma.senderMistake.create({
+            data: {
+              studentId: existing.studentId,
+              studentName: existing.fullName,
+              senderId: existing.senderId || null,
+              senderName: existing.senderName || "Unknown Sender",
+              fieldName: field,
+              oldValue: String(oldVal),
+              newValue: String(newVal),
+              correctedBy: session.username || session.email,
+            },
+          });
+        } catch (mistakeErr) {
+          console.warn("Notice: Failed to log sender mistake:", mistakeErr);
+        }
       }
     }
   }

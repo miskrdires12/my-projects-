@@ -12,6 +12,11 @@ export default async function PrintEnginePage() {
     redirect("/login");
   }
 
+  // ADMIN role is restricted to controlling senders and must not see student photos or print cards
+  if (session.role === "ADMIN") {
+    redirect("/admin/telemetry");
+  }
+
   // Server-side pagination: load first 500 active students for print preview.
   // Client-side pagination allows navigating through the full 20,000+ cohort.
   let students: any[] = [];
