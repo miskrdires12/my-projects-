@@ -14,6 +14,7 @@ import {
   School,
   MapPin,
   User,
+  MessageSquare,
 } from "lucide-react";
 import type { StudentExtended } from "@/types/student";
 import { updateStudentAction } from "@/actions/students";
@@ -63,6 +64,7 @@ export default function EditStudentModal({
   const [emergencyPhone, setEmergencyPhone] = useState(student?.emergencyContactPhone || "");
   const [bloodType, setBloodType] = useState(student?.bloodType || "");
   const [status, setStatus] = useState(student?.status || "ACTIVE");
+  const [receiverNote, setReceiverNote] = useState(student?.receiverNote || "");
 
   // Sync state whenever student prop changes
   React.useEffect(() => {
@@ -78,6 +80,7 @@ export default function EditStudentModal({
       setEmergencyPhone(student.emergencyContactPhone || "");
       setBloodType(student.bloodType || "");
       setStatus(student.status || "ACTIVE");
+      setReceiverNote(student.receiverNote || "");
       setErrorMessage(null);
     }
   }, [student]);
@@ -147,6 +150,8 @@ export default function EditStudentModal({
           emergencyContactPhone: emergencyPhone ? emergencyPhone.trim() : null,
           bloodType: bloodType && bloodType.trim() !== "Unknown" ? bloodType.trim() : null,
           status: status as any,
+          receiverNote: receiverNote ? receiverNote.trim() : null,
+          hasMistake: Boolean(receiverNote && receiverNote.trim()),
         };
 
         const res = await updateStudentAction(student.id, payload);
@@ -397,6 +402,24 @@ export default function EditStudentModal({
                 <option value="TRANSFERRED">TRANSFERRED</option>
               </select>
             </div>
+          </div>
+
+          {/* Note to Sender / Mistake Reason (Feedback System) */}
+          <div className="rounded-2xl border border-amber-300/60 dark:border-amber-700/50 bg-amber-50/70 dark:bg-amber-950/20 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400 font-mono font-bold text-xs">
+              <MessageSquare className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span>Note to Sender (Mistake Explanation / Feedback)</span>
+            </div>
+            <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-mono leading-relaxed">
+              Record what mistake the sender made on this student intake. This note displays directly to the receiver in the student directory and reports back to the sender so they learn and prevent future mistakes.
+            </p>
+            <textarea
+              rows={2}
+              value={receiverNote}
+              onChange={(e) => setReceiverNote(e.target.value)}
+              placeholder="e.g. Student name or father name had spelling error / Photo was not cropped in studio / Phone was missing prefix..."
+              className="w-full rounded-xl border border-amber-300 dark:border-amber-700/60 bg-white dark:bg-[#18221b] p-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all resize-none"
+            />
           </div>
 
           {/* Modal Footer Buttons */}

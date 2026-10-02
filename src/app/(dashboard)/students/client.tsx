@@ -2055,7 +2055,20 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                       </td>
 
                       <td className="px-4 py-3.5 font-semibold text-sm text-foreground dark:text-[#f2f7f4]">
-                        {student.fullName}
+                        <div className="flex flex-col gap-1">
+                          <span>{student.fullName}</span>
+                          {student.receiverNote && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingStudentData(student)}
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-mono font-medium bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-all text-left max-w-[220px] cursor-pointer"
+                              title={`Receiver Note to Sender: ${student.receiverNote} (Click to edit/update)`}
+                            >
+                              <span className="shrink-0">📝</span>
+                              <span className="truncate">{student.receiverNote}</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-4 py-3.5">
@@ -2731,6 +2744,39 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               </div>
             </div>
 
+            {/* Receiver Mistake Note Card */}
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                  <span className="text-sm">📝</span>
+                  <span>Receiver Mistake Note to Sender</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingStudentData(activeStudent)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 hover:bg-sky-500/25 transition-all cursor-pointer"
+                  title="Edit student record or update note to sender"
+                >
+                  <Pencil className="h-3 w-3" />
+                  <span>{activeStudent.receiverNote ? "Update Note" : "Write Note"}</span>
+                </button>
+              </div>
+              {activeStudent.receiverNote ? (
+                <div className="rounded-xl bg-surface/90 dark:bg-black/40 p-2.5 border border-amber-500/20">
+                  <p className="text-xs text-foreground dark:text-[#f2f7f4] font-medium leading-relaxed">
+                    &quot;{activeStudent.receiverNote}&quot;
+                  </p>
+                  <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 font-mono">
+                    Flagged for Sender: {activeStudent.senderName || "Direct Station"}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-foreground-muted dark:text-[#8a9e93] leading-normal italic">
+                  No mistake note logged. If the sender made a data error (e.g. uncapitalized name, typo, wrong school), click &quot;Write Note&quot; to send feedback.
+                </p>
+              )}
+            </div>
+
             {/* Custom Fields Section */}
             {activeStudent.customValues && activeStudent.customValues.length > 0 && (
               <div className="rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] p-4 space-y-2">
@@ -2748,8 +2794,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             )}
 
             {/* Quick Actions in Drawer */}
-            {(userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
-              <div className="pt-4 border-t border-border">
+            <div className="pt-4 border-t border-border space-y-2">
+              <button
+                type="button"
+                onClick={() => setEditingStudentData(activeStudent)}
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 py-2.5 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 transition-colors cursor-pointer"
+              >
+                <Pencil className="h-4 w-4" />
+                <span>Edit Student Data / Note to Sender</span>
+              </button>
+
+              {(userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
                 <button
                   type="button"
                   onClick={() => handleDelete(activeStudent.id, activeStudent.fullName, activeStudent.studentId)}
@@ -2758,8 +2813,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <Trash2 className="h-4 w-4" />
                   <span>Delete Student Record</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -3070,6 +3125,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           setDisplayStudents((prev) =>
             prev.map((s) => (s.id === updated.id || s.studentId === updated.studentId ? updated : s))
           );
+          setActiveStudent((current) => {
+            if (current && (current.id === updated.id || current.studentId === updated.studentId)) {
+              return { ...current, ...updated };
+            }
+            return current;
+          });
         }}
       />
 

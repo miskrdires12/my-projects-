@@ -118,6 +118,8 @@ export async function POST(request: Request) {
           senderId: s.senderId || null,
           senderName: s.senderName || null,
           status: s.status || "ACTIVE",
+          receiverNote: s.receiverNote !== undefined ? s.receiverNote : null,
+          hasMistake: s.hasMistake !== undefined ? Boolean(s.hasMistake) : false,
         };
 
         await prisma.student.upsert({

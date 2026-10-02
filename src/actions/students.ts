@@ -415,6 +415,13 @@ export async function updateStudentAction(
   if (input.dateOfBirth !== undefined) updatePayload.dateOfBirth = input.dateOfBirth ? new Date(input.dateOfBirth) : null;
   if (input.status) updatePayload.status = input.status;
   if (input.batchId !== undefined) updatePayload.batchId = input.batchId;
+  if (input.receiverNote !== undefined) {
+    updatePayload.receiverNote = input.receiverNote;
+    if (input.receiverNote && input.receiverNote.trim()) {
+      updatePayload.hasMistake = true;
+    }
+  }
+  if (input.hasMistake !== undefined) updatePayload.hasMistake = input.hasMistake;
 
   const updated = await prisma.student.update({
     where: { id },
@@ -444,29 +451,54 @@ export async function updateStudentAction(
     }
   }
 
-  // Requirement 9: If updated by receiver, record mistake for the sender who originally submitted this record
-  if (session.role === "RECEIVER" && (existing.senderId || existing.senderName)) {
+  // Requirement 9 & Note to Sender: If updated by receiver/admin, record mistake and note for the sender
+  if (session.role === "RECEIVER" || session.role === "SUPER_ADMIN" || session.role === "ADMIN") {
     const fieldsToTrack = ["fullName", "studentId", "grade", "sex", "phone", "school", "cityRegion", "department", "emergencyContactPhone"];
+    let detectedMistake = false;
+
     for (const field of fieldsToTrack) {
       const oldVal = (existing as any)[field];
       const newVal = (updatePayload as any)[field];
       if (newVal !== undefined && oldVal !== null && oldVal !== undefined && String(oldVal).trim() !== String(newVal).trim()) {
+        detectedMistake = true;
         try {
           await prisma.senderMistake.create({
             data: {
               studentId: existing.studentId,
-              studentName: existing.fullName,
+              studentName: updatePayload.fullName || existing.fullName,
               senderId: existing.senderId || null,
-              senderName: existing.senderName || "Unknown Sender",
+              senderName: existing.senderName || "Assigned Sender",
               fieldName: field,
               oldValue: String(oldVal),
               newValue: String(newVal),
+              note: input.receiverNote || `Corrected ${field} from "${oldVal}" to "${newVal}"`,
               correctedBy: session.username || session.email,
             },
           });
         } catch (mistakeErr) {
           console.warn("Notice: Failed to log sender mistake:", mistakeErr);
         }
+      }
+    }
+
+    // If a note was explicitly written but no individual field changed
+    if (!detectedMistake && input.receiverNote && input.receiverNote.trim()) {
+      try {
+        await prisma.senderMistake.create({
+          data: {
+            studentId: existing.studentId,
+            studentName: updatePayload.fullName || existing.fullName,
+            senderId: existing.senderId || null,
+            senderName: existing.senderName || "Assigned Sender",
+            fieldName: "feedback_note",
+            oldValue: "Reported Mistake",
+            newValue: "Correction Note",
+            note: input.receiverNote.trim(),
+            correctedBy: session.username || session.email,
+          },
+        });
+      } catch (err) {
+        console.warn("Notice: Failed to log feedback note mistake:", err);
       }
     }
   }
@@ -1505,6 +1537,7 @@ export async function backfillMissingQRCodesAction(): Promise<{ success: boolean
       revalidatePath("/designer");
     }
 
+
     return { success: true, count: updated };
   } catch (err: any) {
     console.error("Backfill QR codes error:", err);
@@ -1512,6 +1545,66 @@ export async function backfillMissingQRCodesAction(): Promise<{ success: boolean
   }
 }
 
+// ----------------------------------------------------------------------------
+// SENDER MISTAKE & RECEIVER CORRECTION NOTES ACTIONS
+// ----------------------------------------------------------------------------
 
+export async function getSenderMistakeNotesAction(): Promise<{
+  success: boolean;
+  notes: Array<{
+    id: string;
+    studentId: string;
+    studentName: string;
+    note: string;
+    fieldName?: string | null;
+    oldValue?: string | null;
+    newValue?: string | null;
+    correctedBy?: string | null;
+    createdAt: string;
+    status: string;
+  }>;
+}> {
+  try {
+    const session = await getSession();
+    if (!session || !session.userId) {
+      return { success: false, notes: [] };
+    }
 
+    const isPrivileged = session.role === "SUPER_ADMIN" || session.role === "ADMIN" || session.role === "RECEIVER";
 
+    const senderFilter = isPrivileged
+      ? {}
+      : {
+          OR: [
+            { senderId: session.userId },
+            { senderName: session.username },
+            { senderName: session.email },
+          ],
+        };
+
+    const mistakes = await prisma.senderMistake.findMany({
+      where: senderFilter,
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    });
+
+    return {
+      success: true,
+      notes: mistakes.map((m) => ({
+        id: m.id,
+        studentId: m.studentId,
+        studentName: m.studentName,
+        note: m.note || `Corrected ${m.fieldName}: "${m.oldValue}" -> "${m.newValue}"`,
+        fieldName: m.fieldName,
+        oldValue: m.oldValue,
+        newValue: m.newValue,
+        correctedBy: m.correctedBy,
+        createdAt: m.createdAt.toISOString(),
+        status: m.status,
+      })),
+    };
+  } catch (err: any) {
+    console.warn("[getSenderMistakeNotesAction] fallback:", err);
+    return { success: false, notes: [] };
+  }
+}

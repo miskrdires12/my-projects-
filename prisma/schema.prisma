@@ -115,6 +115,8 @@ model Student {
   status                String              @default("ACTIVE") // ACTIVE | INACTIVE | ARCHIVED | SUSPENDED
   receiverHidden        Boolean             @default(false)    // True when temporarily deleted by Receiver
   hiddenAt              DateTime?
+  receiverNote          String?             // Explanatory note from Receiver to Sender about mistakes
+  hasMistake            Boolean             @default(false)
   batchId               String?
   batch                 TransferBatch?      @relation(fields: [batchId], references: [id], onDelete: SetNull)
   organizationId        String?
@@ -517,10 +519,13 @@ model SenderMistake {
   fieldName   String
   oldValue    String?
   newValue    String?
+  note        String?  // Explanatory note to sender describing the mistake
+  status      String   @default("LOGGED") // LOGGED | REVIEWED | RESOLVED
   correctedBy String?  // Receiver user email/name
   createdAt   DateTime @default(now())
 
   @@index([senderId])
+  @@index([studentId])
   @@map("sender_mistakes")
 }
 

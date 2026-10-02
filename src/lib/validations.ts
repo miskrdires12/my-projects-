@@ -109,6 +109,8 @@ export const studentSchema = z.object({
   qrCodeData: z.string().optional().nullable(),
   status: StudentStatusEnum.default("ACTIVE"),
   batchId: z.string().optional().nullable(),
+  receiverNote: z.string().trim().optional().nullable(),
+  hasMistake: z.boolean().optional(),
 
   // Dynamic Custom Fields mapping { fieldKey: value }
   customFields: z.record(z.string()).optional(),

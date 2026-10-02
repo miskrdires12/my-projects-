@@ -36,6 +36,7 @@ import {
   getCustomFieldsAction,
   checkStudentIdAvailabilityAction,
   getSenderStatsAction,
+  getSenderMistakeNotesAction,
 } from "@/actions/students";
 import { getSenderTasksAction } from "@/actions/tasks";
 import { getGlobalSystemSettingsAction } from "@/actions/settings";
@@ -120,6 +121,10 @@ export default function RegisterPage() {
   // Active Assigned Tasks (Requirement 5)
   const [activeTasks, setActiveTasks] = useState<any[]>([]);
 
+  // Receiver Mistake Notes & Feedback to Sender
+  const [receiverNotes, setReceiverNotes] = useState<any[]>([]);
+  const [showNotesExpanded, setShowNotesExpanded] = useState<boolean>(true);
+
   // Offline-First Queue & Network State
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== "undefined" ? navigator.onLine : true
@@ -185,6 +190,15 @@ export default function RegisterPage() {
       .then((res) => {
         if (res.success && res.tasks && res.tasks.length > 0) {
           setActiveTasks(res.tasks);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch receiver mistake notes and corrections
+    getSenderMistakeNotesAction()
+      .then((res) => {
+        if (res.success && res.notes && res.notes.length > 0) {
+          setReceiverNotes(res.notes);
         }
       })
       .catch(() => {});
@@ -1077,6 +1091,63 @@ export default function RegisterPage() {
                 }}
               />
             </div>
+          </div>
+        )}
+
+        {/* ====================================================================
+            RECEIVER CORRECTION NOTES & MISTAKE NOTIFICATIONS TO SENDER
+           ==================================================================== */}
+        {receiverNotes.length > 0 && (
+          <div className="rounded-2xl border-2 border-amber-500/50 bg-amber-500/10 dark:bg-amber-950/20 p-3.5 shadow-sm space-y-2 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500 text-black font-black text-sm">
+                  📝
+                </span>
+                <div>
+                  <div className="text-xs font-bold text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                    <span>Receiver Mistake Notes</span>
+                    <span className="px-2 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500 text-black">
+                      {receiverNotes.length} Note{receiverNotes.length > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
+                    Review corrections and mistake feedback from receiver station.
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowNotesExpanded((v) => !v)}
+                className="text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+              >
+                {showNotesExpanded ? "Hide" : "View"}
+              </button>
+            </div>
+
+            {showNotesExpanded && (
+              <div className="space-y-2 pt-1 max-h-48 overflow-y-auto pr-1">
+                {receiverNotes.slice(0, 5).map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-2.5 rounded-xl bg-white/80 dark:bg-[#161e19] border border-amber-500/30 text-xs font-mono space-y-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[#080808] dark:text-white truncate max-w-[200px]">
+                        {item.studentName} ({item.studentId})
+                      </span>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                        {item.correctedBy ? `By ${item.correctedBy}` : "Receiver"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#2c3e34] dark:text-[#c5d8ce] leading-relaxed">
+                      👉 &quot;{item.note}&quot;
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

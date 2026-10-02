@@ -217,57 +217,39 @@ export async function login(credentials: {
     const targetRole: UserRole = (preConfig ? preConfig.role : user.role) as UserRole;
     const targetEmail: string = user.email;
 
-    // 1 Device = 1 Role Hardware Enforcement:
+    // Device Hardware Binding & Auto-Unlock on Valid Authentication:
     if (credentials.deviceId) {
       try {
-        const existingBinding = await prisma.deviceBinding.findUnique({
+        await prisma.deviceBinding.upsert({
           where: { deviceId: credentials.deviceId },
+          update: {
+            role: targetRole,
+            boundEmail: targetEmail,
+            deviceInfo: credentials.deviceInfo || "Authorized Device",
+            updatedAt: new Date(),
+          },
+          create: {
+            deviceId: credentials.deviceId,
+            role: targetRole,
+            boundEmail: targetEmail,
+            deviceInfo: credentials.deviceInfo || "Authorized Device",
+          },
         });
-
-        if (existingBinding) {
-          if (existingBinding.role !== targetRole) {
-            return {
-              success: false,
-              error: `ACCESS REJECTED (1 DEVICE = 1 ROLE): This physical device is locked exclusively to '${existingBinding.role}' operations. Logins with '${targetRole}' are strictly prohibited on this physical device.`,
-            };
-          }
-        } else {
-          await prisma.deviceBinding.create({
-            data: {
-              deviceId: credentials.deviceId,
-              role: targetRole,
-              boundEmail: targetEmail,
-              deviceInfo: credentials.deviceInfo || "Registered Device",
-            },
-          });
-        }
       } catch (bindErr) {
         console.warn("Notice: Device binding verification warning:", bindErr);
       }
     }
 
-    // Single-Device User Lock Check
-    if (
-      user.boundDeviceId &&
-      credentials.deviceId &&
-      user.boundDeviceId !== credentials.deviceId
-    ) {
-      return {
-        success: false,
-        error: `Access Denied: This account is locked to another authorized device (${user.boundDeviceInfo || "Registered Device"}). Cross-device access is prohibited.`,
-      };
-    }
-
-    // Update bound device and session telemetry
+    // Update bound device (unlocks account to this device) and session telemetry
     try {
       const updateData: any = {
         lastLoginAt: new Date(),
         lastActiveAt: new Date(),
         workSessionCount: { increment: 1 },
       };
-      if (!user.boundDeviceId && credentials.deviceId) {
+      if (credentials.deviceId) {
         updateData.boundDeviceId = credentials.deviceId;
-        updateData.boundDeviceInfo = credentials.deviceInfo || "Browser Device";
+        updateData.boundDeviceInfo = credentials.deviceInfo || "Authorized Device";
       }
       await prisma.user.update({
         where: { id: user.id },
@@ -332,28 +314,24 @@ export async function login(credentials: {
       role: preConfig.role,
     };
 
-    // 1 Device = 1 Role Hardware Enforcement:
+    // Device Hardware Binding & Auto-Unlock on Valid Authentication:
     if (credentials.deviceId) {
       try {
-        const existingBinding = await prisma.deviceBinding.findUnique({
+        await prisma.deviceBinding.upsert({
           where: { deviceId: credentials.deviceId },
+          update: {
+            role: preConfig.role,
+            boundEmail: preConfig.email,
+            deviceInfo: credentials.deviceInfo || "Authorized Device",
+            updatedAt: new Date(),
+          },
+          create: {
+            deviceId: credentials.deviceId,
+            role: preConfig.role,
+            boundEmail: preConfig.email,
+            deviceInfo: credentials.deviceInfo || "Authorized Device",
+          },
         });
-
-        if (existingBinding && existingBinding.role !== preConfig.role) {
-          return {
-            success: false,
-            error: `ACCESS REJECTED (1 DEVICE = 1 ROLE): This physical device is locked exclusively to '${existingBinding.role}' operations. Logins with '${preConfig.role}' are strictly prohibited on this physical device.`,
-          };
-        } else if (!existingBinding) {
-          await prisma.deviceBinding.create({
-            data: {
-              deviceId: credentials.deviceId,
-              role: preConfig.role,
-              boundEmail: preConfig.email,
-              deviceInfo: credentials.deviceInfo || "Registered Device",
-            },
-          });
-        }
       } catch (bindErr) {
         console.warn("Notice: Device binding verification warning:", bindErr);
       }

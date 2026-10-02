@@ -28,7 +28,7 @@ interface ReceiverMistakeAnalyzerProps {
 
 export interface DetectedAnomaly {
   student: StudentExtended;
-  type: "SLASH_IN_NAME" | "MISSING_PHOTO" | "UNCAPITALIZED_NAME" | "INVALID_PHONE" | "MISSING_SCHOOL";
+  type: "SLASH_IN_NAME" | "MISSING_PHOTO" | "UNCAPITALIZED_NAME" | "INVALID_PHONE" | "MISSING_SCHOOL" | "RECEIVER_NOTE";
   severity: "high" | "medium" | "low";
   description: string;
   suggestedFix?: string;
@@ -112,6 +112,16 @@ export default function ReceiverMistakeAnalyzer({
           type: "MISSING_SCHOOL",
           severity: "low",
           description: "School name is missing.",
+        });
+      }
+
+      // 6. Receiver Note to Sender Logged
+      if (s.receiverNote && s.receiverNote.trim()) {
+        list.push({
+          student: s,
+          type: "RECEIVER_NOTE",
+          severity: "medium",
+          description: `Receiver Note logged: "${s.receiverNote}"`,
         });
       }
     });
@@ -267,6 +277,17 @@ export default function ReceiverMistakeAnalyzer({
             >
               Missing Photos ({anomalies.filter((a) => a.type === "MISSING_PHOTO").length})
             </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("RECEIVER_NOTE")}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                filterType === "RECEIVER_NOTE"
+                  ? "bg-amber-500 text-black"
+                  : "bg-neutral-800 text-neutral-300 hover:text-white"
+              }`}
+            >
+              Notes to Sender 📝 ({anomalies.filter((a) => a.type === "RECEIVER_NOTE").length})
+            </button>
           </div>
         </div>
 
@@ -302,6 +323,13 @@ export default function ReceiverMistakeAnalyzer({
                   </div>
 
                   <p className="text-neutral-300 text-[11px]">{item.description}</p>
+
+                  {item.student.receiverNote && item.type !== "RECEIVER_NOTE" && (
+                    <div className="mt-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-center gap-1.5">
+                      <span className="shrink-0">📝 Receiver Note:</span>
+                      <span className="font-medium italic">&quot;{item.student.receiverNote}&quot;</span>
+                    </div>
+                  )}
 
                   <div className="text-[10px] text-neutral-500 flex items-center gap-2">
                     <span>Sender: <strong className="text-neutral-300">{item.student.senderName || "Direct"}</strong></span>

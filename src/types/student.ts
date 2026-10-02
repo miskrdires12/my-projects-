@@ -61,6 +61,8 @@ export interface StudentExtended {
   qrCodeUrl?: string | null;
   qrCodeData?: string | null;
   status?: string;
+  receiverNote?: string | null;
+  hasMistake?: boolean;
   batch?: { batchNumber: string; title: string } | null;
   senderId?: string | null;
   senderName?: string | null;
