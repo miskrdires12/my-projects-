@@ -717,8 +717,8 @@ export default function DashboardShell({ session, children }: DashboardShellProp
           </div>
         </header>
 
-        {/* Page Content with Full Width */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-[#f7faf9] dark:bg-[#070908] transition-colors duration-200">
+        {/* Page Content with Full Width & Multi-Device Responsiveness */}
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 min-w-0 max-w-full overflow-x-hidden bg-[#f7faf9] dark:bg-[#070908] transition-colors duration-200">
           {children}
         </main>
       </div>

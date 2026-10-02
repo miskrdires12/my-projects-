@@ -15,6 +15,7 @@ export const RECEIVER_EXCEL_HEADERS = [
   "Grade",
   "Phone",
   "EmergencyPhone",
+  "BloodType",
   "@photo",
   "@qr",
 ] as const;
@@ -223,16 +224,16 @@ export function getStudentQrLocalPath(student: StudentPhotoIdentity, folderOverr
   return `${cleanFolder}${sep}${fileName}`;
 }
 
-export function getReceiverExcelHeaders(includeBloodType: boolean = false): string[] {
+export function getReceiverExcelHeaders(includeBloodType: boolean = true): string[] {
   if (includeBloodType) {
     return ["StudentID", "Name", "Sex", "Grade", "Phone", "EmergencyPhone", "BloodType", "@photo", "@qr"];
   }
-  return [...RECEIVER_EXCEL_HEADERS];
+  return ["StudentID", "Name", "Sex", "Grade", "Phone", "EmergencyPhone", "@photo", "@qr"];
 }
 
 /**
  * Maps a student record into receiver columns:
- * [StudentID, Name, Sex, Grade, Phone, EmergencyPhone, (BloodType?), @photo, @qr]
+ * [StudentID, Name, Sex, Grade, Phone, EmergencyPhone, BloodType, @photo, @qr]
  */
 export function formatStudentForReceiverExcel(
   student: {
@@ -248,7 +249,7 @@ export function formatStudentForReceiverExcel(
     bloodType?: string | null;
     [key: string]: any;
   },
-  includeBloodType: boolean = false
+  includeBloodType: boolean = true
 ) {
   const emergency =
     student.emergencyContactPhone ||
@@ -267,7 +268,7 @@ export function formatStudentForReceiverExcel(
 
   if (includeBloodType) {
     const bt = (student.bloodType || "").trim();
-    row.push(bt && bt !== "Unknown" ? bt : "");
+    row.push(bt && bt !== "Unknown" ? bt : "Unknown");
   }
 
   row.push(getStudentPhotoLocalPath(student));

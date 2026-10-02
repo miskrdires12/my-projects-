@@ -89,12 +89,9 @@ async function handleExport(options: ExportOptions) {
     cursor = chunk[chunk.length - 1].id;
   }
 
-  // Determine if BloodType column should be included (only if at least 1 student has a selected blood type)
-  const hasBloodType = allStudents.some(
-    (s) => s.bloodType && s.bloodType.trim() && s.bloodType.trim() !== "Unknown"
-  );
-  const headers = getReceiverExcelHeaders(hasBloodType);
-  const dataRows = allStudents.map((s) => formatStudentForReceiverExcel(s, hasBloodType));
+  // Always include BloodType column with "Unknown" for unselected students
+  const headers = getReceiverExcelHeaders(true);
+  const dataRows = allStudents.map((s) => formatStudentForReceiverExcel(s, true));
 
   // Update Receiver operator encoded metrics
   if (session.userId && allStudents.length > 0) {
@@ -120,28 +117,17 @@ async function handleExport(options: ExportOptions) {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
 
     // Set readable column widths
-    ws["!cols"] = hasBloodType
-      ? [
-          { wch: 18 }, // StudentID
-          { wch: 28 }, // Name
-          { wch: 10 }, // Sex
-          { wch: 14 }, // Grade
-          { wch: 18 }, // Phone
-          { wch: 18 }, // EmergencyPhone
-          { wch: 14 }, // BloodType
-          { wch: 70 }, // @photo
-          { wch: 70 }, // @qr
-        ]
-      : [
-          { wch: 18 }, // StudentID
-          { wch: 28 }, // Name
-          { wch: 10 }, // Sex
-          { wch: 14 }, // Grade
-          { wch: 18 }, // Phone
-          { wch: 18 }, // EmergencyPhone
-          { wch: 70 }, // @photo
-          { wch: 70 }, // @qr
-        ];
+    ws["!cols"] = [
+      { wch: 18 }, // StudentID
+      { wch: 28 }, // Name
+      { wch: 10 }, // Sex
+      { wch: 14 }, // Grade
+      { wch: 18 }, // Phone
+      { wch: 18 }, // EmergencyPhone
+      { wch: 14 }, // BloodType
+      { wch: 70 }, // @photo
+      { wch: 70 }, // @qr
+    ];
 
     XLSX.utils.book_append_sheet(wb, ws, "Students");
     const excelBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });

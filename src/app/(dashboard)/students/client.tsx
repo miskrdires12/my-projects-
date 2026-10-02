@@ -1226,37 +1226,23 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       return;
     }
 
-    // Determine if BloodType column should be included (only if at least 1 student has a selected blood type)
-    const hasBloodType = listToExport.some(
-      (s) => s.bloodType && s.bloodType.trim() && s.bloodType.trim() !== "Unknown"
-    );
-    const headers = getReceiverExcelHeaders(hasBloodType);
-    const dataRows = listToExport.map((s) => formatStudentForReceiverExcel(s, hasBloodType));
+    // Always include BloodType column in Excel (writes "Unknown" if not selected)
+    const headers = getReceiverExcelHeaders(true);
+    const dataRows = listToExport.map((s) => formatStudentForReceiverExcel(s, true));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-    ws["!cols"] = hasBloodType
-      ? [
-          { wch: 18 }, // StudentID
-          { wch: 28 }, // Name
-          { wch: 10 }, // Sex
-          { wch: 14 }, // Grade
-          { wch: 18 }, // Phone
-          { wch: 18 }, // EmergencyPhone
-          { wch: 14 }, // BloodType
-          { wch: 70 }, // @photo
-          { wch: 70 }, // @qr
-        ]
-      : [
-          { wch: 18 }, // StudentID
-          { wch: 28 }, // Name
-          { wch: 10 }, // Sex
-          { wch: 14 }, // Grade
-          { wch: 18 }, // Phone
-          { wch: 18 }, // EmergencyPhone
-          { wch: 70 }, // @photo
-          { wch: 70 }, // @qr
-        ];
+    ws["!cols"] = [
+      { wch: 18 }, // StudentID
+      { wch: 28 }, // Name
+      { wch: 10 }, // Sex
+      { wch: 14 }, // Grade
+      { wch: 18 }, // Phone
+      { wch: 18 }, // EmergencyPhone
+      { wch: 14 }, // BloodType
+      { wch: 70 }, // @photo
+      { wch: 70 }, // @qr
+    ];
     XLSX.utils.book_append_sheet(wb, ws, "Students");
 
     const dateTag = new Date().toISOString().split("T")[0];
@@ -1299,11 +1285,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       return;
     }
 
-    // Determine if BloodType column should be included (only if at least 1 student has a selected blood type)
-    const hasBloodType = listToExport.some(
-      (s) => s.bloodType && s.bloodType.trim() && s.bloodType.trim() !== "Unknown"
-    );
-    const headers = getReceiverExcelHeaders(hasBloodType);
+    // Always include BloodType column in CSV (writes "Unknown" if not selected)
+    const headers = getReceiverExcelHeaders(true);
     const escapeCSV = (val: any) => {
       if (val === null || val === undefined) return '""';
       const str = String(val).trim();
@@ -1311,7 +1294,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     };
 
     const rows = listToExport.map((s) =>
-      formatStudentForReceiverExcel(s, hasBloodType)
+      formatStudentForReceiverExcel(s, true)
         .map((cell) => escapeCSV(cell))
         .join(",")
     );
@@ -1632,119 +1615,146 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       {/* Search & Multi-Filter Controls Bar (Comfortable Size & Enterprise Layout) */}
       <div className="rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] p-4 sm:p-5 space-y-4 shadow-xs">
-        <form onSubmit={handleSearchSubmit} className="flex flex-wrap sm:flex-nowrap items-center gap-3">
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-4 top-3.5 h-4 w-4 text-foreground-muted dark:text-[#8a9e93]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Name, Student ID, Phone, Department, or School..."
-              className="w-full h-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] pl-11 pr-4 text-sm text-foreground dark:text-[#f2f7f4] placeholder:text-foreground-subtle dark:placeholder:text-[#6c8074] focus:border-[#8fe617] focus:outline-none transition-colors"
-            />
+        {/* Row 1: Search bar and quick export buttons */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <form onSubmit={handleSearchSubmit} className="flex flex-1 items-center gap-2.5 min-w-0">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-foreground-muted dark:text-[#8a9e93]" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by Name, Student ID, Phone, Department, School..."
+                className="w-full h-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] pl-10 pr-4 text-xs sm:text-sm text-foreground dark:text-[#f2f7f4] placeholder:text-foreground-subtle dark:placeholder:text-[#6c8074] focus:border-[#8fe617] focus:outline-none transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    applyFilters({ query: "" });
+                  }}
+                  className="absolute right-3 top-3 text-xs text-foreground-muted hover:text-foreground cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              className="h-11 px-6 rounded-xl bg-[#8fe617] text-[#070908] font-bold text-xs sm:text-sm hover:brightness-105 transition-all shadow-xs cursor-pointer shrink-0"
+            >
+              Search
+            </button>
+          </form>
+
+          {/* Export CSV & Excel */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleExportExcel(false)}
+              className="h-11 px-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer whitespace-nowrap"
+              title="Download full student directory as Excel (.xlsx) with BloodType & local paths"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+              <span>Export Excel</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExportCSV(false)}
+              className="h-11 px-4 rounded-xl border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] hover:bg-surface-secondary dark:hover:bg-[#202b23] text-foreground dark:text-[#f2f7f4] text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer whitespace-nowrap"
+              title="Download full student directory as CSV with BloodType & local paths"
+            >
+              <Download className="h-4 w-4 text-foreground-muted dark:text-[#8a9e93]" />
+              <span>Export CSV</span>
+            </button>
           </div>
-          <button
-            type="submit"
-            className="h-11 px-6 rounded-xl bg-[#8fe617] text-[#070908] font-bold text-sm hover:brightness-105 transition-all shadow-xs cursor-pointer"
-          >
-            Search
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExportCSV(false)}
-            className="h-11 px-4 rounded-xl border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] hover:bg-surface-secondary dark:hover:bg-[#202b23] text-foreground dark:text-[#f2f7f4] text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
-            title="Download full student directory as CSV"
-          >
-            <Download className="h-4 w-4 text-foreground-muted dark:text-[#8a9e93]" />
-            <span>Export CSV</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExportExcel(false)}
-            className="h-11 px-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
-            title="Download full student directory as Excel (.xlsx)"
-          >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
-            <span>Export Excel</span>
-          </button>
-          <button
-            type="button"
-            disabled={isDownloadingPhotos}
-            onClick={handleBulkDownloadPhotos}
-            className="h-11 px-5 rounded-xl bg-black text-white hover:bg-neutral-800 dark:bg-neutral-900 dark:border dark:border-[#223126] text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
-            title="Download student portraits organized into Grade & Section folders (ZIP archive)"
-          >
-            {isDownloadingPhotos ? (
-              <Loader2 className="h-4 w-4 text-[#8fe617] animate-spin" />
-            ) : (
-              <Download className="h-4 w-4 text-[#8fe617]" />
-            )}
-            <span>
-              {isDownloadingPhotos
-                ? "Packaging ZIP..."
-                : selectedIds.size > 0
-                ? `Download Photos ZIP (${selectedIds.size})`
-                : "Download Photos (.zip)"}
-            </span>
-          </button>
-          <button
-            type="button"
-            disabled={isDownloadingQRs}
-            onClick={handleBulkDownloadQRs}
-            className="h-11 px-5 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
-            title="Download all student QR code cards organized into Grade & Section folders (ZIP archive)"
-          >
-            {isDownloadingQRs ? (
-              <Loader2 className="h-4 w-4 text-sky-400 animate-spin" />
-            ) : (
-              <QrCode className="h-4 w-4 text-sky-400" />
-            )}
-            <span>
-              {isDownloadingQRs
-                ? "Packaging QRs..."
-                : selectedIds.size > 0
-                ? `Download QRs ZIP (${selectedIds.size})`
-                : "Download QRs (.zip)"}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={handleClearAllStudents}
-            className="h-11 px-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Delete all data to feed fresh records"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span>Clear All Data</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsMistakeAnalyzerOpen(true)}
-            className="h-11 px-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
-            title="Scan student records for missing photos, slash marks, uncapitalized names, and format errors"
-          >
-            <ShieldAlert className="h-4 w-4 text-amber-500" />
-            <span>Mistake Analyzer</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleClearAllStudents}
-            className="h-11 px-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Delete all data to feed fresh records"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span>Clear All Data</span>
-          </button>
-          <button
-            type="button"
-            disabled={isSyncingCloud}
-            onClick={handleForceCloudSync}
-            className="h-11 px-4 rounded-xl border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#8fe617] hover:bg-[#8fe617]/20 text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            title="Clean local browser cache and synchronize with live Supabase database"
-          >
-            <RefreshCw className={`h-4 w-4 text-[#8fe617] ${isSyncingCloud ? "animate-spin" : ""}`} />
-            <span>{isSyncingCloud ? "Syncing..." : "Re-Sync Cloud"}</span>
-          </button>
-        </form>
+        </div>
+
+        {/* Row 2: Operational Data Actions (Download Photos ZIP, Download QRs ZIP, Mistake Analyzer, Re-Sync Cloud, Clear All Data) */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-border/70 dark:border-[#223126]/70">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Download Photos ZIP */}
+            <button
+              type="button"
+              disabled={isDownloadingPhotos}
+              onClick={handleBulkDownloadPhotos}
+              className="h-11 px-4 rounded-xl bg-black text-white hover:bg-neutral-800 dark:bg-neutral-900 dark:border dark:border-[#223126] text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              title="Download student portraits organized into Grade & Section folders (ZIP archive)"
+            >
+              {isDownloadingPhotos ? (
+                <Loader2 className="h-4 w-4 text-[#8fe617] animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 text-[#8fe617]" />
+              )}
+              <span>
+                {isDownloadingPhotos
+                  ? "Packaging ZIP..."
+                  : selectedIds.size > 0
+                  ? `Download Photos ZIP (${selectedIds.size})`
+                  : "Download Photos (.zip)"}
+              </span>
+            </button>
+
+            {/* Download QRs ZIP */}
+            <button
+              type="button"
+              disabled={isDownloadingQRs}
+              onClick={handleBulkDownloadQRs}
+              className="h-11 px-4 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              title="Download all student QR code cards organized into Grade & Section folders (ZIP archive)"
+            >
+              {isDownloadingQRs ? (
+                <Loader2 className="h-4 w-4 text-sky-400 animate-spin" />
+              ) : (
+                <QrCode className="h-4 w-4 text-sky-400" />
+              )}
+              <span>
+                {isDownloadingQRs
+                  ? "Packaging QRs..."
+                  : selectedIds.size > 0
+                  ? `Download QRs ZIP (${selectedIds.size})`
+                  : "Download QRs (.zip)"}
+              </span>
+            </button>
+
+            {/* Mistake Analyzer */}
+            <button
+              type="button"
+              onClick={() => setIsMistakeAnalyzerOpen(true)}
+              className="h-11 px-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer whitespace-nowrap"
+              title="Scan student records for missing photos, slash marks, uncapitalized names, and format errors"
+            >
+              <ShieldAlert className="h-4 w-4 text-amber-500" />
+              <span>Mistake Analyzer</span>
+            </button>
+
+            {/* Re-Sync Cloud */}
+            <button
+              type="button"
+              disabled={isSyncingCloud}
+              onClick={handleForceCloudSync}
+              className="h-11 px-4 rounded-xl border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#8fe617] hover:bg-[#8fe617]/20 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              title="Clean local browser cache and synchronize with live cloud database"
+            >
+              <RefreshCw className={`h-4 w-4 text-[#8fe617] ${isSyncingCloud ? "animate-spin" : ""}`} />
+              <span>{isSyncingCloud ? "Syncing..." : "Re-Sync Cloud"}</span>
+            </button>
+          </div>
+
+          {/* Clear All Data (SINGLE button cleanly positioned at the end) */}
+          <div className="flex items-center ml-auto">
+            <button
+              type="button"
+              onClick={handleClearAllStudents}
+              className="h-11 px-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              title="Delete all data to feed fresh records"
+            >
+              <Trash2 className="h-4 w-4 text-red-500" />
+              <span>Clear All Data</span>
+            </button>
+          </div>
+        </div>
 
         {/* 5-Column Multi-Filters Grid (Grade, Branch, School, Dept, Photo) */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
@@ -2088,11 +2098,16 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                           >
                             {student.sex || "Male"}
                           </span>
-                          {student.bloodType && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-mono bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
-                              🩸 {student.bloodType}
-                            </span>
-                          )}
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold font-mono border ${
+                              student.bloodType && student.bloodType.trim() && student.bloodType.trim() !== "Unknown"
+                                ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                                : "bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border-neutral-500/20"
+                            }`}
+                            title={student.bloodType ? `Blood Group: ${student.bloodType}` : "Blood Group: Unknown"}
+                          >
+                            🩸 {student.bloodType && student.bloodType.trim() ? student.bloodType : "Unknown"}
+                          </span>
                         </div>
                       </td>
 
@@ -2354,8 +2369,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       {/* Sleek Floating Bulk Action Dock (Linear / Vercel Style) */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-4xl w-[calc(100%-2rem)] animate-in fade-in slide-in-from-bottom-5 duration-200">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-[#0c100e]/95 backdrop-blur-md px-5 py-3.5 shadow-2xl text-white ring-1 ring-white/10">
+        <div className="fixed bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-4xl w-[calc(100%-1rem)] sm:w-[calc(100%-2rem)] animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 rounded-2xl border border-neutral-800 bg-[#0c100e]/95 backdrop-blur-md px-3 py-2.5 sm:px-5 sm:py-3.5 shadow-2xl text-white ring-1 ring-white/10">
             {/* Left: Counter and 8-Up calculation */}
             <div className="flex items-center gap-3">
               <span className="flex items-center justify-center bg-[#8fe617] text-[#070908] px-2.5 py-1 rounded-lg text-xs font-mono font-bold shadow-xs">
@@ -2685,12 +2700,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <span className="text-foreground dark:text-[#f2f7f4] font-mono">{activeStudent.emergencyContactPhone}</span>
                 </div>
               )}
-              {activeStudent.bloodType && (
-                <div className="pt-2 flex justify-between">
-                  <span className="text-foreground-muted dark:text-[#8a9e93]">Blood Group:</span>
-                  <span className="text-accent font-bold">{activeStudent.bloodType}</span>
-                </div>
-              )}
+              <div className="pt-2 flex justify-between">
+                <span className="text-foreground-muted dark:text-[#8a9e93]">Blood Group:</span>
+                <span className="text-accent font-bold font-mono">
+                  {activeStudent.bloodType && activeStudent.bloodType.trim() ? activeStudent.bloodType : "Unknown"}
+                </span>
+              </div>
               <div className="pt-2 flex justify-between items-center">
                 <span className="text-foreground-muted dark:text-[#8a9e93]">Data Sent By:</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-[#8fe617]/15 text-[#8fe617] border border-[#8fe617]/30">

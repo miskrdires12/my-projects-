@@ -694,7 +694,7 @@ export default function RegisterPage() {
           emergencyContactName: formData.emergencyContactName,
           emergencyContactPhone: formData.emergencyContactPhone,
           nationality: formData.nationality,
-          bloodType: formData.bloodType && formData.bloodType.trim() && formData.bloodType.trim() !== "Unknown" ? formData.bloodType.trim() : null,
+          bloodType: formData.bloodType && formData.bloodType.trim() ? formData.bloodType.trim() : "Unknown",
           photoPath: officialPhotoPath && !officialPhotoPath.startsWith("blob:") ? officialPhotoPath : null,
           status: formData.status as any,
           customFields: customFieldValues,
@@ -725,7 +725,7 @@ export default function RegisterPage() {
           guardianFullName: payload.guardianFullName || null,
           emergencyContactPhone: payload.emergencyContactPhone || null,
           emergencyContactName: payload.emergencyContactName || null,
-          bloodType: payload.bloodType && payload.bloodType.trim() !== "Unknown" ? payload.bloodType.trim() : null,
+          bloodType: payload.bloodType && payload.bloodType.trim() ? payload.bloodType.trim() : "Unknown",
           nationality: payload.nationality || null,
           photoPath: officialPhotoPath && !officialPhotoPath.startsWith("blob:") ? officialPhotoPath : null,
           qrCodeData: qrPayload,
@@ -903,8 +903,8 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-[#f7faf9] dark:bg-[#070908] text-[#080808] dark:text-[#f2f7f4] pb-16 transition-colors duration-200">
-      {/* Phone-Centric Container */}
-      <div className="max-w-xl mx-auto px-4 pt-4 space-y-4">
+      {/* Phone-Centric & Adaptive Multi-Device Container */}
+      <div className="w-full max-w-xl mx-auto px-1.5 sm:px-4 pt-2 sm:pt-4 space-y-4">
 
         {/* Offline Queue & Network Status Banner */}
         {(offlinePendingQueue.length > 0 || !isOnline) && (
@@ -1353,7 +1353,8 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-red-500 hover:shadow-[0_0_14px_rgba(239,68,68,0.25)] focus:border-red-500 focus:ring-2 focus:ring-red-500/30 focus:outline-none transition-all cursor-pointer"
                 >
-                  <option value="">-- No Blood Group Selected --</option>
+                  <option value="">-- No Blood Group Selected (Unknown) --</option>
+                  <option value="Unknown">Unknown</option>
                   <option value="A+">A+ (A Positive)</option>
                   <option value="A-">A- (A Negative)</option>
                   <option value="B+">B+ (B Positive)</option>

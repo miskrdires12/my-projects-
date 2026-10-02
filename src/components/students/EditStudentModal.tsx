@@ -148,7 +148,7 @@ export default function EditStudentModal({
           address: section.trim(),
           guardianFullName: guardianFullName ? capitalizeName(guardianFullName.trim()) : null,
           emergencyContactPhone: emergencyPhone ? emergencyPhone.trim() : null,
-          bloodType: bloodType && bloodType.trim() !== "Unknown" ? bloodType.trim() : null,
+          bloodType: bloodType && bloodType.trim() ? bloodType.trim() : "Unknown",
           status: status as any,
           receiverNote: receiverNote ? receiverNote.trim() : null,
           hasMistake: Boolean(receiverNote && receiverNote.trim()),
@@ -374,7 +374,7 @@ export default function EditStudentModal({
                 onChange={(e) => setBloodType(e.target.value)}
                 className="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-[#161e19] px-3.5 py-2.5 font-bold focus:border-[#8fe617] focus:outline-none cursor-pointer"
               >
-                <option value="">No Blood Group</option>
+                <option value="Unknown">Unknown</option>
                 <option value="A+">A+</option>
                 <option value="A-">A-</option>
                 <option value="B+">B+</option>

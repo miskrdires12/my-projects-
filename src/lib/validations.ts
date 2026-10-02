@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 
-export const BloodTypeEnum = z.enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]);
+export const BloodTypeEnum = z.enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"]);
 export const SexEnum = z.enum(["Male", "Female", "Other"]);
 export const StudentStatusEnum = z.enum(["ACTIVE", "INACTIVE", "ARCHIVED", "SUSPENDED"]);
 export const UserRoleEnum = z.enum(["SUPER_ADMIN", "ADMIN", "SENDER", "RECEIVER"]);

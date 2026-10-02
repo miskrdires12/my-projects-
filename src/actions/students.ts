@@ -115,7 +115,7 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
     const emergencyContactPhone = data.emergencyContactPhone?.trim() || "";
     const guardianFullName = data.guardianFullName?.trim() || "";
     const nationality = data.nationality?.trim() || "";
-    const bloodType = data.bloodType?.trim() || null;
+    const bloodType = data.bloodType?.trim() || "Unknown";
     const emailAddress = data.emailAddress?.trim() || null;
     const address = data.address?.trim() || null;
     const school = data.school?.trim() || null;
@@ -377,7 +377,7 @@ export async function updateStudentAction(
   if (input.rollNumber !== undefined) updatePayload.rollNumber = input.rollNumber;
   if (input.nationality !== undefined) updatePayload.nationality = input.nationality;
   if (input.nationalId !== undefined) updatePayload.nationalId = input.nationalId;
-  if (input.bloodType !== undefined) updatePayload.bloodType = input.bloodType;
+  if (input.bloodType !== undefined) updatePayload.bloodType = input.bloodType?.trim() || "Unknown";
   if (input.emailAddress !== undefined) updatePayload.emailAddress = input.emailAddress;
   if (input.photoPath !== undefined) {
     let finalPath = input.photoPath;
@@ -1206,7 +1206,7 @@ export async function exportStudentsCSVAction(): Promise<{ success: boolean; csv
         escapeCSV(s.school || ""),
         escapeCSV(s.academicYear || ""),
         escapeCSV(s.dateOfBirth ? new Date(s.dateOfBirth).toISOString().split("T")[0] : ""),
-        escapeCSV(s.bloodType || ""),
+        escapeCSV(s.bloodType && s.bloodType.trim() ? s.bloodType.trim() : "Unknown"),
         escapeCSV(s.rollNumber || ""),
         escapeCSV(s.nationalId || ""),
         escapeCSV(s.nationality || ""),
