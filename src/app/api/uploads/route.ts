@@ -21,10 +21,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // SENDER and ADMIN are authorized to upload student photos
-  if (session.role !== "SENDER" && session.role !== "ADMIN" && session.role !== "RECEIVER") {
+  // SENDER, ADMIN, RECEIVER, and SUPER_ADMIN are authorized to upload student photos
+  if (session.role !== "SENDER" && session.role !== "ADMIN" && session.role !== "RECEIVER" && session.role !== "SUPER_ADMIN") {
     return NextResponse.json(
-      { error: "Forbidden: SENDER, RECEIVER, or ADMIN role required" },
+      { error: "Forbidden: SENDER, RECEIVER, ADMIN, or SUPER_ADMIN role required" },
       { status: 403 }
     );
   }

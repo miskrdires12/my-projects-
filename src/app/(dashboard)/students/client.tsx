@@ -1386,20 +1386,38 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       if (typeof window !== "undefined" && "caches" in window) {
         try {
           const cache = await caches.open("siliconlabs_student_photos_v1");
-          if (studentToUpdate.photoPath) {
-            const cleanUrl = studentToUpdate.photoPath.split("?")[0];
-            await cache.delete(cleanUrl);
-            await cache.delete(studentToUpdate.photoPath);
+          const candidateUrls = [
+            studentToUpdate.photoPath,
+            studentToUpdate.thumbnailPath,
+            studentToUpdate.previewPath,
+            studentToUpdate.originalPhotoPath,
+          ].filter(Boolean) as string[];
+          for (const u of candidateUrls) {
+            await cache.delete(u);
+            await cache.delete(u.split("?")[0]);
           }
         } catch {}
       }
 
+      // Add cache buster if it's a URL path to ensure the browser doesn't serve stale cached images
+      const cacheBustParam = `?t=${Date.now()}`;
+      const finalDisplayPath = finalPath.startsWith("data:") ? finalPath : `${finalPath.split("?")[0]}${cacheBustParam}`;
+      const finalThumbnailPath = (uploadResultData?.thumbnailPath || finalPath).startsWith("data:")
+        ? (uploadResultData?.thumbnailPath || finalPath)
+        : `${(uploadResultData?.thumbnailPath || finalPath).split("?")[0]}${cacheBustParam}`;
+      const finalPreviewPath = (uploadResultData?.previewPath || finalPath).startsWith("data:")
+        ? (uploadResultData?.previewPath || finalPath)
+        : `${(uploadResultData?.previewPath || finalPath).split("?")[0]}${cacheBustParam}`;
+      const finalOriginalPath = (uploadResultData?.originalPath || finalPath).startsWith("data:")
+        ? (uploadResultData?.originalPath || finalPath)
+        : `${(uploadResultData?.originalPath || finalPath).split("?")[0]}${cacheBustParam}`;
+
       const updatedStudent: StudentExtended = {
         ...studentToUpdate,
-        photoPath: finalPath,
-        originalPhotoPath: uploadResultData?.originalPath || studentToUpdate.originalPhotoPath || finalPath,
-        previewPath: uploadResultData?.previewPath || studentToUpdate.previewPath || finalPath,
-        thumbnailPath: uploadResultData?.thumbnailPath || studentToUpdate.thumbnailPath || dataUri,
+        photoPath: finalDisplayPath,
+        thumbnailPath: finalThumbnailPath,
+        previewPath: finalPreviewPath,
+        originalPhotoPath: finalOriginalPath,
       };
 
       // 1. Persist to secure client vault
@@ -1416,9 +1434,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         console.warn("Real-time sync photo broadcast notice:", syncErr);
       }
 
-      // 3. Update database via server action
+      // 3. Update database via server action with all progressive/thumbnail paths
       try {
-        await updateStudentPhotoAction(studentToUpdate.id, finalPath);
+        await updateStudentPhotoAction(studentToUpdate.id, finalDisplayPath, {
+          thumbnailPath: finalThumbnailPath,
+          previewPath: finalPreviewPath,
+          originalPhotoPath: finalOriginalPath,
+        });
       } catch (actionErr) {
         console.warn("Server action photo update warning:", actionErr);
       }
@@ -1438,7 +1460,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         activeStudent &&
         (activeStudent.id === studentToUpdate.id || activeStudent.studentId === studentToUpdate.studentId)
       ) {
-        setActiveStudent((prev) => (prev ? { ...prev, photoPath: finalPath } : null));
+        setActiveStudent(updatedStudent);
       }
     };
     reader.readAsDataURL(editedBlob);
@@ -2846,14 +2868,15 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           isOpen={Boolean(editingStudent)}
           studentId={editingStudent.id || editingStudent.studentId}
           originalImageSrc={
-            editingStudent.originalPhotoPath ||
-            editingStudent.previewPath ||
             editingStudent.photoPath ||
+            editingStudent.previewPath ||
+            editingStudent.originalPhotoPath ||
             editingStudent.thumbnailPath ||
             ""
           }
           fallbackImageSrc={
-            editingStudent.photoPath ||
+            editingStudent.previewPath ||
+            editingStudent.originalPhotoPath ||
             editingStudent.thumbnailPath ||
             undefined
           }

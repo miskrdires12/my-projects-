@@ -119,7 +119,7 @@ export async function getSenderTelemetryAction(
 ): Promise<FullSenderTelemetryResponse> {
   try {
     const session = await getSession();
-    if (!session || (session.role !== "ADMIN" && session.role !== "RECEIVER")) {
+    if (!session || (session.role !== "SUPER_ADMIN" && session.role !== "ADMIN" && session.role !== "RECEIVER")) {
       return {
         success: false,
         selectedDate: targetDateStr || new Date().toISOString().split("T")[0],
@@ -175,6 +175,7 @@ export async function getSenderTelemetryAction(
           OR: [
             { role: "SENDER" },
             { role: "ADMIN" },
+            { role: "SUPER_ADMIN" },
             { recordsSentSingle: { gt: 0 } },
           ],
         },
@@ -220,23 +221,19 @@ export async function getSenderTelemetryAction(
     const sendersTelemetryList: SenderDailyTelemetry[] = [];
 
     // Ensure all registered senders are included
-    const knownSenders = new Map<string, { id: string; name: string; email?: string; role: string; boundDeviceInfo?: string | null }>();
+    const knownSenders = new Map<string, { id: string; name: string; email?: string; role: string; boundDeviceInfo?: string | null; lastActiveAt?: string | null }>();
 
     for (const u of allUsers) {
-      knownSenders.set(u.id, {
+      const entry = {
         id: u.id,
         name: u.username || u.email.split("@")[0],
         email: u.email,
         role: u.role,
         boundDeviceInfo: u.boundDeviceInfo,
-      });
-      knownSenders.set(u.username, {
-        id: u.id,
-        name: u.username,
-        email: u.email,
-        role: u.role,
-        boundDeviceInfo: u.boundDeviceInfo,
-      });
+        lastActiveAt: u.lastActiveAt ? u.lastActiveAt.toISOString() : null,
+      };
+      knownSenders.set(u.id, entry);
+      knownSenders.set(u.username, entry);
     }
 
     // Merge sender identities present in day records
@@ -434,14 +431,24 @@ export async function getSenderTelemetryAction(
             currentLiveStatus = "BURSTING";
           } else if (recordsLast5Mins > 0 || lastAgo <= 180000) {
             currentLiveStatus = "ACTIVE";
-          } else if (lastAgo <= 1800000) {
-            // within 30 min
+          } else if (lastAgo <= 1800000 || (senderMeta.lastActiveAt && (nowMs - new Date(senderMeta.lastActiveAt).getTime() <= 300000))) {
+            // within 30 min of last send, or workstation active within last 5 min
             currentLiveStatus = "IDLE";
           } else {
             currentLiveStatus = "COMPLETED";
           }
         } else {
           currentLiveStatus = "COMPLETED";
+        }
+      } else {
+        // No records sent today yet: check if station is online and connected
+        if (isToday && senderMeta.lastActiveAt) {
+          const diffMs = nowMs - new Date(senderMeta.lastActiveAt).getTime();
+          if (diffMs <= 300000) {
+            currentLiveStatus = "ACTIVE";
+          } else if (diffMs <= 1800000) {
+            currentLiveStatus = "IDLE";
+          }
         }
       }
 
@@ -488,7 +495,7 @@ export async function getSenderTelemetryAction(
         recordsLast1Min,
         recordsLast5Mins,
         peakRecordsPerMinute,
-        lastActiveAt: lastRecordAt,
+        lastActiveAt: lastRecordAt || senderMeta.lastActiveAt || null,
         date: validDateStr,
         totalRecordsToday: totalCount,
         studentsWithPhotos,
@@ -607,7 +614,9 @@ export async function getSenderTelemetryAction(
 
     // System summary stats for selected date
     const totalSystemRecordsToday = dayStudents.length;
-    const activeSendersCountToday = sendersTelemetryList.filter((s) => s.totalRecordsToday > 0).length;
+    const activeSendersCountToday = sendersTelemetryList.filter(
+      (s) => s.totalRecordsToday > 0 || s.currentLiveStatus === "ACTIVE" || s.currentLiveStatus === "BURSTING"
+    ).length;
     const activeSenders = sendersTelemetryList.filter((s) => s.totalRecordsToday > 0);
 
     const systemAvgIntervalSeconds =

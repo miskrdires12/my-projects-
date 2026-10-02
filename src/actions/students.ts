@@ -540,7 +540,12 @@ export async function updateStudentAction(
  */
 export async function updateStudentPhotoAction(
   studentIdOrId: string,
-  photoPath: string
+  photoPath: string,
+  extraPaths?: {
+    thumbnailPath?: string | null;
+    previewPath?: string | null;
+    originalPhotoPath?: string | null;
+  }
 ): Promise<StudentActionResult> {
   try {
     const session = await getSession();
@@ -558,14 +563,27 @@ export async function updateStudentPhotoAction(
       return { success: false, error: "Student not found." };
     }
 
+    const thumbnailPath = extraPaths?.thumbnailPath !== undefined ? extraPaths.thumbnailPath : photoPath;
+    const previewPath = extraPaths?.previewPath !== undefined ? extraPaths.previewPath : photoPath;
+    const originalPhotoPath = extraPaths?.originalPhotoPath !== undefined ? extraPaths.originalPhotoPath : (student.originalPhotoPath || photoPath);
+
     // Clean up previous photo in Cloudflare R2 if different, but NEVER delete the new key
-    const newR2Key = extractR2StorageKey(photoPath);
+    const newR2Keys = [
+      extractR2StorageKey(photoPath),
+      extractR2StorageKey(thumbnailPath),
+      extractR2StorageKey(previewPath),
+      extractR2StorageKey(originalPhotoPath),
+    ].filter((k): k is string => Boolean(k));
+
     if (student.photoPath && student.photoPath !== photoPath) {
-      const oldR2Keys = [
+      const candidateOldKeys = [
         extractR2StorageKey(student.photoPath),
         extractR2StorageKey(student.previewPath),
         extractR2StorageKey(student.originalPhotoPath),
-      ].filter((k): k is string => Boolean(k) && k !== newR2Key);
+        extractR2StorageKey(student.thumbnailPath),
+      ].filter((k): k is string => Boolean(k));
+
+      const oldR2Keys = candidateOldKeys.filter((k) => !newR2Keys.includes(k));
       if (oldR2Keys.length > 0) {
         await deleteMultipleFromR2Bucket(oldR2Keys).catch(() => {});
         invalidateR2StorageCache();
@@ -574,7 +592,12 @@ export async function updateStudentPhotoAction(
 
     const updated = await prisma.student.update({
       where: { id: student.id },
-      data: { photoPath },
+      data: {
+        photoPath,
+        thumbnailPath,
+        previewPath,
+        originalPhotoPath,
+      },
     });
 
     // Broadcast updated photo to Global Cloud Sync Bus immediately
@@ -589,9 +612,13 @@ export async function updateStudentPhotoAction(
       department: updated.department,
       academicYear: updated.academicYear,
       photoPath: updated.photoPath,
+      thumbnailPath: updated.thumbnailPath,
+      previewPath: updated.previewPath,
+      originalPhotoPath: updated.originalPhotoPath,
       qrCodeData: updated.qrCodeData || `STUDENT:${updated.studentId}`,
       status: updated.status,
       createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
     }).catch(() => {});
 
     revalidatePath("/students");
