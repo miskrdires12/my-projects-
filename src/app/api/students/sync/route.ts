@@ -14,6 +14,7 @@ export async function GET() {
   try {
     // 1. Check local database
     let dbStudents = await prisma.student.findMany({
+      where: { receiverHidden: { not: true } },
       orderBy: { createdAt: "desc" },
     });
 
@@ -29,6 +30,7 @@ export async function GET() {
     // 3. If container has 0 students, pull and rehydrate from Cloud Sync
     await rehydrateDatabaseFromCloud();
     dbStudents = await prisma.student.findMany({
+      where: { receiverHidden: { not: true } },
       orderBy: { createdAt: "desc" },
     });
 

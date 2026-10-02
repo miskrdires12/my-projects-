@@ -47,7 +47,9 @@ export default async function StudentsPage({
   const pageSize = Math.min(500, Math.max(10, parseInt(searchParams.pageSize || "25", 10)));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {};
+  const where: any = {
+    receiverHidden: { not: true },
+  };
 
   if (query.trim() !== "") {
     const q = query.trim();

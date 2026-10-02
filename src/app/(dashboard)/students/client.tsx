@@ -1061,12 +1061,14 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // Bulk Delete Selected Students
   const handleBulkDelete = () => {
     if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
     if (
       !confirm(
-        `Are you sure you want to permanently delete the ${selectedIds.size} selected student records?`
+        `Are you sure you want to permanently delete the ${count} selected student record${count > 1 ? "s" : ""}?`
       )
-    )
+    ) {
       return;
+    }
 
     const idsToDelete = Array.from(selectedIds);
     const selectedItems: { id: string; studentId: string }[] = [];
@@ -1100,6 +1102,9 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       idsToDelete.forEach((id) => {
         publishStudentSync("DELETE", id).catch(() => {});
       });
+      selectedItems.forEach((item) => {
+        if (item.studentId) publishStudentSync("DELETE", item.studentId).catch(() => {});
+      });
     } catch {}
 
     setDisplayStudents((prev) =>
@@ -1112,7 +1117,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
     startTransition(async () => {
       try {
-        const res = await deleteMultipleStudentsAction(selectedItems.length > 0 ? selectedItems : idsToDelete);
+        const payload = selectedItems.length > 0 ? selectedItems : idsToDelete;
+        const res = await deleteMultipleStudentsAction(payload, "PERMANENT");
         if (!res.success) {
           alert(res.error || "Failed to delete selected student records.");
         }
@@ -2275,7 +2281,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             <Eye className="h-4 w-4" />
                           </button>
 
-                          {(userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
+                          {(userRole === "SUPER_ADMIN" || userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
                             <button
                               type="button"
                               onClick={() => handleDelete(student.id, student.fullName, student.studentId)}
@@ -2804,7 +2810,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <span>Edit Student Data / Note to Sender</span>
               </button>
 
-              {(userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
+              {(userRole === "SUPER_ADMIN" || userRole === "RECEIVER" || userRole === "ADMIN" || userRole === "SENDER") && (
                 <button
                   type="button"
                   onClick={() => handleDelete(activeStudent.id, activeStudent.fullName, activeStudent.studentId)}

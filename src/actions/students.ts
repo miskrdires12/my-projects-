@@ -612,7 +612,7 @@ export async function updateStudentPhotoAction(
 export async function deleteStudentAction(
   idOrStudentId: string,
   optionalStudentId?: string,
-  deleteType: "PERMANENT" | "TEMPORARY" = "TEMPORARY"
+  deleteType: "PERMANENT" | "TEMPORARY" = "PERMANENT"
 ): Promise<StudentActionResult> {
   try {
     const session = await getSession();
@@ -691,33 +691,45 @@ export async function deleteStudentAction(
           });
         } catch {}
 
-        // Use Safe Student Deletion Pipeline (identifies strictly owned objects and guards against deleting shared assets)
-        try {
-          const { executeSafeStudentDeletion } = await import("@/lib/safe-student-deletion");
-          await executeSafeStudentDeletion(student.id, {
-            userId: session.userId,
-            username: session.username || "Operator",
-            role: session.role,
-          });
-        } catch (safeErr) {
-          console.warn("Notice: executeSafeStudentDeletion non-fatal fallback:", safeErr);
-          // Fallback to direct cascade deletion if needed
-          await prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-          await prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-          await prisma.studentQR.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-          await prisma.transferRecord.deleteMany({ where: { studentId: student.id } }).catch(() => {});
-          await prisma.student.delete({ where: { id: student.id } }).catch((e) => {
-            console.warn("Prisma student delete warning:", e);
-          });
+        // 1. Direct cascade delete relations and student record from DB
+        await Promise.allSettled([
+          prisma.customFieldValue.deleteMany({ where: { studentId: student.id } }),
+          prisma.studentPhoto.deleteMany({ where: { studentId: student.id } }),
+          prisma.studentQR.deleteMany({ where: { studentId: student.id } }),
+          prisma.transferRecord.deleteMany({ where: { studentId: student.id } }),
+          prisma.senderMistake.deleteMany({ where: { studentId: targetStudentId } }),
+        ]);
 
-          await createSafeAuditLog({
-            userId: session.userId,
-            action: "STUDENT_DELETE",
-            entityType: "STUDENT",
-            entityId: student.id,
-            metadata: { studentId: student.studentId, name: student.fullName },
-          });
-        }
+        await prisma.student.deleteMany({
+          where: {
+            OR: [
+              { id: student.id },
+              { studentId: targetStudentId },
+            ],
+          },
+        }).catch((e) => {
+          console.warn("Prisma student delete warning:", e);
+        });
+
+        await createSafeAuditLog({
+          userId: session.userId,
+          action: "STUDENT_DELETE",
+          entityType: "STUDENT",
+          entityId: student.id,
+          metadata: { studentId: student.studentId, name: student.fullName },
+        }).catch(() => {});
+
+        // 2. Asynchronously clean up storage files in background
+        (async () => {
+          try {
+            const { executeSafeStudentDeletion } = await import("@/lib/safe-student-deletion");
+            await executeSafeStudentDeletion(student.id, {
+              userId: session.userId,
+              username: session.username || "Operator",
+              role: session.role,
+            });
+          } catch {}
+        })().catch(() => {});
       }
     }
 
@@ -975,7 +987,8 @@ export async function clearAllStudentsAction(): Promise<{ success: boolean; coun
  * Bulk deletes multiple students safely.
  */
 export async function deleteMultipleStudentsAction(
-  items: (string | { id?: string; studentId?: string })[]
+  items: (string | { id?: string; studentId?: string })[],
+  deleteType: "PERMANENT" | "TEMPORARY" = "PERMANENT"
 ): Promise<{ success: boolean; count: number; error?: string }> {
   try {
     const session = await getSession();
@@ -985,23 +998,145 @@ export async function deleteMultipleStudentsAction(
     if (!hasPermission(session.role, "student:delete")) {
       return { success: false, count: 0, error: "Unauthorized: Missing delete permission." };
     }
-    let count = 0;
+
+    if (!items || items.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    // 1. Gather all candidate IDs and studentIds
+    const candidateIds: string[] = [];
+    const candidateStudentIds: string[] = [];
 
     for (const item of items) {
       if (typeof item === "string") {
-        const res = await deleteStudentAction(item);
-        if (res.success) count++;
+        const val = item.trim();
+        if (val) {
+          candidateIds.push(val);
+          candidateStudentIds.push(val);
+        }
       } else if (item && typeof item === "object") {
-        const res = await deleteStudentAction(item.id || item.studentId || "", item.studentId);
-        if (res.success) count++;
+        if (item.id && item.id.trim()) candidateIds.push(item.id.trim());
+        if (item.studentId && item.studentId.trim()) candidateStudentIds.push(item.studentId.trim());
       }
     }
+
+    const uniqueCandidateIds = Array.from(new Set(candidateIds));
+    const uniqueCandidateStudentIds = Array.from(new Set(candidateStudentIds));
+
+    // 2. Find matching records from DB
+    const matchingStudents = await prisma.student.findMany({
+      where: {
+        OR: [
+          { id: { in: uniqueCandidateIds } },
+          { studentId: { in: uniqueCandidateStudentIds } },
+        ],
+      },
+      select: {
+        id: true,
+        studentId: true,
+        fullName: true,
+        photoPath: true,
+        originalPhotoPath: true,
+      },
+    });
+
+    const allDbIds = Array.from(new Set([...matchingStudents.map((s) => s.id), ...uniqueCandidateIds]));
+    const allStudentIds = Array.from(new Set([...matchingStudents.map((s) => s.studentId), ...uniqueCandidateStudentIds]));
+
+    if (deleteType === "TEMPORARY") {
+      const updateRes = await prisma.student.updateMany({
+        where: {
+          OR: [
+            { id: { in: allDbIds } },
+            { studentId: { in: allStudentIds } },
+          ],
+        },
+        data: {
+          receiverHidden: true,
+          hiddenAt: new Date(),
+        },
+      });
+
+      for (const s of matchingStudents) {
+        publishStudentSync("DELETE", {
+          id: s.id,
+          studentId: s.studentId,
+          temporary: true,
+        }).catch(() => {});
+      }
+
+      revalidatePath("/students");
+      revalidatePath("/dashboard");
+      revalidatePath("/print-engine");
+      return { success: true, count: updateRes.count || matchingStudents.length };
+    }
+
+    // PERMANENT DELETION:
+    // Delete dependent records first to satisfy relational integrity
+    await Promise.allSettled([
+      prisma.customFieldValue.deleteMany({ where: { studentId: { in: allDbIds } } }),
+      prisma.studentPhoto.deleteMany({ where: { studentId: { in: allDbIds } } }),
+      prisma.studentQR.deleteMany({ where: { studentId: { in: allDbIds } } }),
+      prisma.transferRecord.deleteMany({ where: { studentId: { in: allDbIds } } }),
+      prisma.senderMistake.deleteMany({ where: { studentId: { in: allStudentIds } } }),
+    ]);
+
+    // Delete student records in bulk
+    const deleteRes = await prisma.student.deleteMany({
+      where: {
+        OR: [
+          { id: { in: allDbIds } },
+          { studentId: { in: allStudentIds } },
+        ],
+      },
+    });
+
+    // Broadcast deletions to Cloud Sync for each student
+    for (const s of matchingStudents) {
+      publishStudentSync("DELETE", {
+        id: s.id,
+        studentId: s.studentId,
+        temporary: false,
+      }).catch(() => {});
+    }
+
+    for (const sid of allStudentIds) {
+      publishStudentSync("DELETE", sid).catch(() => {});
+    }
+
+    // Clean up storage files asynchronously without blocking response
+    (async () => {
+      try {
+        const { deleteFromStorage } = await import("@/lib/storage-service");
+        for (const s of matchingStudents) {
+          if (s.photoPath && !s.photoPath.startsWith("data:")) {
+            deleteFromStorage(s.photoPath).catch(() => {});
+          }
+          if (s.originalPhotoPath && !s.originalPhotoPath.startsWith("data:")) {
+            deleteFromStorage(s.originalPhotoPath).catch(() => {});
+          }
+        }
+      } catch {}
+    })().catch(() => {});
+
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "STUDENT_BULK_DELETE",
+      entityType: "STUDENT",
+      entityId: allDbIds.slice(0, 10).join(","),
+      metadata: {
+        count: deleteRes.count,
+        studentIds: allStudentIds.slice(0, 20),
+        mode: "PERMANENT_EXPUNGE",
+      },
+    }).catch(() => {});
 
     revalidatePath("/students");
     revalidatePath("/dashboard");
     revalidatePath("/print-engine");
-    return { success: true, count };
+    return { success: true, count: deleteRes.count || matchingStudents.length };
   } catch (error: any) {
+    console.error("deleteMultipleStudentsAction error:", error);
     return { success: false, count: 0, error: error?.message || "Failed to delete selected students." };
   }
 }
