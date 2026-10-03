@@ -4,6 +4,7 @@ import {
   publishStudentSync,
   rehydrateDatabaseFromCloud,
 } from "@/lib/sync-engine";
+import { getR2PublicUrl } from "@/lib/r2-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,15 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
+    const formatStudent = (s: any) => ({
+      ...s,
+      photoUrl: s.photoPath
+        ? s.photoPath.startsWith("http")
+          ? s.photoPath
+          : getR2PublicUrl(s.photoPath)
+        : null,
+    });
+
     // 1. Check local database
     let dbStudents = await prisma.student.findMany({
       where: { receiverHidden: { not: true } },
@@ -22,7 +32,7 @@ export async function GET() {
     if (dbStudents.length > 0) {
       return NextResponse.json({
         success: true,
-        students: dbStudents,
+        students: dbStudents.map(formatStudent),
         totalCount: dbStudents.length,
       });
     }
@@ -36,7 +46,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      students: dbStudents,
+      students: dbStudents.map(formatStudent),
       totalCount: dbStudents.length,
     });
   } catch (err: any) {

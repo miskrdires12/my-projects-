@@ -20,6 +20,9 @@ const PUBLIC_PREFIXES = [
   "/api/uploads",
   "/api/photos",
   "/api/storage",
+  "/api/students/lookup",
+  "/api/students/sync",
+  "/api/r2",
 ];
 
 function getAuthSecret(): Uint8Array {
@@ -89,6 +92,9 @@ export async function middleware(request: NextRequest) {
 
   // 5. Enforce authentication on all protected routes
   if (!sessionUser) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
