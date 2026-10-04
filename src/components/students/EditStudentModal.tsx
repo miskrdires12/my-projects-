@@ -18,8 +18,13 @@ import {
 } from "lucide-react";
 import type { StudentExtended } from "@/types/student";
 import { updateStudentAction } from "@/actions/students";
+import { getBranchSchoolsAction } from "@/actions/settings";
 import { saveStudentToDB } from "@/lib/idb-storage";
 import { publishStudentSync } from "@/lib/sync-client";
+import {
+  DEFAULT_BRANCH_SCHOOLS,
+  mergeBranchSchools,
+} from "@/lib/branch-schools";
 
 interface EditStudentModalProps {
   student: StudentExtended | null;
@@ -27,12 +32,6 @@ interface EditStudentModalProps {
   onClose: () => void;
   onSaved: (updatedStudent: StudentExtended) => void;
 }
-
-const SCHOOLS_BY_SECTION: Record<string, string[]> = {
-  Adama: ["Sena Yerosen", "Debebech", "Yacine", "Odda"],
-  "Addis Ababa": ["YMS", "Adika Youth", "School Of America"],
-  Mojjo: ["Mojjo"],
-};
 
 export function capitalizeName(str: string): string {
   if (!str) return "";
@@ -66,6 +65,8 @@ export default function EditStudentModal({
   const [status, setStatus] = useState(student?.status || "ACTIVE");
   const [receiverNote, setReceiverNote] = useState(student?.receiverNote || "");
 
+  const [branchSchools, setBranchSchools] = useState<Record<string, string[]>>(DEFAULT_BRANCH_SCHOOLS);
+
   // Sync state whenever student prop changes
   React.useEffect(() => {
     if (student) {
@@ -85,13 +86,25 @@ export default function EditStudentModal({
     }
   }, [student]);
 
+  // Load latest custom branch schools when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      getBranchSchoolsAction()
+        .then((bs) => {
+          if (bs) setBranchSchools(mergeBranchSchools(bs));
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
   if (!isOpen || !student) return null;
 
-  const availableSchools = SCHOOLS_BY_SECTION[section] || [];
+  const availableSchools = branchSchools[section] || [];
+  const schoolOptions = Array.from(new Set([...availableSchools, ...(school ? [school] : [])]));
 
   const handleSectionChange = (newSec: string) => {
     setSection(newSec);
-    const schools = SCHOOLS_BY_SECTION[newSec] || [];
+    const schools = branchSchools[newSec] || [];
     if (schools.length > 0 && !schools.includes(school)) {
       setSchool(schools[0]);
     }
@@ -306,9 +319,11 @@ export default function EditStudentModal({
                 onChange={(e) => handleSectionChange(e.target.value)}
                 className="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-[#161e19] px-3.5 py-2.5 font-bold focus:border-[#8fe617] focus:outline-none cursor-pointer"
               >
-                <option value="Adama">Adama Section</option>
-                <option value="Addis Ababa">Addis Ababa Section</option>
-                <option value="Mojjo">Mojjo Section</option>
+                {Object.keys(branchSchools).map((b) => (
+                  <option key={b} value={b}>
+                    {b} Section
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -323,7 +338,7 @@ export default function EditStudentModal({
                 onChange={(e) => setSchool(e.target.value)}
                 className="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-[#161e19] px-3.5 py-2.5 font-bold focus:border-[#8fe617] focus:outline-none cursor-pointer"
               >
-                {availableSchools.map((sch) => (
+                {schoolOptions.map((sch) => (
                   <option key={sch} value={sch}>
                     {sch}
                   </option>

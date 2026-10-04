@@ -19,6 +19,11 @@ import {
   MapPin,
 } from "lucide-react";
 import { createSenderTaskAction, updateSenderTaskAction } from "@/actions/tasks";
+import { getBranchSchoolsAction } from "@/actions/settings";
+import {
+  DEFAULT_BRANCH_SCHOOLS,
+  mergeBranchSchools,
+} from "@/lib/branch-schools";
 
 interface SenderProfile {
   id: string;
@@ -65,12 +70,6 @@ interface TaskManagementViewProps {
   currentUserRole: string;
 }
 
-const SCHOOLS_BY_SECTION: Record<string, string[]> = {
-  Adama: ["Sena Yerosen", "Debebech", "Yacine", "Odda"],
-  "Addis Ababa": ["YMS", "Adika Youth", "School Of America"],
-  Mojjo: ["Mojjo"],
-};
-
 export default function TaskManagementView({
   initialTasks,
   analytics,
@@ -79,10 +78,22 @@ export default function TaskManagementView({
   const [tasks, setTasks] = useState<TaskItem[]>(initialTasks);
   const [isPending, startTransition] = useTransition();
 
+  // Regional Branch & Schools Catalog
+  const [branchSchools, setBranchSchools] = useState<Record<string, string[]>>(DEFAULT_BRANCH_SCHOOLS);
+
   // Modal State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [filterSection, setFilterSection] = useState<string>("ALL");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
+
+  // Load custom branch schools
+  React.useEffect(() => {
+    getBranchSchoolsAction()
+      .then((bs) => {
+        if (bs) setBranchSchools(mergeBranchSchools(bs));
+      })
+      .catch(() => {});
+  }, []);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -97,10 +108,10 @@ export default function TaskManagementView({
   const [formError, setFormError] = useState<string | null>(null);
 
   // Available schools based on selected section
-  const availableSchools = SCHOOLS_BY_SECTION[formData.section] || [];
+  const availableSchools = branchSchools[formData.section] || [];
 
   const handleSectionChange = (section: string) => {
-    const schools = SCHOOLS_BY_SECTION[section] || [];
+    const schools = branchSchools[section] || [];
     setFormData((prev) => ({
       ...prev,
       section,
@@ -373,9 +384,11 @@ export default function TaskManagementView({
               className="h-9 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-[#161e19] px-3 text-xs text-neutral-800 dark:text-neutral-200 font-semibold cursor-pointer"
             >
               <option value="ALL">All Sections</option>
-              <option value="Adama">Adama Section</option>
-              <option value="Addis Ababa">Addis Ababa Section</option>
-              <option value="Mojjo">Mojjo Section</option>
+              {Object.keys(branchSchools).map((b) => (
+                <option key={b} value={b}>
+                  {b} Section
+                </option>
+              ))}
             </select>
 
             {/* Status Filter */}
@@ -560,9 +573,11 @@ export default function TaskManagementView({
                     onChange={(e) => handleSectionChange(e.target.value)}
                     className="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-[#161e19] px-3.5 py-2.5 focus:border-[#8fe617] focus:outline-none cursor-pointer"
                   >
-                    <option value="Adama">Adama Section</option>
-                    <option value="Addis Ababa">Addis Ababa Section</option>
-                    <option value="Mojjo">Mojjo Section</option>
+                    {Object.keys(branchSchools).map((b) => (
+                      <option key={b} value={b}>
+                        {b} Section
+                      </option>
+                    ))}
                   </select>
                 </div>
 

@@ -40,6 +40,11 @@ import {
 } from "@/actions/students";
 import { getSenderTasksAction } from "@/actions/tasks";
 import { getGlobalSystemSettingsAction } from "@/actions/settings";
+import {
+  DEFAULT_BRANCH_SCHOOLS,
+  getBranchForSchool,
+  mergeBranchSchools,
+} from "@/lib/branch-schools";
 import type { StudentFormInput } from "@/lib/validations";
 import { CameraModal } from "@/components/camera/CameraModal";
 import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
@@ -111,6 +116,7 @@ export default function RegisterPage() {
   const [officialPhotoPath, setOfficialPhotoPath] = useState<string | null>(null);
 
   // Selected Section & School Dropdowns (Requirement 7)
+  const [branchSchools, setBranchSchools] = useState<Record<string, string[]>>(DEFAULT_BRANCH_SCHOOLS);
   const [selectedSection, setSelectedSection] = useState<string>("Adama");
 
   // Photo Edit Reminder & Slash Mark Rejection (Requirement 6)
@@ -207,6 +213,9 @@ export default function RegisterPage() {
     getGlobalSystemSettingsAction()
       .then((settings) => {
         if (settings) {
+          const bs = settings.branchSchools ? mergeBranchSchools(settings.branchSchools) : DEFAULT_BRANCH_SCHOOLS;
+          setBranchSchools(bs);
+
           setFormData((prev) => ({
             ...prev,
             grade: prev.grade || settings.defaultGrade || "10",
@@ -539,14 +548,7 @@ export default function RegisterPage() {
 
   const handleSectionChange = (sec: string) => {
     setSelectedSection(sec);
-    const validSchools =
-      sec === "Adama"
-        ? ["Sena Yerosen", "Debebech", "Yacine", "Odda"]
-        : sec === "Addis Ababa"
-        ? ["YMS", "Adika Youth", "School Of America"]
-        : sec === "Mojjo"
-        ? ["Mojjo"]
-        : [];
+    const validSchools = branchSchools[sec] || [];
     const defaultSchoolForSec = validSchools[0] || "";
     setFormData((prev) => ({
       ...prev,
@@ -556,14 +558,7 @@ export default function RegisterPage() {
   };
 
   const handleSchoolChange = (schoolName: string) => {
-    let sec = selectedSection;
-    if (["Sena Yerosen", "Debebech", "Yacine", "Odda"].includes(schoolName)) {
-      sec = "Adama";
-    } else if (["YMS", "Adika Youth", "School Of America"].includes(schoolName)) {
-      sec = "Addis Ababa";
-    } else if (["Mojjo"].includes(schoolName)) {
-      sec = "Mojjo";
-    }
+    const sec = getBranchForSchool(schoolName, branchSchools);
     setSelectedSection(sec);
     setFormData((prev) => ({
       ...prev,
@@ -1397,9 +1392,11 @@ export default function RegisterPage() {
                   onChange={(e) => handleSectionChange(e.target.value)}
                   className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-semibold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all cursor-pointer"
                 >
-                  <option value="Adama">Adama Section</option>
-                  <option value="Addis Ababa">Addis Ababa Section</option>
-                  <option value="Mojjo">Mojjo Section</option>
+                  {Object.keys(branchSchools).map((branch) => (
+                    <option key={branch} value={branch}>
+                      {branch} Section
+                    </option>
+                  ))}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#8fe617]">
                   <ChevronDown className="h-4 w-4 stroke-[2.5]" />
@@ -1407,7 +1404,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* School Dropdown (Requirement 7: Sena Yerosen, Debebech, Yacine, Odda from adama section; YMS, Adika Youth, School Of America for adisababa section; and Mojjo for mojjo section) */}
+            {/* School Dropdown (Dynamic Catalog with Warka in Addis Ababa & Super Admin customization) */}
             <div>
               <label className="block text-xs font-bold text-[#080808] dark:text-[#f2f7f4] mb-1 font-mono">
                 School Name <span className="text-red-500">*</span>
@@ -1421,26 +1418,22 @@ export default function RegisterPage() {
                   className="w-full appearance-none rounded-xl border border-[#dce7e1] dark:border-[#26332b] bg-[#f7faf9] dark:bg-[#1c2420] px-3.5 py-2.5 pr-10 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:border-[#8fe617] focus:border-[#8fe617] focus:ring-2 focus:ring-[#8fe617]/30 focus:outline-none transition-all cursor-pointer"
                 >
                   <option value="">-- Select School --</option>
-                  {(!selectedSection || selectedSection === "Adama") && (
-                    <optgroup label="Adama Section" className="font-bold text-[#080808] dark:text-[#8fe617]">
-                      <option value="Sena Yerosen">Sena Yerosen</option>
-                      <option value="Debebech">Debebech</option>
-                      <option value="Yacine">Yacine</option>
-                      <option value="Odda">Odda</option>
-                    </optgroup>
-                  )}
-                  {(!selectedSection || selectedSection === "Addis Ababa") && (
-                    <optgroup label="Addis Ababa Section" className="font-bold text-[#080808] dark:text-[#8fe617]">
-                      <option value="YMS">YMS</option>
-                      <option value="Adika Youth">Adika Youth</option>
-                      <option value="School Of America">School Of America</option>
-                    </optgroup>
-                  )}
-                  {(!selectedSection || selectedSection === "Mojjo") && (
-                    <optgroup label="Mojjo Section" className="font-bold text-[#080808] dark:text-[#8fe617]">
-                      <option value="Mojjo">Mojjo</option>
-                    </optgroup>
-                  )}
+                  {Object.entries(branchSchools).map(([branch, schools]) => {
+                    if (selectedSection && selectedSection !== branch) return null;
+                    return (
+                      <optgroup
+                        key={branch}
+                        label={`${branch} Section`}
+                        className="font-bold text-[#080808] dark:text-[#8fe617]"
+                      >
+                        {schools.map((sch) => (
+                          <option key={sch} value={sch}>
+                            {sch}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3.5 text-[#8fe617]">
                   <ChevronDown className="h-4 w-4 stroke-[2.5]" />

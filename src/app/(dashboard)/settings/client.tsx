@@ -25,6 +25,12 @@ import {
   Sliders,
   Globe,
   Loader2,
+  Building2,
+  MapPin,
+  Plus,
+  X,
+  RotateCcw,
+  AlertCircle,
 } from "lucide-react";
 import {
   getStudentCountFromDB,
@@ -36,14 +42,17 @@ import { RECEIVER_STUDENT_PHOTO_FOLDER } from "@/lib/export-utils";
 import {
   getGlobalSystemSettingsAction,
   updateGlobalSystemSettingsAction,
+  addSchoolToBranchAction,
+  removeSchoolFromBranchAction,
+  addBranchAction,
+  removeBranchAction,
+  resetBranchSchoolsAction,
   GlobalSystemSettings,
 } from "@/actions/settings";
-
-const SCHOOL_SECTIONS = {
-  Adama: ["Sena Yerosen", "Debebech", "Yacine", "Odda"],
-  "Addis Ababa": ["YMS", "Adika Youth", "School Of America"],
-  Mojjo: ["Mojjo"],
-};
+import {
+  DEFAULT_BRANCH_SCHOOLS,
+  mergeBranchSchools,
+} from "@/lib/branch-schools";
 
 export interface ReceiverSettings {
   photoFolder: string;
@@ -130,11 +139,25 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
   const [studentCount, setStudentCount] = useState<number>(0);
   const [isClearingImmediate, setIsClearingImmediate] = useState(false);
 
+  // Regional Branch & School Directory State (Super Admin)
+  const [branchSchools, setBranchSchools] = useState<Record<string, string[]>>(DEFAULT_BRANCH_SCHOOLS);
+  const [activeManageBranch, setActiveManageBranch] = useState<string>("Addis Ababa");
+  const [newSchoolName, setNewSchoolName] = useState<string>("");
+  const [newBranchInput, setNewBranchInput] = useState<string>("");
+  const [isAddingBranch, setIsAddingBranch] = useState<boolean>(false);
+  const [schoolActionLoading, setSchoolActionLoading] = useState<boolean>(false);
+  const [schoolFeedback, setSchoolFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
   // Load saved configurations on mount
   useEffect(() => {
     try {
       getGlobalSystemSettingsAction().then((gs) => {
-        if (gs) setGlobalSettings(gs);
+        if (gs) {
+          setGlobalSettings(gs);
+          if (gs.branchSchools) {
+            setBranchSchools(mergeBranchSchools(gs.branchSchools));
+          }
+        }
       }).catch(() => {});
       const isDark = document.documentElement.classList.contains("dark");
       const savedTheme = (localStorage.getItem("sb_theme") as "light" | "dark") || (isDark ? "dark" : "light");
@@ -247,6 +270,170 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
       alert("Failed to update global settings: " + (err?.message || "Unknown error"));
     } finally {
       setSavingGlobal(false);
+    }
+  };
+
+  const handleAddSchoolToBranch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanSchool = newSchoolName.trim();
+    if (!cleanSchool) return;
+
+    setSchoolActionLoading(true);
+    setSchoolFeedback(null);
+    try {
+      const res = await addSchoolToBranchAction(activeManageBranch, cleanSchool);
+      if (res.success && res.branchSchools) {
+        setBranchSchools(res.branchSchools);
+        setNewSchoolName("");
+        setSchoolFeedback({
+          type: "success",
+          message: `Added "${cleanSchool}" to ${activeManageBranch} branch successfully.`,
+        });
+        setTimeout(() => setSchoolFeedback(null), 4000);
+      } else {
+        setSchoolFeedback({
+          type: "error",
+          message: res.error || "Failed to add school.",
+        });
+      }
+    } catch (err: any) {
+      setSchoolFeedback({
+        type: "error",
+        message: err?.message || "Error adding school.",
+      });
+    } finally {
+      setSchoolActionLoading(false);
+    }
+  };
+
+  const handleRemoveSchoolFromBranch = async (branch: string, schoolName: string) => {
+    if (!confirm(`Are you sure you want to remove "${schoolName}" from the ${branch} branch?`)) {
+      return;
+    }
+    setSchoolActionLoading(true);
+    setSchoolFeedback(null);
+    try {
+      const res = await removeSchoolFromBranchAction(branch, schoolName);
+      if (res.success && res.branchSchools) {
+        setBranchSchools(res.branchSchools);
+        setSchoolFeedback({
+          type: "success",
+          message: `Removed "${schoolName}" from ${branch} branch.`,
+        });
+        setTimeout(() => setSchoolFeedback(null), 4000);
+      } else {
+        setSchoolFeedback({
+          type: "error",
+          message: res.error || "Failed to remove school.",
+        });
+      }
+    } catch (err: any) {
+      setSchoolFeedback({
+        type: "error",
+        message: err?.message || "Error removing school.",
+      });
+    } finally {
+      setSchoolActionLoading(false);
+    }
+  };
+
+  const handleCreateBranch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanBranch = newBranchInput.trim();
+    if (!cleanBranch) return;
+
+    setSchoolActionLoading(true);
+    setSchoolFeedback(null);
+    try {
+      const res = await addBranchAction(cleanBranch);
+      if (res.success && res.branchSchools) {
+        setBranchSchools(res.branchSchools);
+        setActiveManageBranch(cleanBranch);
+        setNewBranchInput("");
+        setIsAddingBranch(false);
+        setSchoolFeedback({
+          type: "success",
+          message: `Branch "${cleanBranch}" created successfully. You can now add schools to it.`,
+        });
+        setTimeout(() => setSchoolFeedback(null), 4000);
+      } else {
+        setSchoolFeedback({
+          type: "error",
+          message: res.error || "Failed to create branch.",
+        });
+      }
+    } catch (err: any) {
+      setSchoolFeedback({
+        type: "error",
+        message: err?.message || "Error creating branch.",
+      });
+    } finally {
+      setSchoolActionLoading(false);
+    }
+  };
+
+  const handleRemoveBranch = async (branch: string) => {
+    if (!confirm(`Are you sure you want to delete the entire branch "${branch}" and all its registered schools?`)) {
+      return;
+    }
+    setSchoolActionLoading(true);
+    setSchoolFeedback(null);
+    try {
+      const res = await removeBranchAction(branch);
+      if (res.success && res.branchSchools) {
+        setBranchSchools(res.branchSchools);
+        const remaining = Object.keys(res.branchSchools);
+        setActiveManageBranch(remaining[0] || "Addis Ababa");
+        setSchoolFeedback({
+          type: "success",
+          message: `Branch "${branch}" removed successfully.`,
+        });
+        setTimeout(() => setSchoolFeedback(null), 4000);
+      } else {
+        setSchoolFeedback({
+          type: "error",
+          message: res.error || "Failed to delete branch.",
+        });
+      }
+    } catch (err: any) {
+      setSchoolFeedback({
+        type: "error",
+        message: err?.message || "Error deleting branch.",
+      });
+    } finally {
+      setSchoolActionLoading(false);
+    }
+  };
+
+  const handleResetDefaults = async () => {
+    if (!confirm("Reset all branches and schools to factory default catalog (includes Warka in Addis Ababa)?")) {
+      return;
+    }
+    setSchoolActionLoading(true);
+    setSchoolFeedback(null);
+    try {
+      const res = await resetBranchSchoolsAction();
+      if (res.success && res.branchSchools) {
+        setBranchSchools(res.branchSchools);
+        setActiveManageBranch("Addis Ababa");
+        setSchoolFeedback({
+          type: "success",
+          message: "All branches & schools reset to factory defaults (with Warka in Addis Ababa).",
+        });
+        setTimeout(() => setSchoolFeedback(null), 4000);
+      } else {
+        setSchoolFeedback({
+          type: "error",
+          message: res.error || "Failed to reset.",
+        });
+      }
+    } catch (err: any) {
+      setSchoolFeedback({
+        type: "error",
+        message: err?.message || "Error resetting branch schools.",
+      });
+    } finally {
+      setSchoolActionLoading(false);
     }
   };
 
@@ -513,7 +700,7 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
                   value={globalSettings.defaultSection}
                   onChange={(e) => {
                     const sec = e.target.value;
-                    const availableSchools = SCHOOL_SECTIONS[sec as keyof typeof SCHOOL_SECTIONS] || [];
+                    const availableSchools = branchSchools[sec] || [];
                     setGlobalSettings((prev) => ({
                       ...prev,
                       defaultSection: sec,
@@ -522,9 +709,11 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
                   }}
                   className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-hidden focus:border-[#8fe617]"
                 >
-                  <option value="Adama">Adama</option>
-                  <option value="Addis Ababa">Addis Ababa</option>
-                  <option value="Mojjo">Mojjo</option>
+                  {Object.keys(branchSchools).map((branch) => (
+                    <option key={branch} value={branch}>
+                      {branch}
+                    </option>
+                  ))}
                 </select>
                 <p className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">
                   Default branch pre-selected on student intake forms.
@@ -541,7 +730,7 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
                   onChange={(e) => setGlobalSettings((prev) => ({ ...prev, defaultSchool: e.target.value }))}
                   className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-hidden focus:border-[#8fe617]"
                 >
-                  {(SCHOOL_SECTIONS[globalSettings.defaultSection as keyof typeof SCHOOL_SECTIONS] || []).map((sch) => (
+                  {(branchSchools[globalSettings.defaultSection] || []).map((sch) => (
                     <option key={sch} value={sch}>
                       {sch}
                     </option>
@@ -683,6 +872,248 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
                     </span>
                   </label>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ────────────────────────────────────────────────────────────────────────── */}
+          {/* REGIONAL CAMPUS BRANCHES & SCHOOL DIRECTORY (SUPER ADMIN)                  */}
+          {/* ────────────────────────────────────────────────────────────────────────── */}
+          <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-[#8fe617]/20 border border-[#8fe617] flex items-center justify-center text-[#062404] dark:text-[#8fe617]">
+                  <Building2 className="h-5 w-5 text-[#8fe617]" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-mono font-black uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2">
+                    <span>Campus Branches &amp; School Directory</span>
+                    <span className="text-[10px] bg-[#8fe617] text-[#062404] px-2 py-0.5 rounded font-black tracking-widest">
+                      DYNAMIC DIRECTORY
+                    </span>
+                  </h2>
+                  <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] mt-0.5">
+                    Add, remove, or organize schools for each branch (Addis Ababa, Adama, Mojjo, etc.). Schools immediately appear on registration forms and search filters.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={schoolActionLoading}
+                  onClick={handleResetDefaults}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] hover:border-[#8fe617] transition-all cursor-pointer disabled:opacity-50"
+                  title="Reset branches and schools to factory default catalog (includes Warka in Addis Ababa)"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Reset Defaults</span>
+                </button>
+              </div>
+            </div>
+
+            {/* School Action Feedback Alert */}
+            {schoolFeedback && (
+              <div
+                className={`p-3.5 rounded-2xl border text-xs font-mono font-bold flex items-center gap-2.5 animate-in fade-in duration-200 ${
+                  schoolFeedback.type === "success"
+                    ? "border-[#8fe617] bg-[#8fe617]/15 text-[#080808] dark:text-[#8fe617]"
+                    : "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400"
+                }`}
+              >
+                {schoolFeedback.type === "success" ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-[#8fe617]" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+                )}
+                <span>{schoolFeedback.message}</span>
+              </div>
+            )}
+
+            {/* Branch Switcher Tabs & Create Branch */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="text-xs font-mono font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase tracking-wider block">
+                  Select Regional Branch to Manage:
+                </label>
+                {!isAddingBranch && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingBranch(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Create New Branch</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Inline Branch Creation Form */}
+              {isAddingBranch && (
+                <form
+                  onSubmit={handleCreateBranch}
+                  className="flex items-center gap-2 p-3 rounded-2xl border border-[#8fe617]/40 bg-[#f7faf9] dark:bg-[#070908] animate-in fade-in duration-200"
+                >
+                  <MapPin className="h-4 w-4 text-[#8fe617] shrink-0" />
+                  <input
+                    type="text"
+                    value={newBranchInput}
+                    onChange={(e) => setNewBranchInput(e.target.value)}
+                    placeholder="Enter branch name (e.g. Hawassa, Dire Dawa, Bahir Dar)..."
+                    className="flex-1 bg-transparent text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-none placeholder:text-[#6b7771] dark:placeholder:text-[#8a9e93]"
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    disabled={schoolActionLoading || !newBranchInput.trim()}
+                    className="px-3 py-1.5 rounded-xl bg-[#8fe617] text-[#062404] text-xs font-mono font-black hover:bg-[#7ecc10] disabled:opacity-50 transition-all cursor-pointer"
+                  >
+                    {schoolActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Create"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingBranch(false);
+                      setNewBranchInput("");
+                    }}
+                    className="p-1.5 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-500 transition-colors cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </form>
+              )}
+
+              {/* Branch Pill Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {Object.keys(branchSchools).map((branch) => {
+                  const isActive = activeManageBranch === branch;
+                  const schoolCount = branchSchools[branch]?.length || 0;
+                  return (
+                    <button
+                      key={branch}
+                      type="button"
+                      onClick={() => {
+                        setActiveManageBranch(branch);
+                        setSchoolFeedback(null);
+                      }}
+                      className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                        isActive
+                          ? "bg-[#8fe617] text-[#062404] shadow-xs"
+                          : "border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] hover:border-[#8fe617]"
+                      }`}
+                    >
+                      <MapPin className="h-3.5 w-3.5" />
+                      <span>{branch}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                          isActive
+                            ? "bg-[#062404]/20 text-[#062404]"
+                            : "bg-neutral-200 dark:bg-neutral-800 text-[#080808] dark:text-[#f2f7f4]"
+                        }`}
+                      >
+                        {schoolCount}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Active Branch School Management Box */}
+            <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/50 dark:bg-[#070908]/50 p-5 space-y-5">
+              <div className="flex items-center justify-between flex-wrap gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+                <div className="flex items-center gap-2">
+                  <School className="h-4 w-4 text-[#8fe617]" />
+                  <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    Schools in <span className="text-[#8fe617] underline decoration-[#8fe617]/50">{activeManageBranch}</span> Branch ({branchSchools[activeManageBranch]?.length || 0})
+                  </span>
+                </div>
+
+                {/* Branch Delete (if user desires) */}
+                {Object.keys(branchSchools).length > 1 && (
+                  <button
+                    type="button"
+                    disabled={schoolActionLoading}
+                    onClick={() => handleRemoveBranch(activeManageBranch)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>Delete {activeManageBranch} Branch</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Add New School Form */}
+              <form onSubmit={handleAddSchoolToBranch} className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[#6b7771] dark:text-[#8a9e93]">
+                    <School className="h-4 w-4" />
+                  </div>
+                  <input
+                    type="text"
+                    value={newSchoolName}
+                    onChange={(e) => setNewSchoolName(e.target.value)}
+                    placeholder={`Enter new school name for ${activeManageBranch} branch (e.g. Warka, St. Joseph)...`}
+                    className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] pl-9 pr-3.5 py-2.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] focus:outline-none focus:border-[#8fe617]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={schoolActionLoading || !newSchoolName.trim()}
+                  className="flex items-center gap-2 rounded-xl bg-[#8fe617] px-4 py-2.5 text-xs font-mono font-black text-[#062404] hover:bg-[#7ecc10] shadow-[0_0_15px_rgba(143,230,23,0.3)] transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {schoolActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 stroke-[2.5]" />}
+                  <span>Add School</span>
+                </button>
+              </form>
+
+              {/* Current Schools List */}
+              <div className="space-y-2">
+                {(!branchSchools[activeManageBranch] || branchSchools[activeManageBranch].length === 0) ? (
+                  <div className="py-8 text-center rounded-xl border border-dashed border-[#dce7e1] dark:border-[#223126] text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                    No schools registered under {activeManageBranch} branch yet. Use the field above to register a school.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {branchSchools[activeManageBranch].map((school) => {
+                      const isWarka = school.toLowerCase() === "warka";
+                      return (
+                        <div
+                          key={school}
+                          className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                            isWarka
+                              ? "border-[#8fe617] bg-[#8fe617]/10"
+                              : "border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] hover:border-[#8fe617]/50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <School className={`h-4 w-4 shrink-0 ${isWarka ? "text-[#8fe617]" : "text-[#6b7771] dark:text-[#8a9e93]"}`} />
+                            <div className="truncate">
+                              <span className="text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] block truncate">
+                                {school}
+                              </span>
+                              {isWarka && (
+                                <span className="text-[9px] font-mono text-[#8fe617] uppercase tracking-wider block font-black">
+                                  ★ Addis Ababa Branch
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={schoolActionLoading}
+                            onClick={() => handleRemoveSchoolFromBranch(activeManageBranch, school)}
+                            className="p-1 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                            title={`Remove ${school} from ${activeManageBranch}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>

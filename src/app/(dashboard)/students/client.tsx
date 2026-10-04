@@ -45,6 +45,11 @@ import {
   updateStudentPhotoAction,
   updateStudentAction,
 } from "@/actions/students";
+import { getBranchSchoolsAction } from "@/actions/settings";
+import {
+  DEFAULT_BRANCH_SCHOOLS,
+  mergeBranchSchools,
+} from "@/lib/branch-schools";
 import type { UserRole } from "@/types/auth";
 import { subscribeToCloudSync, publishStudentSync } from "@/lib/sync-client";
 import {
@@ -277,6 +282,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [selectedPhotoStatus, setSelectedPhotoStatus] = useState(searchParams.get("photoStatus") || "ALL");
   const [selectedBranch, setSelectedBranch] = useState(searchParams.get("branch") || "ALL");
   const [selectedSchool, setSelectedSchool] = useState(searchParams.get("school") || "ALL");
+
+  // Regional Branch & School Directory Catalog
+  const [branchSchools, setBranchSchools] = useState<Record<string, string[]>>(DEFAULT_BRANCH_SCHOOLS);
+
+  useEffect(() => {
+    getBranchSchoolsAction()
+      .then((bs) => {
+        if (bs) setBranchSchools(mergeBranchSchools(bs));
+      })
+      .catch(() => {});
+  }, []);
 
   // Edit Student and Mistake Analyzer Modal States
   const [editingStudentData, setEditingStudentData] = useState<StudentExtended | null>(null);
@@ -1807,9 +1823,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3 text-xs text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
           >
             <option value="ALL">All Branches</option>
-            <option value="Adama">Adama Section</option>
-            <option value="Addis Ababa">Addis Ababa Section</option>
-            <option value="Mojjo">Mojjo Section</option>
+            {Object.keys(branchSchools).map((branch) => (
+              <option key={branch} value={branch}>
+                {branch} Section
+              </option>
+            ))}
           </select>
 
           {/* School Filter */}
@@ -1822,14 +1840,18 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3 text-xs text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
           >
             <option value="ALL">All Schools</option>
-            <option value="Sena Yerosen">Sena Yerosen</option>
-            <option value="Debebech">Debebech</option>
-            <option value="Yacine">Yacine</option>
-            <option value="Odda">Odda</option>
-            <option value="YMS">YMS</option>
-            <option value="Adika Youth">Adika Youth</option>
-            <option value="School Of America">School Of America</option>
-            <option value="Mojjo">Mojjo</option>
+            {Object.entries(branchSchools).map(([branch, schools]) => {
+              if (selectedBranch && selectedBranch !== "ALL" && selectedBranch !== branch) return null;
+              return (
+                <optgroup key={branch} label={`${branch} Section`}>
+                  {schools.map((sch) => (
+                    <option key={sch} value={sch}>
+                      {sch}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
 
           {/* Department Filter */}
