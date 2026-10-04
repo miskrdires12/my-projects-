@@ -21,6 +21,7 @@ const PUBLIC_PREFIXES = [
   "/api/photos",
   "/api/storage",
   "/api/students/lookup",
+  "/api/students/bind-qr",
   "/api/students/sync",
   "/api/r2",
 ];
