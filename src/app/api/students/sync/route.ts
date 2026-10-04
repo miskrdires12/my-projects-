@@ -106,7 +106,7 @@ export async function POST(request: Request) {
             grade: s.grade || "General",
           });
 
-        const studentData = {
+        const studentData: any = {
           fullName: s.fullName,
           phone: s.phone || "N/A",
           sex: s.sex || "Male",
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
           department: s.department || "",
           academicYear: s.academicYear || "",
           address: s.address || null,
-          bloodType: s.bloodType && s.bloodType.trim() !== "Unknown" ? s.bloodType.trim() : null,
+          bloodType: s.bloodType && s.bloodType.trim() !== "Unknown" && s.bloodType.trim() !== "null" ? s.bloodType.trim() : null,
           guardianFullName: s.guardianFullName || "",
           emergencyContactName: s.emergencyContactName || "",
           emergencyContactPhone: s.emergencyContactPhone || "",
@@ -134,9 +134,42 @@ export async function POST(request: Request) {
           hasMistake: s.hasMistake !== undefined ? Boolean(s.hasMistake) : false,
         };
 
+        // Resilient update: Never overwrite existing photos or sender attribution with nulls
+        const safeUpdateData: any = {
+          fullName: s.fullName,
+          phone: s.phone || undefined,
+          sex: s.sex || undefined,
+          grade: s.grade || undefined,
+          qrCodeData: canonicalQr,
+        };
+        if (s.school) safeUpdateData.school = s.school;
+        if (s.department) safeUpdateData.department = s.department;
+        if (s.academicYear) safeUpdateData.academicYear = s.academicYear;
+        if (s.address) safeUpdateData.address = s.address;
+        if (s.bloodType && s.bloodType.trim() !== "Unknown" && s.bloodType.trim() !== "null") {
+          safeUpdateData.bloodType = s.bloodType.trim();
+        }
+        if (s.guardianFullName) safeUpdateData.guardianFullName = s.guardianFullName;
+        if (s.emergencyContactName) safeUpdateData.emergencyContactName = s.emergencyContactName;
+        if (s.emergencyContactPhone) safeUpdateData.emergencyContactPhone = s.emergencyContactPhone;
+        if (s.nationality) safeUpdateData.nationality = s.nationality;
+        if (s.nationalId) safeUpdateData.nationalId = s.nationalId;
+        if (s.rollNumber) safeUpdateData.rollNumber = s.rollNumber;
+        if (photoPath) {
+          safeUpdateData.photoPath = photoPath;
+          safeUpdateData.thumbnailPath = thumbnailPath;
+          safeUpdateData.previewPath = previewPath;
+          safeUpdateData.originalPhotoPath = originalPhotoPath;
+        }
+        if (s.senderId) safeUpdateData.senderId = s.senderId;
+        if (s.senderName) safeUpdateData.senderName = s.senderName;
+        if (s.status) safeUpdateData.status = s.status;
+        if (s.receiverNote !== undefined) safeUpdateData.receiverNote = s.receiverNote;
+        if (s.hasMistake !== undefined) safeUpdateData.hasMistake = Boolean(s.hasMistake);
+
         await prisma.student.upsert({
           where: { studentId: s.studentId },
-          update: studentData,
+          update: safeUpdateData,
           create: {
             studentId: s.studentId,
             ...studentData,
