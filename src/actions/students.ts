@@ -1770,3 +1770,101 @@ export async function getSenderMistakeNotesAction(): Promise<{
     return { success: false, notes: [] };
   }
 }
+
+/**
+ * Approves a student submitted from mobile APK or pending Super Admin review.
+ * Sets status to ACTIVE, clears pending receiver notes, and broadcasts instant sync.
+ */
+export async function approveStudentAction(studentIdOrId: string): Promise<StudentActionResult> {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return { success: false, error: "Session expired. Please log in again." };
+    }
+
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: [{ id: studentIdOrId }, { studentId: studentIdOrId }],
+      },
+    });
+
+    if (!student) {
+      return { success: false, error: "Student not found." };
+    }
+
+    const updated = await prisma.student.update({
+      where: { id: student.id },
+      data: {
+        status: "ACTIVE",
+        receiverNote: null,
+        hasMistake: false,
+      },
+    });
+
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "STUDENT_APPROVE",
+      entityType: "STUDENT",
+      entityId: updated.id,
+      metadata: { studentId: updated.studentId, approvedBy: session.username || session.email },
+    });
+
+    publishStudentSync("UPSERT", updated).catch(() => {});
+
+    return {
+      success: true,
+      studentId: updated.studentId,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to approve student." };
+  }
+}
+
+/**
+ * Rejects a mobile-registered student or QR bind request.
+ */
+export async function rejectStudentAction(studentIdOrId: string): Promise<StudentActionResult> {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return { success: false, error: "Session expired. Please log in again." };
+    }
+
+    const student = await prisma.student.findFirst({
+      where: {
+        OR: [{ id: studentIdOrId }, { studentId: studentIdOrId }],
+      },
+    });
+
+    if (!student) {
+      return { success: false, error: "Student not found." };
+    }
+
+    const updated = await prisma.student.update({
+      where: { id: student.id },
+      data: {
+        status: "INACTIVE",
+        receiverNote: `REJECTED_BY_SUPERADMIN: ${new Date().toLocaleDateString()}`,
+        hasMistake: true,
+      },
+    });
+
+    await createSafeAuditLog({
+      userId: session.userId,
+      action: "STUDENT_REJECT",
+      entityType: "STUDENT",
+      entityId: updated.id,
+      metadata: { studentId: updated.studentId, rejectedBy: session.username || session.email },
+    });
+
+    publishStudentSync("UPSERT", updated).catch(() => {});
+
+    return {
+      success: true,
+      studentId: updated.studentId,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to reject student." };
+  }
+}
+

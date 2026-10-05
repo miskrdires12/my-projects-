@@ -34,6 +34,8 @@ import {
   QrCode,
   Pencil,
   ShieldAlert,
+  CheckCheck,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -44,6 +46,8 @@ import {
   deleteMultipleStudentsAction,
   updateStudentPhotoAction,
   updateStudentAction,
+  approveStudentAction,
+  rejectStudentAction,
 } from "@/actions/students";
 import { getBranchSchoolsAction } from "@/actions/settings";
 import {
@@ -413,6 +417,54 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }).catch(() => {});
 
     alert(`⚡ Auto-resend signal dispatched to Sender Station for ${student.fullName} (${sId})!\n\nIf the sender station has this student queued or stored locally, the photo will auto-transmit immediately.`);
+  };
+
+  // Super Admin 1-Click Approval for Mobile-Registered Students or QR Binds
+  const handleApproveStudent = async (student: StudentExtended) => {
+    try {
+      const res = await approveStudentAction(student.id);
+      if (res.success) {
+        const updated = {
+          ...student,
+          status: "ACTIVE",
+          receiverNote: null,
+          hasMistake: false,
+        };
+        setDisplayStudents((prev) =>
+          prev.map((s) => (s.id === student.id ? updated : s))
+        );
+        saveStudentToDB(updated as any).catch(() => {});
+        publishStudentSync("UPSERT", updated as any).catch(() => {});
+      } else {
+        alert(res.error || "Failed to approve student");
+      }
+    } catch (err: any) {
+      alert("Error approving student: " + err.message);
+    }
+  };
+
+  const handleRejectStudent = async (student: StudentExtended) => {
+    if (!confirm(`Are you sure you want to reject registration for ${student.fullName}?`)) return;
+    try {
+      const res = await rejectStudentAction(student.id);
+      if (res.success) {
+        const updated = {
+          ...student,
+          status: "INACTIVE",
+          receiverNote: `REJECTED_BY_SUPERADMIN: ${new Date().toLocaleDateString()}`,
+          hasMistake: true,
+        };
+        setDisplayStudents((prev) =>
+          prev.map((s) => (s.id === student.id ? updated : s))
+        );
+        saveStudentToDB(updated as any).catch(() => {});
+        publishStudentSync("UPSERT", updated as any).catch(() => {});
+      } else {
+        alert(res.error || "Failed to reject student");
+      }
+    } catch (err: any) {
+      alert("Error rejecting student: " + err.message);
+    }
   };
 
   const handleSort = (field: keyof StudentExtended) => {
@@ -1518,6 +1570,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           emPhone.includes(q) ||
           emName.includes(q) ||
           blood.includes(q) ||
+          (s.status || "").toLowerCase().includes(q) ||
+          (s.receiverNote || "").toLowerCase().includes(q) ||
           Boolean(customMatch)
         );
       });
@@ -1767,6 +1821,35 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               <span>Mistake Analyzer</span>
             </button>
 
+            {/* Pending Super Admin Approvals */}
+            {displayStudents.some(
+              (s) =>
+                s.status === "PENDING_APPROVAL" ||
+                s.receiverNote?.includes("PENDING_SUPERADMIN_APPROVAL")
+            ) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("PENDING_APPROVAL");
+                }}
+                className="h-11 px-4 rounded-xl border border-amber-500 bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 text-xs sm:text-sm font-bold transition-colors flex items-center gap-2 shadow-xs cursor-pointer whitespace-nowrap animate-pulse"
+                title="Filter student records waiting for Super Admin approval from mobile APK"
+              >
+                <CheckCheck className="h-4 w-4 text-amber-500" />
+                <span>
+                  Pending Approvals (
+                  {
+                    displayStudents.filter(
+                      (s) =>
+                        s.status === "PENDING_APPROVAL" ||
+                        s.receiverNote?.includes("PENDING_SUPERADMIN_APPROVAL")
+                    ).length
+                  }
+                  )
+                </span>
+              </button>
+            )}
+
             {/* Re-Sync Cloud */}
             <button
               type="button"
@@ -1997,8 +2080,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                     )}
                   </button>
                 </th>
-                <th className="px-4 py-3.5">School</th>
-                <th className="px-4 py-3.5">Branch / Location</th>
                 <th className="px-4 py-3.5">Sent By</th>
                 <th className="px-4 py-3.5">Photo Status</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
@@ -2007,7 +2088,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <tbody className="divide-y divide-border dark:divide-[#223126]">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
+                  <td colSpan={10} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
                       <div className="w-16 h-16 rounded-2xl bg-surface-secondary dark:bg-[#161e19] border border-border dark:border-[#223126] flex items-center justify-center text-accent">
                         <Users className="w-8 h-8 text-[#8fe617]" />
@@ -2116,8 +2197,43 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
                       <td className="px-4 py-3.5 font-semibold text-sm text-foreground dark:text-[#f2f7f4]">
                         <div className="flex flex-col gap-1">
-                          <span>{student.fullName}</span>
-                          {student.receiverNote && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{student.fullName}</span>
+                            {student.school && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25">
+                                🏫 {student.school}
+                              </span>
+                            )}
+                            {student.address && student.address.trim() !== "" && student.address !== "General" && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-foreground-muted dark:text-[#8a9e93] bg-surface-secondary dark:bg-[#161e19] border border-border dark:border-[#223126]">
+                                📍 {student.address}
+                              </span>
+                            )}
+                          </div>
+                          {(student.status === "PENDING_APPROVAL" || student.receiverNote?.includes("PENDING_SUPERADMIN_APPROVAL")) && (
+                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40">
+                                ⚠️ Needs Approval
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleApproveStudent(student)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-xs cursor-pointer"
+                                title="Super Admin: Approve and save to live system"
+                              >
+                                <CheckCheck className="h-3 w-3" /> Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectStudent(student)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-600 hover:bg-red-500/30 transition-colors border border-red-500/30 cursor-pointer"
+                                title="Reject"
+                              >
+                                <XCircle className="h-3 w-3" /> Reject
+                              </button>
+                            </div>
+                          )}
+                          {student.receiverNote && !student.receiverNote.includes("PENDING_SUPERADMIN_APPROVAL") && (
                             <button
                               type="button"
                               onClick={() => setEditingStudentData(student)}
@@ -2157,16 +2273,6 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
                       <td className="px-4 py-3.5 text-sm font-medium text-foreground dark:text-[#f2f7f4]">{student.grade}</td>
                       <td className="px-4 py-3.5 text-sm font-mono text-foreground-muted dark:text-[#8a9e93]">{student.phone}</td>
-
-                      {/* School Column */}
-                      <td className="px-4 py-3.5 text-sm font-semibold text-foreground dark:text-[#f2f7f4] max-w-[140px] truncate" title={student.school || "Unassigned"}>
-                        {student.school || "—"}
-                      </td>
-
-                      {/* Branch / Location Column */}
-                      <td className="px-4 py-3.5 text-sm font-mono text-foreground-muted dark:text-[#8a9e93] max-w-[120px] truncate" title={student.address || "General"}>
-                        {student.address || "General"}
-                      </td>
 
                       {/* Data Sent By Attribution */}
                       <td className="px-4 py-3.5">
@@ -2320,6 +2426,28 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                               <QrCode className="h-4 w-4 text-[#8fe617]" />
                             )}
                           </button>
+
+                          {/* Super Admin Quick Approval for Mobile Scanned QR / Registrations */}
+                          {(student.status === "PENDING_APPROVAL" || student.receiverNote?.includes("PENDING_SUPERADMIN_APPROVAL")) && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleApproveStudent(student)}
+                                className="rounded-lg p-2 text-emerald-600 bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/40 transition-colors cursor-pointer"
+                                title={`Super Admin: Approve ${student.fullName} (Save to Live System)`}
+                              >
+                                <CheckCheck className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectStudent(student)}
+                                className="rounded-lg p-2 text-red-500 bg-red-500/15 hover:bg-red-500/30 border border-red-500/40 transition-colors cursor-pointer"
+                                title={`Super Admin: Reject ${student.fullName}`}
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
 
                           {/* 1-Click Edit Student Record */}
                           <button
