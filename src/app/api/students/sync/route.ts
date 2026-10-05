@@ -34,10 +34,10 @@ export async function GET(request: Request) {
 
     const formatStudent = (s: any) => ({
       ...s,
-      school: s.school || (schoolParam ? schoolParam : "Warka"),
-      schoolName: s.school || (schoolParam ? schoolParam : "Warka"),
-      address: s.address || "Addis Ababa",
-      cityRegion: s.cityRegion || s.address || "Addis Ababa",
+      school: s.school || null,
+      schoolName: s.school || null,
+      address: s.address || null,
+      cityRegion: s.cityRegion || s.address || null,
       photoUrl: s.photoPath
         ? s.photoPath.startsWith("http")
           ? s.photoPath

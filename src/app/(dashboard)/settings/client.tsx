@@ -125,8 +125,8 @@ export function SettingsClient({ userRole = "RECEIVER", username = "Operator" }:
   const [globalSettings, setGlobalSettings] = useState<GlobalSystemSettings>({
     defaultGrade: "10",
     defaultAcademicYear: "2026-2027",
-    defaultSchool: "Sena Yerosen",
-    defaultSection: "Adama",
+    defaultSchool: "",
+    defaultSection: "",
     enforceAutoCapitalize: true,
     enforceSlashRejection: true,
     enforcePhonePrefix2517: true,

@@ -57,8 +57,8 @@ export default function EditStudentModal({
   const [grade, setGrade] = useState(student?.grade || "10");
   const [sex, setSex] = useState(student?.sex || "Male");
   const [phone, setPhone] = useState(student?.phone || "");
-  const [section, setSection] = useState(student?.address || "Adama");
-  const [school, setSchool] = useState(student?.school || "Sena Yerosen");
+  const [section, setSection] = useState(student?.address || "");
+  const [school, setSchool] = useState(student?.school || "");
   const [guardianFullName, setGuardianFullName] = useState(student?.guardianFullName || "");
   const [emergencyPhone, setEmergencyPhone] = useState(student?.emergencyContactPhone || "");
   const [bloodType, setBloodType] = useState(student?.bloodType || "");
@@ -75,8 +75,8 @@ export default function EditStudentModal({
       setGrade(student.grade || "10");
       setSex(student.sex || "Male");
       setPhone(student.phone || "");
-      setSection(student.address || "Adama");
-      setSchool(student.school || "Sena Yerosen");
+      setSection(student.address || "");
+      setSchool(student.school || "");
       setGuardianFullName(student.guardianFullName || "");
       setEmergencyPhone(student.emergencyContactPhone || "");
       setBloodType(student.bloodType || "");
@@ -99,13 +99,15 @@ export default function EditStudentModal({
 
   if (!isOpen || !student) return null;
 
-  const availableSchools = branchSchools[section] || [];
+  const availableSchools = section ? branchSchools[section] || [] : [];
   const schoolOptions = Array.from(new Set([...availableSchools, ...(school ? [school] : [])]));
 
   const handleSectionChange = (newSec: string) => {
     setSection(newSec);
     const schools = branchSchools[newSec] || [];
-    if (schools.length > 0 && !schools.includes(school)) {
+    if (!newSec) {
+      setSchool("");
+    } else if (schools.length > 0 && (!school || !schools.includes(school))) {
       setSchool(schools[0]);
     }
   };
@@ -157,8 +159,8 @@ export default function EditStudentModal({
           grade: grade.trim(),
           sex,
           phone: phone.trim(),
-          school: school.trim(),
-          address: section.trim(),
+          school: school.trim() || null,
+          address: section.trim() || null,
           guardianFullName: guardianFullName ? capitalizeName(guardianFullName.trim()) : null,
           emergencyContactPhone: emergencyPhone ? emergencyPhone.trim() : null,
           bloodType: bloodType && bloodType.trim() ? bloodType.trim() : "Unknown",
@@ -312,13 +314,14 @@ export default function EditStudentModal({
             <div>
               <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 flex items-center gap-1">
                 <MapPin className="h-3.5 w-3.5 text-sky-400" />
-                <span>Section / Location *</span>
+                <span>Section / Location</span>
               </label>
               <select
                 value={section}
                 onChange={(e) => handleSectionChange(e.target.value)}
                 className="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-[#161e19] px-3.5 py-2.5 font-bold focus:border-[#8fe617] focus:outline-none cursor-pointer"
               >
+                <option value="">(Unassigned / Not Specified)</option>
                 {Object.keys(branchSchools).map((b) => (
                   <option key={b} value={b}>
                     {b} Section
@@ -331,13 +334,14 @@ export default function EditStudentModal({
             <div>
               <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 flex items-center gap-1">
                 <School className="h-3.5 w-3.5 text-[#8fe617]" />
-                <span>School Name *</span>
+                <span>School Name</span>
               </label>
               <select
                 value={school}
                 onChange={(e) => setSchool(e.target.value)}
                 className="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-[#161e19] px-3.5 py-2.5 font-bold focus:border-[#8fe617] focus:outline-none cursor-pointer"
               >
+                <option value="">(Unassigned / Not Specified)</option>
                 {schoolOptions.map((sch) => (
                   <option key={sch} value={sch}>
                     {sch}

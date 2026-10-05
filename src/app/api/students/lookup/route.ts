@@ -191,8 +191,8 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const studentSchool = dbStudent.school || (schoolParam ? schoolParam : "Warka");
-      const studentAddress = dbStudent.address || "Addis Ababa";
+      const studentSchool = dbStudent.school || null;
+      const studentAddress = dbStudent.address || null;
 
       return NextResponse.json(
         {
@@ -241,8 +241,6 @@ export async function GET(request: NextRequest) {
 
     if (matchedR2) {
       const photoUrl = getR2PublicUrl(matchedR2.key);
-      const fallbackSchool = schoolParam || "Warka";
-      const fallbackAddress = "Addis Ababa";
 
       // Opportunistically save to database for future queries
       try {
@@ -252,8 +250,6 @@ export async function GET(request: NextRequest) {
             fullName: matchedR2.fullName,
             grade: matchedR2.grade || "General",
             photoPath: matchedR2.key,
-            school: fallbackSchool,
-            address: fallbackAddress,
           },
           create: {
             studentId: matchedR2.studentId,
@@ -262,8 +258,8 @@ export async function GET(request: NextRequest) {
             sex: "Unspecified",
             phone: "",
             photoPath: matchedR2.key,
-            school: fallbackSchool,
-            address: fallbackAddress,
+            school: null,
+            address: null,
             status: "ACTIVE",
           },
         });
@@ -285,11 +281,11 @@ export async function GET(request: NextRequest) {
             sex: "",
             gender: "",
             bloodType: "",
-            school: fallbackSchool,
-            schoolName: fallbackSchool,
-            address: fallbackAddress,
-            cityRegion: fallbackAddress,
-            location: fallbackAddress,
+            school: null,
+            schoolName: null,
+            address: null,
+            cityRegion: null,
+            location: null,
             parentPhone: "",
             phone: "",
             emergencyContactPhone: "",

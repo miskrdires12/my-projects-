@@ -66,10 +66,10 @@ export async function GET(request: Request) {
       emergencyContactName: s.emergencyContactName || "",
       guardianName: s.guardianFullName || "",
       bloodType: s.bloodType || "",
-      school: s.school || (schoolParam ? schoolParam : "Warka"),
-      schoolName: s.school || (schoolParam ? schoolParam : "Warka"),
-      address: s.address || "Addis Ababa",
-      cityRegion: s.cityRegion || s.address || "Addis Ababa",
+      school: s.school || null,
+      schoolName: s.school || null,
+      address: s.address || null,
+      cityRegion: s.cityRegion || s.address || null,
       qrCodeData: s.qrCodeData || s.studentId,
       photoUrl: s.photoPath
         ? s.photoPath.startsWith("http")

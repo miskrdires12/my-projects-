@@ -219,8 +219,8 @@ export default function RegisterPage() {
           setFormData((prev) => ({
             ...prev,
             grade: prev.grade || settings.defaultGrade || "10",
-            school: prev.school || settings.defaultSchool || "Sena Yerosen",
-            address: prev.address || settings.defaultSection || "Adama",
+            school: prev.school || settings.defaultSchool || "",
+            address: prev.address || settings.defaultSection || "",
             academicYear: prev.academicYear || settings.defaultAcademicYear || "2026-2027",
           }));
           if (settings.defaultSection) {
@@ -853,7 +853,7 @@ export default function RegisterPage() {
     clearActiveDraft();
     setPhotoWasEdited(false);
     let defaultGrade = "10";
-    let defaultSchool = "Sena Yerosen";
+    let defaultSchool = "";
     let defaultAcademicYear = "2026-2027";
     let idPrefix = "SB-";
     try {
@@ -874,7 +874,7 @@ export default function RegisterPage() {
       sex: "Male",
       phone: "",
       emailAddress: "",
-      address: selectedSection || "Adama",
+      address: selectedSection || "",
       school: defaultSchool,
       department: "",
       academicYear: defaultAcademicYear,
