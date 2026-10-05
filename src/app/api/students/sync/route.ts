@@ -5,16 +5,39 @@ import {
   rehydrateDatabaseFromCloud,
 } from "@/lib/sync-engine";
 import { getR2PublicUrl } from "@/lib/r2-storage";
+import { verifyApkAccess } from "@/lib/apk-control";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET: Rehydrates cold Lambda container and returns all active synchronized students.
+ * GET: Rehydrates cold Lambda container and returns active synchronized students.
+ * Supports ?school= filter to restrict output strictly to the active school campus.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const schoolParam = searchParams.get("school")?.trim();
+
+    // 1. Verify Super Admin APK access and school approval
+    const authCheck = await verifyApkAccess(request, schoolParam);
+    if (!authCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: authCheck.error,
+          blocked: true,
+          students: [],
+        },
+        { status: authCheck.status || 403 }
+      );
+    }
+
     const formatStudent = (s: any) => ({
       ...s,
+      school: s.school || (schoolParam ? schoolParam : "Warka"),
+      schoolName: s.school || (schoolParam ? schoolParam : "Warka"),
+      address: s.address || "Addis Ababa",
+      cityRegion: s.cityRegion || s.address || "Addis Ababa",
       photoUrl: s.photoPath
         ? s.photoPath.startsWith("http")
           ? s.photoPath
@@ -22,9 +45,14 @@ export async function GET() {
         : null,
     });
 
+    const where: any = { receiverHidden: { not: true } };
+    if (schoolParam && schoolParam !== "ALL") {
+      where.school = { equals: schoolParam, mode: "insensitive" };
+    }
+
     // 1. Check local database
     let dbStudents = await prisma.student.findMany({
-      where: { receiverHidden: { not: true } },
+      where,
       orderBy: { createdAt: "desc" },
     });
 
@@ -32,6 +60,7 @@ export async function GET() {
     if (dbStudents.length > 0) {
       return NextResponse.json({
         success: true,
+        school: schoolParam || "ALL",
         students: dbStudents.map(formatStudent),
         totalCount: dbStudents.length,
       });
@@ -40,12 +69,13 @@ export async function GET() {
     // 3. If container has 0 students, pull and rehydrate from Cloud Sync
     await rehydrateDatabaseFromCloud();
     dbStudents = await prisma.student.findMany({
-      where: { receiverHidden: { not: true } },
+      where,
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({
       success: true,
+      school: schoolParam || "ALL",
       students: dbStudents.map(formatStudent),
       totalCount: dbStudents.length,
     });

@@ -36,6 +36,7 @@ import {
   ShieldAlert,
   CheckCheck,
   XCircle,
+  Smartphone,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -65,6 +66,7 @@ import { PhotoEditorModal } from "@/components/camera/PhotoEditorModal";
 import { ResilientStudentPhoto } from "@/components/ui/ResilientStudentPhoto";
 import EditStudentModal from "@/components/students/EditStudentModal";
 import ReceiverMistakeAnalyzer from "@/components/students/ReceiverMistakeAnalyzer";
+import { ApkControlModal } from "@/components/admin/ApkControlModal";
 import type { StudentExtended } from "@/types/student";
 
 interface StudentDirectoryClientProps {
@@ -298,9 +300,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       .catch(() => {});
   }, []);
 
-  // Edit Student and Mistake Analyzer Modal States
+  // Edit Student, Mistake Analyzer, and APK Control Modal States
   const [editingStudentData, setEditingStudentData] = useState<StudentExtended | null>(null);
   const [isMistakeAnalyzerOpen, setIsMistakeAnalyzerOpen] = useState(false);
+  const [isApkControlOpen, setIsApkControlOpen] = useState(false);
 
   // Selection state for bulk operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1819,6 +1822,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             >
               <ShieldAlert className="h-4 w-4 text-amber-500" />
               <span>Mistake Analyzer</span>
+            </button>
+
+            {/* Super Admin Mobile APK Access & School Approval Button */}
+            <button
+              type="button"
+              onClick={() => setIsApkControlOpen(true)}
+              className="h-11 px-4 rounded-xl border border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-2 shadow-xs cursor-pointer whitespace-nowrap"
+              title="Super Admin control to block mobile APK access or approve school campuses"
+            >
+              <Smartphone className="h-4 w-4 text-purple-400" />
+              <span>Mobile APK & Schools</span>
             </button>
 
             {/* Pending Super Admin Approvals */}
@@ -3343,6 +3357,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           saveStudentToDB(updated as any).catch(() => {});
           publishStudentSync("UPSERT", updated as any).catch(() => {});
         }}
+      />
+
+      {/* Super Admin Mobile APK Access Control Modal */}
+      <ApkControlModal
+        isOpen={isApkControlOpen}
+        onClose={() => setIsApkControlOpen(false)}
+        userRole={userRole}
       />
     </div>
   );

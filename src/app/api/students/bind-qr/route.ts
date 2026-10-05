@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { publishStudentSync } from "@/lib/sync-engine";
+import { verifyApkAccess } from "@/lib/apk-control";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,15 @@ export async function POST(request: Request) {
       address,
       isNewRegistration,
     } = body;
+
+    // Verify Super Admin APK access and school approval
+    const authCheck = await verifyApkAccess(request, school);
+    if (!authCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: authCheck.error, blocked: true },
+        { status: authCheck.status || 403 }
+      );
+    }
 
     if (!studentId || typeof studentId !== "string") {
       return NextResponse.json(

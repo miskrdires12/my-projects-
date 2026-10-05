@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getR2PublicUrl, getR2Client } from "@/lib/r2-storage";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { verifyApkAccess } from "@/lib/apk-control";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +93,7 @@ async function getR2StudentIndex(): Promise<R2StudentEntry[]> {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Role",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Role, X-School-Selection, X-Client-Type",
   "Content-Type": "application/json",
 };
 
@@ -103,6 +104,16 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolParam = searchParams.get("school")?.trim();
+
+    // 1. Verify Super Admin APK access and school approval
+    const authCheck = await verifyApkAccess(request, schoolParam);
+    if (!authCheck.allowed) {
+      return NextResponse.json(
+        { found: false, error: authCheck.error, blocked: true },
+        { status: authCheck.status || 403, headers: corsHeaders }
+      );
+    }
 
     // Accept studentId, id, q, or query parameter
     let rawQuery = (
@@ -180,6 +191,9 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      const studentSchool = dbStudent.school || (schoolParam ? schoolParam : "Warka");
+      const studentAddress = dbStudent.address || "Addis Ababa";
+
       return NextResponse.json(
         {
           found: true,
@@ -192,9 +206,18 @@ export async function GET(request: NextRequest) {
             grade: dbStudent.grade || "",
             section: dbStudent.section || "",
             sex: dbStudent.sex || "",
+            gender: dbStudent.sex || "",
             bloodType: dbStudent.bloodType || "",
+            school: studentSchool,
+            schoolName: studentSchool,
+            address: studentAddress,
+            cityRegion: studentAddress,
+            location: studentAddress,
             parentPhone: dbStudent.emergencyContactPhone || dbStudent.phone || "",
             phone: dbStudent.phone || "",
+            emergencyContactPhone: dbStudent.emergencyContactPhone || "",
+            emergencyContactName: dbStudent.emergencyContactName || "",
+            guardianName: dbStudent.guardianFullName || "",
             photoUrl: photoUrl || "",
           },
         },
@@ -218,6 +241,8 @@ export async function GET(request: NextRequest) {
 
     if (matchedR2) {
       const photoUrl = getR2PublicUrl(matchedR2.key);
+      const fallbackSchool = schoolParam || "Warka";
+      const fallbackAddress = "Addis Ababa";
 
       // Opportunistically save to database for future queries
       try {
@@ -227,6 +252,8 @@ export async function GET(request: NextRequest) {
             fullName: matchedR2.fullName,
             grade: matchedR2.grade || "General",
             photoPath: matchedR2.key,
+            school: fallbackSchool,
+            address: fallbackAddress,
           },
           create: {
             studentId: matchedR2.studentId,
@@ -235,6 +262,8 @@ export async function GET(request: NextRequest) {
             sex: "Unspecified",
             phone: "",
             photoPath: matchedR2.key,
+            school: fallbackSchool,
+            address: fallbackAddress,
             status: "ACTIVE",
           },
         });
@@ -252,10 +281,20 @@ export async function GET(request: NextRequest) {
             fullName: matchedR2.fullName,
             roll: "",
             grade: matchedR2.grade,
-            section: "",
+            section: "A",
             sex: "",
+            gender: "",
             bloodType: "",
+            school: fallbackSchool,
+            schoolName: fallbackSchool,
+            address: fallbackAddress,
+            cityRegion: fallbackAddress,
+            location: fallbackAddress,
             parentPhone: "",
+            phone: "",
+            emergencyContactPhone: "",
+            emergencyContactName: "",
+            guardianName: "",
             photoUrl: photoUrl,
           },
         },
