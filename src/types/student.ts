@@ -63,6 +63,7 @@ export interface StudentExtended {
   status?: string;
   receiverNote?: string | null;
   hasMistake?: boolean;
+  photoIntegrityStatus?: string | null;
   batch?: { batchNumber: string; title: string } | null;
   senderId?: string | null;
   senderName?: string | null;

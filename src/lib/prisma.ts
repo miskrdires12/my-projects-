@@ -10,47 +10,49 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Canonical Supabase Cloud PostgreSQL Connection (PgBouncer Transaction Pooler)
-const SUPABASE_POSTGRES_URL =
-  "postgresql://postgres.hiwhmpuhhakguckckuqv:1998nehase10@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true&connection_limit=1";
-
 function resolveDatabaseUrl(): string {
-  let dbUrl = process.env.DATABASE_URL?.trim();
+  const dbUrl = process.env.DATABASE_URL?.trim();
 
-  // If missing or invalid protocol (e.g. SQLite file: or REST API https:), fallback to Supabase
   if (!dbUrl || (!dbUrl.startsWith("postgresql://") && !dbUrl.startsWith("postgres://"))) {
-    dbUrl = SUPABASE_POSTGRES_URL;
+    throw new Error(
+      "[prisma] DATABASE_URL is missing or invalid. Set it in .env (postgresql://user:pass@host:5432/db)."
+    );
   }
 
+  let resolved = dbUrl;
+
   // Rewrite Supabase pooler from Session Mode (5432, cap of 15) to Transaction Mode (6543)
-  if (dbUrl.includes("pooler.supabase.com")) {
-    dbUrl = dbUrl.replace(":5432", ":6543");
-    if (!dbUrl.includes("pgbouncer=")) {
-      dbUrl += (dbUrl.includes("?") ? "&" : "?") + "pgbouncer=true";
+  if (resolved.includes("pooler.supabase.com")) {
+    resolved = resolved.replace(":5432", ":6543");
+    if (!resolved.includes("pgbouncer=")) {
+      resolved += (resolved.includes("?") ? "&" : "?") + "pgbouncer=true";
     }
-    if (!dbUrl.includes("connection_limit=")) {
-      dbUrl += (dbUrl.includes("?") ? "&" : "?") + "connection_limit=1";
+    // Raised from 1 -> 10 (pool_timeout 20s): a single pooled connection starved
+    // every concurrent query batch (P2024 pool timeouts), slowing the UI and
+    // forcing resilient fallbacks to render "0 students".
+    if (!resolved.includes("connection_limit=")) {
+      resolved += (resolved.includes("?") ? "&" : "?") + "connection_limit=10&pool_timeout=20";
     }
   }
 
   // Ensure SSL requirement for cloud database connections
   if (
-    (dbUrl.includes("supabase.co") || dbUrl.includes("supabase.com") || dbUrl.includes("pooler.supabase.com")) &&
-    !dbUrl.includes("sslmode=")
+    (resolved.includes("supabase.co") || resolved.includes("supabase.com") || resolved.includes("pooler.supabase.com")) &&
+    !resolved.includes("sslmode=")
   ) {
-    dbUrl += (dbUrl.includes("?") ? "&" : "?") + "sslmode=require";
+    resolved += (resolved.includes("?") ? "&" : "?") + "sslmode=require";
   }
 
   // Enforce Cloudflare dedicated schema to guarantee complete database isolation
-  if (dbUrl.includes("schema=")) {
-    dbUrl = dbUrl.replace(/schema=[^&]*/, "schema=cloudflare");
+  if (resolved.includes("schema=")) {
+    resolved = resolved.replace(/schema=[^&]*/, "schema=cloudflare");
   } else {
-    dbUrl += (dbUrl.includes("?") ? "&" : "?") + "schema=cloudflare";
+    resolved += (resolved.includes("?") ? "&" : "?") + "schema=cloudflare";
   }
 
   // Synchronize process.env so Prisma engine internals read the exact postgresql:// protocol
-  process.env.DATABASE_URL = dbUrl;
-  return dbUrl;
+  process.env.DATABASE_URL = resolved;
+  return resolved;
 }
 
 
@@ -77,4 +79,3 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export default prisma;
-

@@ -7,6 +7,7 @@ export const DEFAULT_BRANCH_SCHOOLS: Record<string, string[]> = {
   Adama: ["Sena Yerosen", "Debebech", "Yacine", "Odda"],
   "Addis Ababa": ["YMS", "Adika Youth", "School Of America", "Warka"],
   Mojjo: ["Mojjo"],
+  Harar: ["High Tech"],
 };
 
 export const BRANCH_STORAGE_KEY = "sb_branch_schools_v1";
@@ -20,6 +21,7 @@ export function normalizeBranchName(branch: string): string {
   if (b.includes("adama")) return "Adama";
   if (b.includes("addis") || b.includes("adis") || b.includes("ababa")) return "Addis Ababa";
   if (b.includes("mojjo") || b.includes("mojo")) return "Mojjo";
+  if (b.includes("harar") || b.includes("harrer") || b.includes("harer")) return "Harar";
   return branch.trim();
 }
 

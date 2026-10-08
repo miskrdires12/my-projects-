@@ -43,8 +43,8 @@ export default async function StudentsPage({
   const branchFilter = searchParams.branch ?? "ALL";
 
   const page = Math.max(1, parseInt(searchParams.page || "1", 10));
-  // Requirement 11: Support up to 500 students in a single page
-  const pageSize = Math.min(500, Math.max(10, parseInt(searchParams.pageSize || "25", 10)));
+  // Requirement 11: Support up to 500 students in a single page (default: 500 per page)
+  const pageSize = Math.min(500, Math.max(10, parseInt(searchParams.pageSize || "500", 10)));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {
