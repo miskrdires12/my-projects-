@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     let photoPath = rawUrl;
     let studentName = rawName || "Student_Portrait";
 
+    let encodeClass = "Unencoded";
     if (id) {
       const student = await prisma.student.findFirst({
         where: {
@@ -38,12 +39,14 @@ export async function GET(request: NextRequest) {
           fullName: true,
           photoPath: true,
           originalPhotoPath: true,
+          photoIntegrityStatus: true,
         },
       });
 
       if (student) {
         photoPath = student.originalPhotoPath || student.photoPath || photoPath;
         if (student.fullName) studentName = student.fullName;
+        encodeClass = student.photoIntegrityStatus === "PHOTO_VERIFIED" ? "Encoded" : "Unencoded";
       }
     }
 
@@ -57,9 +60,9 @@ export async function GET(request: NextRequest) {
       .replace(/\s+/g, " ")
       .trim() || "Student_Portrait";
 
-    const filename = `${cleanName}.jpg`;
+    const filename = `${encodeClass}_${cleanName}.jpg`;
     // Clean ASCII fallback without quotes or illegal chars
-    const asciiFilename = cleanName.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "") + ".jpg";
+    const asciiFilename = `${encodeClass}_` + cleanName.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "") + ".jpg";
     const utf8Filename = encodeURIComponent(filename);
     const contentDisposition = `attachment; filename="${asciiFilename}"; filename*=UTF-8''${utf8Filename}`;
 

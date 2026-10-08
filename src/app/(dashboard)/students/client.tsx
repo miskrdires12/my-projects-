@@ -103,6 +103,21 @@ function parseSecureLocalList(raw: string | null): any[] {
   }
 }
 
+function generatePageNumbers(current: number, total: number): (number | string)[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const pages: (number | string)[] = [1];
+  if (current > 3) pages.push("...");
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+  if (current < total - 2) pages.push("...");
+  pages.push(total);
+  return pages;
+}
 
 export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   students,
@@ -275,6 +290,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [selectedPhotoStatus, setSelectedPhotoStatus] = useState(searchParams.get("photoStatus") || "ALL");
   const [selectedBranch, setSelectedBranch] = useState(searchParams.get("branch") || "ALL");
   const [selectedSchool, setSelectedSchool] = useState(searchParams.get("school") || "ALL");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync search input whenever the URL q param changes
+  useEffect(() => {
+    const q = searchParams.get("q") || "";
+    setSearchQuery(q);
+  }, [searchParams]);
 
   // Regional Branch & School Directory Catalog
   const [branchSchools, setBranchSchools] = useState<Record<string, string[]>>(DEFAULT_BRANCH_SCHOOLS);
@@ -493,9 +515,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     });
   };
 
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      applyFilters({ q: val.trim(), page: 1 });
+    }, 380);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    applyFilters({ q: "", page: 1 });
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    applyFilters({ q: searchQuery });
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    applyFilters({ q: searchQuery.trim(), page: 1 });
   };
 
   const handlePageChange = (newPage: number) => {
@@ -1657,6 +1694,102 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   // The server already returns exactly one page slice — no client-side re-slicing.
   const paginatedStudents = sortedStudents;
 
+  const renderPaginationBar = (position: "top" | "bottom") => (
+    <div
+      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+        position === "top" ? "border-b" : "border-t"
+      } border-border dark:border-[#223126] bg-surface-secondary/60 dark:bg-[#161e19]/60 px-4 sm:px-6 py-2.5 text-xs text-foreground-muted dark:text-[#8a9e93]`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span>
+          Showing <strong className="text-foreground dark:text-[#f2f7f4]">{startItem}</strong> to{" "}
+          <strong className="text-foreground dark:text-[#f2f7f4]">{endItem}</strong> of{" "}
+          <strong className="text-foreground dark:text-[#f2f7f4] font-mono">
+            {totalEffective.toLocaleString()}
+          </strong>{" "}
+          students
+        </span>
+
+        <div className="flex items-center gap-1.5">
+          <span>Per page:</span>
+          <select
+            value={activePageSize}
+            onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
+            className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#070908] px-2 py-1 text-xs font-semibold text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none cursor-pointer"
+          >
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={250}>250</option>
+            <option value={500}>500</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="font-mono font-semibold mr-1 hidden md:inline">
+          Page {activePage} of {totalPages}
+        </span>
+
+        <button
+          onClick={() => handlePageChange(1)}
+          disabled={activePage <= 1}
+          className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] px-2 py-1 text-[11px] font-mono text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
+          title="First Page"
+        >
+          « First
+        </button>
+
+        <button
+          onClick={() => handlePageChange(activePage - 1)}
+          disabled={activePage <= 1}
+          className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
+          title="Previous Page"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+
+        {generatePageNumbers(activePage, totalPages).map((p, idx) =>
+          p === "..." ? (
+            <span key={`dots-${position}-${idx}`} className="px-1 text-neutral-500 font-mono">
+              ...
+            </span>
+          ) : (
+            <button
+              key={`page-${position}-${p}`}
+              onClick={() => handlePageChange(Number(p))}
+              className={`rounded-lg px-2.5 py-1 text-xs font-mono font-bold transition-all cursor-pointer ${
+                activePage === p
+                  ? "bg-[#8fe617] text-[#070908] shadow-xs"
+                  : "border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23]"
+              }`}
+            >
+              {p}
+            </button>
+          )
+        )}
+
+        <button
+          onClick={() => handlePageChange(activePage + 1)}
+          disabled={activePage >= totalPages}
+          className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
+          title="Next Page"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+
+        <button
+          onClick={() => handlePageChange(totalPages)}
+          disabled={activePage >= totalPages}
+          className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] px-2 py-1 text-[11px] font-mono text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
+          title="Last Page"
+        >
+          Last »
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div
       className={`space-y-4 pb-28 ${userRole === "RECEIVER" ? "select-none" : ""}`}
@@ -1715,20 +1848,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Name, Student ID, Phone, Department, School..."
-                className="w-full h-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] pl-10 pr-4 text-xs sm:text-sm text-foreground dark:text-[#f2f7f4] placeholder:text-foreground-subtle dark:placeholder:text-[#6c8074] focus:border-[#8fe617] focus:outline-none transition-colors"
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search all 3,723 students by Name, Student ID, Phone, Department, School..."
+                className="w-full h-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] pl-10 pr-16 text-xs sm:text-sm text-foreground dark:text-[#f2f7f4] placeholder:text-foreground-subtle dark:placeholder:text-[#6c8074] focus:border-[#8fe617] focus:outline-none transition-colors"
               />
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    applyFilters({ query: "" });
-                  }}
-                  className="absolute right-3 top-3 text-xs text-foreground-muted hover:text-foreground cursor-pointer"
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-3 text-xs font-semibold text-[#8fe617] hover:underline cursor-pointer"
                 >
-                  Clear
+                  Clear ✕
                 </button>
               )}
             </div>
@@ -1983,6 +2113,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       {/* Main Student Data Table */}
       <div className="rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] overflow-hidden shadow-xs">
+        {renderPaginationBar("top")}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] text-xs uppercase tracking-wider text-foreground-muted dark:text-[#8a9e93] font-mono select-none">
@@ -2545,54 +2676,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         </div>
 
         {/* Server-Side Pagination Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-border dark:border-[#223126] bg-surface-secondary/50 dark:bg-[#161e19]/50 px-6 py-3 text-xs text-foreground-muted dark:text-[#8a9e93]">
-          <div className="flex items-center gap-3">
-            <span>
-              Showing <strong className="text-foreground dark:text-[#f2f7f4]">{startItem}</strong> to{" "}
-              <strong className="text-foreground dark:text-[#f2f7f4]">{endItem}</strong> of{" "}
-              <strong className="text-foreground dark:text-[#f2f7f4] font-mono">{totalEffective.toLocaleString()}</strong> students
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              <span>Per page:</span>
-              <select
-                value={activePageSize}
-                onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
-                className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#070908] px-2.5 py-1 text-xs font-semibold text-foreground dark:text-[#f2f7f4] focus:border-accent focus:outline-none cursor-pointer"
-              >
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={250}>250</option>
-                <option value={500}>500</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-semibold">
-              Page {activePage} of {totalPages}
-            </span>
-
-            <button
-              onClick={() => handlePageChange(activePage - 1)}
-              disabled={activePage <= 1}
-              className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1.5 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
-              title="Previous Page"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-
-            <button
-              onClick={() => handlePageChange(activePage + 1)}
-              disabled={activePage >= totalPages}
-              className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1.5 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
-              title="Next Page"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        {renderPaginationBar("bottom")}
       </div>
 
       {/* Sleek Floating Bulk Action Dock (Linear / Vercel Style) */}

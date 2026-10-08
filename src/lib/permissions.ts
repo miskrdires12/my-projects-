@@ -35,12 +35,15 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly PermissionAction[]> = {
     "settings:update",
   ],
   ADMIN: [
-    // Admin is strictly restricted to controlling senders, sender tasks, and sender telemetry.
-    // Prohibited from accessing student data and photos.
     "dashboard:view",
     "user:read",
+    "user:create",
+    "user:update",
+    "user:delete",
+    "user:role_assign",
     "system:metrics_read",
     "system:audit_read",
+    "database:manage",
     "settings:update",
   ],
   SENDER: [

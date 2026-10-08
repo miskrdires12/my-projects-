@@ -8,6 +8,7 @@ export const DEFAULT_BRANCH_SCHOOLS: Record<string, string[]> = {
   "Addis Ababa": ["YMS", "Adika Youth", "School Of America", "Warka"],
   Mojjo: ["Mojjo"],
   Harar: ["High Tech"],
+  Harrer: ["High Tech"],
 };
 
 export const BRANCH_STORAGE_KEY = "sb_branch_schools_v1";
@@ -21,7 +22,8 @@ export function normalizeBranchName(branch: string): string {
   if (b.includes("adama")) return "Adama";
   if (b.includes("addis") || b.includes("adis") || b.includes("ababa")) return "Addis Ababa";
   if (b.includes("mojjo") || b.includes("mojo")) return "Mojjo";
-  if (b.includes("harar") || b.includes("harrer") || b.includes("harer")) return "Harar";
+  if (b.includes("harrer")) return "Harrer";
+  if (b.includes("harar") || b.includes("harer")) return "Harar";
   return branch.trim();
 }
 
@@ -34,6 +36,9 @@ export function getBranchForSchool(
 ): string {
   if (!schoolName) return "Adama";
   const cleanSchool = schoolName.trim().toLowerCase();
+  if (cleanSchool.includes("high tech")) {
+    return branchMap["Harrer"] ? "Harrer" : "Harar";
+  }
   for (const [branch, schools] of Object.entries(branchMap)) {
     if (schools.some((s) => s.trim().toLowerCase() === cleanSchool)) {
       return branch;
@@ -70,6 +75,14 @@ export function mergeBranchSchools(
   // Guarantee Warka is always in Addis Ababa unless explicitly deleted
   if (result["Addis Ababa"] && !result["Addis Ababa"].includes("Warka") && !customBranchSchools["Addis Ababa"]) {
     result["Addis Ababa"].push("Warka");
+  }
+
+  // Guarantee High Tech is always in Harrer and Harar
+  if (result["Harrer"] && !result["Harrer"].includes("High Tech") && !customBranchSchools["Harrer"]) {
+    result["Harrer"].push("High Tech");
+  }
+  if (result["Harar"] && !result["Harar"].includes("High Tech") && !customBranchSchools["Harar"]) {
+    result["Harar"].push("High Tech");
   }
 
   return result;
