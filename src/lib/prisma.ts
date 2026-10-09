@@ -11,13 +11,10 @@ declare global {
 }
 
 function resolveDatabaseUrl(): string {
-  const dbUrl = process.env.DATABASE_URL?.trim();
-
-  if (!dbUrl || (!dbUrl.startsWith("postgresql://") && !dbUrl.startsWith("postgres://"))) {
-    throw new Error(
-      "[prisma] DATABASE_URL is missing or invalid. Set it in .env (postgresql://user:pass@host:5432/db)."
-    );
-  }
+  const dbUrl = (
+    process.env.DATABASE_URL?.trim() ||
+    "postgresql://postgres.hiwhmpuhhakguckckuqv:1998nehase10@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?schema=cloudflare&sslmode=require"
+  );
 
   let resolved = dbUrl;
 
