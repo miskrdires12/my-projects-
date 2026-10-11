@@ -58,25 +58,24 @@ export const AppLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F7F5] text-[#202833] flex flex-col font-sans selection:bg-[#85E510] selection:text-[#062404]">
-      {/* Sticky Enterprise Header */}
-      <Header
+    <div className="min-h-screen bg-[#F1F5F9] text-[#1E293B] flex font-sans selection:bg-[#85E510] selection:text-[#062404]">
+      {/* Role-Specific Persistent Sidebar */}
+      <Sidebar
         currentStation={currentStation}
-        onStationChange={handleStationChange}
-        onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
       />
 
-      <div className="flex-1 flex">
-        {/* Role-Specific Persistent Sidebar */}
-        <Sidebar
+      {/* Main Content Area with Header */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        <Header
           currentStation={currentStation}
-          mobileOpen={mobileSidebarOpen}
-          onCloseMobile={() => setMobileSidebarOpen(false)}
+          onStationChange={handleStationChange}
+          onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 min-w-0 overflow-y-auto bg-[#F4F7F5] p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
+        <main className="flex-1 min-w-0 bg-[#F1F5F9] p-3 sm:p-5 lg:p-6 overflow-y-auto">
+          <div className="max-w-[1780px] mx-auto w-full">
             <Outlet />
           </div>
         </main>

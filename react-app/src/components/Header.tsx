@@ -1,7 +1,7 @@
 import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Send, Inbox, Shield, Zap, Bell, LogOut, User as UserIcon, Lock, Smartphone } from 'lucide-react';
-import { getCurrentUser, setCurrentUser, getOrCreateDeviceId } from '@/lib/store';
+import { useNavigate } from 'react-router-dom';
+import { Search, Bell, LogOut, ChevronDown } from 'lucide-react';
+import { getCurrentUser, setCurrentUser } from '@/lib/store';
 import { UserRole } from '@/types';
 
 interface HeaderProps {
@@ -12,56 +12,34 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ currentStation, onStationChange, onToggleMobileSidebar }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const user = getCurrentUser();
-  const deviceId = getOrCreateDeviceId();
 
   const handleSignOut = () => {
     setCurrentUser(null);
     navigate('/login');
   };
 
-  // Determine which stations this user can switch to
-  const canAccessStation = (target: UserRole): boolean => {
-    if (!user) return false;
-    if (user.role === 'SUPER_ADMIN') return true; // Super Admin can inspect all 4 stations
-    if (user.role === target) return true;
-    if (user.role === 'ADMIN' && target === 'SENDER') return true; // Admin can inspect sender workflow
-    return false;
-  };
-
-  const handleStationSwitch = (station: UserRole) => {
-    if (!canAccessStation(station)) return;
-    onStationChange(station);
-    if (station === 'SENDER') navigate('/sender/register');
-    else if (station === 'RECEIVER') navigate('/receiver/dashboard');
-    else if (station === 'ADMIN') navigate('/admin/dashboard');
-    else if (station === 'SUPER_ADMIN') navigate('/super-admin/dashboard');
-  };
-
-  const getRoleBadgeStyle = (role?: UserRole) => {
-    switch (role) {
-      case 'SENDER':
-        return 'bg-[#85E510]/20 text-[#366804] border-[#85E510]/40';
-      case 'RECEIVER':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'ADMIN':
-        return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'SUPER_ADMIN':
-        return 'bg-purple-100 text-purple-800 border-purple-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+  const getInitials = (name?: string): string => {
+    if (!name) return 'RC';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
     }
+    return name.substring(0, 2).toUpperCase();
   };
+
+  const displayName = user?.username === 'yonatantesfa'
+    ? 'Receiver C. Staff'
+    : user?.username || 'Receiver C. Staff';
 
   return (
-    <header className="sticky top-0 z-50 h-16 bg-white/95 backdrop-blur-md border-b border-[#E2E8F0] flex items-center justify-between px-4 sm:px-6 gap-4 shadow-sm">
-      {/* Brand & Mobile Hamburger */}
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-30 h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-4 sm:px-6 gap-4 shadow-xs">
+      {/* Mobile Toggle & Search Bar */}
+      <div className="flex items-center gap-3 flex-1 max-w-2xl">
         <button
           type="button"
           onClick={onToggleMobileSidebar}
-          className="lg:hidden p-2 text-[#64748B] hover:text-[#202833] rounded-lg hover:bg-black/5"
+          className="lg:hidden p-2 text-[#64748B] hover:text-[#1E293B] rounded-lg hover:bg-slate-100"
           aria-label="Toggle Navigation"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,89 +47,100 @@ export const Header: React.FC<HeaderProps> = ({ currentStation, onStationChange,
           </svg>
         </button>
 
-        <a href="/" className="flex items-center gap-2.5 text-inherit no-underline">
-          <img
-            src="/logo.png"
-            alt="Silicon Labs Emblem"
-            className="h-8 w-8 object-contain drop-shadow-[0_2px_8px_rgba(133,229,16,0.3)]"
-            onError={(e) => { (e.target as HTMLImageElement).src = '/brand-logo.png'; }}
+        {/* Global Search Input matching Screenshot */}
+        <div className="relative w-full">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+          <input
+            type="text"
+            placeholder="Search by student ID, name, grade, or section..."
+            className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-10 pr-9 py-2 text-xs font-medium text-[#1E293B] placeholder-[#94A3B8] focus:outline-none focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] transition-all"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const target = e.currentTarget.value;
+                const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="Search students..."]');
+                if (searchInput) {
+                  searchInput.value = target;
+                  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              }
+            }}
           />
-          <div className="flex items-center gap-1.5 font-heading font-black text-base tracking-tight text-[#202833]">
-            <span>SILICON</span>
-            <span className="bg-[#85E510] text-[#062404] text-[9px] font-black px-1.5 py-0.5 rounded tracking-wide">LABS</span>
-            <span className="text-xs font-extrabold text-[#4D8A07] ml-1">StudentBridge</span>
-          </div>
-        </a>
-      </div>
-
-      {/* Station Identity Badge (Separate Station Indicator) */}
-      <div className="flex items-center">
-        {currentStation === 'SENDER' && (
-          <div className="flex items-center gap-2 bg-[#85E510]/15 border border-[#85E510]/40 px-3.5 py-1.5 rounded-full text-xs font-black text-[#2e5903] shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse"></span>
-            <Send className="w-3.5 h-3.5 text-[#366804]" />
-            <span className="tracking-tight">SENDER STATION &bull; DATA ENCODER</span>
-          </div>
-        )}
-        {currentStation === 'RECEIVER' && (
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3.5 py-1.5 rounded-full text-xs font-black text-blue-800 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-            <Inbox className="w-3.5 h-3.5 text-blue-600" />
-            <span className="tracking-tight">RECEIVER STATION &bull; ID PRODUCTION OPERATOR</span>
-          </div>
-        )}
-        {currentStation === 'ADMIN' && (
-          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3.5 py-1.5 rounded-full text-xs font-black text-amber-900 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-            <Shield className="w-3.5 h-3.5 text-amber-600" />
-            <span className="tracking-tight">ADMIN STATION &bull; OPERATIONS MANAGER</span>
-          </div>
-        )}
-        {currentStation === 'SUPER_ADMIN' && (
-          <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 px-3.5 py-1.5 rounded-full text-xs font-black text-purple-900 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
-            <Zap className="w-3.5 h-3.5 text-purple-600" />
-            <span className="tracking-tight">SUPER ADMIN STATION &bull; CTO CONTROL ROOM</span>
-          </div>
-        )}
-      </div>
-
-      {/* Operator Status & Logout */}
-      <div className="flex items-center gap-3">
-        {user ? (
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-xs font-bold text-[#202833] leading-none">
-                {user.username}
-              </span>
-              <span className="text-[10px] text-[#64748B] font-mono mt-0.5">
-                {user.email}
-              </span>
-            </div>
-
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getRoleBadgeStyle(user.role)}`}>
-              {user.role}
-            </span>
-
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="p-2 text-[#64748B] hover:text-red-600 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-200 transition-all flex items-center gap-1 text-xs font-bold"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
-          </div>
-        ) : (
           <button
             type="button"
-            onClick={() => navigate('/login')}
-            className="px-3 py-1.5 rounded-xl bg-[#85E510] text-[#062404] font-bold text-xs"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#1E293B]"
+            title="Search"
           >
-            Sign In
+            <Search className="w-3.5 h-3.5" />
           </button>
+        </div>
+      </div>
+
+      {/* Right Controls: Notifications, Station Switcher & User Profile */}
+      <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+        {/* Station Switcher Pill (for Admin / Super Admin) */}
+        {user?.role === 'SUPER_ADMIN' && (
+          <div className="hidden md:flex items-center gap-1 bg-[#F1F5F9] border border-[#CBD5E1] rounded-xl p-0.5 text-[11px] font-bold">
+            <button
+              type="button"
+              onClick={() => onStationChange('RECEIVER')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'RECEIVER' ? 'bg-white text-[#1E293B] shadow-xs' : 'text-[#64748B]'}`}
+            >
+              Receiver
+            </button>
+            <button
+              type="button"
+              onClick={() => onStationChange('SENDER')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SENDER' ? 'bg-white text-[#1E293B] shadow-xs' : 'text-[#64748B]'}`}
+            >
+              Sender
+            </button>
+            <button
+              type="button"
+              onClick={() => onStationChange('SUPER_ADMIN')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SUPER_ADMIN' ? 'bg-white text-[#1E293B] shadow-xs' : 'text-[#64748B]'}`}
+            >
+              Control
+            </button>
+          </div>
         )}
+
+        {/* Notifications Icon with Red Badge (matching screenshot badge "3") */}
+        <div className="relative">
+          <button
+            type="button"
+            className="w-9 h-9 rounded-xl border border-[#CBD5E1] flex items-center justify-center text-[#64748B] hover:text-[#1E293B] hover:bg-[#F8FAF9] transition-all"
+            title="Notifications"
+          >
+            <Bell className="w-4 h-4" />
+          </button>
+          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-white shadow-xs">
+            3
+          </span>
+        </div>
+
+        {/* User Profile matching Screenshot ("RC" Avatar, "Receiver C. Staff", "Receiver") */}
+        <div className="flex items-center gap-2.5 pl-1 border-l border-[#E2E8F0]">
+          <div className="w-9 h-9 rounded-full bg-[#1E293B] text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+            {getInitials(displayName)}
+          </div>
+          <div className="hidden sm:block text-left leading-none">
+            <div className="text-xs font-black text-[#1E293B] leading-tight">
+              {displayName}
+            </div>
+            <div className="text-[10px] text-[#64748B] font-semibold mt-0.5 capitalize">
+              {user?.role?.toLowerCase() || 'Receiver'}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="p-1.5 text-[#94A3B8] hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-all ml-1"
+            title="Sign Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </header>
   );

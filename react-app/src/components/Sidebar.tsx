@@ -1,9 +1,10 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutGrid, UserPlus, Users, CheckSquare, BarChart2, UserCheck,
-  Download, AlertTriangle, Activity, Database, Settings, RefreshCw,
-  ShieldCheck, FileCheck, Layers, Smartphone, HardDrive, Shield, CreditCard
+  Users, CreditCard, Printer, Layers, Settings,
+  UserPlus, LayoutGrid, CheckSquare, BarChart2,
+  ShieldCheck, Smartphone, RefreshCw, Database,
+  HardDrive, Activity, User as UserIcon
 } from 'lucide-react';
 import { UserRole } from '@/types';
 import { getCurrentUser } from '@/lib/store';
@@ -15,40 +16,23 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentStation, mobileOpen, onCloseMobile }) => {
+  const location = useLocation();
   const user = getCurrentUser();
-
-  const getStationBadge = () => {
-    switch (currentStation) {
-      case 'SENDER':
-        return { title: 'SENDER WORKSTATION', subtitle: 'Biometric Capture & Transmission', color: 'bg-[#85E510]/15 text-[#366804] border-[#85E510]/30' };
-      case 'RECEIVER':
-        return { title: 'RECEIVER CONSOLE', subtitle: 'Directory, Review & Bulk Exports', color: 'bg-blue-50 text-blue-700 border-blue-200' };
-      case 'ADMIN':
-        return { title: 'ADMIN SUPERVISION', subtitle: 'Workforce & Task Governance', color: 'bg-amber-50 text-amber-800 border-amber-200' };
-      case 'SUPER_ADMIN':
-        return { title: 'SUPER ADMIN CONSOLE', subtitle: 'Central Authority & Diagnostics', color: 'bg-purple-50 text-purple-800 border-purple-200' };
-    }
-  };
 
   const getNavItems = () => {
     switch (currentStation) {
+      case 'RECEIVER':
+        return [
+          { to: '/receiver/students', label: 'Student Directory', icon: Users, exact: true },
+          { to: '/receiver/id-production', label: 'ID Card Designer', icon: CreditCard },
+          { to: '/receiver/review', label: 'Print Engine', icon: Printer },
+          { to: '/receiver/exports', label: 'Bulk Operations', icon: Layers },
+          { to: '/receiver/settings', label: 'Settings', icon: Settings },
+        ];
       case 'SENDER':
-        // Mandatory Specification: Sender must have exactly two navigation sections:
-        // 1. Register Student. 2. Settings.
         return [
           { to: '/sender/register', label: 'Register Student', icon: UserPlus },
           { to: '/sender/settings', label: 'Settings', icon: Settings },
-        ];
-      case 'RECEIVER':
-        return [
-          { to: '/receiver/dashboard', label: 'Dashboard', icon: LayoutGrid },
-          { to: '/receiver/students', label: 'Student Directory', icon: Users },
-          { to: '/receiver/review', label: 'Review Queue', icon: ShieldCheck },
-          { to: '/receiver/id-production', label: 'ID Production', icon: CreditCard },
-          { to: '/receiver/mistakes', label: 'Mistake Analyzer', icon: AlertTriangle },
-          { to: '/receiver/exports', label: 'Bulk Operations & Exports', icon: Download },
-          { to: '/receiver/database', label: 'Database Control Room', icon: Database },
-          { to: '/receiver/settings', label: 'Settings', icon: Settings },
         ];
       case 'ADMIN':
         return [
@@ -77,7 +61,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentStation, mobileOpen, on
     }
   };
 
-  const badge = getStationBadge();
   const navItems = getNavItems();
 
   return (
@@ -85,60 +68,87 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentStation, mobileOpen, on
       {/* Mobile backdrop */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={onCloseMobile}
         />
       )}
 
       <aside
-        className={`fixed lg:sticky top-16 left-0 z-40 w-64 h-[calc(100vh-4rem)] bg-white border-r border-[#E2E8F0] flex flex-col transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed lg:sticky top-0 left-0 z-40 w-64 h-screen bg-[#0B1118] border-r border-[#1E293B] flex flex-col transition-transform duration-300 lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
         }`}
       >
-        {/* Station Identification Card */}
-        <div className="p-4 border-b border-[#E2E8F0]">
-          <div className={`px-3 py-1.5 rounded-xl border ${badge.color}`}>
-            <div className="text-[11px] font-black tracking-wide uppercase">
-              {badge.title}
+        {/* Brand Header */}
+        <div className="h-16 flex items-center px-5 border-b border-[#1E293B] gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-[#85E510] flex items-center justify-center p-1 text-[#062404] shadow-sm">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+              <rect x="3" y="3" width="8" height="8" rx="2" />
+              <rect x="13" y="3" width="8" height="8" rx="2" fillOpacity="0.8" />
+              <rect x="3" y="13" width="8" height="8" rx="2" fillOpacity="0.8" />
+              <rect x="13" y="13" width="8" height="8" rx="2" />
+            </svg>
+          </div>
+          <span className="font-heading font-black text-lg tracking-tight text-white">
+            StudentBridge
+          </span>
+        </div>
+
+        {/* Station User Profile Card */}
+        <div className="p-4 border-b border-[#1E293B]/80">
+          <div className="flex items-center gap-3 p-2.5 rounded-xl bg-[#131E2B] border border-[#1E2D3D]">
+            <div className="w-9 h-9 rounded-full bg-[#85E510] text-[#062404] flex items-center justify-center font-bold shrink-0 shadow-xs">
+              <UserIcon className="w-5 h-5" />
             </div>
-            <div className="text-[10px] opacity-80 font-medium mt-0.5">
-              {badge.subtitle}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-black text-white leading-tight truncate">
+                {currentStation === 'RECEIVER' ? 'Receiver' : currentStation.replace('_', ' ')}
+              </div>
+              <div className="text-[11px] text-[#94A3B8] font-medium leading-tight truncate mt-0.5">
+                {currentStation === 'RECEIVER' ? 'Review • Manage • Produce' : 'Active Workstation'}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {/* Navigation Items */}
+        <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const isStudentsDirectory = item.label === 'Student Directory';
+            const isActive = isStudentsDirectory
+              ? location.pathname.startsWith('/receiver/students') || location.pathname === '/receiver/dashboard' || location.pathname === '/receiver'
+              : location.pathname === item.to;
+
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
                 onClick={onCloseMobile}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-[#85E510]/15 text-[#2E5803] font-bold border-l-4 border-[#85E510] shadow-sm'
-                      : 'text-[#64748B] hover:text-[#202833] hover:bg-[#F4F7F5]'
-                  }`
-                }
+                className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  isActive
+                    ? 'bg-[#85E510] text-[#062404] shadow-sm'
+                    : 'text-[#94A3B8] hover:text-white hover:bg-[#131E2B]'
+                }`}
               >
-                <Icon className="w-4 h-4 shrink-0" />
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#062404]' : 'text-[#64748B]'}`} />
                 <span className="truncate">{item.label}</span>
               </NavLink>
             );
           })}
         </nav>
 
-        {/* Bottom Station Status */}
-        <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAF9]">
-          <div className="flex items-center justify-between text-[11px] text-[#64748B]">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse" />
-              <span className="font-semibold text-[#202833]">Edge Online</span>
+        {/* Bottom Station Status Card */}
+        <div className="p-4 border-t border-[#1E293B] bg-[#080D13]">
+          <div className="flex items-start gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#85E510] mt-1 shrink-0 animate-pulse shadow-[0_0_8px_#85E510]" />
+            <div className="min-w-0">
+              <div className="text-xs font-black text-white leading-tight">
+                System Online
+              </div>
+              <div className="text-[10px] text-[#64748B] font-mono leading-tight mt-0.5 truncate">
+                Connected to Supabase & R2
+              </div>
             </div>
-            <span className="font-mono text-[10px] text-[#64748B]">Cloudflare</span>
           </div>
         </div>
       </aside>
