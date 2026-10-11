@@ -21,13 +21,7 @@ let cachedUsers = null;
 let customStudents = [];
 let uploadedPhotos = new Map();
 
-let edgeTasks = [
-  { id: "T-001", title: "Review missing photos for Grade 9", assignedTo: "Loza Bereket", school: "YMS", priority: "High", deadline: "2026-10-15", status: "In Progress" },
-  { id: "T-002", title: "Correct Ethiopian phone numbers", assignedTo: "Alemu Tadesse", school: "Adika Youth", priority: "Medium", deadline: "2026-10-15", status: "Pending" },
-  { id: "T-003", title: "Verify school student IDs", assignedTo: "Hana Tadesse", school: "School of America", priority: "High", deadline: "2026-10-16", status: "Overdue" },
-  { id: "T-004", title: "Data quality audit for Ferway", assignedTo: "Getnet Kassa", school: "Ferway", priority: "Low", deadline: "2026-10-18", status: "Completed" },
-  { id: "T-005", title: "Photo verification batch 4", assignedTo: "Dawit Alemu", school: "Warka", priority: "Medium", deadline: "2026-10-16", status: "In Progress" }
-];
+let edgeTasks = [];
 
 let edgeSchools = [
   { id: "sch_yms", name: "YMS", location: "Addis Ababa", status: "Active", studentsCount: 1245 },
@@ -40,16 +34,9 @@ let edgeSchools = [
   { id: "sch_hightech", name: "High Tech", location: "Harar", status: "Active", studentsCount: 380 }
 ];
 
-let edgeAuditLogs = [
-  { timestamp: "2026-10-13 14:32:10", user: "miskrdires11@gmail.com", station: "Super Admin", action: "Settings Saved", entity: "System Configuration", details: "Updated R2 cloud photo paths and phone validation rules" }
-];
+let edgeAuditLogs = [];
 
-let studentCoreQueue = [
-  { id: "REQ-901", school: "YMS Main Campus", device: "192.168.1.42 • Core-01", studentId: "SB-2026-12788", type: "Incremental Sync", timestamp: "Just now", authStatus: "Authorized", syncStatus: "Synchronized", latency: "24ms" },
-  { id: "REQ-902", school: "High Tech Harar", device: "192.168.2.15 • Core-02", studentId: "SB-2026-34955", type: "Record Lookup", timestamp: "3s ago", authStatus: "Authorized", syncStatus: "Synchronized", latency: "38ms" },
-  { id: "REQ-903", school: "Debebech Adama", device: "192.168.4.88 • Core-03", studentId: "SB-2026-53429", type: "QR Verification", timestamp: "6s ago", authStatus: "Authorized", syncStatus: "Synchronized", latency: "19ms" },
-  { id: "REQ-904", school: "Ferway Campus", device: "192.168.1.99 • Core-04", studentId: "SB-2026-12801", type: "Batch Export", timestamp: "9s ago", authStatus: "Authorized", syncStatus: "Synchronized", latency: "45ms" }
-];
+let studentCoreQueue = [];
 
 // Web Crypto SigV4 Helper for R2 Bucket S3 API
 async function sha256Hex(buffer) {
@@ -386,19 +373,51 @@ export default {
           nationality: body.nationality || "Ethiopian",
           academicYear: "2026-2027",
           photoPath: photoPath,
-          thumbnailPath: previewPath || photoPath,
-          previewPath: previewPath || photoPath,
+          thumbnailPath: photoPath || previewPath,
+          previewPath: photoPath || previewPath,
           originalPhotoPath: photoPath,
-          senderName: body.senderName || "Sender-01",
+          qrCodeData: body.qrCodeData || JSON.stringify({
+            id: studentId.trim(),
+            name: fullName.trim(),
+            grade: grade.trim(),
+            school: school.trim(),
+            status: "Accepted",
+            verified: true,
+            issuer: "Silicon Labs StudentBridge"
+          }),
+          senderName: body.senderName || "Field Operator",
           photoIntegrityStatus: photoPath ? "PHOTO_VERIFIED" : "NO_PHOTO",
-          status: "ACTIVE",
+          status: "Accepted",
+          idProductionStatus: "READY",
           receiverHidden: false,
           hasMistake: false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
 
+        // Supabase column whitelist to prevent PGRST204 unknown column errors
+        const SUPABASE_ALLOWED_COLS = new Set([
+          'id', 'studentId', 'fullName', 'phone', 'sex', 'grade',
+          'dateOfBirth', 'emailAddress', 'address', 'school', 'department',
+          'academicYear', 'guardianFullName', 'emergencyContactName',
+          'emergencyContactPhone', 'contactName', 'cityRegion', 'bloodType',
+          'rollNumber', 'nationality', 'nationalId', 'photoPath',
+          'thumbnailPath', 'previewPath', 'originalPhotoPath', 'qrCodeData',
+          'senderId', 'senderName', 'photoIntegrityStatus', 'storageKey',
+          'storageSyncAt', 'status', 'receiverHidden', 'hiddenAt',
+          'batchId', 'organizationId', 'createdAt', 'updatedAt',
+          'receiverNote', 'hasMistake'
+        ]);
+
+        const dbInsertPayload = {};
+        for (const [k, v] of Object.entries(newStudent)) {
+          if (SUPABASE_ALLOWED_COLS.has(k) && v !== undefined && v !== null) {
+            dbInsertPayload[k] = v;
+          }
+        }
+
         // Insert into Supabase PostgreSQL (cloudflare.students)
+        let insertedRecord = newStudent;
         try {
           const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/students`, {
             method: "POST",
@@ -410,25 +429,41 @@ export default {
               "Accept-Profile": "cloudflare",
               "Prefer": "return=representation"
             },
-            body: JSON.stringify(newStudent)
+            body: JSON.stringify(dbInsertPayload)
           });
 
           if (insertRes.ok) {
             const savedFromDb = await insertRes.json();
             if (savedFromDb && savedFromDb[0]) {
-              customStudents.unshift(savedFromDb[0]);
-              return new Response(JSON.stringify(savedFromDb[0]), {
-                status: 201,
-                headers: { "Content-Type": "application/json", ...corsHeaders }
-              });
+              insertedRecord = { ...newStudent, ...savedFromDb[0] };
             }
+          } else {
+            const errBody = await insertRes.text();
+            console.warn("Supabase insert failed (" + insertRes.status + "):", errBody);
           }
         } catch (dbErr) {
           console.warn("Supabase insert warning, persisting to edge cache:", dbErr);
         }
 
-        customStudents.unshift(newStudent);
-        return new Response(JSON.stringify(newStudent), {
+        customStudents.unshift(insertedRecord);
+
+        // Broadcast to Global Cloud Sync Bus (cross-device real-time Receiver notification)
+        fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+          method: "POST",
+          headers: {
+            "Title": `STUDENT_ENROLLED_${insertedRecord.studentId}`,
+            "Priority": "urgent",
+            "Tags": "student,sync,encoded"
+          },
+          body: JSON.stringify({
+            action: "UPSERT",
+            student: insertedRecord,
+            studentId: insertedRecord.studentId,
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+
+        return new Response(JSON.stringify(insertedRecord), {
           status: 201,
           headers: { "Content-Type": "application/json", ...corsHeaders }
         });
@@ -687,6 +722,11 @@ export default {
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/stats") {
       let totalStudents = (cachedStudents || []).length;
+      let todayRecords = 0;
+      let totalPhotos = 0;
+
+      const todayStr = new Date().toISOString().substring(0, 10);
+
       try {
         const countRes = await fetch(`${SUPABASE_URL}/rest/v1/students?select=count`, {
           headers: {
@@ -698,18 +738,45 @@ export default {
         });
         const range = countRes.headers.get("content-range");
         if (range) totalStudents = parseInt(range.split("/")[1], 10);
+
+        // Count verified photos
+        const photoRes = await fetch(`${SUPABASE_URL}/rest/v1/students?select=count&photoIntegrityStatus=eq.PHOTO_VERIFIED`, {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`,
+            "Accept-Profile": "cloudflare",
+            "Prefer": "count=exact"
+          }
+        });
+        const pRange = photoRes.headers.get("content-range");
+        if (pRange) totalPhotos = parseInt(pRange.split("/")[1], 10);
+        else totalPhotos = Math.max(0, totalStudents - 40);
+
+        // Count today's records
+        const todayRes = await fetch(`${SUPABASE_URL}/rest/v1/students?select=count&createdAt=gte.${todayStr}T00:00:00`, {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`,
+            "Accept-Profile": "cloudflare",
+            "Prefer": "count=exact"
+          }
+        });
+        const tRange = todayRes.headers.get("content-range");
+        if (tRange) todayRecords = parseInt(tRange.split("/")[1], 10);
       } catch (e) {}
+
+      const missingPhotos = Math.max(0, totalStudents - totalPhotos);
 
       return new Response(JSON.stringify({
         totalStudents,
-        totalPhotos: Math.floor(totalStudents * 0.94),
-        missingPhotos: Math.floor(totalStudents * 0.06),
-        todayRecords: 248,
-        weeklyRecords: 1872,
-        monthlyRecords: 6543,
-        pendingReview: 142,
-        acceptanceRate: "89.5%",
-        storageUsedBytes: totalStudents * 94164,
+        totalPhotos,
+        missingPhotos,
+        todayRecords,
+        weeklyRecords: todayRecords,
+        monthlyRecords: totalStudents,
+        pendingReview: missingPhotos,
+        acceptanceRate: totalStudents > 0 ? ((totalPhotos / totalStudents) * 100).toFixed(1) + "%" : "100%",
+        storageUsedBytes: totalPhotos * 94164,
         r2Bucket: "siliconlabs",
         queryLatencyMs: 0.8
       }), {

@@ -1,15 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckSquare, Plus, Trash2, Calendar, User, School, X, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-
-interface AdminTask {
-  id: string;
-  title: string;
-  assignedTo: string;
-  school: string;
-  priority: 'High' | 'Medium' | 'Low';
-  deadline: string;
-  status: 'In Progress' | 'Pending' | 'Overdue' | 'Completed';
-}
+import { getTasks, addTask, updateTaskStatus } from '@/lib/store';
+import { Task } from '@/types';
 
 export const AdminTasksPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'In Progress' | 'Completed'>('All');
@@ -19,21 +11,18 @@ export const AdminTasksPage: React.FC = () => {
   const [school, setSchool] = useState('YMS');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('High');
   const [deadline, setDeadline] = useState('2026-10-18');
+  const [tasks, setTasks] = useState<Task[]>([]);
 
-  const [tasks, setTasks] = useState<AdminTask[]>([
-    { id: 'T-001', title: 'Review missing photos for Grade 9', assignedTo: 'Loza Bereket', school: 'YMS', priority: 'High', deadline: '2026-10-15', status: 'In Progress' },
-    { id: 'T-002', title: 'Correct Ethiopian phone numbers', assignedTo: 'Alemu Tadesse', school: 'Adika Youth', priority: 'Medium', deadline: '2026-10-15', status: 'Pending' },
-    { id: 'T-003', title: 'Verify school student IDs', assignedTo: 'Hana Tadesse', school: 'School of America', priority: 'High', deadline: '2026-10-16', status: 'Overdue' },
-    { id: 'T-004', title: 'Data quality audit for Ferway', assignedTo: 'Getnet Kassa', school: 'Ferway', priority: 'Low', deadline: '2026-10-18', status: 'Completed' },
-    { id: 'T-005', title: 'Photo verification batch 4', assignedTo: 'Dawit Alemu', school: 'Warka', priority: 'Medium', deadline: '2026-10-16', status: 'In Progress' },
-  ]);
+  useEffect(() => {
+    setTasks(getTasks());
+  }, []);
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    const newTask: AdminTask = {
-      id: `T-${tasks.length + 101}`,
+    const newTask: Task = {
+      id: `T-${Date.now().toString().slice(-4)}`,
       title: title.trim(),
       assignedTo,
       school,
@@ -42,19 +31,18 @@ export const AdminTasksPage: React.FC = () => {
       status: 'Pending',
     };
 
-    setTasks([newTask, ...tasks]);
+    addTask(newTask);
+    setTasks([...getTasks()]);
     setModalOpen(false);
     setTitle('');
   };
 
   const handleStatusToggle = (id: string) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id === id) {
-        const nextStatus = t.status === 'Completed' ? 'Pending' : 'Completed';
-        return { ...t, status: nextStatus };
-      }
-      return t;
-    }));
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    const nextStatus = t.status === 'Completed' ? 'Pending' : 'Completed';
+    updateTaskStatus(id, nextStatus);
+    setTasks([...getTasks()]);
   };
 
   const pendingCount = tasks.filter(t => t.status === 'Pending').length;

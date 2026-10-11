@@ -4,9 +4,11 @@ import {
   QrCode, Eye, Layers, ChevronRight, User, ShieldCheck, Check, Sparkles,
   Sliders, FileText, ArrowRight, X, AlertTriangle
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import {
   getStudents, getCardTemplates, getPrintJobs, addPrintJob,
-  updateStudentIdProductionStatus, getCurrentUser, addAuditLog
+  updateStudentIdProductionStatus, getCurrentUser, addAuditLog,
+  getPhotoUrl, subscribeToStudentSync
 } from '@/lib/store';
 import { Student, CardTemplate, PrintJob } from '@/types';
 
@@ -25,6 +27,24 @@ export const ReceiverIdProductionPage: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [cardQrDataUrl, setCardQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedStudent) {
+      const qrPayload = selectedStudent.qrCodeData || JSON.stringify({
+        id: selectedStudent.studentId,
+        name: selectedStudent.fullName,
+        school: selectedStudent.school || 'Campus',
+        grade: selectedStudent.grade || '9C',
+        status: selectedStudent.status || 'Accepted',
+        verified: true,
+        issuer: 'Silicon Labs StudentBridge'
+      });
+      QRCode.toDataURL(qrPayload, { width: 140, margin: 1, color: { dark: '#062404', light: '#ffffff' } })
+        .then(url => setCardQrDataUrl(url))
+        .catch(() => setCardQrDataUrl(null));
+    }
+  }, [selectedStudent]);
 
   useEffect(() => {
     const loadedStudents = getStudents();
@@ -37,6 +57,28 @@ export const ReceiverIdProductionPage: React.FC = () => {
     // Select first student with photo by default
     const firstWithPhoto = loadedStudents.find(s => s.photoPath || s.previewPath) || loadedStudents[0];
     if (firstWithPhoto) setSelectedStudent(firstWithPhoto);
+
+    // Real-time student enrollment subscription
+    const unsubscribe = subscribeToStudentSync(
+      (incoming) => {
+        setStudents(prev => {
+          const idx = prev.findIndex(s => s.studentId === incoming.studentId || s.id === incoming.id);
+          if (idx !== -1) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], ...incoming };
+            return updated;
+          }
+          return [incoming, ...prev];
+        });
+      },
+      (deletedId) => {
+        setStudents(prev => prev.filter(s => s.studentId !== deletedId && s.id !== deletedId));
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const refreshData = () => {
@@ -139,10 +181,7 @@ export const ReceiverIdProductionPage: React.FC = () => {
   };
 
   // Card details
-  const photoUrl = selectedStudent?.previewPath ||
-    (selectedStudent?.photoPath
-      ? `https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev/${selectedStudent.photoPath.replace(/^\//, '')}`
-      : null);
+  const photoUrl = getPhotoUrl(selectedStudent?.previewPath || selectedStudent?.thumbnailPath || selectedStudent?.photoPath);
 
   const cardSerial = selectedStudent?.cardSerialNumber || (selectedStudent ? generateCardSerial(selectedStudent.studentId) : 'CR80-2026-10492');
   const currentProdStatus = selectedStudent?.idProductionStatus || (selectedStudent?.status === 'Accepted' || selectedStudent?.status === 'VERIFIED' ? 'READY' : 'QUEUED');
@@ -243,7 +282,7 @@ export const ReceiverIdProductionPage: React.FC = () => {
             <CheckCircle2 className="w-4 h-4 text-[#2E7D32]" />
           </div>
           <div className="mt-2 text-2xl font-heading font-black text-[#2E7D32]">
-            {students.filter(s => s.idProductionStatus === 'COMPLETED').length + 165}
+            {students.filter(s => s.idProductionStatus === 'COMPLETED').length}
           </div>
           <div className="mt-1 text-[11px] text-[#2E7D32] font-semibold">Physically stamped & verified</div>
         </div>
@@ -346,10 +385,7 @@ export const ReceiverIdProductionPage: React.FC = () => {
               filteredStudents.slice(0, 50).map(s => {
                 const isSelected = selectedStudent?.studentId === s.studentId;
                 const isChecked = selectedIds.has(s.studentId);
-                const sPhoto = s.previewPath ||
-                  (s.photoPath
-                    ? `https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev/${s.photoPath.replace(/^\//, '')}`
-                    : null);
+                const sPhoto = getPhotoUrl(s.previewPath || s.thumbnailPath || s.photoPath);
                 const sStatus = s.idProductionStatus || (s.status === 'Accepted' || s.status === 'VERIFIED' ? 'READY' : 'QUEUED');
 
                 return (
@@ -528,32 +564,13 @@ export const ReceiverIdProductionPage: React.FC = () => {
                     </div>
 
                     <div className="p-4 flex items-center justify-between gap-4 flex-1 bg-white">
-                      {/* Dynamic QR Code & Barcode */}
-                      <div className="w-24 h-24 border border-[#CBD5E1] rounded-xl p-1 bg-white flex flex-col items-center justify-center shrink-0 shadow-sm">
-                        <svg className="w-full h-full" viewBox="0 0 100 100">
-                          {/* Standard high-density QR representation */}
-                          <rect width="100" height="100" fill="white" />
-                          <rect x="5" y="5" width="28" height="28" fill="#202833" />
-                          <rect x="9" y="9" width="20" height="20" fill="white" />
-                          <rect x="13" y="13" width="12" height="12" fill="#202833" />
-
-                          <rect x="67" y="5" width="28" height="28" fill="#202833" />
-                          <rect x="71" y="9" width="20" height="20" fill="white" />
-                          <rect x="75" y="13" width="12" height="12" fill="#202833" />
-
-                          <rect x="5" y="67" width="28" height="28" fill="#202833" />
-                          <rect x="9" y="71" width="20" height="20" fill="white" />
-                          <rect x="13" y="75" width="12" height="12" fill="#202833" />
-
-                          {/* Data dots */}
-                          <circle cx="45" cy="20" r="3" fill="#202833" />
-                          <circle cx="55" cy="30" r="3" fill="#202833" />
-                          <circle cx="45" cy="50" r="3.5" fill="#202833" />
-                          <circle cx="65" cy="65" r="3" fill="#202833" />
-                          <circle cx="85" cy="80" r="3" fill="#202833" />
-                          <circle cx="40" cy="80" r="3" fill="#202833" />
-                          <circle cx="55" cy="80" r="3" fill="#202833" />
-                        </svg>
+                      {/* Dynamic QR Code */}
+                      <div className="w-24 h-24 border border-[#CBD5E1] rounded-xl p-1 bg-white flex flex-col items-center justify-center shrink-0 shadow-sm overflow-hidden">
+                        {cardQrDataUrl ? (
+                          <img src={cardQrDataUrl} alt="Student Pass QR" className="w-full h-full object-contain" />
+                        ) : (
+                          <QrCode className="w-12 h-12 text-[#202833]" />
+                        )}
                         <span className="text-[7px] font-mono text-[#64748B] mt-0.5">SCAN TO VERIFY</span>
                       </div>
 

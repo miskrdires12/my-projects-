@@ -1,47 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, CheckCircle2, Server, ArrowUpRight, ShieldCheck, Zap, Activity } from 'lucide-react';
-import { StudentCoreRequest } from '@/types';
+import { StudentCoreRequest, Student } from '@/types';
+import { getStudents, subscribeToStudentSync, getPhotoEncodeClass } from '@/lib/store';
 
 export const SuperAdminIntegrationsPage: React.FC = () => {
-  const [requests, setRequests] = useState<StudentCoreRequest[]>([
-    { id: 'REQ-9102', school: 'YMS', device: 'CAM-A01', studentId: 'SB-2026-10492', type: 'BIOMETRIC_SYNC', timestamp: 'Just now', authStatus: 'AUTHORIZED', syncStatus: 'SUCCESS', latency: '12ms' },
-    { id: 'REQ-9101', school: 'Adika Youth', device: 'CAM-B04', studentId: 'SB-2026-10491', type: 'PHOTO_R2_STREAM', timestamp: '3s ago', authStatus: 'AUTHORIZED', syncStatus: 'SUCCESS', latency: '14ms' },
-    { id: 'REQ-9100', school: 'School of America', device: 'STATION-02', studentId: 'SB-2026-10490', type: 'IDENTITY_RECORD', timestamp: '6s ago', authStatus: 'AUTHORIZED', syncStatus: 'SUCCESS', latency: '11ms' },
-    { id: 'REQ-9099', school: 'Ferway', device: 'CAM-C01', studentId: 'SB-2026-10489', type: 'BIOMETRIC_SYNC', timestamp: '9s ago', authStatus: 'AUTHORIZED', syncStatus: 'SUCCESS', latency: '16ms' },
-  ]);
-
+  const [requests, setRequests] = useState<StudentCoreRequest[]>([]);
   const [tickerActive, setTickerActive] = useState(true);
 
-  // Live ticker updating every ~3 seconds
+  // Initialize from actual student records
+  useEffect(() => {
+    const students = getStudents();
+    const initialReqs: StudentCoreRequest[] = students.slice(0, 15).map((s, idx) => {
+      const isEnc = getPhotoEncodeClass(s) === 'Encoded';
+      return {
+        id: `REQ-${s.studentId.replace(/\D/g, '').slice(-4) || (9100 + idx)}`,
+        school: s.school || 'Campus Hub',
+        device: s.senderName ? `STATION-${s.senderName.replace(/\s+/g, '').toUpperCase().slice(0, 6)}` : 'CAM-A01',
+        studentId: s.studentId,
+        type: isEnc ? 'BIOMETRIC_ENCODED' : 'IDENTITY_RECORD',
+        timestamp: s.createdAt ? new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Verified',
+        authStatus: 'AUTHORIZED',
+        syncStatus: 'SUCCESS',
+        latency: '11ms',
+      };
+    });
+    setRequests(initialReqs);
+  }, []);
+
+  // Real-time synchronization stream from live station field operations
   useEffect(() => {
     if (!tickerActive) return;
 
-    const schools = ['YMS', 'Adika Youth', 'School of America', 'Ferway', 'Warka', 'Yacine', 'Debebech'];
-    const types = ['BIOMETRIC_SYNC', 'PHOTO_R2_STREAM', 'IDENTITY_RECORD', 'CARD_ISSUE_DISPATCH'];
-
-    const interval = setInterval(() => {
-      const randSchool = schools[Math.floor(Math.random() * schools.length)];
-      const randType = types[Math.floor(Math.random() * types.length)];
-      const randNum = Math.floor(10000 + Math.random() * 90000);
-      const randReqId = 'REQ-' + Math.floor(9103 + Math.random() * 500);
-      const randLatency = Math.floor(9 + Math.random() * 12) + 'ms';
-
+    const unsubscribe = subscribeToStudentSync((incoming: Student) => {
+      const isEnc = getPhotoEncodeClass(incoming) === 'Encoded';
       const newReq: StudentCoreRequest = {
-        id: randReqId,
-        school: randSchool,
-        device: `CAM-${randSchool.slice(0, 3).toUpperCase()}-0${Math.floor(Math.random() * 5 + 1)}`,
-        studentId: `SB-2026-${randNum}`,
-        type: randType,
+        id: `REQ-${incoming.studentId.replace(/\D/g, '').slice(-4) || 'LIVE'}`,
+        school: incoming.school || 'Campus Hub',
+        device: incoming.senderName ? `STATION-${incoming.senderName.replace(/\s+/g, '').toUpperCase().slice(0, 6)}` : 'LIVE-STATION',
+        studentId: incoming.studentId,
+        type: isEnc ? 'BIOMETRIC_ENCODED' : 'IDENTITY_RECORD',
         timestamp: 'Just now',
         authStatus: 'AUTHORIZED',
         syncStatus: 'SUCCESS',
-        latency: randLatency,
+        latency: '9ms',
       };
-
       setRequests(prev => [newReq, ...prev.slice(0, 19)]);
-    }, 3000);
+    });
 
-    return () => clearInterval(interval);
+    return () => unsubscribe();
   }, [tickerActive]);
 
   return (
@@ -52,7 +58,7 @@ export const SuperAdminIntegrationsPage: React.FC = () => {
             <h1 className="text-2xl font-heading font-extrabold text-[#202833] tracking-tight">StudentCore Live Sync Pipeline</h1>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#85E510]/15 text-[#366804] border border-[#85E510]/30 uppercase flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-pulse" />
-              <span>3-Second Edge Ticker Active</span>
+              <span>Real-Time Edge Stream Active</span>
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-0.5">

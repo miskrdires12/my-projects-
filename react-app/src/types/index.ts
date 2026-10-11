@@ -27,8 +27,11 @@ export interface Student {
   bloodType?: string;
   rollNumber?: string;
   photoPath?: string;
+  thumbnailPath?: string;
   previewPath?: string;
   originalPhotoPath?: string;
+  photoIntegrityStatus?: 'PHOTO_VERIFIED' | 'NO_PHOTO' | 'REPAIR_REQUIRED' | string;
+  qrCodeData?: string;
   senderName?: string;
   status?: string;
   bulkedStatus?: 'BULKED' | 'UNBULKED' | string;
@@ -41,6 +44,7 @@ export interface Student {
   createdAt?: string;
   updatedAt?: string;
   hasMistake?: boolean;
+  receiverHidden?: boolean;
   country?: string;
   location?: string;
   idProductionStatus?: 'QUEUED' | 'READY' | 'IN_PRODUCTION' | 'COMPLETED' | string;

@@ -21,37 +21,64 @@ export const ReceiverDashboardPage: React.FC = () => {
     return () => window.removeEventListener('studentbridge_datachange', refreshData);
   }, []);
 
-  const totalStudents = students.length || 3723;
-  const withPhoto = students.filter(s => s.photoPath || s.previewPath).length;
-  const missingPhoto = totalStudents - withPhoto;
+  const totalStudents = students.length;
+  const withPhoto = students.filter(s => s.photoPath || s.previewPath || s.thumbnailPath || s.photoIntegrityStatus === 'PHOTO_VERIFIED').length;
+  const missingPhoto = Math.max(0, totalStudents - withPhoto);
 
-  // Daily volume data
-  const dailyCaptureData = [
-    { day: 'Mon', submitted: 220, accepted: 195 },
-    { day: 'Tue', submitted: 260, accepted: 240 },
-    { day: 'Wed', submitted: 310, accepted: 285 },
-    { day: 'Thu', submitted: 290, accepted: 265 },
-    { day: 'Fri', submitted: 340, accepted: 315 },
-    { day: 'Sat', submitted: 180, accepted: 165 },
-    { day: 'Sun', submitted: 140, accepted: 130 },
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const todayIngested = students.filter(s => s.createdAt && s.createdAt.startsWith(todayStr)).length;
+
+  const acceptedCount = students.filter(s => !s.status || s.status === 'Accepted' || s.status === 'ACTIVE' || s.status === 'VERIFIED').length;
+  const pendingCount = students.filter(s => s.status === 'Pending').length;
+  const rejectedCount = students.filter(s => s.status === 'Rejected').length;
+  const correctedCount = students.filter(s => s.status === 'Corrected').length;
+
+  const acceptanceRate = totalStudents > 0 ? ((acceptedCount / totalStudents) * 100).toFixed(1) + '%' : '100%';
+
+  // Real past 7 days capture volume
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const today = new Date();
+  const dailyCaptureData = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(today.getDate() - (6 - i));
+    const dStr = d.toISOString().substring(0, 10);
+    const dayLabel = daysOfWeek[d.getDay()];
+    const countSub = students.filter(s => s.createdAt && s.createdAt.startsWith(dStr)).length;
+    const countAcc = students.filter(s => s.createdAt && s.createdAt.startsWith(dStr) && (!s.status || s.status === 'Accepted' || s.status === 'ACTIVE' || s.status === 'VERIFIED')).length;
+    return {
+      day: dayLabel,
+      submitted: countSub,
+      accepted: countAcc
+    };
+  });
+
+  // Real Top Schools distribution directly from student records
+  const schoolCounts: Record<string, number> = {};
+  students.forEach(s => {
+    const sch = s.school || 'Unassigned';
+    schoolCounts[sch] = (schoolCounts[sch] || 0) + 1;
+  });
+
+  const sortedSchools = Object.entries(schoolCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => ({
+      name,
+      count,
+      percentage: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+    }));
+
+  const topSchools = sortedSchools.length > 0 ? sortedSchools : [
+    { name: 'Active Registry', count: totalStudents, percentage: 100 }
   ];
 
-  // Top Schools distribution
-  const topSchools = [
-    { name: 'YMS', count: 1245, percentage: 33 },
-    { name: 'Adika Youth', count: 982, percentage: 26 },
-    { name: 'School of America', count: 756, percentage: 20 },
-    { name: 'Ferway', count: 542, percentage: 14 },
-    { name: 'Warka', count: 398, percentage: 10 },
-  ];
-
-  // Record status donut data
+  // Real Record status donut data
   const recordStatusData = [
-    { name: 'Accepted', value: 89.2, color: '#85E510' },
-    { name: 'Rejected', value: 4.1, color: '#ef4444' },
-    { name: 'Corrected', value: 3.5, color: '#0284c7' },
-    { name: 'Pending', value: 3.2, color: '#f59e0b' },
-  ];
+    { name: 'Accepted', value: totalStudents > 0 ? Number(((acceptedCount / totalStudents) * 100).toFixed(1)) : 100, color: '#85E510' },
+    { name: 'Pending', value: totalStudents > 0 ? Number(((pendingCount / totalStudents) * 100).toFixed(1)) : 0, color: '#f59e0b' },
+    { name: 'Rejected', value: totalStudents > 0 ? Number(((rejectedCount / totalStudents) * 100).toFixed(1)) : 0, color: '#ef4444' },
+    { name: 'Corrected', value: totalStudents > 0 ? Number(((correctedCount / totalStudents) * 100).toFixed(1)) : 0, color: '#0284c7' },
+  ].filter(x => x.value > 0 || totalStudents === 0);
 
   return (
     <div className="space-y-6">
@@ -103,10 +130,10 @@ export const ReceiverDashboardPage: React.FC = () => {
 
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
           <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Today's Ingested</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#202833]">248</div>
+          <div className="mt-2 text-3xl font-heading font-black text-[#202833]">{todayIngested.toLocaleString()}</div>
           <div className="mt-1 text-[11px] text-[#366804] font-semibold flex items-center gap-1">
             <TrendingUp className="w-3 h-3" />
-            <span>+14.2% vs yesterday</span>
+            <span>Authoritative Live Ingestion</span>
           </div>
         </div>
 
@@ -114,13 +141,13 @@ export const ReceiverDashboardPage: React.FC = () => {
           <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Biometric Photos</div>
           <div className="mt-2 text-3xl font-heading font-black text-[#202833]">{withPhoto.toLocaleString()}</div>
           <div className="mt-1 text-[11px] text-[#366804] font-semibold">
-            {missingPhoto > 0 ? `${missingPhoto} missing photos flagged` : 'All photos verified'}
+            {missingPhoto > 0 ? `${missingPhoto} pending photos flagged` : 'All photos verified'}
           </div>
         </div>
 
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
           <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Acceptance Rate</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#366804]">89.2%</div>
+          <div className="mt-2 text-3xl font-heading font-black text-[#366804]">{acceptanceRate}</div>
           <div className="mt-1 text-[11px] text-[#64748B]">High fidelity biometric standards</div>
         </div>
       </div>

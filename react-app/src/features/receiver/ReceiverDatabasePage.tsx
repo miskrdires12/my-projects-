@@ -30,8 +30,17 @@ export const ReceiverDatabasePage: React.FC = () => {
         </div>
 
         <button
-          onClick={() => {
-            setLatency(`${Math.floor(12 + Math.random() * 10)}ms`);
+          onClick={async () => {
+            const start = performance.now();
+            try {
+              const res = await fetch('/api/stats');
+              const elapsed = Math.round(performance.now() - start);
+              setLatency(`${elapsed}ms`);
+              setHealthStatus(res.ok ? 'Healthy' : 'Degraded');
+            } catch (e) {
+              const elapsed = Math.round(performance.now() - start);
+              setLatency(`${elapsed}ms`);
+            }
           }}
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-[#F8FAF9] border border-[#CBD5E1] text-xs font-bold text-[#202833] shadow-sm transition-all"
         >

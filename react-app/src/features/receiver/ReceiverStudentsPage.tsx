@@ -7,7 +7,7 @@ import {
   Clock, ArrowUpRight, Check, Printer, FileSpreadsheet, CreditCard
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import { getStudents, addStudent, updateStudent, deleteStudent } from '@/lib/store';
+import { getStudents, addStudent, updateStudent, deleteStudent, getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync } from '@/lib/store';
 import { Student } from '@/types';
 
 export const ReceiverStudentsPage: React.FC = () => {
@@ -17,6 +17,7 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [gradeFilter, setGradeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [photoFilter, setPhotoFilter] = useState('ALL');
+  const [encodeFilter, setEncodeFilter] = useState<'ALL' | 'ENCODED' | 'UNENCODED'>('ALL');
 
   // Multi-selection for batch operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -29,6 +30,7 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [activeTab, setActiveTab] = useState<'Record History' | 'Photo History' | 'Correction Form'>('Record History');
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+  const [copiedPayload, setCopiedPayload] = useState(false);
 
   // Correction Form States
   const [editFullName, setEditFullName] = useState('');
@@ -43,13 +45,11 @@ export const ReceiverStudentsPage: React.FC = () => {
       if (res.ok) {
         const json = await res.json();
         if (json.students && json.students.length > 0) {
-          const current = getStudents();
-          const currentIds = new Set(current.map(s => s.studentId));
-          json.students.forEach((s: Student) => {
-            if (!currentIds.has(s.studentId)) {
-              addStudent(s);
-            }
-          });
+          const memory = getStudents();
+          const serverIds = new Set(json.students.map((s: Student) => s.studentId));
+          const localOnly = memory.filter(m => !serverIds.has(m.studentId));
+          setStudents([...localOnly, ...json.students]);
+          return;
         }
       }
     } catch (e) {
@@ -61,17 +61,30 @@ export const ReceiverStudentsPage: React.FC = () => {
   useEffect(() => {
     loadData();
 
-    // Reactive event listener for student registrations from Sender Station
-    const handleDataChange = () => {
-      loadData();
-    };
-    window.addEventListener('studentbridge_datachange', handleDataChange);
+    // Dual-channel real-time subscription (BroadcastChannel + ntfy Cloud SSE + DOM)
+    const unsubscribe = subscribeToStudentSync(
+      (incoming) => {
+        setStudents((prev) => {
+          const idx = prev.findIndex(s => s.studentId === incoming.studentId || s.id === incoming.id);
+          if (idx !== -1) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], ...incoming };
+            return updated;
+          }
+          return [incoming, ...prev];
+        });
+      },
+      (deletedId) => {
+        setStudents((prev) => prev.filter(s => s.studentId !== deletedId && s.id !== deletedId));
+      }
+    );
+
     return () => {
-      window.removeEventListener('studentbridge_datachange', handleDataChange);
+      unsubscribe();
     };
   }, []);
 
-  // Update correction form whenever selected student changes
+  // Update correction form and QR whenever selected student changes
   useEffect(() => {
     if (selectedStudent) {
       setEditFullName(selectedStudent.fullName);
@@ -80,14 +93,16 @@ export const ReceiverStudentsPage: React.FC = () => {
       setCorrectionReason('');
       setCorrectionSaved(false);
 
-      const qrPayload = JSON.stringify({
+      const qrPayload = selectedStudent.qrCodeData || JSON.stringify({
         id: selectedStudent.studentId,
         name: selectedStudent.fullName,
         school: selectedStudent.school || 'YMS',
         grade: selectedStudent.grade || '9C',
         status: selectedStudent.status || 'Accepted',
+        verified: true,
         issuer: 'Silicon Labs StudentBridge'
       });
+
       QRCode.toDataURL(qrPayload, { width: 140, margin: 1, color: { dark: '#062404', light: '#85E510' } })
         .then(url => setQrCodeDataUrl(url))
         .catch(() => setQrCodeDataUrl(null));
@@ -100,7 +115,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     return Array.from(set).sort();
   }, [students]);
 
-  // Filtered dataset
+  // Filtered dataset including Encode status
   const filtered = useMemo(() => {
     return students.filter(s => {
       const q = search.toLowerCase().trim();
@@ -112,13 +127,25 @@ export const ReceiverStudentsPage: React.FC = () => {
 
       const matchSchool = schoolFilter === 'ALL' || s.school === schoolFilter;
       const matchGrade = gradeFilter === 'ALL' || s.grade === gradeFilter;
-      const matchStatus = statusFilter === 'ALL' || (s.status || 'Accepted').toUpperCase() === statusFilter.toUpperCase();
-      const hasPhoto = !!(s.photoPath || s.previewPath);
+      const st = (s.status || 'Accepted').toUpperCase();
+      const isAccepted = st === 'ACCEPTED' || st === 'ACTIVE' || st === 'VERIFIED';
+      const matchStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACCEPTED' && isAccepted) ||
+        (statusFilter === 'PENDING' && st === 'PENDING') ||
+        (statusFilter === 'REJECTED' && st === 'REJECTED');
+      const hasPhoto = !!(s.photoPath || s.previewPath || s.thumbnailPath);
       const matchPhoto = photoFilter === 'ALL' || (photoFilter === 'YES' && hasPhoto) || (photoFilter === 'NO' && !hasPhoto);
 
-      return matchSearch && matchSchool && matchGrade && matchStatus && matchPhoto;
+      const isEncoded = getPhotoEncodeClass(s) === 'Encoded';
+      const matchEncode =
+        encodeFilter === 'ALL' ||
+        (encodeFilter === 'ENCODED' && isEncoded) ||
+        (encodeFilter === 'UNENCODED' && !isEncoded);
+
+      return matchSearch && matchSchool && matchGrade && matchStatus && matchPhoto && matchEncode;
     });
-  }, [students, search, schoolFilter, gradeFilter, statusFilter, photoFilter]);
+  }, [students, search, schoolFilter, gradeFilter, statusFilter, photoFilter, encodeFilter]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const pagedStudents = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -265,6 +292,17 @@ export const ReceiverStudentsPage: React.FC = () => {
             <option value="PENDING">Pending</option>
             <option value="REJECTED">Rejected</option>
           </select>
+
+          {/* Encode Class filter */}
+          <select
+            value={encodeFilter}
+            onChange={(e) => { setEncodeFilter(e.target.value as any); setPage(1); }}
+            className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-semibold text-[#202833] focus:outline-none focus:border-[#85E510]"
+          >
+            <option value="ALL">Encode Class: All</option>
+            <option value="ENCODED">Encoded (Photo Verified)</option>
+            <option value="UNENCODED">Unencoded (Missing Photo)</option>
+          </select>
         </div>
 
         <div className="flex items-center gap-2.5 self-end md:self-auto">
@@ -286,7 +324,7 @@ export const ReceiverStudentsPage: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => { setSearch(''); setSchoolFilter('ALL'); setGradeFilter('ALL'); setStatusFilter('ALL'); setPhotoFilter('ALL'); setPage(1); }}
+            onClick={() => { setSearch(''); setSchoolFilter('ALL'); setGradeFilter('ALL'); setStatusFilter('ALL'); setPhotoFilter('ALL'); setEncodeFilter('ALL'); setPage(1); }}
             className="px-3 py-1.5 rounded-xl bg-[#F8FAF9] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-xs font-bold text-[#202833] transition-all"
           >
             Reset
@@ -319,6 +357,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <th className="py-3.5">School</th>
                 <th className="py-3.5">Phone Number</th>
                 <th className="py-3.5">Sender</th>
+                <th className="py-3.5">Encode Class</th>
                 <th className="py-3.5">Review Status</th>
                 <th className="py-3.5">ID Card Status</th>
                 <th className="py-3.5 text-right pr-4">Actions</th>
@@ -326,7 +365,8 @@ export const ReceiverStudentsPage: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
               {pagedStudents.map((s) => {
-                const photoSrc = s.previewPath || (s.photoPath ? `https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev/${s.photoPath.replace(/^\//, '')}` : null);
+                const photoSrc = getPhotoUrl(s.thumbnailPath || s.previewPath || s.photoPath);
+                const isEncoded = getPhotoEncodeClass(s) === 'Encoded';
                 const status = s.status || 'Accepted';
                 const isSelected = selectedIds.has(s.studentId);
 
@@ -394,7 +434,22 @@ export const ReceiverStudentsPage: React.FC = () => {
                     <td className="py-3 font-mono text-[#64748B]">{s.phone || '+2519...'}</td>
 
                     {/* Sender */}
-                    <td className="py-3 text-[#64748B]">{s.senderName || 'Sender-01'}</td>
+                    <td className="py-3 text-[#64748B]">{s.senderName || 'Field Operator'}</td>
+
+                    {/* Encode Class Badge */}
+                    <td className="py-3">
+                      {isEncoded ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1 w-fit shadow-xs">
+                          <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span>Encoded</span>
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1 w-fit">
+                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>Unencoded</span>
+                        </span>
+                      )}
+                    </td>
 
                     {/* Status Badge */}
                     <td className="py-3">
@@ -513,9 +568,9 @@ export const ReceiverStudentsPage: React.FC = () => {
               {/* Photo & Identity Quick Card */}
               <div className="p-4 bg-[#F8FAF9] rounded-2xl border border-[#E2E8F0] flex items-center gap-4">
                 <div className="w-24 h-28 rounded-xl bg-white border border-[#CBD5E1] overflow-hidden shrink-0 shadow-sm flex items-center justify-center">
-                  {selectedStudent.previewPath || selectedStudent.photoPath ? (
+                  {getPhotoUrl(selectedStudent.previewPath || selectedStudent.thumbnailPath || selectedStudent.photoPath) ? (
                     <img
-                      src={selectedStudent.previewPath || `https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev/${selectedStudent.photoPath?.replace(/^\//, '')}`}
+                      src={getPhotoUrl(selectedStudent.previewPath || selectedStudent.thumbnailPath || selectedStudent.photoPath)!}
                       alt={selectedStudent.fullName}
                       className="w-full h-full object-cover"
                     />
@@ -525,6 +580,18 @@ export const ReceiverStudentsPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5 text-xs flex-1">
+                  <div className="flex justify-between items-center pb-1 border-b border-[#E2E8F0]">
+                    <span className="text-[#64748B]">Encode Class:</span>
+                    {getPhotoEncodeClass(selectedStudent) === 'Encoded' ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                        <Check className="w-3 h-3 text-emerald-600" /> Encoded
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-amber-600" /> Unencoded
+                      </span>
+                    )}
+                  </div>
                   <div className="flex justify-between">
                     <span className="text-[#64748B]">Grade & Section:</span>
                     <span className="font-bold text-[#202833]">{selectedStudent.grade || '9C'}</span>
@@ -543,30 +610,64 @@ export const ReceiverStudentsPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#64748B]">Origin Sender:</span>
-                    <span className="font-semibold text-[#202833]">{selectedStudent.senderName || 'Field Sender'}</span>
+                    <span className="font-semibold text-[#202833]">{selectedStudent.senderName || 'Field Operator'}</span>
                   </div>
                 </div>
               </div>
 
-              {/* QR Verification Payload */}
-              {qrCodeDataUrl && (
-                <div className="p-4 bg-white rounded-2xl border border-[#E2E8F0] flex items-center justify-between gap-4">
-                  <div>
-                    <h4 className="text-xs font-black text-[#202833] flex items-center gap-1.5">
-                      <QrCode className="w-4 h-4 text-[#4D8A07]" />
-                      <span>Encrypted Verification QR</span>
-                    </h4>
-                    <p className="text-[11px] text-[#64748B] mt-1 max-w-[280px]">
-                      Authentic QR payload compatible with StudentCore Android field scanners.
-                    </p>
+              {/* QR Auto-Encoded Payload Card */}
+              <div className="p-4 bg-white rounded-2xl border border-[#E2E8F0] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-[#4D8A07]" />
+                    <h4 className="text-xs font-black text-[#202833]">Auto-Encoded QR Payload</h4>
                   </div>
-                  <img
-                    src={qrCodeDataUrl}
-                    alt="Student QR Code"
-                    className="w-20 h-20 rounded-lg border border-[#E2E8F0] p-1 bg-white"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const payload = selectedStudent.qrCodeData || JSON.stringify({
+                        id: selectedStudent.studentId,
+                        name: selectedStudent.fullName,
+                        school: selectedStudent.school || 'YMS',
+                        grade: selectedStudent.grade || '9C',
+                        status: selectedStudent.status || 'Accepted',
+                        verified: true,
+                        issuer: 'Silicon Labs StudentBridge'
+                      });
+                      navigator.clipboard.writeText(payload);
+                      setCopiedPayload(true);
+                      setTimeout(() => setCopiedPayload(false), 2000);
+                    }}
+                    className="text-[11px] font-bold text-[#4D8A07] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedPayload ? <span className="text-emerald-600">✓ Copied</span> : <span>Copy Raw Encoded</span>}
+                  </button>
                 </div>
-              )}
+
+                <div className="flex items-center gap-4">
+                  {qrCodeDataUrl && (
+                    <img
+                      src={qrCodeDataUrl}
+                      alt="Student QR Code"
+                      className="w-20 h-20 rounded-lg border border-[#E2E8F0] p-1 bg-white shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 bg-[#F8FAF9] p-2.5 rounded-xl border border-[#E2E8F0] overflow-hidden">
+                    <div className="text-[10px] text-[#64748B] font-bold mb-1 uppercase tracking-wider">Canonical Payload</div>
+                    <code className="text-[10px] font-mono text-[#366804] break-all block leading-relaxed line-clamp-3">
+                      {selectedStudent.qrCodeData || JSON.stringify({
+                        id: selectedStudent.studentId,
+                        name: selectedStudent.fullName,
+                        school: selectedStudent.school || 'YMS',
+                        grade: selectedStudent.grade || '9C',
+                        status: selectedStudent.status || 'Accepted',
+                        verified: true,
+                        issuer: 'Silicon Labs StudentBridge'
+                      })}
+                    </code>
+                  </div>
+                </div>
+              </div>
 
               {/* ID Production Action CTA */}
               <div className="p-3.5 bg-[#85E510]/15 rounded-2xl border border-[#85E510]/40 flex items-center justify-between gap-3">

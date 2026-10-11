@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Download, FileSpreadsheet, Archive, CheckCircle2, AlertCircle, Loader2, X, RefreshCw, FileText, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { getStudents } from '@/lib/store';
+import { getStudents, getPhotoUrl, getPhotoEncodeClass } from '@/lib/store';
 
 export const ReceiverExportsPage: React.FC = () => {
   const [selectedScope, setSelectedScope] = useState<'filtered' | 'all'>('all');
@@ -15,13 +15,16 @@ export const ReceiverExportsPage: React.FC = () => {
 
   const students = getStudents();
 
-  const sampleFiles = [
-    { name: 'SB-2026-12788_Loza_Bereket.jpg', status: 'Done', size: '250 KB' },
-    { name: 'SB-2026-12787_Alemu_Tadesse.jpg', status: 'Done', size: '260 KB' },
-    { name: 'SB-2026-12786_Hana_Tadesse.jpg', status: 'Missing', size: '0 KB' },
-    { name: 'SB-2026-12785_Getnet_Kassa.jpg', status: 'Done', size: '240 KB' },
-    { name: 'SB-2026-12784_Dawit_Alemu.jpg', status: 'Done', size: '255 KB' },
-  ];
+  // Derived from real authoritative student records
+  const sampleFiles = (students.length > 0 ? students.slice(0, 5) : []).map(s => {
+    const isEnc = getPhotoEncodeClass(s) === 'Encoded';
+    return {
+      name: `${s.studentId}_${(s.fullName || 'Student').replace(/\s+/g, '_')}.jpg`,
+      status: isEnc ? 'Done' : 'Missing',
+      size: isEnc ? '250 KB' : '0 KB',
+      encodeClass: isEnc ? 'Encoded' : 'Unencoded'
+    };
+  });
 
   const handleStartDownload = () => {
     setDownloadModalOpen(true);
@@ -53,20 +56,27 @@ export const ReceiverExportsPage: React.FC = () => {
 
   const exportRealCSV = () => {
     try {
-      const headers = ['ID', 'StudentID', 'FullName', 'Sex', 'Grade', 'School', 'Phone', 'BloodType', 'Country', 'Status', 'PhotoPath'];
-      const rows = students.map(s => [
-        s.id,
-        s.studentId,
-        `"${s.fullName}"`,
-        s.sex || '',
-        s.grade || '',
-        `"${s.school || ''}"`,
-        s.phone || '',
-        s.bloodType || '',
-        s.country || 'Ethiopia',
-        s.status || 'Accepted',
-        `"${s.photoPath || ''}"`
-      ]);
+      const headers = ['ID', 'StudentID', 'FullName', 'Sex', 'Grade', 'School', 'Phone', 'BloodType', 'Country', 'EncodeClass', 'QRCodePayload', 'Status', 'PhotoUrl'];
+      const rows = students.map(s => {
+        const isEnc = getPhotoEncodeClass(s) === 'Encoded';
+        const qr = s.qrCodeData || `SB://${s.studentId}/${encodeURIComponent(s.fullName)}/${encodeURIComponent(s.school || 'Campus')}/${encodeURIComponent(s.grade || '12')}`;
+        const photo = getPhotoUrl(s.photoPath || s.previewPath) || '';
+        return [
+          s.id,
+          s.studentId,
+          `"${s.fullName}"`,
+          s.sex || '',
+          s.grade || '',
+          `"${s.school || ''}"`,
+          s.phone || '',
+          s.bloodType || '',
+          s.country || 'Ethiopia',
+          isEnc ? 'Encoded' : 'Unencoded',
+          `"${qr.replace(/"/g, '""')}"`,
+          s.status || 'Accepted',
+          `"${photo}"`
+        ];
+      });
 
       const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -84,18 +94,25 @@ export const ReceiverExportsPage: React.FC = () => {
 
   const exportRealExcel = () => {
     try {
-      const exportData = students.map(s => ({
-        'Student ID': s.studentId,
-        'Full Name': s.fullName,
-        'Sex': s.sex || 'Female',
-        'Grade Level': s.grade || '',
-        'School Campus': s.school || '',
-        'Contact Phone': s.phone || '',
-        'Blood Type': s.bloodType || '',
-        'Country': s.country || 'Ethiopia',
-        'Photo Object Key': s.photoPath || 'MISSING',
-        'Verification Status': s.status || 'Accepted',
-      }));
+      const exportData = students.map(s => {
+        const isEnc = getPhotoEncodeClass(s) === 'Encoded';
+        const qr = s.qrCodeData || `SB://${s.studentId}/${encodeURIComponent(s.fullName)}/${encodeURIComponent(s.school || 'Campus')}/${encodeURIComponent(s.grade || '12')}`;
+        const photo = getPhotoUrl(s.photoPath || s.previewPath) || 'MISSING';
+        return {
+          'Student ID': s.studentId,
+          'Full Name': s.fullName,
+          'Sex': s.sex || 'Female',
+          'Grade Level': s.grade || '',
+          'School Campus': s.school || '',
+          'Contact Phone': s.phone || '',
+          'Blood Type': s.bloodType || '',
+          'Country': s.country || 'Ethiopia',
+          'Encode Class': isEnc ? 'Encoded (Photo Verified)' : 'Unencoded (Missing Photo)',
+          'QR Code Payload': qr,
+          'Photo URL': photo,
+          'Verification Status': s.status || 'Accepted',
+        };
+      });
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       const workbook = XLSX.utils.book_new();
@@ -108,8 +125,8 @@ export const ReceiverExportsPage: React.FC = () => {
 
   const exportPhotoManifest = () => {
     try {
-      const withPhoto = students.filter(s => s.photoPath || s.previewPath);
-      const missing = students.filter(s => !s.photoPath && !s.previewPath);
+      const withPhoto = students.filter(s => getPhotoEncodeClass(s) === 'Encoded');
+      const missing = students.filter(s => getPhotoEncodeClass(s) !== 'Encoded');
 
       const manifest = {
         generatedAt: new Date().toISOString(),
@@ -124,7 +141,9 @@ export const ReceiverExportsPage: React.FC = () => {
           fullName: s.fullName,
           grade: s.grade,
           school: s.school,
-          photoKey: s.photoPath || `${s.grade}/${s.studentId}_${s.fullName.replace(/\s+/g, '_')}.jpg`,
+          encodeClass: 'Encoded',
+          qrCodePayload: s.qrCodeData || `SB://${s.studentId}/${encodeURIComponent(s.fullName)}`,
+          photoUrl: getPhotoUrl(s.photoPath || s.previewPath),
           status: 'VERIFIED'
         })),
         missingManifest: missing.map(s => ({
@@ -132,6 +151,7 @@ export const ReceiverExportsPage: React.FC = () => {
           fullName: s.fullName,
           grade: s.grade,
           school: s.school,
+          encodeClass: 'Unencoded',
           status: 'MISSING_PHOTO'
         }))
       };
@@ -152,15 +172,18 @@ export const ReceiverExportsPage: React.FC = () => {
   const exportClassifiedZip = async () => {
     try {
       const zip = new JSZip();
-      const meta = students.slice(0, 50).map(s => ({
+      const meta = students.slice(0, 100).map(s => ({
         id: s.studentId,
         name: s.fullName,
         grade: s.grade,
-        school: s.school
+        school: s.school,
+        encodeClass: getPhotoEncodeClass(s),
+        qrCodePayload: s.qrCodeData || `SB://${s.studentId}/${encodeURIComponent(s.fullName)}`,
+        photoUrl: getPhotoUrl(s.photoPath || s.previewPath)
       }));
 
       zip.file('manifest.json', JSON.stringify(meta, null, 2));
-      zip.file('README.txt', 'StudentBridge Photo Archive\nStored under grade partitions.\nSilicon Labs Enterprise Data Management.');
+      zip.file('README.txt', 'StudentBridge Photo Archive\nClassified under Encoded_Verified and Unencoded_Pending partitions.\nSilicon Labs Enterprise Data Management.');
 
       const content = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(content);

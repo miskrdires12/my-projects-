@@ -41,8 +41,8 @@ export const SuperAdminDashboardPage: React.FC = () => {
     .map(u => ({
       name: u.username,
       email: u.email,
-      records: u.recordsSentSingle || Math.floor(Math.random() * 400 + 120),
-      rate: '96%'
+      records: u.recordsSentSingle || 0,
+      rate: totalCount > 0 ? `${Math.round((acceptedCount / totalCount) * 100)}%` : '100%'
     }));
 
   return (
@@ -89,7 +89,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
         {/* Pending / Under Review */}
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm hover:border-amber-400 transition-all">
           <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Pending Review</div>
-          <div className="mt-2 text-3xl font-heading font-black text-amber-600">{(pendingCount || 12).toLocaleString()}</div>
+          <div className="mt-2 text-3xl font-heading font-black text-amber-600">{pendingCount.toLocaleString()}</div>
           <div className="mt-1 text-[11px] text-amber-700 font-semibold">Triage queue active</div>
         </div>
 

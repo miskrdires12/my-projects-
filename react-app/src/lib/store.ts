@@ -1,4 +1,7 @@
 import { Student, User, Task, School, AuditLog, StudentCoreRequest, MistakeItem, UserRole, CardTemplate, PrintJob } from '@/types';
+import { publishStudentSync, subscribeToStudentSync, getPhotoUrl, getPhotoEncodeClass } from './syncEngine';
+
+export { getPhotoUrl, getPhotoEncodeClass, publishStudentSync, subscribeToStudentSync };
 
 // Initial fallback schools
 const DEFAULT_SCHOOLS: School[] = [
@@ -12,13 +15,7 @@ const DEFAULT_SCHOOLS: School[] = [
   { id: "sch_hightech", name: "High Tech", location: "Harar", status: "Active", studentsCount: 380 }
 ];
 
-const DEFAULT_TASKS: Task[] = [
-  { id: "T-001", title: "Review missing photos for Grade 9", assignedTo: "Loza Bereket", school: "YMS", priority: "High", deadline: "2026-10-15", status: "In Progress" },
-  { id: "T-002", title: "Correct Ethiopian phone numbers", assignedTo: "Alemu Tadesse", school: "Adika Youth", priority: "Medium", deadline: "2026-10-15", status: "Pending" },
-  { id: "T-003", title: "Verify school student IDs", assignedTo: "Hana Tadesse", school: "School of America", priority: "High", deadline: "2026-10-16", status: "Overdue" },
-  { id: "T-004", title: "Data quality audit for Ferway", assignedTo: "Getnet Kassa", school: "Ferway", priority: "Low", deadline: "2026-10-18", status: "Completed" },
-  { id: "T-005", title: "Photo verification batch 4", assignedTo: "Dawit Alemu", school: "Warka", priority: "Medium", deadline: "2026-10-16", status: "In Progress" }
-];
+const DEFAULT_TASKS: Task[] = [];
 
 export interface OperatorAccount extends User {
   password?: string;
@@ -98,12 +95,44 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
 let memoryStudents: Student[] = [];
 let memoryUsers: User[] = [...PRESET_OPERATORS];
 let memorySchools: School[] = DEFAULT_SCHOOLS;
-let memoryTasks: Task[] = DEFAULT_TASKS;
-let memoryAuditLogs: AuditLog[] = [
-  { timestamp: "2026-10-13 14:32:10", user: "miskrdires11@gmail.com", station: "Super Admin", action: "Settings Saved", entity: "System Configuration", details: "Updated R2 cloud photo paths and phone validation rules" },
-  { timestamp: "2026-10-13 14:15:02", user: "Alemu Tadesse", station: "Receiver", action: "Bulk Download", entity: "500 Photos", details: "Exported ZIP archive for YMS Grade 9" },
-  { timestamp: "2026-10-13 13:48:22", user: "Loza Bereket", station: "Sender", action: "Student Registration", entity: "SB-2026-12788", details: "Registered student Loza Bereket with portrait photo" }
-];
+let memoryTasks: Task[] = (() => {
+  try {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('sb_admin_tasks') : null;
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    return [];
+  }
+})();
+let memoryAuditLogs: AuditLog[] = [];
+
+/**
+ * Handles incoming real-time sync events from other browser tabs or remote field terminals.
+ */
+function upsertStudentFromSync(incoming: Student): void {
+  if (!incoming || !incoming.studentId) return;
+
+  const existingIdx = memoryStudents.findIndex(s => s.studentId === incoming.studentId || s.id === incoming.id);
+  if (existingIdx !== -1) {
+    memoryStudents[existingIdx] = { ...memoryStudents[existingIdx], ...incoming };
+  } else {
+    memoryStudents.unshift(incoming);
+  }
+
+  try {
+    const existing: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+    const cIdx = existing.findIndex((s: Student) => s.studentId === incoming.studentId || s.id === incoming.id);
+    if (cIdx !== -1) {
+      existing[cIdx] = incoming;
+    } else {
+      existing.unshift(incoming);
+    }
+    localStorage.setItem('sb_custom_students', JSON.stringify(existing));
+  } catch (e) {}
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('studentbridge_datachange', { detail: incoming }));
+  }
+}
 
 export async function initStore(): Promise<void> {
   // 1. Fetch live student records from server / Supabase PostgreSQL
@@ -179,8 +208,18 @@ export async function initStore(): Promise<void> {
     }
   } catch (e) {}
 
-  // 6. Automatically sync any pending offline items
+  // 6. Connect Real-Time Dual-Channel Sync Bus (BroadcastChannel + ntfy Cloud SSE)
   if (typeof window !== 'undefined') {
+    subscribeToStudentSync(
+      (syncedStudent) => {
+        upsertStudentFromSync(syncedStudent);
+      },
+      (deletedId) => {
+        memoryStudents = memoryStudents.filter(s => s.studentId !== deletedId && s.id !== deletedId);
+        window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
+      }
+    );
+
     import('@/lib/offlineQueue').then(({ syncOfflineQueue }) => {
       syncOfflineQueue().catch(() => {});
     });
@@ -192,18 +231,32 @@ export function getStudents(): Student[] {
 }
 
 export function addStudent(newStudent: Student): void {
-  // Ensure default fields
+  // Ensure default and encoded fields
   if (!newStudent.status) newStudent.status = 'Accepted';
   if (!newStudent.location) newStudent.location = 'Addis Ababa';
   if (!newStudent.idProductionStatus) newStudent.idProductionStatus = 'READY';
+  if (!newStudent.photoIntegrityStatus) {
+    newStudent.photoIntegrityStatus = (newStudent.photoPath || newStudent.previewPath || newStudent.thumbnailPath) ? 'PHOTO_VERIFIED' : 'NO_PHOTO';
+  }
+  if (!newStudent.qrCodeData) {
+    newStudent.qrCodeData = JSON.stringify({
+      id: newStudent.studentId,
+      name: newStudent.fullName,
+      grade: newStudent.grade || '',
+      school: newStudent.school || '',
+      status: 'Accepted',
+      verified: true,
+      issuer: 'Silicon Labs StudentBridge'
+    });
+  }
   if (!newStudent.recordHistory || newStudent.recordHistory.length === 0) {
     newStudent.recordHistory = [
       {
         date: new Date().toISOString().replace('T', ' ').substring(0, 16),
         action: 'Initial Submission',
-        user: getCurrentUser()?.username || 'Loza Bereket',
+        user: getCurrentUser()?.username || 'Field Operator',
         role: 'Sender',
-        notes: 'Initial student identity registration and portrait capture'
+        notes: 'Initial student identity registration and biometric capture'
       }
     ];
   }
@@ -228,17 +281,15 @@ export function addStudent(newStudent: Student): void {
 
   addAuditLog({
     timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-    user: getCurrentUser()?.username || 'Loza Bereket',
+    user: getCurrentUser()?.username || 'Field Operator',
     station: 'Sender',
     action: 'Student Registration',
     entity: newStudent.studentId,
     details: `Registered ${newStudent.fullName} for ${newStudent.school || 'YMS'}`
   });
 
-  // Dispatch custom event for immediate UI updates
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('studentbridge_datachange', { detail: newStudent }));
-  }
+  // Broadcast across all open tabs, windows, and cloud remote receivers
+  publishStudentSync('UPSERT', newStudent);
 }
 
 export function updateStudent(id: string, updates: Partial<Student>): void {
@@ -371,11 +422,19 @@ export function getTasks(): Task[] {
 
 export function addTask(task: Task): void {
   memoryTasks.unshift(task);
+  try {
+    localStorage.setItem('sb_admin_tasks', JSON.stringify(memoryTasks));
+  } catch (e) {}
 }
 
 export function updateTaskStatus(id: string, status: Task['status']): void {
   const t = memoryTasks.find(x => x.id === id);
-  if (t) t.status = status;
+  if (t) {
+    t.status = status;
+    try {
+      localStorage.setItem('sb_admin_tasks', JSON.stringify(memoryTasks));
+    } catch (e) {}
+  }
 }
 
 export function getSchools(): School[] {
@@ -427,10 +486,14 @@ const DEFAULT_CARD_TEMPLATES: CardTemplate[] = [
   }
 ];
 
-let memoryPrintJobs: PrintJob[] = [
-  { id: 'JOB-9021', timestamp: '2026-10-13 14:10:00', operator: 'Yonatan Tesfa', templateName: 'CR80 Official Minimalist', studentCount: 25, status: 'COMPLETED' },
-  { id: 'JOB-9020', timestamp: '2026-10-13 11:30:15', operator: 'Yonatan Tesfa', templateName: 'Executive Academic Credential', studentCount: 140, status: 'COMPLETED' },
-];
+let memoryPrintJobs: PrintJob[] = (() => {
+  try {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('sb_print_jobs') : null;
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    return [];
+  }
+})();
 
 export function getCardTemplates(): CardTemplate[] {
   return DEFAULT_CARD_TEMPLATES;
@@ -442,6 +505,9 @@ export function getPrintJobs(): PrintJob[] {
 
 export function addPrintJob(job: PrintJob): void {
   memoryPrintJobs.unshift(job);
+  try {
+    localStorage.setItem('sb_print_jobs', JSON.stringify(memoryPrintJobs));
+  } catch (e) {}
 }
 
 export function updateStudentIdProductionStatus(studentId: string, status: string, cardSerialNumber?: string): void {

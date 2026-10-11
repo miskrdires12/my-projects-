@@ -54,7 +54,7 @@ export const AdminDashboardPage: React.FC = () => {
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
           <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Field Sender Fleet</span>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-heading font-black text-[#202833]">{senders.length || 12}</span>
+            <span className="text-3xl font-heading font-black text-[#202833]">{senders.length}</span>
             <span className="text-xs text-[#366804] font-bold">Operators Active</span>
           </div>
           <div className="mt-2 text-xs text-[#64748B]">1-Device hardware locked</div>
@@ -66,7 +66,7 @@ export const AdminDashboardPage: React.FC = () => {
             <span className="text-3xl font-heading font-black text-[#202833]">{tasks.length}</span>
             <span className="text-xs text-amber-600 font-bold">In Flight</span>
           </div>
-          <div className="mt-2 text-xs text-[#64748B]">Distributed across 8 schools</div>
+          <div className="mt-2 text-xs text-[#64748B]">Distributed across field stations</div>
         </div>
 
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
@@ -81,7 +81,9 @@ export const AdminDashboardPage: React.FC = () => {
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
           <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Audit Pass Rate</span>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-heading font-black text-[#366804]">99.4%</span>
+            <span className="text-3xl font-heading font-black text-[#366804]">
+              {students.length > 0 ? ((students.filter(s => s.photoPath || s.previewPath || s.photoIntegrityStatus === 'PHOTO_VERIFIED').length / students.length) * 100).toFixed(1) + '%' : '100%'}
+            </span>
             <span className="text-xs text-[#366804] font-bold">Exceeds SLA</span>
           </div>
           <div className="mt-2 text-xs text-[#64748B]">Quality compliance rate</div>

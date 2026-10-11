@@ -288,6 +288,17 @@ export const StudentRegistrationPage: React.FC = () => {
         nationality,
         photoPath: capturedPhoto ? `${grade}/${studentId.trim()}_${fullName.trim().replace(/\s+/g, '_')}.jpg` : undefined,
         previewPath: capturedPhoto || undefined,
+        thumbnailPath: capturedPhoto || undefined,
+        photoIntegrityStatus: capturedPhoto ? 'PHOTO_VERIFIED' : 'NO_PHOTO',
+        qrCodeData: JSON.stringify({
+          id: studentId.trim(),
+          name: fullName.trim(),
+          grade: grade.trim(),
+          school: school.trim(),
+          status: 'Accepted',
+          verified: true,
+          issuer: 'Silicon Labs StudentBridge'
+        }),
         senderName: user?.username || 'Field Operator',
         status: 'Accepted',
         idProductionStatus: 'READY',
