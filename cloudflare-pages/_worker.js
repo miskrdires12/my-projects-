@@ -641,13 +641,24 @@ export default {
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "DELETE") {
       try {
-        const targetId = (url.searchParams.get("id") || url.searchParams.get("studentId") || "").trim();
-        const isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
-        const isRestore = url.searchParams.get("action") === "restore" || url.searchParams.get("restore") === "true";
+        let targetId = (url.searchParams.get("id") || url.searchParams.get("studentId") || "").trim();
+        let isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
+        let isRestore = url.searchParams.get("action") === "restore" || url.searchParams.get("restore") === "true";
+
+        if (!targetId && request.headers.get("content-type")?.includes("application/json")) {
+          try {
+            const body = await request.clone().json();
+            targetId = (body.id || body.studentId || "").trim();
+            if (body.permanent !== undefined) isPermanent = !!body.permanent;
+            if (body.restore !== undefined) isRestore = !!body.restore;
+          } catch (e) {}
+        }
 
         if (!targetId) {
           return new Response(JSON.stringify({ error: "Missing id parameter" }), { status: 400, headers: corsHeaders });
         }
+
+        const tLower = targetId.toLowerCase();
 
         if (isRestore) {
           // RESTORE FROM TEMPORARY HIDE
@@ -664,7 +675,7 @@ export default {
           });
 
           if (cachedAllStudents) {
-            const match = cachedAllStudents.find(s => s.studentId === targetId || s.id === targetId);
+            const match = cachedAllStudents.find(s => (s.studentId || "").toLowerCase() === tLower || (s.id || "").toLowerCase() === tLower);
             if (match) {
               match.receiverHidden = false;
               match.hiddenAt = null;
@@ -686,7 +697,7 @@ export default {
           // 1. PERMANENT DELETE (Purge from Everywhere: Supabase + Cloudflare R2 + Edge Cache + Local)
           let photoToDelete = null;
           if (cachedAllStudents) {
-            const found = cachedAllStudents.find(s => s.studentId === targetId || s.id === targetId);
+            const found = cachedAllStudents.find(s => (s.studentId || "").toLowerCase() === tLower || (s.id || "").toLowerCase() === tLower);
             if (found) photoToDelete = found.photoPath || found.previewPath || found.originalPhotoPath;
           }
 
@@ -724,11 +735,11 @@ export default {
 
           // Purge from memory caches
           if (cachedAllStudents) {
-            cachedAllStudents = cachedAllStudents.filter(s => s.studentId !== targetId && s.id !== targetId);
+            cachedAllStudents = cachedAllStudents.filter(s => (s.studentId || "").toLowerCase() !== tLower && (s.id || "").toLowerCase() !== tLower);
           }
-          customStudents = customStudents.filter(s => s.studentId !== targetId && s.id !== targetId);
+          customStudents = customStudents.filter(s => (s.studentId || "").toLowerCase() !== tLower && (s.id || "").toLowerCase() !== tLower);
           if (cachedStudents) {
-            cachedStudents = cachedStudents.filter(s => s.studentId !== targetId && s.id !== targetId);
+            cachedStudents = cachedStudents.filter(s => (s.studentId || "").toLowerCase() !== tLower && (s.id || "").toLowerCase() !== tLower);
           }
 
           // Broadcast permanent deletion across all connected stations
@@ -760,7 +771,7 @@ export default {
           });
 
           if (cachedAllStudents) {
-            const match = cachedAllStudents.find(s => s.studentId === targetId || s.id === targetId);
+            const match = cachedAllStudents.find(s => (s.studentId || "").toLowerCase() === tLower || (s.id || "").toLowerCase() === tLower);
             if (match) {
               match.receiverHidden = true;
               match.hiddenAt = new Date().toISOString();
@@ -1290,6 +1301,7 @@ export default {
         const indexResponse = await env.ASSETS.fetch(indexRequest);
         const resHeaders = new Headers(indexResponse.headers);
         resHeaders.set("Access-Control-Allow-Origin", "*");
+        resHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
         return new Response(indexResponse.body, { status: 200, headers: resHeaders });
       }
 

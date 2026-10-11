@@ -49,8 +49,11 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [correctionReason, setCorrectionReason] = useState('');
   const [correctionSaved, setCorrectionSaved] = useState(false);
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const loadData = async () => {
     try {
+      setIsLoading(true);
       const res = await fetch('/api/students?all=true&limit=5000');
       if (res.ok) {
         const json = await res.json();
@@ -64,14 +67,32 @@ export const ReceiverStudentsPage: React.FC = () => {
       }
     } catch (e) {
       console.warn('Syncing with local storage:', e);
+    } finally {
+      setIsLoading(false);
     }
     setStudents([...getStudents()]);
   };
 
   useEffect(() => {
+    // 1. Instant 0ms memory mount to prevent blank screen
+    const initial = getStudents();
+    if (initial.length > 0) {
+      setStudents(initial);
+    }
+
+    // 2. Authoritative background sync
     loadData();
 
-    // Dual-channel real-time subscription (BroadcastChannel + ntfy Cloud SSE + DOM)
+    // 3. React to local store mutations and background loads
+    const handleDataChange = () => {
+      const current = getStudents();
+      if (current.length > 0) {
+        setStudents([...current]);
+      }
+    };
+    window.addEventListener('studentbridge_datachange', handleDataChange);
+
+    // 4. Dual-channel real-time subscription (BroadcastChannel + ntfy Cloud SSE + DOM)
     const unsubscribe = subscribeToStudentSync(
       (incoming) => {
         setStudents((prev) => {
@@ -90,6 +111,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     );
 
     return () => {
+      window.removeEventListener('studentbridge_datachange', handleDataChange);
       unsubscribe();
     };
   }, []);
@@ -209,26 +231,64 @@ export const ReceiverStudentsPage: React.FC = () => {
     setIsDeleting(true);
     try {
       if (isBatchDeleting) {
-        for (const id of Array.from(selectedIds)) {
-          deleteStudent(id, permanent);
+        const batchIds = Array.from(selectedIds);
+        // Optimistic instant UI update
+        if (permanent) {
+          setStudents(prev => prev.filter(s => !selectedIds.has(s.studentId) && !selectedIds.has(s.id)));
+        } else {
+          setStudents(prev => prev.map(s => {
+            if (selectedIds.has(s.studentId) || selectedIds.has(s.id)) {
+              return { ...s, receiverHidden: true, hiddenAt: new Date().toISOString() };
+            }
+            return s;
+          }));
         }
         setSelectedIds(new Set());
         setIsBatchDeleting(false);
+
+        for (const id of batchIds) {
+          await deleteStudent(id, permanent);
+        }
       } else if (deleteTarget) {
-        deleteStudent(deleteTarget.studentId, permanent);
-        if (selectedStudent?.studentId === deleteTarget.studentId || selectedStudent?.id === deleteTarget.id) {
+        const targetSid = deleteTarget.studentId;
+        const targetId = deleteTarget.id;
+
+        // Optimistic instant UI update
+        if (permanent) {
+          setStudents(prev => prev.filter(s => s.studentId !== targetSid && s.id !== targetId));
+        } else {
+          setStudents(prev => prev.map(s => {
+            if (s.studentId === targetSid || s.id === targetId) {
+              return { ...s, receiverHidden: true, hiddenAt: new Date().toISOString() };
+            }
+            return s;
+          }));
+        }
+
+        if (selectedStudent?.studentId === targetSid || selectedStudent?.id === targetId) {
           setSelectedStudent(null);
         }
         setDeleteTarget(null);
+
+        await deleteStudent(targetSid, permanent);
       }
       await loadData();
+    } catch (err) {
+      console.error('Delete execution error:', err);
     } finally {
       setIsDeleting(false);
     }
   };
 
   const handleRestore = async (studentId: string) => {
-    restoreStudent(studentId);
+    // Optimistic instant UI update
+    setStudents(prev => prev.map(s => {
+      if (s.studentId === studentId || s.id === studentId) {
+        return { ...s, receiverHidden: false, hiddenAt: null as any };
+      }
+      return s;
+    }));
+    await restoreStudent(studentId);
     await loadData();
   };
 
@@ -621,6 +681,33 @@ export const ReceiverStudentsPage: React.FC = () => {
                   </tr>
                 );
               })}
+
+              {pagedStudents.length === 0 && (
+                <tr>
+                  <td colSpan={13} className="py-12 text-center text-[#64748B]">
+                    {isLoading ? (
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-8 h-8 border-2 border-[#85E510] border-t-transparent rounded-full animate-spin"></div>
+                        <span className="font-bold text-xs text-[#202833]">Syncing with Cloudflare R2 & Database...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2 py-4">
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto">
+                          <AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <span className="font-bold text-sm text-[#202833]">No student records found</span>
+                        <p className="text-xs text-[#64748B] max-w-sm mx-auto">
+                          {search || schoolFilter !== 'ALL' || gradeFilter !== 'ALL' || statusFilter !== 'ALL'
+                            ? 'No students match your current search or filter criteria. Click "Reset" above to clear filters.'
+                            : viewMode === 'HIDDEN'
+                            ? 'No hidden students in trash. Students temporarily deleted will appear here.'
+                            : 'No student records currently available.'}
+                        </p>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -628,7 +715,7 @@ export const ReceiverStudentsPage: React.FC = () => {
         {/* Pagination Bar */}
         <div className="p-4 bg-[#F8FAF9] border-t border-[#E2E8F0] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#64748B]">
           <div>
-            Showing <strong className="text-[#202833]">{(page - 1) * pageSize + 1}</strong> to{' '}
+            Showing <strong className="text-[#202833]">{filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to{' '}
             <strong className="text-[#202833]">{Math.min(page * pageSize, filtered.length)}</strong> of{' '}
             <strong className="text-[#202833]">{filtered.length.toLocaleString()}</strong> records
           </div>
