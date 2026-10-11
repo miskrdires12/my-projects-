@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, LogOut, ChevronDown } from 'lucide-react';
+import { Search, Bell, LogOut, Menu } from 'lucide-react';
 import { getCurrentUser, setCurrentUser } from '@/lib/store';
 import { UserRole } from '@/types';
 
@@ -30,21 +30,20 @@ export const Header: React.FC<HeaderProps> = ({ currentStation, onStationChange,
 
   const displayName = user?.username === 'yonatantesfa'
     ? 'Receiver C. Staff'
-    : user?.username || 'Receiver C. Staff';
+    : (user?.username === 'admin' ? 'Administrator' : user?.username || 'Receiver C. Staff');
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-4 sm:px-6 gap-4 shadow-xs">
-      {/* Mobile Toggle & Search Bar */}
-      <div className="flex items-center gap-3 flex-1 max-w-2xl">
+      {/* Navigation Menu Toggle & Search Bar */}
+      <div className="flex items-center gap-2.5 flex-1 max-w-2xl">
         <button
           type="button"
           onClick={onToggleMobileSidebar}
-          className="lg:hidden p-2 text-[#64748B] hover:text-[#1E293B] rounded-lg hover:bg-slate-100"
-          aria-label="Toggle Navigation"
+          className="p-2 text-[#1E293B] hover:text-[#062404] hover:bg-[#85E510]/15 rounded-xl border border-transparent hover:border-[#85E510]/30 transition-all flex items-center justify-center shrink-0 cursor-pointer"
+          aria-label="Toggle Navigation Menu"
+          title="Toggle Navigation Menu"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          <Menu className="w-5 h-5 text-[#1E293B]" />
         </button>
 
         {/* Global Search Input matching Screenshot */}
@@ -77,29 +76,36 @@ export const Header: React.FC<HeaderProps> = ({ currentStation, onStationChange,
 
       {/* Right Controls: Notifications, Station Switcher & User Profile */}
       <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-        {/* Station Switcher Pill (for Admin / Super Admin) */}
+        {/* Station Switcher Pill (for Super Admin) */}
         {user?.role === 'SUPER_ADMIN' && (
           <div className="hidden md:flex items-center gap-1 bg-[#F1F5F9] border border-[#CBD5E1] rounded-xl p-0.5 text-[11px] font-bold">
             <button
               type="button"
               onClick={() => onStationChange('RECEIVER')}
-              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'RECEIVER' ? 'bg-white text-[#1E293B] shadow-xs' : 'text-[#64748B]'}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'RECEIVER' ? 'bg-[#85E510] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
             >
               Receiver
             </button>
             <button
               type="button"
               onClick={() => onStationChange('SENDER')}
-              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SENDER' ? 'bg-white text-[#1E293B] shadow-xs' : 'text-[#64748B]'}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SENDER' ? 'bg-[#85E510] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
             >
               Sender
             </button>
             <button
               type="button"
-              onClick={() => onStationChange('SUPER_ADMIN')}
-              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SUPER_ADMIN' ? 'bg-white text-[#1E293B] shadow-xs' : 'text-[#64748B]'}`}
+              onClick={() => onStationChange('ADMIN')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'ADMIN' ? 'bg-[#85E510] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
             >
-              Control
+              Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => onStationChange('SUPER_ADMIN')}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SUPER_ADMIN' ? 'bg-[#85E510] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
+            >
+              Super Admin
             </button>
           </div>
         )}
@@ -128,14 +134,14 @@ export const Header: React.FC<HeaderProps> = ({ currentStation, onStationChange,
               {displayName}
             </div>
             <div className="text-[10px] text-[#64748B] font-semibold mt-0.5 capitalize">
-              {user?.role?.toLowerCase() || 'Receiver'}
+              {user?.role === 'SUPER_ADMIN' ? 'Super Admin' : (user?.role?.toLowerCase() || 'Receiver')}
             </div>
           </div>
 
           <button
             type="button"
             onClick={handleSignOut}
-            className="p-1.5 text-[#94A3B8] hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-all ml-1"
+            className="p-1.5 text-[#94A3B8] hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-all ml-1 cursor-pointer"
             title="Sign Out"
           >
             <LogOut className="w-4 h-4" />

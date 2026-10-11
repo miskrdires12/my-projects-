@@ -10,8 +10,8 @@ import { User as UserType } from '@/types';
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@studentbridge.internal');
+  const [password, setPassword] = useState('password123');
   const [error, setError] = useState<string | null>(null);
   const [deviceLockedWarning, setDeviceLockedWarning] = useState<string | null>(null);
   const [lockedUser, setLockedUser] = useState<UserType | null>(null);
@@ -69,7 +69,7 @@ export const LoginPage: React.FC = () => {
       }
 
       // 1-Device Hardware Lock Enforcement Policy
-      if (user.boundDeviceId && user.boundDeviceId !== deviceId && user.role !== 'SUPER_ADMIN') {
+      if (user.boundDeviceId && user.boundDeviceId !== deviceId) {
         setLockedUser(user);
         setDeviceLockedWarning(
           `Hardware Lock Active: Account "${user.username}" is bound to Workstation [${user.boundDeviceId}]. Access from current terminal [${deviceId}] is blocked.`

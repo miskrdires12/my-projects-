@@ -94,8 +94,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     id: "usr-admin-institutional",
     username: "admin",
     email: "admin@studentbridge.internal",
-    role: "ADMIN",
-    password: "admin123",
+    role: "SUPER_ADMIN",
+    password: "password123",
     boundDeviceId: null,
   },
   {

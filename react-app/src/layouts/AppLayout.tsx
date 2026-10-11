@@ -18,7 +18,7 @@ export const AppLayout: React.FC = () => {
   }
 
   // Workstation Device Lock Enforcement:
-  if (user.boundDeviceId && user.boundDeviceId !== deviceId && user.role !== 'SUPER_ADMIN') {
+  if (user.boundDeviceId && user.boundDeviceId !== deviceId) {
     setCurrentUser(null);
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
