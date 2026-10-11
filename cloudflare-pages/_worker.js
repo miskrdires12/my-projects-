@@ -110,6 +110,60 @@ async function uploadToR2Bucket(key, bytes, contentType = "image/jpeg") {
   return `${R2_PUBLIC_BASE_URL}/${key}`;
 }
 
+async function deleteFromR2Bucket(key) {
+  if (!key) return false;
+  let cleanKey = key;
+  if (cleanKey.includes(R2_PUBLIC_BASE_URL)) {
+    cleanKey = cleanKey.replace(`${R2_PUBLIC_BASE_URL}/`, "");
+  } else if (cleanKey.startsWith("http")) {
+    try {
+      const u = new URL(cleanKey);
+      cleanKey = u.pathname.replace(/^\/+/, "");
+    } catch (e) {}
+  }
+  cleanKey = cleanKey.replace(/^\/+/, "");
+
+  const path = `/${R2_BUCKET}/${cleanKey}`;
+  const url = new URL(path, R2_ENDPOINT);
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const dateStamp = amzDate.substring(0, 8);
+  const region = "auto";
+  const service = "s3";
+
+  const payloadHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+  const host = url.host;
+
+  const canonicalHeaders = `host:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+  const canonicalRequest = `DELETE\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
+  const algorithm = "AWS4-HMAC-SHA256";
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${await sha256Hex(new TextEncoder().encode(canonicalRequest))}`;
+
+  const signingKey = await getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
+  const sigBytes = await hmacSha256(signingKey, new TextEncoder().encode(stringToSign));
+  const signature = Array.from(sigBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+
+  const authHeader = `${algorithm} Credential=${R2_ACCESS_KEY_ID}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const res = await fetch(url.toString(), {
+    method: "DELETE",
+    headers: {
+      "Host": host,
+      "x-amz-date": amzDate,
+      "x-amz-content-sha256": payloadHash,
+      "Authorization": authHeader
+    }
+  });
+
+  return res.ok || res.status === 204 || res.status === 404;
+}
+
+let cachedAllStudents = null;
+let lastAllFetchTime = 0;
+
 async function ensureLocalFallbackLoaded(env, originUrl) {
   if (!cachedStudents) {
     try {
@@ -129,6 +183,43 @@ async function ensureLocalFallbackLoaded(env, originUrl) {
       cachedUsers = [];
     }
   }
+}
+
+async function getAllStudentsDataset(env, originUrl) {
+  if (cachedAllStudents && cachedAllStudents.length >= 3700 && (Date.now() - lastAllFetchTime < 120000)) {
+    return cachedAllStudents;
+  }
+
+  await ensureLocalFallbackLoaded(env, originUrl);
+
+  try {
+    const offsets = [0, 1000, 2000, 3000];
+    const fetchPromises = offsets.map(offset =>
+      fetch(`${SUPABASE_URL}/rest/v1/students?select=*&order=createdAt.desc&limit=1000&offset=${offset}`, {
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Accept-Profile": "cloudflare"
+        }
+      }).then(r => r.ok ? r.json() : [])
+    );
+
+    const batchResults = await Promise.all(fetchPromises);
+    const combined = batchResults.flat();
+
+    if (combined && combined.length > 0) {
+      const dbIds = new Set(combined.map(s => s.studentId));
+      const newlyAdded = customStudents.filter(s => !dbIds.has(s.studentId));
+      cachedAllStudents = [...newlyAdded, ...combined];
+      lastAllFetchTime = Date.now();
+      return cachedAllStudents;
+    }
+  } catch (err) {
+    console.warn("Supabase parallel fetch error:", err);
+  }
+
+  cachedAllStudents = [...customStudents, ...(cachedStudents || [])];
+  return cachedAllStudents;
 }
 
 export default {
@@ -197,68 +288,37 @@ export default {
     }
 
     // -------------------------------------------------------------------------
-    // 2. GET STUDENTS (Direct Supabase PostgreSQL Query)
+    // 2. GET STUDENTS (All 3,723+ Records: Supabase PostgreSQL + Edge Cache)
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "GET") {
+      const isAllRequested = url.searchParams.get("all") === "true" ||
+                             url.searchParams.get("limit") === "all" ||
+                             parseInt(url.searchParams.get("limit") || "0", 10) >= 1000;
+
       const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
-      const limit = Math.min(500, Math.max(10, parseInt(url.searchParams.get("limit") || "500", 10)));
+      const limit = isAllRequested ? 10000 : Math.min(500, Math.max(10, parseInt(url.searchParams.get("limit") || "100", 10)));
       const offset = (page - 1) * limit;
 
-      const search = (url.searchParams.get("search") || "").trim();
+      const search = (url.searchParams.get("search") || "").trim().toLowerCase();
       const school = (url.searchParams.get("school") || "ALL").trim();
       const grade = (url.searchParams.get("grade") || "ALL").trim();
+      const hiddenParam = url.searchParams.get("hidden"); // "true" or "false" or null
 
-      try {
-        let sbQuery = `${SUPABASE_URL}/rest/v1/students?select=*&order=createdAt.desc&limit=${limit}&offset=${offset}`;
+      const allData = await getAllStudentsDataset(env, request.url);
+      let filtered = allData;
 
-        if (search) {
-          sbQuery += `&or=(fullName.ilike.*${encodeURIComponent(search)}*,studentId.ilike.*${encodeURIComponent(search)}*,phone.ilike.*${encodeURIComponent(search)}*)`;
-        }
-        if (school !== "ALL") {
-          sbQuery += `&school=eq.${encodeURIComponent(school)}`;
-        }
-        if (grade !== "ALL") {
-          sbQuery += `&grade=eq.${encodeURIComponent(grade)}`;
-        }
-
-        const sbRes = await fetch(sbQuery, {
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": `Bearer ${SUPABASE_KEY}`,
-            "Accept-Profile": "cloudflare",
-            "Prefer": "count=exact"
-          }
-        });
-
-        if (sbRes.ok) {
-          const range = sbRes.headers.get("content-range");
-          const total = range ? parseInt(range.split("/")[1], 10) : 0;
-          const students = await sbRes.json();
-          const totalPages = Math.ceil(total / limit) || 1;
-
-          return new Response(
-            JSON.stringify({
-              page,
-              limit,
-              total,
-              totalPages,
-              count: students.length,
-              students
-            }),
-            { headers: { "Content-Type": "application/json", ...corsHeaders } }
-          );
-        }
-      } catch (err) {
-        console.warn("Supabase fetch failed, falling back to local dataset:", err);
+      if (hiddenParam === "true") {
+        filtered = filtered.filter(s => s.receiverHidden === true);
+      } else if (hiddenParam === "false") {
+        filtered = filtered.filter(s => s.receiverHidden !== true);
       }
 
-      // Fallback to local memory / JSON
-      let all = [...customStudents, ...(cachedStudents || [])];
       if (search || school !== "ALL" || grade !== "ALL") {
-        all = all.filter(s => {
+        filtered = filtered.filter(s => {
           if (search) {
-            const m = (s.fullName || "").toLowerCase().includes(search.toLowerCase()) ||
-                      (s.studentId || "").toLowerCase().includes(search.toLowerCase());
+            const m = (s.fullName || "").toLowerCase().includes(search) ||
+                      (s.studentId || "").toLowerCase().includes(search) ||
+                      (s.phone || "").toLowerCase().includes(search);
             if (!m) return false;
           }
           if (school !== "ALL" && (s.school || "").toLowerCase() !== school.toLowerCase()) return false;
@@ -267,9 +327,9 @@ export default {
         });
       }
 
-      const total = all.length;
+      const total = filtered.length;
       const totalPages = Math.ceil(total / limit) || 1;
-      const paginated = all.slice(offset, offset + limit);
+      const students = isAllRequested ? filtered : filtered.slice(offset, offset + limit);
 
       return new Response(
         JSON.stringify({
@@ -277,11 +337,60 @@ export default {
           limit,
           total,
           totalPages,
-          count: paginated.length,
-          students: paginated
+          count: students.length,
+          students
         }),
         { headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
+    }
+
+    // -------------------------------------------------------------------------
+    // 2.5 DIRECT PHOTO UPLOAD (Cloudflare R2 Bucket 'siliconlabs')
+    // -------------------------------------------------------------------------
+    if (url.pathname === "/api/upload" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        const { data, studentId, grade, fullName, fileName } = body;
+        if (!data) {
+          return new Response(JSON.stringify({ error: "Missing image data" }), { status: 400, headers: corsHeaders });
+        }
+
+        const cleanGrade = (grade || "general").trim();
+        const cleanName = (fullName || "student").trim().replace(/\s+/g, "_");
+        const cleanId = (studentId || Date.now().toString()).trim();
+        const photoKey = `${cleanGrade}/${cleanId}_${cleanName}.jpg`;
+
+        let base64Data = data;
+        let contentType = "image/jpeg";
+        if (base64Data.includes(",")) {
+          const parts = base64Data.split(",");
+          const m = parts[0].match(/:(.*?);/);
+          if (m) contentType = m[1];
+          base64Data = parts[1];
+        }
+
+        const binaryStr = atob(base64Data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+
+        const r2Url = await uploadToR2Bucket(photoKey, bytes, contentType);
+        uploadedPhotos.set(photoKey, { contentType, bytes });
+
+        return new Response(JSON.stringify({
+          success: true,
+          url: r2Url,
+          key: photoKey,
+          storage: "Cloudflare R2",
+          bucket: R2_BUCKET
+        }), {
+          status: 201,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
     }
 
     // -------------------------------------------------------------------------
@@ -446,6 +555,9 @@ export default {
         }
 
         customStudents.unshift(insertedRecord);
+        if (cachedAllStudents) {
+          cachedAllStudents.unshift(insertedRecord);
+        }
 
         // Broadcast to Global Cloud Sync Bus (cross-device real-time Receiver notification)
         fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
@@ -489,7 +601,7 @@ export default {
         const updates = { ...body, updatedAt: new Date().toISOString() };
         delete updates.id;
 
-        const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/students?studentId=eq.${encodeURIComponent(studentId)}`, {
+        const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(studentId)},id.eq.${encodeURIComponent(studentId)})`, {
           method: "PATCH",
           headers: {
             "apikey": SUPABASE_KEY,
@@ -501,6 +613,13 @@ export default {
           },
           body: JSON.stringify(updates)
         });
+
+        if (cachedAllStudents) {
+          const sIdx = cachedAllStudents.findIndex(s => s.studentId === studentId || s.id === studentId);
+          if (sIdx !== -1) {
+            cachedAllStudents[sIdx] = { ...cachedAllStudents[sIdx], ...updates };
+          }
+        }
 
         if (updateRes.ok) {
           const updated = await updateRes.json();
@@ -518,28 +637,147 @@ export default {
     }
 
     // -------------------------------------------------------------------------
-    // 5. DELETE STUDENT (Controlled Deletion / Archival)
+    // 5. DELETE STUDENT (Permanent vs Temporary System Deletion)
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "DELETE") {
       try {
-        const targetId = url.searchParams.get("id") || url.searchParams.get("studentId");
+        const targetId = (url.searchParams.get("id") || url.searchParams.get("studentId") || "").trim();
+        const isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
+        const isRestore = url.searchParams.get("action") === "restore" || url.searchParams.get("restore") === "true";
+
         if (!targetId) {
           return new Response(JSON.stringify({ error: "Missing id parameter" }), { status: 400, headers: corsHeaders });
         }
 
-        await fetch(`${SUPABASE_URL}/rest/v1/students?studentId=eq.${encodeURIComponent(targetId)}`, {
-          method: "DELETE",
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": `Bearer ${SUPABASE_KEY}`,
-            "Content-Profile": "cloudflare",
-            "Accept-Profile": "cloudflare"
-          }
-        });
+        if (isRestore) {
+          // RESTORE FROM TEMPORARY HIDE
+          await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(targetId)},id.eq.${encodeURIComponent(targetId)})`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              "Content-Profile": "cloudflare",
+              "Accept-Profile": "cloudflare"
+            },
+            body: JSON.stringify({ receiverHidden: false, hiddenAt: null, updatedAt: new Date().toISOString() })
+          });
 
-        return new Response(JSON.stringify({ success: true, deletedId: targetId }), {
-          headers: { "Content-Type": "application/json", ...corsHeaders }
-        });
+          if (cachedAllStudents) {
+            const match = cachedAllStudents.find(s => s.studentId === targetId || s.id === targetId);
+            if (match) {
+              match.receiverHidden = false;
+              match.hiddenAt = null;
+            }
+          }
+
+          fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+            method: "POST",
+            headers: { "Title": `STUDENT_RESTORED_${targetId}`, "Priority": "default" },
+            body: JSON.stringify({ action: "RESTORE", studentId: targetId, timestamp: Date.now() })
+          }).catch(() => {});
+
+          return new Response(JSON.stringify({ success: true, restored: true, studentId: targetId }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders }
+          });
+        }
+
+        if (isPermanent) {
+          // 1. PERMANENT DELETE (Purge from Everywhere: Supabase + Cloudflare R2 + Edge Cache + Local)
+          let photoToDelete = null;
+          if (cachedAllStudents) {
+            const found = cachedAllStudents.find(s => s.studentId === targetId || s.id === targetId);
+            if (found) photoToDelete = found.photoPath || found.previewPath || found.originalPhotoPath;
+          }
+
+          if (!photoToDelete) {
+            try {
+              const fetchRec = await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(targetId)},id.eq.${encodeURIComponent(targetId)})&select=photoPath,previewPath,originalPhotoPath`, {
+                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Accept-Profile": "cloudflare" }
+              });
+              if (fetchRec.ok) {
+                const rows = await fetchRec.json();
+                if (rows && rows[0]) photoToDelete = rows[0].photoPath || rows[0].previewPath || rows[0].originalPhotoPath;
+              }
+            } catch (e) {}
+          }
+
+          // Delete photo from Cloudflare R2 bucket 'siliconlabs'
+          if (photoToDelete) {
+            try {
+              await deleteFromR2Bucket(photoToDelete);
+            } catch (r2DelErr) {
+              console.warn("R2 photo delete error:", r2DelErr);
+            }
+          }
+
+          // Delete student record from Supabase PostgreSQL
+          await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(targetId)},id.eq.${encodeURIComponent(targetId)})`, {
+            method: "DELETE",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Profile": "cloudflare",
+              "Accept-Profile": "cloudflare"
+            }
+          });
+
+          // Purge from memory caches
+          if (cachedAllStudents) {
+            cachedAllStudents = cachedAllStudents.filter(s => s.studentId !== targetId && s.id !== targetId);
+          }
+          customStudents = customStudents.filter(s => s.studentId !== targetId && s.id !== targetId);
+          if (cachedStudents) {
+            cachedStudents = cachedStudents.filter(s => s.studentId !== targetId && s.id !== targetId);
+          }
+
+          // Broadcast permanent deletion across all connected stations
+          fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+            method: "POST",
+            headers: { "Title": `STUDENT_DELETED_${targetId}`, "Priority": "high" },
+            body: JSON.stringify({ action: "DELETE_PERMANENT", studentId: targetId, timestamp: Date.now() })
+          }).catch(() => {});
+
+          return new Response(JSON.stringify({ success: true, permanent: true, deletedId: targetId }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders }
+          });
+        } else {
+          // 2. TEMPORARY DELETE (Soft Delete: Hide only from station system view, preserve data in Cloudflare)
+          await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(targetId)},id.eq.${encodeURIComponent(targetId)})`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              "Content-Profile": "cloudflare",
+              "Accept-Profile": "cloudflare"
+            },
+            body: JSON.stringify({
+              receiverHidden: true,
+              hiddenAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            })
+          });
+
+          if (cachedAllStudents) {
+            const match = cachedAllStudents.find(s => s.studentId === targetId || s.id === targetId);
+            if (match) {
+              match.receiverHidden = true;
+              match.hiddenAt = new Date().toISOString();
+            }
+          }
+
+          // Broadcast temporary deletion across stations
+          fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+            method: "POST",
+            headers: { "Title": `STUDENT_HIDDEN_${targetId}`, "Priority": "default" },
+            body: JSON.stringify({ action: "TEMPORARY_DELETE", studentId: targetId, timestamp: Date.now() })
+          }).catch(() => {});
+
+          return new Response(JSON.stringify({ success: true, temporary: true, studentId: targetId }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders }
+          });
+        }
       } catch (e) {
         return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
       }

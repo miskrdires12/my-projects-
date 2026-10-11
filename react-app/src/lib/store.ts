@@ -135,9 +135,9 @@ function upsertStudentFromSync(incoming: Student): void {
 }
 
 export async function initStore(): Promise<void> {
-  // 1. Fetch live student records from server / Supabase PostgreSQL
+  // 1. Fetch live student records from server / Supabase PostgreSQL (All 3,723+ Records)
   try {
-    const res = await fetch('/api/students?limit=500');
+    const res = await fetch('/api/students?all=true&limit=5000');
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.students) && data.students.length > 0) {
@@ -353,33 +353,106 @@ export function updateStudent(id: string, updates: Partial<Student>): void {
   }
 }
 
-export function deleteStudent(id: string): void {
+export function deleteStudent(id: string, permanent: boolean = false): void {
   const index = memoryStudents.findIndex(s => s.id === id || s.studentId === id);
   if (index !== -1) {
-    const deleted = memoryStudents.splice(index, 1)[0];
+    const student = memoryStudents[index];
+
+    if (permanent) {
+      // 1. PERMANENT PURGE: Remove completely from memory and local storage
+      const deleted = memoryStudents.splice(index, 1)[0];
+      try {
+        const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+        const filtered = custom.filter(s => s.id !== id && s.studentId !== id);
+        localStorage.setItem('sb_custom_students', JSON.stringify(filtered));
+      } catch (e) {}
+
+      // Persist permanent purge to Cloudflare (R2 photo deletion & Supabase PostgreSQL delete)
+      fetch(`/api/students?id=${encodeURIComponent(id)}&permanent=true`, {
+        method: 'DELETE'
+      }).catch(err => {
+        console.warn('Could not sync permanent delete to server, queued offline:', err);
+        import('@/lib/offlineQueue').then(({ queueOfflineOperation }) => {
+          queueOfflineOperation('DELETE_STUDENT', { id, studentId: deleted.studentId, permanent: true });
+        });
+      });
+
+      addAuditLog({
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        user: getCurrentUser()?.username || 'Receiver',
+        station: 'Receiver',
+        action: 'Student Permanently Deleted',
+        entity: deleted.studentId,
+        details: `Purged record & Cloudflare R2 portrait for ${deleted.fullName}`
+      });
+    } else {
+      // 2. TEMPORARY DELETE (Soft Delete: Hide only from station system view, preserve data in Cloudflare)
+      student.receiverHidden = true;
+      student.hiddenAt = new Date().toISOString();
+
+      try {
+        const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+        const cIdx = custom.findIndex(s => s.id === id || s.studentId === id);
+        if (cIdx !== -1) {
+          custom[cIdx].receiverHidden = true;
+          custom[cIdx].hiddenAt = student.hiddenAt;
+          localStorage.setItem('sb_custom_students', JSON.stringify(custom));
+        }
+      } catch (e) {}
+
+      // Sync soft delete to server
+      fetch(`/api/students?id=${encodeURIComponent(id)}&permanent=false`, {
+        method: 'DELETE'
+      }).catch(err => {
+        console.warn('Could not sync soft delete to server:', err);
+      });
+
+      addAuditLog({
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        user: getCurrentUser()?.username || 'Receiver',
+        station: 'Receiver',
+        action: 'Student Hidden from System',
+        entity: student.studentId,
+        details: `Temporarily hidden from station directory: ${student.fullName}`
+      });
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
+    }
+  }
+}
+
+export function restoreStudent(id: string): void {
+  const index = memoryStudents.findIndex(s => s.id === id || s.studentId === id);
+  if (index !== -1) {
+    const student = memoryStudents[index];
+    student.receiverHidden = false;
+    student.hiddenAt = null as any;
+
     try {
       const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
-      const filtered = custom.filter(s => s.id !== id && s.studentId !== id);
-      localStorage.setItem('sb_custom_students', JSON.stringify(filtered));
+      const cIdx = custom.findIndex(s => s.id === id || s.studentId === id);
+      if (cIdx !== -1) {
+        custom[cIdx].receiverHidden = false;
+        custom[cIdx].hiddenAt = null as any;
+        localStorage.setItem('sb_custom_students', JSON.stringify(custom));
+      }
     } catch (e) {}
 
-    // Persist delete to Supabase PostgreSQL in background
-    fetch(`/api/students?id=${encodeURIComponent(id)}`, {
+    fetch(`/api/students?id=${encodeURIComponent(id)}&action=restore`, {
       method: 'DELETE'
     }).catch(err => {
-      console.warn('Could not sync delete to server, queued offline:', err);
-      import('@/lib/offlineQueue').then(({ queueOfflineOperation }) => {
-        queueOfflineOperation('DELETE_STUDENT', { id, studentId: deleted.studentId });
-      });
+      console.warn('Could not sync restore to server:', err);
     });
 
     addAuditLog({
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      user: getCurrentUser()?.username || 'Admin',
-      station: 'Admin',
-      action: 'Student Deleted',
-      entity: deleted.studentId,
-      details: `Removed record for ${deleted.fullName}`
+      user: getCurrentUser()?.username || 'Receiver',
+      station: 'Receiver',
+      action: 'Student Restored',
+      entity: student.studentId,
+      details: `Restored to active directory: ${student.fullName}`
     });
 
     if (typeof window !== 'undefined') {

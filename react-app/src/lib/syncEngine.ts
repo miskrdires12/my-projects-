@@ -12,7 +12,7 @@ export const SYNC_BASE_URL = `https://ntfy.sh/${SYNC_TOPIC}`;
 export const R2_PUBLIC_BASE_URL = 'https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev';
 
 export interface SyncPayload {
-  action: 'UPSERT' | 'DELETE' | 'PING';
+  action: 'UPSERT' | 'DELETE' | 'DELETE_PERMANENT' | 'TEMPORARY_DELETE' | 'RESTORE' | 'PING';
   student?: Student;
   studentId?: string;
   timestamp: number;
@@ -129,8 +129,17 @@ export function subscribeToStudentSync(
     const payload = event.data;
     if (payload.action === 'UPSERT' && payload.student) {
       onUpsert(payload.student);
-    } else if (payload.action === 'DELETE' && payload.studentId && onDelete) {
+    } else if ((payload.action === 'DELETE' || payload.action === 'DELETE_PERMANENT') && payload.studentId && onDelete) {
       onDelete(payload.studentId);
+    } else if (payload.action === 'TEMPORARY_DELETE' && payload.studentId) {
+      // Trigger data refresh on soft delete
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('studentbridge_softdelete', { detail: payload.studentId }));
+      }
+    } else if (payload.action === 'RESTORE' && payload.studentId) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('studentbridge_softdelete', { detail: payload.studentId }));
+      }
     }
   };
 
@@ -145,7 +154,7 @@ export function subscribeToStudentSync(
     if (custom.detail) {
       if (custom.detail.action === 'UPSERT' && custom.detail.student) {
         onUpsert(custom.detail.student);
-      } else if (custom.detail.action === 'DELETE' && custom.detail.studentId && onDelete) {
+      } else if ((custom.detail.action === 'DELETE' || custom.detail.action === 'DELETE_PERMANENT') && custom.detail.studentId && onDelete) {
         onDelete(custom.detail.studentId);
       }
     }
@@ -164,8 +173,12 @@ export function subscribeToStudentSync(
         const payload: SyncPayload = typeof raw.message === 'string' ? JSON.parse(raw.message) : raw;
         if (payload.action === 'UPSERT' && payload.student) {
           onUpsert(payload.student);
-        } else if (payload.action === 'DELETE' && payload.studentId && onDelete) {
+        } else if ((payload.action === 'DELETE' || payload.action === 'DELETE_PERMANENT') && payload.studentId && onDelete) {
           onDelete(payload.studentId);
+        } else if ((payload.action === 'TEMPORARY_DELETE' || payload.action === 'RESTORE') && payload.studentId) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('studentbridge_softdelete', { detail: payload.studentId }));
+          }
         }
       } catch (parseErr) {
         // Ping or non-JSON message, safely ignore

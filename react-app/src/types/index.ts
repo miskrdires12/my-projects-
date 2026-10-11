@@ -45,6 +45,7 @@ export interface Student {
   updatedAt?: string;
   hasMistake?: boolean;
   receiverHidden?: boolean;
+  hiddenAt?: string | null;
   country?: string;
   location?: string;
   idProductionStatus?: 'QUEUED' | 'READY' | 'IN_PRODUCTION' | 'COMPLETED' | string;

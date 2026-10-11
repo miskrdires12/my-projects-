@@ -4,10 +4,14 @@ import {
   Search, Filter, Eye, Edit2, Trash2, X, Download, CheckCircle2,
   AlertTriangle, ChevronLeft, ChevronRight, Phone, School as SchoolIcon,
   UserCheck, Shield, ExternalLink, Calendar, HeartPulse, QrCode, FileText,
-  Clock, ArrowUpRight, Check, Printer, FileSpreadsheet, CreditCard
+  Clock, ArrowUpRight, Check, Printer, FileSpreadsheet, CreditCard,
+  RotateCcw, EyeOff, AlertOctagon
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import { getStudents, addStudent, updateStudent, deleteStudent, getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync } from '@/lib/store';
+import {
+  getStudents, addStudent, updateStudent, deleteStudent, restoreStudent,
+  getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync
+} from '@/lib/store';
 import { Student } from '@/types';
 
 export const ReceiverStudentsPage: React.FC = () => {
@@ -18,6 +22,12 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [photoFilter, setPhotoFilter] = useState('ALL');
   const [encodeFilter, setEncodeFilter] = useState<'ALL' | 'ENCODED' | 'UNENCODED'>('ALL');
+  const [viewMode, setViewMode] = useState<'ACTIVE' | 'HIDDEN' | 'ALL'>('ACTIVE');
+
+  // Deletion Modal States
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Multi-selection for batch operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -41,7 +51,7 @@ export const ReceiverStudentsPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const res = await fetch('/api/students?limit=500');
+      const res = await fetch('/api/students?all=true&limit=5000');
       if (res.ok) {
         const json = await res.json();
         if (json.students && json.students.length > 0) {
@@ -115,9 +125,17 @@ export const ReceiverStudentsPage: React.FC = () => {
     return Array.from(set).sort();
   }, [students]);
 
-  // Filtered dataset including Encode status
+  const activeCount = useMemo(() => students.filter(s => !s.receiverHidden).length, [students]);
+  const hiddenCount = useMemo(() => students.filter(s => s.receiverHidden === true).length, [students]);
+  const totalCount = students.length;
+
+  // Filtered dataset including Encode status and Directory View Mode
   const filtered = useMemo(() => {
     return students.filter(s => {
+      // View Mode Filter
+      if (viewMode === 'ACTIVE' && s.receiverHidden) return false;
+      if (viewMode === 'HIDDEN' && !s.receiverHidden) return false;
+
       const q = search.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -145,7 +163,7 @@ export const ReceiverStudentsPage: React.FC = () => {
 
       return matchSearch && matchSchool && matchGrade && matchStatus && matchPhoto && matchEncode;
     });
-  }, [students, search, schoolFilter, gradeFilter, statusFilter, photoFilter, encodeFilter]);
+  }, [students, search, schoolFilter, gradeFilter, statusFilter, photoFilter, encodeFilter, viewMode]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const pagedStudents = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -187,14 +205,31 @@ export const ReceiverStudentsPage: React.FC = () => {
     }, 1500);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to permanently delete this student record?')) {
-      deleteStudent(id);
-      loadData();
-      if (selectedStudent?.id === id || selectedStudent?.studentId === id) {
-        setSelectedStudent(null);
+  const executeDelete = async (permanent: boolean) => {
+    setIsDeleting(true);
+    try {
+      if (isBatchDeleting) {
+        for (const id of Array.from(selectedIds)) {
+          deleteStudent(id, permanent);
+        }
+        setSelectedIds(new Set());
+        setIsBatchDeleting(false);
+      } else if (deleteTarget) {
+        deleteStudent(deleteTarget.studentId, permanent);
+        if (selectedStudent?.studentId === deleteTarget.studentId || selectedStudent?.id === deleteTarget.id) {
+          setSelectedStudent(null);
+        }
+        setDeleteTarget(null);
       }
+      await loadData();
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const handleRestore = async (studentId: string) => {
+    restoreStudent(studentId);
+    await loadData();
   };
 
   return (
@@ -215,12 +250,71 @@ export const ReceiverStudentsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* View Mode Switcher */}
+          <div className="flex items-center gap-1 p-1 bg-[#F4F7F5] rounded-xl border border-[#CBD5E1]">
+            <button
+              type="button"
+              onClick={() => { setViewMode('ACTIVE'); setPage(1); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === 'ACTIVE'
+                  ? 'bg-white text-[#202833] shadow-xs'
+                  : 'text-[#64748B] hover:text-[#202833]'
+              }`}
+            >
+              <span>Active</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-[#85E510]/30 text-[#366804]">
+                {activeCount.toLocaleString()}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setViewMode('HIDDEN'); setPage(1); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === 'HIDDEN'
+                  ? 'bg-white text-amber-900 shadow-xs'
+                  : 'text-[#64748B] hover:text-amber-800'
+              }`}
+            >
+              <span>Hidden / Trash</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-100 text-amber-800">
+                {hiddenCount.toLocaleString()}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setViewMode('ALL'); setPage(1); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === 'ALL'
+                  ? 'bg-white text-[#202833] shadow-xs'
+                  : 'text-[#64748B] hover:text-[#202833]'
+              }`}
+            >
+              <span>All</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-slate-200 text-slate-700">
+                {totalCount.toLocaleString()}
+              </span>
+            </button>
+          </div>
+
           {selectedIds.size > 0 && (
-            <span className="text-xs font-bold text-[#366804] bg-[#85E510]/20 px-3 py-1.5 rounded-xl border border-[#85E510]/40">
-              {selectedIds.size} Selected
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-[#366804] bg-[#85E510]/20 px-3 py-1.5 rounded-xl border border-[#85E510]/40">
+                {selectedIds.size} Selected
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsBatchDeleting(true)}
+                className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-all flex items-center gap-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Selected</span>
+              </button>
+            </div>
           )}
+
           <Link
             to="/receiver/exports"
             className="px-3.5 py-2 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] text-xs font-black shadow-sm transition-all flex items-center gap-1.5"
@@ -477,21 +571,52 @@ export const ReceiverStudentsPage: React.FC = () => {
 
                     {/* Actions */}
                     <td className="py-3 text-right pr-4 space-x-1.5" onClick={(e) => e.stopPropagation()}>
-                      <Link
-                        to="/receiver/id-production"
-                        className="p-1.5 inline-flex items-center justify-center rounded-lg bg-[#F4F7F5] hover:bg-[#85E510] hover:text-[#062404] text-[#64748B] transition-all border border-[#CBD5E1]"
-                        title="Produce ID Card"
-                      >
-                        <CreditCard className="w-4 h-4" />
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedStudent(s)}
-                        className="p-1.5 inline-flex items-center justify-center rounded-lg bg-[#F4F7F5] hover:bg-[#85E510] hover:text-[#062404] text-[#64748B] transition-all border border-[#CBD5E1]"
-                        title="View Full Dossier"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                      {s.receiverHidden ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleRestore(s.studentId)}
+                            className="p-1.5 inline-flex items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-all border border-emerald-300"
+                            title="Restore to System"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(s)}
+                            className="p-1.5 inline-flex items-center justify-center rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 transition-all border border-rose-300"
+                            title="Permanent Delete (Purge Everywhere)"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <Link
+                            to="/receiver/id-production"
+                            className="p-1.5 inline-flex items-center justify-center rounded-lg bg-[#F4F7F5] hover:bg-[#85E510] hover:text-[#062404] text-[#64748B] transition-all border border-[#CBD5E1]"
+                            title="Produce ID Card"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedStudent(s)}
+                            className="p-1.5 inline-flex items-center justify-center rounded-lg bg-[#F4F7F5] hover:bg-[#85E510] hover:text-[#062404] text-[#64748B] transition-all border border-[#CBD5E1]"
+                            title="View Full Dossier"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(s)}
+                            className="p-1.5 inline-flex items-center justify-center rounded-lg bg-[#F4F7F5] hover:bg-rose-50 text-rose-500 hover:text-rose-700 transition-all border border-[#CBD5E1]"
+                            title="Delete Student"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );
@@ -817,11 +942,11 @@ export const ReceiverStudentsPage: React.FC = () => {
             <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAF9] flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => handleDelete(selectedStudent.studentId)}
-                className="px-3 py-1.5 rounded-xl text-red-600 hover:bg-red-50 text-xs font-bold transition-colors flex items-center gap-1"
+                onClick={() => setDeleteTarget(selectedStudent)}
+                className="px-3.5 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors flex items-center gap-1.5 border border-rose-200"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Remove Student</span>
+                <span>Delete Record</span>
               </button>
 
               <button
@@ -830,6 +955,124 @@ export const ReceiverStudentsPage: React.FC = () => {
                 className="px-4 py-1.5 rounded-xl bg-[#202833] text-white text-xs font-bold hover:bg-[#161D26]"
               >
                 Close Drawer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dual-Mode Deletion Modal (Permanent vs Temporary System Removal) */}
+      {(deleteTarget || isBatchDeleting) && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-[#CBD5E1] shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-[#E2E8F0] flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-base text-[#202833]">
+                    {isBatchDeleting ? `Delete ${selectedIds.size} Selected Students` : 'Delete Student Record'}
+                  </h3>
+                  <p className="text-xs text-[#64748B]">
+                    Choose between temporary system removal or permanent cloud erasure
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setDeleteTarget(null); setIsBatchDeleting(false); }}
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-[#64748B] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target Preview */}
+            {deleteTarget && (
+              <div className="p-4 mx-6 mt-5 bg-[#F8FAF9] rounded-2xl border border-[#E2E8F0] flex items-center gap-3.5">
+                <div className="w-12 h-14 rounded-xl bg-white border border-[#CBD5E1] overflow-hidden shrink-0 flex items-center justify-center">
+                  {getPhotoUrl(deleteTarget.previewPath || deleteTarget.thumbnailPath || deleteTarget.photoPath) ? (
+                    <img
+                      src={getPhotoUrl(deleteTarget.previewPath || deleteTarget.thumbnailPath || deleteTarget.photoPath)!}
+                      alt={deleteTarget.fullName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400">No Photo</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-bold text-sm text-[#202833] truncate">{deleteTarget.fullName}</h4>
+                  <div className="flex items-center gap-2 text-xs font-mono text-[#366804] mt-0.5">
+                    <span>{deleteTarget.studentId}</span>
+                    <span className="text-[#94A3B8] font-sans">&bull;</span>
+                    <span className="text-[#64748B] font-sans">{deleteTarget.grade} - {deleteTarget.school}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Deletion Choice Cards */}
+            <div className="p-6 space-y-4">
+              {/* Option 1: Temporary Delete */}
+              <div className="p-4 rounded-2xl border-2 border-amber-200 bg-amber-50/50 hover:bg-amber-50 transition-colors">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-900">
+                      Temporary Delete
+                    </span>
+                    <span className="text-xs font-bold text-amber-900">Hide from My System</span>
+                  </div>
+                  <p className="text-xs text-amber-800/80 leading-relaxed">
+                    Hides this record from your active station directory. Biometric photos and records remain securely preserved in Cloudflare and can be restored at any time.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => executeDelete(false)}
+                  className="mt-3.5 w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white text-xs font-black shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <EyeOff className="w-4 h-4" />
+                  <span>{isDeleting ? 'Updating System...' : 'Temporary Delete (Hide Only)'}</span>
+                </button>
+              </div>
+
+              {/* Option 2: Permanent Delete */}
+              <div className="p-4 rounded-2xl border-2 border-rose-200 bg-rose-50/50 hover:bg-rose-50 transition-colors">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-200 text-rose-900">
+                      Permanent Delete
+                    </span>
+                    <span className="text-xs font-bold text-rose-900">Erase from Everywhere</span>
+                  </div>
+                  <p className="text-xs text-rose-800/80 leading-relaxed">
+                    Irreversibly destroys this record from Supabase PostgreSQL database, purges biometric portrait from Cloudflare R2 bucket ('siliconlabs'), and deletes across all devices.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => executeDelete(true)}
+                  className="mt-3.5 w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white text-xs font-black shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isDeleting ? 'Erasing Everywhere...' : 'Permanent Delete (Purge Everywhere)'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAF9] flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setDeleteTarget(null); setIsBatchDeleting(false); }}
+                className="px-4 py-2 rounded-xl border border-[#CBD5E1] bg-white text-xs font-bold text-[#64748B] hover:bg-slate-50 transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>
