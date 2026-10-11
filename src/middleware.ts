@@ -29,11 +29,13 @@ const PUBLIC_PREFIXES = [
 function getAuthSecret(): Uint8Array {
   const secret = process.env.AUTH_SECRET;
   if (!secret || secret.length < 32) {
-    // Fallback key only for build/edge initialization guard
-    return new TextEncoder().encode("student-bridge-enterprise-secret-key-32-chars-minimum-prod-grade");
+    throw new Error(
+      "[Security Guard] AUTH_SECRET is not configured or is fewer than 32 characters. A cryptographically random secret is required."
+    );
   }
   return new TextEncoder().encode(secret);
 }
+
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

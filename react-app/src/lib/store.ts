@@ -106,6 +106,20 @@ let memoryAuditLogs: AuditLog[] = [
 ];
 
 export async function initStore(): Promise<void> {
+  // 1. Fetch live student records from server / Supabase PostgreSQL
+  try {
+    const res = await fetch('/api/students?limit=500');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.students) && data.students.length > 0) {
+        memoryStudents = data.students;
+      }
+    }
+  } catch (apiErr) {
+    console.warn('Live API fetch failed, falling back to local dataset:', apiErr);
+  }
+
+  // 2. Fallback to /data/students.json if memoryStudents is still empty
   if (memoryStudents.length === 0) {
     try {
       const res = await fetch('/data/students.json');
@@ -117,34 +131,42 @@ export async function initStore(): Promise<void> {
     }
   }
 
+  // 3. Fetch live users from server / Supabase PostgreSQL
   try {
-    const res = await fetch('/data/users.json');
+    const res = await fetch('/api/users');
     if (res.ok) {
       const loadedUsers: User[] = await res.json();
-      // Merge while preserving preset aliases
-      const existingEmails = new Set(memoryUsers.map(u => u.email.toLowerCase()));
-      loadedUsers.forEach(u => {
-        if (!existingEmails.has(u.email.toLowerCase())) {
-          memoryUsers.push(u);
-        }
-      });
+      if (Array.isArray(loadedUsers) && loadedUsers.length > 0) {
+        const existingEmails = new Set(memoryUsers.map(u => u.email.toLowerCase()));
+        loadedUsers.forEach(u => {
+          if (!existingEmails.has(u.email.toLowerCase())) {
+            memoryUsers.push(u);
+          }
+        });
+      }
     }
   } catch (e) {
-    console.warn('Could not load /data/users.json', e);
+    console.warn('Could not load /api/users', e);
   }
 
-  // Merge custom students from localStorage
+  // 4. Merge custom students from localStorage if any
   try {
     const custom = localStorage.getItem('sb_custom_students');
     if (custom) {
       const parsed = JSON.parse(custom);
       if (Array.isArray(parsed)) {
-        memoryStudents = [...parsed, ...memoryStudents];
+        // Merge without duplicates
+        const existingIds = new Set(memoryStudents.map(s => s.studentId));
+        parsed.forEach((s: Student) => {
+          if (!existingIds.has(s.studentId)) {
+            memoryStudents.unshift(s);
+          }
+        });
       }
     }
   } catch (e) {}
 
-  // Sync bound devices from localStorage if previously updated
+  // 5. Sync bound devices from localStorage if previously updated
   try {
     const savedLocks = localStorage.getItem('sb_device_locks');
     if (savedLocks) {
@@ -156,6 +178,13 @@ export async function initStore(): Promise<void> {
       });
     }
   } catch (e) {}
+
+  // 6. Automatically sync any pending offline items
+  if (typeof window !== 'undefined') {
+    import('@/lib/offlineQueue').then(({ syncOfflineQueue }) => {
+      syncOfflineQueue().catch(() => {});
+    });
+  }
 }
 
 export function getStudents(): Student[] {
@@ -242,6 +271,22 @@ export function updateStudent(id: string, updates: Partial<Student>): void {
       }
     } catch (e) {}
 
+    // Persist update to Supabase PostgreSQL in background
+    fetch('/api/students', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: memoryStudents[index].id,
+        studentId: memoryStudents[index].studentId,
+        ...updates
+      })
+    }).catch(err => {
+      console.warn('Could not sync update to server, queued offline:', err);
+      import('@/lib/offlineQueue').then(({ queueOfflineOperation }) => {
+        queueOfflineOperation('UPDATE_STUDENT', { id: memoryStudents[index].id, ...updates });
+      });
+    });
+
     addAuditLog({
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
       user: getCurrentUser()?.username || 'Receiver',
@@ -266,6 +311,16 @@ export function deleteStudent(id: string): void {
       const filtered = custom.filter(s => s.id !== id && s.studentId !== id);
       localStorage.setItem('sb_custom_students', JSON.stringify(filtered));
     } catch (e) {}
+
+    // Persist delete to Supabase PostgreSQL in background
+    fetch(`/api/students?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    }).catch(err => {
+      console.warn('Could not sync delete to server, queued offline:', err);
+      import('@/lib/offlineQueue').then(({ queueOfflineOperation }) => {
+        queueOfflineOperation('DELETE_STUDENT', { id, studentId: deleted.studentId });
+      });
+    });
 
     addAuditLog({
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),

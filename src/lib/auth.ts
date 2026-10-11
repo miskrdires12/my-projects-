@@ -18,11 +18,15 @@ const BCRYPT_SALT_ROUNDS = 12;
  * Enforces a minimum 32-character secret length.
  */
 function getAuthSecret(): Uint8Array {
-  const secret =
-    process.env.AUTH_SECRET ||
-    "student-bridge-enterprise-secret-key-32-chars-minimum-prod-grade";
+  const secret = process.env.AUTH_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "[Security Guard] AUTH_SECRET is not configured or is fewer than 32 characters. A cryptographically random secret is required."
+    );
+  }
   return new TextEncoder().encode(secret);
 }
+
 
 // ----------------------------------------------------------------------------
 // PASSWORD HASHING

@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Camera, RefreshCw, CheckCircle2, AlertCircle, RotateCw, ZoomIn, ZoomOut,
   Upload, UserCheck, ArrowRight, ShieldCheck, Sparkles, X, Sliders, Crop,
-  ChevronDown, ChevronUp, Image as ImageIcon, Check, Printer
+  ChevronDown, ChevronUp, Image as ImageIcon, Check, Printer, SwitchCamera
 } from 'lucide-react';
 import { getStudents, addStudent, getSchools, getCurrentUser } from '@/lib/store';
+import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
 
 export const StudentRegistrationPage: React.FC = () => {
@@ -44,6 +45,8 @@ export const StudentRegistrationPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
+  const [isStreamReady, setIsStreamReady] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -58,7 +61,9 @@ export const StudentRegistrationPage: React.FC = () => {
 
   // Submission States
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatusText, setSubmitStatusText] = useState('');
   const [submittedStudent, setSubmittedStudent] = useState<Student | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const schools = getSchools();
 
@@ -86,40 +91,48 @@ export const StudentRegistrationPage: React.FC = () => {
       clean = '+2519' + clean.slice(2);
     } else if (clean.startsWith('07')) {
       clean = '+2517' + clean.slice(2);
-    } else if (clean.startsWith('9')) {
+    } else if (clean.startsWith('9') && !clean.startsWith('+')) {
       clean = '+2519' + clean.slice(1);
-    } else if (clean.startsWith('7')) {
+    } else if (clean.startsWith('7') && !clean.startsWith('+')) {
       clean = '+2517' + clean.slice(1);
     }
     setter(clean);
   };
 
-  // Start Webcam
-  const startCamera = async () => {
-    setCameraError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-        audio: false,
-      });
-      setCameraStream(stream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
+  // Bulletproof Callback Ref to immediately bind video element upon mounting
+  const setVideoRef = useCallback((element: HTMLVideoElement | null) => {
+    videoRef.current = element;
+    if (element && cameraStream) {
+      try {
+        if (element.srcObject !== cameraStream) {
+          element.srcObject = cameraStream;
+        }
+        element.muted = true;
+        element.playsInline = true;
+        element.play().then(() => {
+          setIsStreamReady(true);
+        }).catch((err) => {
+          console.warn('Camera autoplay warning:', err);
+          setIsStreamReady(true);
+        });
+      } catch (err) {
+        console.warn('Error attaching video stream:', err);
       }
-      setIsCameraActive(true);
-    } catch (err: any) {
-      console.warn('Camera access issue:', err);
-      setCameraError('Camera access unavailable. Please choose an image file from your device.');
     }
-  };
+  }, [cameraStream]);
 
-  // Stop Webcam
+  // Stop Webcam cleanly
   const stopCamera = () => {
     if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
+      cameraStream.getTracks().forEach(track => {
+        try { track.stop(); } catch (e) {}
+      });
       setCameraStream(null);
     }
+    if (videoRef.current) {
+      try { videoRef.current.srcObject = null; } catch (e) {}
+    }
+    setIsStreamReady(false);
     setIsCameraActive(false);
   };
 
@@ -129,19 +142,95 @@ export const StudentRegistrationPage: React.FC = () => {
     };
   }, []);
 
-  // Take Snapshot
+  // Start Webcam with multi-tier fallback & camera facing support
+  const startCamera = async (facing: 'user' | 'environment' = cameraFacing) => {
+    setCameraError(null);
+    setIsStreamReady(false);
+    stopCamera();
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Webcam API is not available on this browser or insecure context. Please upload an image file.');
+      }
+
+      let stream: MediaStream | null = null;
+      try {
+        // Tier 1: HD user-facing or back-facing portrait video
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false,
+        });
+      } catch (tier1Err) {
+        console.warn('HD camera constraint failed, falling back to standard video:', tier1Err);
+        // Tier 2: Universal hardware fallback
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
+      if (!stream) {
+        throw new Error('No video stream received from camera.');
+      }
+
+      setCameraStream(stream);
+      setIsCameraActive(true);
+      setCameraFacing(facing);
+
+      // Timeout safety: never let user remain permanently blocked behind loading spinner
+      setTimeout(() => {
+        setIsStreamReady(true);
+      }, 900);
+    } catch (err: any) {
+      console.warn('Camera access issue:', err);
+      let msg = 'Camera access unavailable. Please check camera permissions or upload a portrait photo.';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        msg = 'Camera permission denied. Please allow camera access in browser permissions or upload an image file.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        msg = 'No camera sensor found on this hardware. Please use the Upload Image option.';
+      }
+      setCameraError(msg);
+      setIsCameraActive(false);
+    }
+  };
+
+  // Flip Camera (Front <-> Back)
+  const toggleCameraFacing = () => {
+    const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
+    startCamera(nextFacing);
+  };
+
+  // Take Snapshot from video
   const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) {
+      alert('Camera feed is still initializing. Please wait a moment.');
+      return;
+    }
+
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+
+    canvas.width = vw;
+    canvas.height = vh;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, vw, vh);
+      try {
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-        setCapturedPhoto(dataUrl);
-        stopCamera();
+        if (dataUrl && dataUrl.length > 500) {
+          setCapturedPhoto(dataUrl);
+          stopCamera();
+        } else {
+          alert('Could not capture photo frame. Please try again.');
+        }
+      } catch (e: any) {
+        alert('Photo snapshot failed: ' + e.message);
       }
     }
   };
@@ -161,30 +250,34 @@ export const StudentRegistrationPage: React.FC = () => {
     }
   };
 
+  // Student Registration Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+
     if (isIdTaken) {
-      alert('The Student ID is already taken. Please generate or specify a unique ID.');
+      setSubmitError('The Student ID is already taken. Please generate or specify a unique ID.');
       return;
     }
 
     if (!fullName.trim()) {
-      alert('Student Full Name is required.');
+      setSubmitError('Student Full Name is required.');
       return;
     }
 
     setIsSubmitting(true);
+    setSubmitStatusText('Uploading biometric photograph & saving to Supabase PostgreSQL...');
 
     try {
       const studentPayload: Student = {
-        id: 'std-' + Date.now(),
+        id: 'cmu-' + Date.now().toString(36),
         studentId: studentId.trim(),
         fullName: fullName.trim(),
         sex,
-        grade,
+        grade: grade.trim(),
         phone: phone.trim(),
         bloodType,
-        school,
+        school: school.trim(),
         location,
         country: 'Ethiopia',
         dateOfBirth: dateOfBirth || undefined,
@@ -210,31 +303,50 @@ export const StudentRegistrationPage: React.FC = () => {
         ]
       };
 
-      // Call Cloudflare Edge Worker API to save student & upload photo to R2
+      // 1. Submit to Cloudflare Edge Worker API (Handles R2 upload & Supabase PostgreSQL write)
+      let persistedStudent = studentPayload;
+      let serverConfirmed = false;
+
       try {
         const res = await fetch('/api/students', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(studentPayload)
         });
+
         if (res.ok) {
           const cloudSaved = await res.json();
-          if (cloudSaved && cloudSaved.photoPath) {
-            studentPayload.photoPath = cloudSaved.photoPath;
-            studentPayload.previewPath = cloudSaved.previewPath || cloudSaved.photoPath;
+          if (cloudSaved && cloudSaved.studentId) {
+            persistedStudent = cloudSaved;
+            serverConfirmed = true;
           }
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          if (res.status === 409 || errData.error === 'DUPLICATE_ID') {
+            setIsIdTaken(true);
+            throw new Error('Student ID is already taken in the authoritative database.');
+          }
+          throw new Error(errData.message || errData.error || `Server returned error (${res.status})`);
         }
-      } catch (cloudErr) {
-        console.warn('Direct Cloudflare Edge sync warning, saving locally:', cloudErr);
+      } catch (networkErr: any) {
+        if (networkErr.message?.includes('already taken')) {
+          throw networkErr;
+        }
+
+        console.warn('Direct server sync failed, queuing into IndexedDB offline queue:', networkErr);
+        // Queue into IndexedDB for durable offline resilience
+        await queueOfflineOperation('CREATE_STUDENT', studentPayload).catch(() => {});
+        persistedStudent = studentPayload;
       }
 
-      // Persist in client store & notify Receiver Station immediately
-      addStudent(studentPayload);
-      setSubmittedStudent(studentPayload);
+      // 2. Persist in local store & notify Receiver Station immediately
+      addStudent(persistedStudent);
+      setSubmittedStudent(persistedStudent);
     } catch (err: any) {
-      alert('Error during registration: ' + err.message);
+      setSubmitError(err.message || 'Error occurred during registration.');
     } finally {
       setIsSubmitting(false);
+      setSubmitStatusText('');
     }
   };
 
@@ -252,11 +364,12 @@ export const StudentRegistrationPage: React.FC = () => {
     setRotation(0);
     setZoom(1);
     setSubmittedStudent(null);
+    setSubmitError(null);
   };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
-      {/* Hidden Canvas for captures */}
+      {/* Hidden Canvas for snapshot processing */}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Top Header */}
@@ -271,7 +384,7 @@ export const StudentRegistrationPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-1">
-            Capture biometric photograph, input student records, and transmit directly to authoritative database
+            Capture biometric photograph, input student records, and transmit directly to Supabase PostgreSQL & Cloudflare R2
           </p>
         </div>
 
@@ -281,6 +394,18 @@ export const StudentRegistrationPage: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {submitError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+            <span>{submitError}</span>
+          </div>
+          <button type="button" onClick={() => setSubmitError(null)} className="text-red-500 hover:text-red-800">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Main Grid: 2 White Cards */}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -306,16 +431,30 @@ export const StudentRegistrationPage: React.FC = () => {
             {/* Photo Preview Container */}
             <div className="relative aspect-[3/4] w-full max-w-[280px] mx-auto bg-[#F4F7F5] rounded-2xl border-2 border-dashed border-[#CBD5E1] overflow-hidden flex flex-col items-center justify-center shadow-inner group">
               {isCameraActive ? (
-                <div className="relative w-full h-full bg-black flex items-center justify-center">
+                <div className="relative w-full h-full bg-slate-900 flex items-center justify-center overflow-hidden">
                   <video
-                    ref={videoRef}
+                    ref={setVideoRef}
                     autoPlay
                     playsInline
                     muted
+                    onPlaying={() => setIsStreamReady(true)}
+                    onLoadedMetadata={(e) => {
+                      const v = e.target as HTMLVideoElement;
+                      v.muted = true;
+                      v.play().catch(() => {});
+                      setIsStreamReady(true);
+                    }}
+                    onCanPlay={() => setIsStreamReady(true)}
                     className="w-full h-full object-cover"
                   />
+                  {!isStreamReady && (
+                    <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center text-white text-xs gap-2 z-10 transition-opacity">
+                      <RefreshCw className="w-5 h-5 animate-spin text-[#85E510]" />
+                      <span className="font-semibold text-slate-200">Connecting camera sensor...</span>
+                    </div>
+                  )}
                   {/* Portrait Alignment Guide */}
-                  <div className="absolute inset-x-8 inset-y-6 border-2 border-dashed border-[#85E510]/60 rounded-full pointer-events-none" />
+                  <div className="absolute inset-x-8 inset-y-6 border-2 border-dashed border-[#85E510]/70 rounded-full pointer-events-none z-20 shadow-sm" />
                 </div>
               ) : capturedPhoto ? (
                 <div className="relative w-full h-full bg-slate-900 flex items-center justify-center overflow-hidden">
@@ -357,21 +496,32 @@ export const StudentRegistrationPage: React.FC = () => {
           {/* Photo Actions */}
           <div className="space-y-2 pt-2">
             {isCameraActive ? (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={capturePhoto}
+                    className="py-2.5 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Take Photo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="py-2.5 px-4 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] text-[#202833] font-bold text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  onClick={capturePhoto}
-                  className="py-2.5 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-bold text-xs shadow-sm flex items-center justify-center gap-1.5"
+                  onClick={toggleCameraFacing}
+                  className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-50 border border-[#CBD5E1] text-[#202833] font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
                 >
-                  <Camera className="w-4 h-4" />
-                  <span>Take Photo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={stopCamera}
-                  className="py-2.5 px-4 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] text-[#202833] font-bold text-xs"
-                >
-                  Cancel
+                  <SwitchCamera className="w-3.5 h-3.5 text-[#4D8A07]" />
+                  <span>Switch Camera ({cameraFacing === 'user' ? 'Front' : 'Back'})</span>
                 </button>
               </div>
             ) : (
@@ -379,8 +529,8 @@ export const StudentRegistrationPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={startCamera}
-                    className="py-2.5 px-3 rounded-xl bg-[#202833] hover:bg-[#161D26] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    onClick={() => startCamera()}
+                    className="py-2.5 px-3 rounded-xl bg-[#202833] hover:bg-[#161D26] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
                   >
                     <Camera className="w-4 h-4 text-[#85E510]" />
                     <span>Take Photo</span>
@@ -389,7 +539,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="py-2.5 px-3 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    className="py-2.5 px-3 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Upload className="w-4 h-4 text-[#64748B]" />
                     <span>Upload Image</span>
@@ -409,7 +559,7 @@ export const StudentRegistrationPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setIsEditorOpen(true)}
-                      className="py-2 px-3 rounded-xl bg-white hover:bg-[#F8FAF9] border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                      className="py-2 px-3 rounded-xl bg-white hover:bg-[#F8FAF9] border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       <Sliders className="w-3.5 h-3.5 text-[#4D8A07]" />
                       <span>Edit & Crop</span>
@@ -425,7 +575,7 @@ export const StudentRegistrationPage: React.FC = () => {
                         setRotation(0);
                         setZoom(1);
                       }}
-                      className="py-2 px-3 rounded-xl bg-white hover:bg-red-50 border border-[#CBD5E1] hover:border-red-200 text-red-600 font-bold text-xs flex items-center justify-center gap-1.5"
+                      className="py-2 px-3 rounded-xl bg-white hover:bg-red-50 border border-[#CBD5E1] hover:border-red-200 text-red-600 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span>Retake</span>
@@ -456,7 +606,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setStudentId(generateNewId())}
-                    className="text-[10px] text-[#4D8A07] hover:underline font-bold flex items-center gap-1"
+                    className="text-[10px] text-[#4D8A07] hover:underline font-bold flex items-center gap-1 cursor-pointer"
                   >
                     <RefreshCw className="w-2.5 h-2.5" /> Auto-Generate
                   </button>
@@ -503,7 +653,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setSex('Female')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       sex === 'Female'
                         ? 'bg-purple-50 text-purple-700 border-purple-300 shadow-sm'
                         : 'bg-[#F8FAF9] text-[#64748B] border-[#CBD5E1] hover:bg-white'
@@ -514,7 +664,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setSex('Male')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       sex === 'Male'
                         ? 'bg-blue-50 text-blue-700 border-blue-300 shadow-sm'
                         : 'bg-[#F8FAF9] text-[#64748B] border-[#CBD5E1] hover:bg-white'
@@ -602,7 +752,7 @@ export const StudentRegistrationPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowExtraDetails(!showExtraDetails)}
-                className="w-full flex items-center justify-between text-xs font-bold text-[#202833] py-2 px-3 rounded-xl bg-[#F8FAF9] hover:bg-[#F1F5F3] border border-[#CBD5E1] transition-all"
+                className="w-full flex items-center justify-between text-xs font-bold text-[#202833] py-2 px-3 rounded-xl bg-[#F8FAF9] hover:bg-[#F1F5F3] border border-[#CBD5E1] transition-all cursor-pointer"
               >
                 <span className="flex items-center gap-2">
                   <Sliders className="w-3.5 h-3.5 text-[#4D8A07]" />
@@ -681,7 +831,7 @@ export const StudentRegistrationPage: React.FC = () => {
               {isSubmitting ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Submitting to Authoritative Database...</span>
+                  <span>{submitStatusText || 'Saving to Authoritative Database...'}</span>
                 </>
               ) : (
                 <>
@@ -706,7 +856,7 @@ export const StudentRegistrationPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsEditorOpen(false)}
-                className="p-1 rounded-lg hover:bg-[#F4F7F5] text-[#64748B]"
+                className="p-1 rounded-lg hover:bg-[#F4F7F5] text-[#64748B] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -734,7 +884,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   key={tab}
                   type="button"
                   onClick={() => setEditorActiveTab(tab)}
-                  className={`px-3 py-1 rounded-lg transition-all ${
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
                     editorActiveTab === tab
                       ? 'bg-white text-[#202833] shadow-sm font-black'
                       : 'hover:text-[#202833]'
@@ -803,7 +953,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setRotation(r => (r + 90) % 360)}
-                    className="px-4 py-2 bg-white border border-[#CBD5E1] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                    className="px-4 py-2 bg-white border border-[#CBD5E1] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
                   >
                     <RotateCw className="w-4 h-4 text-[#4D8A07]" />
                     <span>Rotate 90&deg;</span>
@@ -840,14 +990,14 @@ export const StudentRegistrationPage: React.FC = () => {
                   setRotation(0);
                   setZoom(1);
                 }}
-                className="px-3 py-2 text-xs font-bold text-[#64748B] hover:text-[#202833]"
+                className="px-3 py-2 text-xs font-bold text-[#64748B] hover:text-[#202833] cursor-pointer"
               >
                 Reset Default
               </button>
               <button
                 type="button"
                 onClick={() => setIsEditorOpen(false)}
-                className="px-4 py-2 rounded-xl bg-[#85E510] text-[#062404] font-black text-xs shadow-sm"
+                className="px-4 py-2 rounded-xl bg-[#85E510] text-[#062404] font-black text-xs shadow-sm cursor-pointer"
               >
                 Apply Adjustments
               </button>
@@ -866,7 +1016,7 @@ export const StudentRegistrationPage: React.FC = () => {
               </div>
               <div>
                 <h3 className="font-heading font-black text-lg text-[#202833]">Student Registered!</h3>
-                <p className="text-xs text-[#64748B]">Transmitted to authoritative repository</p>
+                <p className="text-xs text-[#64748B]">Transmitted to Supabase PostgreSQL repository</p>
               </div>
             </div>
 
@@ -889,7 +1039,7 @@ export const StudentRegistrationPage: React.FC = () => {
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-[#64748B]">Biometric Photo:</span>
-                <span className="font-bold text-[#4D8A07]">Stored & Associated</span>
+                <span className="font-bold text-[#4D8A07]">Stored in Cloudflare R2</span>
               </div>
             </div>
 
@@ -897,7 +1047,7 @@ export const StudentRegistrationPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="py-2.5 px-3 rounded-xl bg-white border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-[#F8FAF9]"
+                className="py-2.5 px-3 rounded-xl bg-white border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-[#F8FAF9] cursor-pointer"
               >
                 <Printer className="w-4 h-4 text-[#64748B]" />
                 <span>Print Receipt</span>
@@ -905,7 +1055,7 @@ export const StudentRegistrationPage: React.FC = () => {
               <button
                 type="button"
                 onClick={resetFormForNext}
-                className="py-2.5 px-3 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs flex items-center justify-center gap-1.5 shadow-sm"
+                className="py-2.5 px-3 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               >
                 <span>Register Next</span>
                 <ArrowRight className="w-4 h-4" />
