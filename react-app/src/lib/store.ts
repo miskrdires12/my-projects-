@@ -89,11 +89,48 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SUPER_ADMIN",
     password: "super123",
     boundDeviceId: null,
+  },
+  {
+    id: "usr-admin-institutional",
+    username: "admin",
+    email: "admin@studentbridge.internal",
+    role: "ADMIN",
+    password: "admin123",
+    boundDeviceId: null,
+  },
+  {
+    id: "usr-receiver-institutional",
+    username: "receiver",
+    email: "receiver@studentbridge.internal",
+    role: "RECEIVER",
+    password: "receiver123",
+    boundDeviceId: null,
+  },
+  {
+    id: "usr-sender-institutional",
+    username: "sender",
+    email: "sender@studentbridge.internal",
+    role: "SENDER",
+    password: "sender123",
+    boundDeviceId: null,
   }
 ];
 
 let memoryStudents: Student[] = [];
-let memoryUsers: User[] = [...PRESET_OPERATORS];
+let memoryUsers: User[] = (() => {
+  const users: User[] = [...PRESET_OPERATORS];
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const locksMap = JSON.parse(localStorage.getItem('sb_device_locks') || '{}');
+      users.forEach(u => {
+        if (locksMap[u.id]) {
+          u.boundDeviceId = locksMap[u.id];
+        }
+      });
+    }
+  } catch (e) {}
+  return users;
+})();
 let memorySchools: School[] = DEFAULT_SCHOOLS;
 let memoryTasks: Task[] = (() => {
   try {

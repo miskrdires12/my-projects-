@@ -340,23 +340,24 @@ export const ReceiverStudentsPage: React.FC = () => {
     window.print();
   };
 
-  // Fallback student if list is empty
-  const activeDossier = selectedStudent || {
+  // Default avatar SVG placeholder for records pending photo capture
+  const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23F1F5F9'/%3E%3Ccircle cx='50' cy='38' r='20' fill='%23CBD5E1'/%3E%3Cpath d='M20 85 C20 65, 35 60, 50 60 C65 60, 80 65, 80 85 Z' fill='%23CBD5E1'/%3E%3C/svg%3E";
+
+  // Active student dossier (prefers user selection, then first loaded student)
+  const activeDossier = selectedStudent || (students.length > 0 ? students[0] : ({
     id: 'STU001245',
     studentId: 'STU001245',
     fullName: 'Daniel Kim',
     grade: 'Grade 10',
     sex: 'Male',
-    school: 'Silicon Labs Academy',
+    school: 'Silicon Labs Central',
     phone: '+251911445566',
     status: 'Active',
-    photoPath: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=400',
     dateOfBirth: '2010-03-15',
     department: '10-A'
-  } as Student;
+  } as Student));
 
-  const currentPhoto = getPhotoUrl(activeDossier.photoPath || activeDossier.previewPath || activeDossier.thumbnailPath) ||
-    'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=400';
+  const currentPhoto = getPhotoUrl(activeDossier.photoPath || activeDossier.previewPath || activeDossier.thumbnailPath) || DEFAULT_AVATAR;
 
   return (
     <div className="space-y-6 pb-12 font-sans selection:bg-[#85E510] selection:text-[#062404]">
@@ -692,7 +693,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 alt={activeDossier.fullName}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=400';
+                  (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
                 }}
               />
             </div>
@@ -1299,7 +1300,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                     required
                     value={formFullName}
                     onChange={(e) => setFormFullName(e.target.value)}
-                    placeholder="e.g. Daniel Kim"
+                    placeholder="e.g. Student Full Name"
                     className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold"
                   />
                 </div>

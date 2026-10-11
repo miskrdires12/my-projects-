@@ -14,64 +14,93 @@ export const ForgotPasswordPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-[#101612] border border-[#1e2c22] rounded-2xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-      <div className="mb-6">
-        <Link to="/login" className="inline-flex items-center gap-1.5 text-xs text-[#8fe617] hover:underline mb-4">
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Sign In</span>
-        </Link>
-        <h2 className="text-xl font-heading font-extrabold text-white tracking-tight">Reset Password</h2>
-        <p className="text-xs text-[#9eb2a6] mt-1">
-          Enter your registered email address to receive password reset instructions.
-        </p>
+    <div className="flex flex-col items-center justify-center py-6 px-4 font-sans select-none">
+      {/* Silicon Labs Monogram Logo Card */}
+      <div className="w-16 h-16 rounded-2xl bg-white border border-slate-100 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex items-center justify-center p-2.5 mb-3">
+        <img
+          src="/logo.png"
+          alt="Silicon Labs"
+          className="w-11 h-11 object-contain"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = '/brand-logo.png';
+          }}
+        />
       </div>
 
-      {submitted ? (
-        <div className="p-4 rounded-xl bg-[#8fe617]/10 border border-[#8fe617]/30 text-[#8fe617] text-xs space-y-2">
-          <div className="flex items-center gap-2 font-bold text-sm">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Reset Link Dispatched</span>
-          </div>
-          <p className="text-[#9eb2a6]">
-            If an account exists for <span className="text-white font-mono">{email}</span>, a secure recovery code has been sent. Check your inbox or contact your Station Administrator.
+      {/* Brand Title */}
+      <div className="flex items-center gap-1.5 text-2xl font-black text-black tracking-tight font-heading">
+        <span>SILICON</span>
+        <span className="bg-[#00DF68] text-black text-xs font-black px-2 py-0.5 rounded-md leading-none shadow-xs">
+          LABS
+        </span>
+      </div>
+
+      <div className="text-[10px] sm:text-[11px] font-semibold text-slate-500 tracking-wider uppercase mt-1 text-center">
+        STUDENT IDENTITY & CARD MANUFACTURING PLATFORM
+      </div>
+
+      {/* Password Recovery Card */}
+      <div className="w-full max-w-[390px] bg-white rounded-[24px] border border-slate-100 shadow-[0_12px_36px_rgba(0,0,0,0.03)] p-6 sm:p-7 mt-5">
+        <div className="mb-5">
+          <Link to="/login" className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-black mb-3 font-semibold transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Sign In</span>
+          </Link>
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-snug">
+            Reset Password
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5 font-normal">
+            Enter your institutional email address to receive workstation recovery instructions.
           </p>
-          <div className="pt-2">
-            <Link
-              to="/login"
-              className="inline-block px-3 py-1.5 bg-[#8fe617] text-[#062404] font-bold rounded-lg text-xs"
-            >
-              Return to Login
-            </Link>
-          </div>
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-[#9eb2a6] mb-1.5 uppercase tracking-wider">
-              Operator Email Address
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9eb2a6]" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="operator@siliconlabs.et"
-                className="w-full bg-[#070908] border border-[#1e2c22] rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-[#3f4743] focus:outline-none focus:border-[#8fe617] focus:ring-1 focus:ring-[#8fe617] transition-all"
-              />
+
+        {submitted ? (
+          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs space-y-2">
+            <div className="flex items-center gap-2 font-bold text-sm text-emerald-900">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Recovery Link Dispatched</span>
+            </div>
+            <p className="leading-relaxed">
+              If an account exists for <span className="font-bold text-slate-900">{email}</span>, a secure recovery link has been generated. Contact your workstation administrator for fast clearance.
+            </p>
+            <div className="pt-2">
+              <Link
+                to="/login"
+                className="inline-block px-3 py-1.5 bg-[#00DF68] hover:bg-[#00CA5D] text-black font-bold rounded-lg text-xs"
+              >
+                Return to Login
+              </Link>
             </div>
           </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                INSTITUTIONAL EMAIL ADDRESS
+              </label>
+              <div className="relative flex items-center">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@studentbridge.internal"
+                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 font-medium focus:outline-none focus:border-[#00DF68] focus:ring-2 focus:ring-[#00DF68]/20 transition-all"
+                />
+              </div>
+            </div>
 
-          <button
-            type="submit"
-            className="w-full py-3 px-4 rounded-xl bg-[#8fe617] hover:bg-[#a0f22c] text-[#062404] font-bold text-sm shadow-[0_0_20px_rgba(143,230,23,0.35)] transition-all flex items-center justify-center gap-2"
-          >
-            <span>Request Password Reset</span>
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
-      )}
+            <button
+              type="submit"
+              className="w-full mt-2 py-3 px-4 rounded-xl bg-[#00DF68] hover:bg-[#00CA5D] active:bg-[#00B854] text-black font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>SEND RECOVERY CODE</span>
+              <Send className="w-4 h-4" />
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 };

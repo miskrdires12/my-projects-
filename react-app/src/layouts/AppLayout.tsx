@@ -3,16 +3,23 @@ import { Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
 import { UserRole } from '@/types';
-import { getCurrentUser } from '@/lib/store';
+import { getCurrentUser, setCurrentUser, getOrCreateDeviceId } from '@/lib/store';
 
 export const AppLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const user = getCurrentUser();
+  const deviceId = getOrCreateDeviceId();
 
   // If not logged in, redirect to login page immediately
   if (!user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  // Workstation Device Lock Enforcement:
+  if (user.boundDeviceId && user.boundDeviceId !== deviceId && user.role !== 'SUPER_ADMIN') {
+    setCurrentUser(null);
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
