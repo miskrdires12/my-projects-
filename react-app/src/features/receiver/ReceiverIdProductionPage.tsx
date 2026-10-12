@@ -8,7 +8,7 @@ import QRCode from 'qrcode';
 import {
   getStudents, getCardTemplates, getPrintJobs, addPrintJob,
   updateStudentIdProductionStatus, getCurrentUser, addAuditLog,
-  getPhotoUrl, subscribeToStudentSync
+  getPhotoUrl, subscribeToStudentSync, generateStudentQrToken
 } from '@/lib/store';
 import { Student, CardTemplate, PrintJob } from '@/types';
 
@@ -31,15 +31,7 @@ export const ReceiverIdProductionPage: React.FC = () => {
 
   useEffect(() => {
     if (selectedStudent) {
-      const qrPayload = selectedStudent.qrCodeData || JSON.stringify({
-        id: selectedStudent.studentId,
-        name: selectedStudent.fullName,
-        school: selectedStudent.school || 'Campus',
-        grade: selectedStudent.grade || '9C',
-        status: selectedStudent.status || 'Accepted',
-        verified: true,
-        issuer: 'Silicon Labs StudentBridge'
-      });
+      const qrPayload = generateStudentQrToken(selectedStudent);
       QRCode.toDataURL(qrPayload, { width: 140, margin: 1, color: { dark: '#062404', light: '#ffffff' } })
         .then(url => setCardQrDataUrl(url))
         .catch(() => setCardQrDataUrl(null));

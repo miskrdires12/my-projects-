@@ -14,7 +14,8 @@ import * as XLSX from 'xlsx';
 import {
   getStudents, addStudent, updateStudent, deleteStudent,
   getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync,
-  DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP
+  DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP,
+  generateStudentQrToken, getStudentPhotoFileName, getStudentQrFileName
 } from '@/lib/store';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
@@ -167,11 +168,11 @@ export const ReceiverStudentsPage: React.FC = () => {
   // Update Detail QR Code when detail student changes
   useEffect(() => {
     if (detailStudent) {
-      // Token is strictly only student ID
-      QRCode.toDataURL(detailStudent.studentId, {
+      // Strict JSON QR token format: {"id":"...","name":"...","roll":"","grade":"..."}
+      QRCode.toDataURL(generateStudentQrToken(detailStudent), {
         width: 320,
         margin: 1,
-        color: { dark: '#0B1118', light: '#FFFFFF' }
+        color: { dark: '#000000', light: '#FFFFFF' }
       })
         .then(url => setDetailQrDataUrl(url))
         .catch(() => setDetailQrDataUrl(null));
@@ -433,44 +434,53 @@ export const ReceiverStudentsPage: React.FC = () => {
       return;
     }
 
+    const fileName = getStudentPhotoFileName(s);
     try {
       if (photoUrl.startsWith('data:')) {
         const a = document.createElement('a');
         a.href = photoUrl;
-        a.download = `${s.studentId}_${s.fullName.replace(/\s+/g, '_')}_photo.jpg`;
+        a.download = fileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
       } else {
-        const res = await fetch(photoUrl);
+        const res = await fetch(photoUrl, { mode: 'cors' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${s.studentId}_${s.fullName.replace(/\s+/g, '_')}_photo.jpg`;
+        a.download = fileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
     } catch (err: any) {
-      alert('Error downloading photo: ' + err.message);
+      console.warn('Fallback download for photo:', fileName, err);
+      const a = document.createElement('a');
+      a.href = photoUrl;
+      a.download = fileName;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   };
 
-  // Single Student QR Code Download (PNG - Token strictly studentId)
+  // Single Student QR Code Download (PNG - Token strictly JSON payload)
   const downloadSingleQr = async (s: Student, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      // Auto QR generation with token strictly = studentId
-      const qrUrl = await QRCode.toDataURL(s.studentId, {
+      const qrPayload = generateStudentQrToken(s);
+      const qrUrl = await QRCode.toDataURL(qrPayload, {
         width: 600,
         margin: 2,
-        color: { dark: '#0B1118', light: '#FFFFFF' }
+        color: { dark: '#000000', light: '#FFFFFF' }
       });
       const a = document.createElement('a');
       a.href = qrUrl;
-      a.download = `${s.studentId}_QR.png`;
+      a.download = getStudentQrFileName(s);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -502,12 +512,13 @@ export const ReceiverStudentsPage: React.FC = () => {
 
       for (let i = 0; i < targets.length; i++) {
         const s = targets[i];
+        const fileName = getStudentPhotoFileName(s);
         setProgressModal({
           isOpen: true,
           title: 'Downloading Selected Photographs (ZIP Archive)',
           current: i + 1,
           total: targets.length,
-          statusText: `Fetching photo ${i + 1}/${targets.length}: ${s.fullName} (${s.studentId})...`
+          statusText: `Fetching photo ${i + 1}/${targets.length}: ${fileName}...`
         });
 
         const photoUrl = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath);
@@ -515,13 +526,13 @@ export const ReceiverStudentsPage: React.FC = () => {
           try {
             if (photoUrl.startsWith('data:')) {
               const base64Data = photoUrl.split(',')[1];
-              folder.file(`${s.studentId}_${s.fullName.replace(/\s+/g, '_')}.jpg`, base64Data, { base64: true });
+              folder.file(fileName, base64Data, { base64: true });
               count++;
             } else {
-              const res = await fetch(photoUrl);
+              const res = await fetch(photoUrl, { mode: 'cors' });
               if (res.ok) {
                 const blob = await res.blob();
-                folder.file(`${s.studentId}_${s.fullName.replace(/\s+/g, '_')}.jpg`, blob);
+                folder.file(fileName, blob);
                 count++;
               }
             }
@@ -529,11 +540,11 @@ export const ReceiverStudentsPage: React.FC = () => {
             console.warn('Skipping photo for', s.studentId, e);
           }
         }
-        await new Promise(r => setTimeout(r, 20));
+        await new Promise(r => setTimeout(r, 15));
       }
 
       if (count === 0) {
-        alert('None of the selected students have photos available.');
+        alert('None of the selected students have downloadable photos.');
         setProgressModal(prev => ({ ...prev, isOpen: false }));
         return;
       }
@@ -553,7 +564,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err: any) {
       alert('Error creating photo archive: ' + err.message);
     } finally {
@@ -563,7 +574,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     }
   };
 
-  // Bulk Selected QR Codes Download (ZIP with Progress - Token strictly studentId)
+  // Bulk Selected QR Codes Download (ZIP with Progress - Token strictly JSON payload)
   const downloadSelectedQrsZip = async () => {
     const targets = students.filter(s => selectedIds.has(s.studentId));
     if (targets.length === 0) {
@@ -576,7 +587,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       title: 'Auto-Generating Student QR Codes (ZIP Archive)',
       current: 0,
       total: targets.length,
-      statusText: 'Encoding QR codes with strictly Student ID token...'
+      statusText: 'Encoding QR codes with JSON payload...'
     });
 
     try {
@@ -593,17 +604,17 @@ export const ReceiverStudentsPage: React.FC = () => {
           statusText: `Rendering QR token for ${s.studentId} (${i + 1}/${targets.length})...`
         });
 
-        // Token strictly only student id
-        const qrDataUrl = await QRCode.toDataURL(s.studentId, {
+        const qrPayload = generateStudentQrToken(s);
+        const qrDataUrl = await QRCode.toDataURL(qrPayload, {
           width: 500,
           margin: 2,
-          color: { dark: '#0B1118', light: '#FFFFFF' }
+          color: { dark: '#000000', light: '#FFFFFF' }
         });
 
         const base64Data = qrDataUrl.split(',')[1];
-        folder.file(`${s.studentId}_QR.png`, base64Data, { base64: true });
+        folder.file(getStudentQrFileName(s), base64Data, { base64: true });
 
-        await new Promise(r => setTimeout(r, 15));
+        await new Promise(r => setTimeout(r, 10));
       }
 
       setProgressModal(prev => ({ ...prev, statusText: 'Packaging QR codes ZIP...' }));
@@ -615,7 +626,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err: any) {
       alert('Error generating QR archive: ' + err.message);
     } finally {
@@ -645,32 +656,32 @@ export const ReceiverStudentsPage: React.FC = () => {
     });
 
     try {
-      const rows = targets.map((s, idx) => ({
-        '#': idx + 1,
-        'Student ID': s.studentId,
-        'Full Name': s.fullName,
-        'Gender': s.sex || 'Male',
-        'Grade': s.grade || '',
-        'Section': getSection(s),
-        'Branch Location': s.location || 'Addis Ababa',
-        'Assigned School': s.school || '',
-        'Phone Number': s.phone || '',
-        'Emergency Phone': s.emergencyContactPhone || '',
-        'Date of Birth': s.dateOfBirth ? s.dateOfBirth.substring(0, 10) : '',
-        'Blood Group': s.bloodType || 'O+',
-        'School Bus': s.schoolBusUsage || 'Yes',
-        'Sender / Field Op': s.senderName || 'Field Sender',
-        'Transmitted Date': s.createdAt ? new Date(s.createdAt).toLocaleString() : '',
-        'Biometric Status': s.photoIntegrityStatus || 'PHOTO_VERIFIED',
-        'System Status': s.status || 'Accepted'
-      }));
+      const rows = targets.map((s, idx) => {
+        const photoName = getStudentPhotoFileName(s);
+        const qrName = getStudentQrFileName(s);
+        const photoLocalPath = `C:\\Users\\Administrator\\Desktop\\yekaelementry\\${photoName}`;
+        return {
+          '#': idx + 1,
+          'Name': s.fullName,
+          'StudentId': s.studentId,
+          'Sex': s.sex || 'Male',
+          'Grade': s.grade || '',
+          'BloodType': s.bloodType || 'O+',
+          'Phone': s.phone || '',
+          '@photo': photoLocalPath,
+          '@qr': qrName,
+          'Branch': s.location || 'Addis Ababa',
+          'School': s.school || '',
+          'Status': s.status || 'Accepted'
+        };
+      });
 
       setProgressModal(prev => ({ ...prev, current: targets.length, statusText: 'Building Excel workbook...' }));
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 80));
 
       const worksheet = XLSX.utils.json_to_sheet(rows);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Students Directory');
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
       XLSX.writeFile(workbook, `studentbridge_directory_${Date.now()}.xlsx`);
     } catch (err: any) {
       alert('Excel export error: ' + err.message);
@@ -681,7 +692,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     }
   };
 
-  // CSV Export (.csv with Progress)
+  // CSV Export (.csv with Progress - strictly formatted headers and Desktop photo path)
   const exportCsv = async (onlySelected: boolean = false) => {
     const targets = onlySelected
       ? students.filter(s => selectedIds.has(s.studentId))
@@ -697,36 +708,36 @@ export const ReceiverStudentsPage: React.FC = () => {
       title: 'Compiling CSV Data File',
       current: 0,
       total: targets.length,
-      statusText: 'Writing comma-separated rows...'
+      statusText: 'Writing Name, StudentId, Sex, Grade, BloodType, Phone, @photo, @qr...'
     });
 
     try {
-      const headers = ['Student ID', 'Full Name', 'Gender', 'Grade', 'Section', 'Branch', 'School', 'Phone', 'Date of Birth', 'Blood Group', 'Sender', 'Transmitted At', 'Status'];
+      // Exact required header format: Name StudentId Sex Grade BloodType Phone @photo @qr
+      const headers = ['Name', 'StudentId', 'Sex', 'Grade', 'BloodType', 'Phone', '@photo', '@qr'];
       const csvRows = [headers.join(',')];
 
       targets.forEach(s => {
+        const photoName = getStudentPhotoFileName(s);
+        const qrName = getStudentQrFileName(s);
+        const photoLocalPath = `C:\\Users\\Administrator\\Desktop\\yekaelementry\\${photoName}`;
+
         const row = [
-          `"${s.studentId}"`,
           `"${(s.fullName || '').replace(/"/g, '""')}"`,
+          `"${s.studentId}"`,
           `"${s.sex || 'Male'}"`,
           `"${s.grade || ''}"`,
-          `"${getSection(s)}"`,
-          `"${s.location || 'Addis Ababa'}"`,
-          `"${(s.school || '').replace(/"/g, '""')}"`,
-          `"${s.phone || ''}"`,
-          `"${s.dateOfBirth ? s.dateOfBirth.substring(0, 10) : ''}"`,
           `"${s.bloodType || 'O+'}"`,
-          `"${s.senderName || 'Field Sender'}"`,
-          `"${s.createdAt || ''}"`,
-          `"${s.status || 'Accepted'}"`
+          `"${s.phone || ''}"`,
+          `"${photoLocalPath.replace(/"/g, '""')}"`,
+          `"${qrName}"`
         ];
         csvRows.push(row.join(','));
       });
 
       setProgressModal(prev => ({ ...prev, current: targets.length, statusText: 'Downloading CSV file...' }));
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 80));
 
-      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -734,7 +745,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err: any) {
       alert('CSV export error: ' + err.message);
     } finally {

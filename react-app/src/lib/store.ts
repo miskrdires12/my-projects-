@@ -201,45 +201,63 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     boundDeviceId: null,
     recordsEncoded: 7061,
   },
-  // Institutional Aliases for Automated Testing
-  {
-    id: "usr-admin-institutional",
-    username: "admin",
-    email: "admin@studentbridge.internal",
-    role: "SUPER_ADMIN",
-    password: "12345678",
-    boundDeviceId: null,
-  },
-  {
-    id: "usr-receiver-institutional",
-    username: "receiver",
-    email: "receiver@studentbridge.internal",
-    role: "RECEIVER",
-    password: "12345678",
-    boundDeviceId: null,
-  },
-  {
-    id: "usr-sender-institutional",
-    username: "sender",
-    email: "sender@studentbridge.internal",
-    role: "SENDER",
-    password: "12345678",
-    boundDeviceId: null,
-  }
 ];
+
+// Strict QR token payload format required by user:
+// {"id":"SB-2026-50216","name":"Betelhem Tesfaye","roll":"","grade":"12D"}
+export function generateStudentQrToken(student: Partial<Student>): string {
+  return JSON.stringify({
+    id: student.studentId || '',
+    name: student.fullName || '',
+    roll: student.rollNumber || '',
+    grade: student.grade || ''
+  });
+}
+
+// Generates the standard photo filename for a student
+export function getStudentPhotoFileName(student: Partial<Student>): string {
+  if (student.photoPath) {
+    try {
+      const cleanPath = student.photoPath.split('?')[0];
+      const rawName = cleanPath.split('/').pop() || '';
+      const decoded = decodeURIComponent(rawName);
+      if (decoded && (decoded.toLowerCase().endsWith('.jpg') || decoded.toLowerCase().endsWith('.png') || decoded.toLowerCase().endsWith('.jpeg'))) {
+        return decoded;
+      }
+    } catch {}
+  }
+  const safeName = (student.fullName || 'student').trim().replace(/[\/\\:*?"<>|]/g, '_');
+  return `${student.studentId || 'STUDENT'}_${safeName}.jpg`;
+}
+
+// Generates the standard QR filename for a student
+export function getStudentQrFileName(student: Partial<Student>): string {
+  return `${student.studentId || 'STUDENT'}_qr.png`;
+}
 
 let memoryStudents: Student[] = [];
 let memoryUsers: (User & { password?: string })[] = (() => {
-  const users: (User & { password?: string })[] = PRESET_OPERATORS.map(u => ({ ...u, password: '12345678' }));
+  const users: (User & { password?: string })[] = PRESET_OPERATORS
+    .filter(u => !u.email.endsWith('@studentbridge.internal') && !u.id.startsWith('usr-admin-institutional') && !u.id.startsWith('usr-receiver-institutional') && !u.id.startsWith('usr-sender-institutional'))
+    .map(u => ({ ...u, password: '12345678' }));
   try {
     if (typeof localStorage !== 'undefined') {
       const savedCustom = localStorage.getItem('sb_custom_users');
       if (savedCustom) {
         const customParsed = JSON.parse(savedCustom);
         if (Array.isArray(customParsed)) {
+          const filteredCustom = customParsed.filter((cu: any) =>
+            cu &&
+            cu.email &&
+            !cu.email.toLowerCase().endsWith('@studentbridge.internal') &&
+            cu.id !== 'usr-admin-institutional' &&
+            cu.id !== 'usr-receiver-institutional' &&
+            cu.id !== 'usr-sender-institutional'
+          );
+          localStorage.setItem('sb_custom_users', JSON.stringify(filteredCustom));
           const existingIds = new Set(users.map(u => u.id));
           const existingEmails = new Set(users.map(u => u.email.toLowerCase()));
-          customParsed.forEach((cu: any) => {
+          filteredCustom.forEach((cu: any) => {
             if (!existingIds.has(cu.id) && !existingEmails.has(cu.email.toLowerCase())) {
               users.unshift({
                 ...cu,
@@ -257,7 +275,9 @@ let memoryUsers: (User & { password?: string })[] = (() => {
         }
       });
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('Error loading custom users from localStorage:', e);
+  }
   return users;
 })();
 let memorySchools: School[] = DEFAULT_SCHOOLS;
@@ -415,8 +435,8 @@ export function addStudent(newStudent: Student): void {
   if (!newStudent.photoIntegrityStatus) {
     newStudent.photoIntegrityStatus = (newStudent.photoPath || newStudent.previewPath || newStudent.thumbnailPath) ? 'PHOTO_VERIFIED' : 'NO_PHOTO';
   }
-  // QR Code payload token is strictly only student id
-  newStudent.qrCodeData = newStudent.studentId;
+  // QR Code payload token strictly adheres to required format: {"id":"...","name":"...","roll":"","grade":"..."}
+  newStudent.qrCodeData = generateStudentQrToken(newStudent);
   if (!newStudent.recordHistory || newStudent.recordHistory.length === 0) {
     newStudent.recordHistory = [
       {

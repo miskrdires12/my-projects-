@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import {
   getStudents, addStudent, getSchools, getCurrentUser,
-  DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP, getSenderMetrics, SenderMetrics
+  DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP, getSenderMetrics, SenderMetrics,
+  generateStudentQrToken
 } from '@/lib/store';
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
@@ -408,8 +409,13 @@ export const StudentRegistrationPage: React.FC = () => {
         thumbnailPath: finalPhotoUrl || capturedPhoto || undefined,
         originalPhotoPath: finalPhotoUrl,
         photoIntegrityStatus: capturedPhoto ? 'PHOTO_VERIFIED' : 'NO_PHOTO',
-        // QR Code token is strictly student id
-        qrCodeData: studentId.trim(),
+        // QR Code token strictly formatted as {"id":"...","name":"...","roll":"","grade":"..."}
+        qrCodeData: generateStudentQrToken({
+          studentId: studentId.trim(),
+          fullName: fullName.trim(),
+          rollNumber: '',
+          grade: grade ? grade.trim() : ''
+        }),
         senderName: user?.username || 'Field Operator',
         status: 'Accepted',
         idProductionStatus: 'READY',
@@ -500,17 +506,9 @@ export const StudentRegistrationPage: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-heading font-black text-[#0B1118] tracking-tight">
-              Register Student & Biometric Camera Capture
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#9EE617]/20 text-[#366804] border border-[#9EE617]/40 uppercase">
-              Station One &bull; Sender
-            </span>
-          </div>
-          <p className="text-xs text-[#64748B] mt-1">
-            Capture biometric photograph, input student records, and transmit directly to Supabase PostgreSQL & Cloudflare R2
-          </p>
+          <h1 className="text-2xl font-heading font-black text-[#0B1118] tracking-tight">
+            Register Student
+          </h1>
         </div>
 
         <div className="flex items-center gap-2">

@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { Download, FileSpreadsheet, Archive, CheckCircle2, AlertCircle, Loader2, X, RefreshCw, FileText, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
-import { getStudents, getPhotoUrl, getPhotoEncodeClass } from '@/lib/store';
+import {
+  getStudents, getPhotoUrl, getPhotoEncodeClass,
+  generateStudentQrToken, getStudentPhotoFileName, getStudentQrFileName
+} from '@/lib/store';
 
 export const ReceiverExportsPage: React.FC = () => {
   const [selectedScope, setSelectedScope] = useState<'filtered' | 'all'>('all');
@@ -19,7 +22,7 @@ export const ReceiverExportsPage: React.FC = () => {
   const sampleFiles = (students.length > 0 ? students.slice(0, 5) : []).map(s => {
     const isEnc = getPhotoEncodeClass(s) === 'Encoded';
     return {
-      name: `${s.studentId}_${(s.fullName || 'Student').replace(/\s+/g, '_')}.jpg`,
+      name: getStudentPhotoFileName(s),
       status: isEnc ? 'Done' : 'Missing',
       size: isEnc ? '250 KB' : '0 KB',
       encodeClass: isEnc ? 'Encoded' : 'Unencoded'
@@ -56,29 +59,25 @@ export const ReceiverExportsPage: React.FC = () => {
 
   const exportRealCSV = () => {
     try {
-      const headers = ['ID', 'StudentID', 'FullName', 'Sex', 'Grade', 'School', 'Phone', 'BloodType', 'Country', 'EncodeClass', 'QRCodePayload', 'Status', 'PhotoUrl'];
+      // Exact required header format: Name StudentId Sex Grade BloodType Phone @photo @qr
+      const headers = ['Name', 'StudentId', 'Sex', 'Grade', 'BloodType', 'Phone', '@photo', '@qr'];
       const rows = students.map(s => {
-        const isEnc = getPhotoEncodeClass(s) === 'Encoded';
-        const qr = s.qrCodeData || `SB://${s.studentId}/${encodeURIComponent(s.fullName)}/${encodeURIComponent(s.school || 'Campus')}/${encodeURIComponent(s.grade || '12')}`;
-        const photo = getPhotoUrl(s.photoPath || s.previewPath) || '';
+        const photoName = getStudentPhotoFileName(s);
+        const qrName = getStudentQrFileName(s);
+        const photoLocalPath = `C:\\Users\\Administrator\\Desktop\\yekaelementry\\${photoName}`;
         return [
-          s.id,
-          s.studentId,
-          `"${s.fullName}"`,
-          s.sex || '',
-          s.grade || '',
-          `"${s.school || ''}"`,
-          s.phone || '',
-          s.bloodType || '',
-          s.country || 'Ethiopia',
-          isEnc ? 'Encoded' : 'Unencoded',
-          `"${qr.replace(/"/g, '""')}"`,
-          s.status || 'Accepted',
-          `"${photo}"`
+          `"${(s.fullName || '').replace(/"/g, '""')}"`,
+          `"${s.studentId}"`,
+          `"${s.sex || 'Male'}"`,
+          `"${s.grade || ''}"`,
+          `"${s.bloodType || 'O+'}"`,
+          `"${s.phone || ''}"`,
+          `"${photoLocalPath.replace(/"/g, '""')}"`,
+          `"${qrName}"`
         ];
       });
 
-      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -87,6 +86,7 @@ export const ReceiverExportsPage: React.FC = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
       console.error(e);
     }
@@ -95,22 +95,21 @@ export const ReceiverExportsPage: React.FC = () => {
   const exportRealExcel = () => {
     try {
       const exportData = students.map(s => {
-        const isEnc = getPhotoEncodeClass(s) === 'Encoded';
-        const qr = s.qrCodeData || `SB://${s.studentId}/${encodeURIComponent(s.fullName)}/${encodeURIComponent(s.school || 'Campus')}/${encodeURIComponent(s.grade || '12')}`;
-        const photo = getPhotoUrl(s.photoPath || s.previewPath) || 'MISSING';
+        const photoName = getStudentPhotoFileName(s);
+        const qrName = getStudentQrFileName(s);
+        const photoLocalPath = `C:\\Users\\Administrator\\Desktop\\yekaelementry\\${photoName}`;
         return {
-          'Student ID': s.studentId,
-          'Full Name': s.fullName,
-          'Sex': s.sex || 'Female',
-          'Grade Level': s.grade || '',
-          'School Campus': s.school || '',
-          'Contact Phone': s.phone || '',
-          'Blood Type': s.bloodType || '',
-          'Country': s.country || 'Ethiopia',
-          'Encode Class': isEnc ? 'Encoded (Photo Verified)' : 'Unencoded (Missing Photo)',
-          'QR Code Payload': qr,
-          'Photo URL': photo,
-          'Verification Status': s.status || 'Accepted',
+          'Name': s.fullName,
+          'StudentId': s.studentId,
+          'Sex': s.sex || 'Male',
+          'Grade': s.grade || '',
+          'BloodType': s.bloodType || 'O+',
+          'Phone': s.phone || '',
+          '@photo': photoLocalPath,
+          '@qr': qrName,
+          'Branch': s.location || 'Addis Ababa',
+          'School': s.school || '',
+          'Status': s.status || 'Accepted'
         };
       });
 
