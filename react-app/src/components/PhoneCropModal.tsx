@@ -59,6 +59,23 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 320, height: 420 });
   const [cropBox, setCropBox] = useState<CropRect>({ x: 20, y: 20, width: 280, height: 373 });
+  const cropBoxRef = useRef<CropRect>(cropBox);
+  const aspectRatioRef = useRef<AspectRatioMode>(aspectRatio);
+  const hasInitializedCropRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    cropBoxRef.current = cropBox;
+  }, [cropBox]);
+
+  useEffect(() => {
+    aspectRatioRef.current = aspectRatio;
+  }, [aspectRatio]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      hasInitializedCropRef.current = false;
+    }
+  }, [isOpen]);
 
   // Dragging State
   const [dragAction, setDragAction] = useState<DragAction>(null);
@@ -82,6 +99,8 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     setPan({ x: 0, y: 0 });
     setIsSaving(false);
     setAspectRatio('3:4');
+    aspectRatioRef.current = '3:4';
+    hasInitializedCropRef.current = false;
 
     if (imageUrl.startsWith('data:')) {
       setCurrentImageSrc(imageUrl);
@@ -128,86 +147,146 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     };
   }, [imageUrl, isOpen]);
 
-  // Initialize or re-center crop box when aspect ratio changes (preserving user center)
+  // Initialize or adapt crop box when aspect ratio changes (preserving user crop & center)
   const applyAspectRatio = useCallback((ratio: AspectRatioMode, cWidth: number, cHeight: number, prevCrop?: CropRect) => {
     const pad = 24;
-    const maxW = cWidth - pad * 2;
-    const maxH = cHeight - pad * 2;
+    const maxW = Math.max(100, cWidth - pad * 2);
+    const maxH = Math.max(100, cHeight - pad * 2);
 
-    let newW = maxW;
-    let newH = maxH;
+    let newW: number;
+    let newH: number;
+    let newX: number;
+    let newY: number;
 
-    if (ratio === '3:4') {
-      const targetAspect = 3 / 4;
-      if (maxW / maxH > targetAspect) {
-        newH = maxH;
-        newW = newH * targetAspect;
+    const hasValidPrev = Boolean(prevCrop && prevCrop.width >= 40 && prevCrop.height >= 40);
+
+    if (ratio === 'FREE') {
+      if (hasValidPrev && prevCrop) {
+        // PRESERVE user's exact crop dimensions and position when switching to FREE
+        newW = Math.min(prevCrop.width, maxW);
+        newH = Math.min(prevCrop.height, maxH);
+        newX = prevCrop.x;
+        newY = prevCrop.y;
       } else {
-        newW = maxW;
-        newH = newW / targetAspect;
-      }
-    } else if (ratio === '1:1') {
-      const minDim = Math.min(maxW, maxH);
-      newW = minDim;
-      newH = minDim;
-    } else if (ratio === '4:3') {
-      const targetAspect = 4 / 3;
-      if (maxW / maxH > targetAspect) {
-        newH = maxH;
-        newW = newH * targetAspect;
-      } else {
-        newW = maxW;
-        newH = newW / targetAspect;
+        // Initial fallback for FREE
+        newW = Math.round(maxW * 0.85);
+        newH = Math.round(maxH * 0.85);
+        newX = Math.round((cWidth - newW) / 2);
+        newY = Math.round((cHeight - newH) / 2);
       }
     } else {
-      // FREE: Default to 85% coverage
-      newW = maxW * 0.85;
-      newH = maxH * 0.85;
+      // ratio is '3:4', '1:1', or '4:3'
+      const targetAspect = ratio === '3:4' ? 3 / 4 : ratio === '1:1' ? 1 : 4 / 3;
+
+      if (hasValidPrev && prevCrop) {
+        // User has already cropped/positioned their crop box!
+        // Adapt the user's existing crop box to the target aspect ratio around its center.
+        const prevW = prevCrop.width;
+        const prevH = prevCrop.height;
+        const curAspect = prevW / prevH;
+
+        if (curAspect > targetAspect) {
+          // Wider than target ratio: expand height to fit width if it fits in container,
+          // otherwise scale down to container height.
+          const candH = Math.round(prevW / targetAspect);
+          if (candH <= maxH) {
+            newH = candH;
+            newW = prevW;
+          } else {
+            newH = maxH;
+            newW = Math.round(newH * targetAspect);
+          }
+        } else {
+          // Taller than target ratio: expand width to fit height if it fits in container,
+          // otherwise scale down to container width.
+          const candW = Math.round(prevH * targetAspect);
+          if (candW <= maxW) {
+            newW = candW;
+            newH = prevH;
+          } else {
+            newW = maxW;
+            newH = Math.round(newW / targetAspect);
+          }
+        }
+
+        // Clamp to max container bounds
+        if (newW > maxW) {
+          newW = maxW;
+          newH = Math.round(newW / targetAspect);
+        }
+        if (newH > maxH) {
+          newH = maxH;
+          newW = Math.round(newH * targetAspect);
+        }
+
+        // Preserve selected center
+        const curCenterX = prevCrop.x + prevCrop.width / 2;
+        const curCenterY = prevCrop.y + prevCrop.height / 2;
+
+        newX = Math.round(curCenterX - newW / 2);
+        newY = Math.round(curCenterY - newH / 2);
+      } else {
+        // Initial setup (no previous user crop) - fit to viewport
+        if (maxW / maxH > targetAspect) {
+          newH = maxH;
+          newW = Math.round(newH * targetAspect);
+        } else {
+          newW = maxW;
+          newH = Math.round(newW / targetAspect);
+        }
+        newX = Math.round((cWidth - newW) / 2);
+        newY = Math.round((cHeight - newH) / 2);
+      }
     }
 
-    // Preserve selected center if previous crop exists, otherwise center in viewport
-    const curCenterX = prevCrop ? (prevCrop.x + prevCrop.width / 2) : (cWidth / 2);
-    const curCenterY = prevCrop ? (prevCrop.y + prevCrop.height / 2) : (cHeight / 2);
-
-    let newX = Math.round(curCenterX - newW / 2);
-    let newY = Math.round(curCenterY - newH / 2);
-
-    // Boundary clamp
+    // Boundary clamp: keep crop box completely within container
     newX = Math.max(0, Math.min(newX, cWidth - newW));
     newY = Math.max(0, Math.min(newY, cHeight - newH));
 
-    setCropBox({
+    const updatedBox: CropRect = {
       x: Math.round(newX),
       y: Math.round(newY),
       width: Math.round(newW),
       height: Math.round(newH)
-    });
+    };
+
+    cropBoxRef.current = updatedBox;
+    setCropBox(updatedBox);
   }, []);
 
-  // Update container size on open
+  // Measure container and initialize crop box once when modal opens,
+  // or adjust container on window resize WITHOUT resetting user crop.
   useEffect(() => {
     if (!isOpen) return;
-    const updateSize = () => {
+
+    const measureAndInit = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const w = Math.round(rect.width) || 320;
         const h = Math.round(rect.height) || 420;
         setContainerSize({ width: w, height: h });
-        applyAspectRatio(aspectRatio, w, h);
+
+        if (!hasInitializedCropRef.current) {
+          hasInitializedCropRef.current = true;
+          applyAspectRatio('3:4', w, h);
+        }
       }
     };
-    const t = setTimeout(updateSize, 50);
-    window.addEventListener('resize', updateSize);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('resize', updateSize);
-    };
-  }, [isOpen, aspectRatio, applyAspectRatio]);
 
-  // Handle Aspect Ratio Tab Switching preserving crop center
+    const timer = setTimeout(measureAndInit, 50);
+    window.addEventListener('resize', measureAndInit);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', measureAndInit);
+    };
+  }, [isOpen, applyAspectRatio]);
+
+  // Handle Aspect Ratio Tab Switching preserving crop box & center
   const handleSelectAspectRatio = (mode: AspectRatioMode) => {
     setAspectRatio(mode);
-    applyAspectRatio(mode, containerSize.width, containerSize.height, cropBox);
+    aspectRatioRef.current = mode;
+    applyAspectRatio(mode, containerSize.width, containerSize.height, cropBoxRef.current);
   };
 
   // Start drag handler
@@ -216,7 +295,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     dragStartRef.current = {
       clientX,
       clientY,
-      startCrop: { ...cropBox },
+      startCrop: { ...cropBoxRef.current },
       startPan: { ...pan }
     };
   };
@@ -237,11 +316,13 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
       let nextY = startCrop.y + dy;
       nextX = Math.max(0, Math.min(nextX, cW - startCrop.width));
       nextY = Math.max(0, Math.min(nextY, cH - startCrop.height));
-      setCropBox({
+      const movedBox = {
         ...startCrop,
         x: Math.round(nextX),
         y: Math.round(nextY)
-      });
+      };
+      cropBoxRef.current = movedBox;
+      setCropBox(movedBox);
       return;
     }
 
@@ -332,12 +413,14 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
       }
     }
 
-    setCropBox({
+    const updatedBox = {
       x: Math.round(newX),
       y: Math.round(newY),
       width: Math.round(newW),
       height: Math.round(newH)
-    });
+    };
+    cropBoxRef.current = updatedBox;
+    setCropBox(updatedBox);
   }, [dragAction, aspectRatio, containerSize]);
 
   // Window event listeners for drag tracking
@@ -391,7 +474,9 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     setContrast(100);
     setSaturation(100);
     setPan({ x: 0, y: 0 });
-    applyAspectRatio(aspectRatio, containerSize.width, containerSize.height);
+    setAspectRatio('3:4');
+    aspectRatioRef.current = '3:4';
+    applyAspectRatio('3:4', containerSize.width, containerSize.height);
   };
 
   // Canvas Exporter
@@ -400,6 +485,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     setIsSaving(true);
 
     try {
+      const activeCropBox = cropBoxRef.current || cropBox;
       const img = new Image();
       img.crossOrigin = 'anonymous';
       await new Promise<void>((resolve, reject) => {
@@ -420,9 +506,9 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
         targetW = 800;
         targetH = 600;
       } else if (aspectRatio === 'FREE') {
-        const factor = Math.max(600 / cropBox.width, 600 / cropBox.height);
-        targetW = Math.round(cropBox.width * factor);
-        targetH = Math.round(cropBox.height * factor);
+        const factor = Math.max(600 / activeCropBox.width, 600 / activeCropBox.height);
+        targetW = Math.round(activeCropBox.width * factor);
+        targetH = Math.round(activeCropBox.height * factor);
       }
 
       exportCanvas.width = targetW;
@@ -453,17 +539,17 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
       const imgDisplayY = (cH - displayH) / 2 + pan.y;
 
       // Compute offset of crop box relative to image center
-      const cropCenterX = cropBox.x + cropBox.width / 2;
-      const cropCenterY = cropBox.y + cropBox.height / 2;
+      const cropCenterX = activeCropBox.x + activeCropBox.width / 2;
+      const cropCenterY = activeCropBox.y + activeCropBox.height / 2;
 
       ctx.save();
       // Move canvas origin to center of export
       ctx.translate(targetW / 2, targetH / 2);
       ctx.rotate((rotation * Math.PI) / 180);
 
-      // Scale ratio from cropBox dimensions to export canvas
-      const scaleX = targetW / cropBox.width;
-      const scaleY = targetH / cropBox.height;
+      // Scale ratio from activeCropBox dimensions to export canvas
+      const scaleX = targetW / activeCropBox.width;
+      const scaleY = targetH / activeCropBox.height;
 
       // Image center relative to crop box center
       const imgRelX = (imgDisplayX + displayW / 2) - cropCenterX;
