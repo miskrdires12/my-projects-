@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Crop, RotateCw, ZoomIn, ZoomOut, Sliders, X, Check,
-  Image as ImageIcon, RefreshCw, Upload, Sparkles, Sun, Eye, Wand2
+  Crop, RotateCw, ZoomIn, ZoomOut, X, Check,
+  Upload, Wand2, Loader2, Sparkles
 } from 'lucide-react';
 
 interface PhoneCropModalProps {
@@ -23,9 +23,10 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'Crop' | 'Enhance' | 'Rotate'>('Crop');
   const [currentImageSrc, setCurrentImageSrc] = useState<string>(imageUrl);
-  const [aspectRatio, setAspectRatio] = useState<'4:3' | '3:4' | '1:1' | 'free'>('4:3');
+  const [aspectRatio, setAspectRatio] = useState<'3:4' | '4:3' | '1:1' | 'free'>('3:4');
   const [zoom, setZoom] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Photo Quality Enhancer States
   const [brightness, setBrightness] = useState<number>(100);
@@ -34,11 +35,12 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
   const [sharpness, setSharpness] = useState<number>(0);
 
   // Crop Box normalized coordinates (0 to 1 relative to container)
+  // Default 3:4 portrait (0.66w x 0.88h)
   const [cropBox, setCropBox] = useState<{ x: number; y: number; width: number; height: number }>({
-    x: 0.1,
-    y: 0.1,
-    width: 0.8,
-    height: 0.6
+    x: 0.17,
+    y: 0.06,
+    width: 0.66,
+    height: 0.88
   });
 
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -46,11 +48,36 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
   const [dragStart, setDragStart] = useState<{ x: number; y: number; box: typeof cropBox }>({
     x: 0,
     y: 0,
-    box: { x: 0.1, y: 0.1, width: 0.8, height: 0.6 }
+    box: { x: 0.17, y: 0.06, width: 0.66, height: 0.88 }
   });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const adjustCropBoxForRatio = (ratio: '3:4' | '4:3' | '1:1' | 'free') => {
+    setAspectRatio(ratio);
+    if (ratio === 'free') {
+      setCropBox({ x: 0.05, y: 0.05, width: 0.9, height: 0.9 });
+      return;
+    }
+
+    if (ratio === '3:4') {
+      // 3:4 Portrait standard
+      const h = 0.88;
+      const w = 0.66;
+      setCropBox({ x: (1 - w) / 2, y: (1 - h) / 2, width: w, height: h });
+    } else if (ratio === '4:3') {
+      // 4:3 Landscape standard
+      const w = 0.88;
+      const h = 0.66;
+      setCropBox({ x: (1 - w) / 2, y: (1 - h) / 2, width: w, height: h });
+    } else if (ratio === '1:1') {
+      // 1:1 Square standard
+      const w = 0.78;
+      const h = 0.78;
+      setCropBox({ x: (1 - w) / 2, y: (1 - h) / 2, width: w, height: h });
+    }
+  };
 
   useEffect(() => {
     setCurrentImageSrc(imageUrl);
@@ -60,39 +87,13 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     setContrast(100);
     setSaturation(100);
     setSharpness(0);
-    adjustCropBoxForRatio('4:3');
+    setIsSaving(false);
+    adjustCropBoxForRatio('3:4');
   }, [imageUrl, isOpen]);
 
-  const adjustCropBoxForRatio = (ratio: typeof aspectRatio) => {
-    setAspectRatio(ratio);
-    if (ratio === 'free') {
-      setCropBox({ x: 0.05, y: 0.05, width: 0.9, height: 0.9 });
-      return;
-    }
-
-    let targetRatio = 4 / 3; // width / height
-    if (ratio === '3:4') targetRatio = 3 / 4;
-    else if (ratio === '1:1') targetRatio = 1;
-    else if (ratio === '4:3') targetRatio = 4 / 3;
-
-    // Viewport assumed roughly 4:3 container
-    let w = 0.85;
-    let h = w / targetRatio * 0.9;
-    if (h > 0.85) {
-      h = 0.85;
-      w = h * targetRatio / 0.9;
-    }
-    w = Math.min(0.92, Math.max(0.2, w));
-    h = Math.min(0.92, Math.max(0.2, h));
-
-    const x = Math.max(0.02, (1 - w) / 2);
-    const y = Math.max(0.02, (1 - h) / 2);
-    setCropBox({ x, y, width: w, height: h });
-  };
-
-  // 1-Click Photo Quality Auto-Enhancer
+  // 1-Click Biometric Auto-Enhancer
   const handleAutoEnhance = () => {
-    setBrightness(104);
+    setBrightness(105);
     setContrast(112);
     setSaturation(108);
     setSharpness(35);
@@ -240,79 +241,139 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     }
   };
 
-  // Perform Final Crop & Enhancements on Canvas
+  // Render to canvas with exact dimensions and all active filters/crops
+  const renderCanvasOutput = (img: HTMLImageElement) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    let outWidth = 600;
+    let outHeight = 800;
+
+    if (aspectRatio === '3:4') {
+      outWidth = 600;
+      outHeight = 800;
+    } else if (aspectRatio === '4:3') {
+      outWidth = 800;
+      outHeight = 600;
+    } else if (aspectRatio === '1:1') {
+      outWidth = 600;
+      outHeight = 600;
+    } else if (aspectRatio === 'free') {
+      const ratio = cropBox.width / Math.max(0.01, cropBox.height);
+      outWidth = 800;
+      outHeight = Math.round(outWidth / ratio);
+    }
+
+    canvas.width = outWidth;
+    canvas.height = outHeight;
+
+    // Source coordinates on full resolution image
+    let sx = Math.max(0, cropBox.x * img.naturalWidth);
+    let sy = Math.max(0, cropBox.y * img.naturalHeight);
+    let sw = Math.min(img.naturalWidth - sx, cropBox.width * img.naturalWidth);
+    let sh = Math.min(img.naturalHeight - sy, cropBox.height * img.naturalHeight);
+
+    if (zoom > 1) {
+      const zw = sw / zoom;
+      const zh = sh / zoom;
+      sx += (sw - zw) / 2;
+      sy += (sh - zh) / 2;
+      sw = zw;
+      sh = zh;
+    }
+
+    ctx.save();
+    ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outWidth, outHeight);
+    ctx.restore();
+
+    // Sharpness filter
+    if (sharpness > 0) {
+      applyConvolutionSharpen(ctx, outWidth, outHeight, sharpness);
+    }
+
+    // Rotation
+    if (rotation !== 0) {
+      const rotCanvas = document.createElement('canvas');
+      rotCanvas.width = outWidth;
+      rotCanvas.height = outHeight;
+      const rctx = rotCanvas.getContext('2d');
+      if (rctx) {
+        rctx.save();
+        rctx.translate(outWidth / 2, outHeight / 2);
+        rctx.rotate((rotation * Math.PI) / 180);
+        rctx.drawImage(canvas, -outWidth / 2, -outHeight / 2);
+        rctx.restore();
+        return rotCanvas.toDataURL('image/jpeg', 0.95);
+      }
+    }
+
+    return canvas.toDataURL('image/jpeg', 0.95);
+  };
+
+  // Perform Final Crop & Enhancements with robust cross-origin fallback
   const handleSaveAndApply = () => {
     if (!currentImageSrc) return;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+    setIsSaving(true);
 
-      // Ratio calculation
-      let targetRatio = 4 / 3;
-      if (aspectRatio === '4:3') targetRatio = 4 / 3;
-      else if (aspectRatio === '3:4') targetRatio = 3 / 4;
-      else if (aspectRatio === '1:1') targetRatio = 1;
-      else if (aspectRatio === 'free') targetRatio = cropBox.width / cropBox.height;
-
-      const outWidth = 800;
-      const outHeight = Math.round(outWidth / targetRatio);
-
-      canvas.width = outWidth;
-      canvas.height = outHeight;
-
-      // Source image bounding box
-      let sx = Math.max(0, cropBox.x * img.naturalWidth);
-      let sy = Math.max(0, cropBox.y * img.naturalHeight);
-      let sw = Math.min(img.naturalWidth - sx, cropBox.width * img.naturalWidth);
-      let sh = Math.min(img.naturalHeight - sy, cropBox.height * img.naturalHeight);
-
-      if (zoom > 1) {
-        const zw = sw / zoom;
-        const zh = sh / zoom;
-        sx += (sw - zw) / 2;
-        sy += (sh - zh) / 2;
-        sw = zw;
-        sh = zh;
-      }
-
-      ctx.save();
-      // Apply Brightness, Contrast & Saturation
-      ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outWidth, outHeight);
-      ctx.restore();
-
-      // Apply Sharpness Enhancement
-      if (sharpness > 0) {
-        applyConvolutionSharpen(ctx, outWidth, outHeight, sharpness);
-      }
-
-      // Handle Rotation
-      if (rotation !== 0) {
-        const rotCanvas = document.createElement('canvas');
-        rotCanvas.width = outWidth;
-        rotCanvas.height = outHeight;
-        const rctx = rotCanvas.getContext('2d');
-        if (rctx) {
-          rctx.save();
-          rctx.translate(outWidth / 2, outHeight / 2);
-          rctx.rotate((rotation * Math.PI) / 180);
-          rctx.drawImage(canvas, -outWidth / 2, -outHeight / 2);
-          rctx.restore();
-          const finalDataUrl = rotCanvas.toDataURL('image/jpeg', 0.95);
+    const finishWithImage = (img: HTMLImageElement) => {
+      try {
+        const finalDataUrl = renderCanvasOutput(img);
+        if (finalDataUrl) {
           onSave(finalDataUrl);
           onClose();
-          return;
+        } else {
+          alert('Failed to render photo crop canvas.');
         }
+      } catch (err: any) {
+        console.error('Error applying photo crop:', err);
+        // Fallback: try direct data URL
+        onSave(currentImageSrc);
+        onClose();
+      } finally {
+        setIsSaving(false);
       }
-
-      const finalDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-      onSave(finalDataUrl);
-      onClose();
     };
-    img.src = currentImageSrc;
+
+    // Primary attempt: load with anonymous CORS & cache-buster
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      finishWithImage(img);
+    };
+
+    img.onerror = () => {
+      console.warn('Direct crossOrigin load failed, trying proxy fallback...');
+      // Fallback: fetch via edge proxy or data URI
+      const proxyUrl = `/api/proxy-photo?url=${encodeURIComponent(currentImageSrc)}`;
+      fetch(proxyUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const fallbackImg = new Image();
+            fallbackImg.onload = () => finishWithImage(fallbackImg);
+            fallbackImg.src = e.target?.result as string;
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(fetchErr => {
+          console.error('Proxy load also failed:', fetchErr);
+          // Last resort: load without crossOrigin
+          const noCorsImg = new Image();
+          noCorsImg.onload = () => finishWithImage(noCorsImg);
+          noCorsImg.src = currentImageSrc;
+        });
+    };
+
+    if (currentImageSrc.startsWith('data:')) {
+      img.src = currentImageSrc;
+    } else {
+      const sep = currentImageSrc.includes('?') ? '&' : '?';
+      img.src = `${currentImageSrc}${sep}_cb=${Date.now()}`;
+    }
   };
 
   if (!isOpen) return null;
@@ -336,7 +397,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                 )}
               </h3>
               <p className="text-[11px] text-slate-500 font-medium">
-                4:3 / 3:4 All-side cropping & photo quality enhancer
+                Default 3:4 portrait framing & biometric quality enhancer
               </p>
             </div>
           </div>
@@ -362,7 +423,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
             }`}
           >
             <Crop className="w-3.5 h-3.5" />
-            <span>Framing & Aspect (4:3)</span>
+            <span>Framing & Aspect (3:4 Default)</span>
           </button>
           <button
             type="button"
@@ -429,8 +490,8 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                   <div className="border-r border-b border-[#9EE617]/50" />
                   <div className="border-r border-b border-[#9EE617]/50" />
                   <div className="border-b border-[#9EE617]/50" />
-                  <div className="border-r border-[#9EE617]/50" />
-                  <div className="border-r border-[#9EE617]/50" />
+                  <div className="border-r border-b border-[#9EE617]/50" />
+                  <div className="border-r border-b border-[#9EE617]/50" />
                   <div />
                 </div>
 
@@ -438,36 +499,44 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                 <div
                   onPointerDown={(e) => handlePointerDown(e, 'nw')}
                   className="absolute -top-2.5 -left-2.5 w-6 h-6 rounded-full bg-[#9EE617] border-2 border-black cursor-nwse-resize shadow-md flex items-center justify-center"
+                  title="Resize top-left"
                 />
                 <div
                   onPointerDown={(e) => handlePointerDown(e, 'ne')}
                   className="absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full bg-[#9EE617] border-2 border-black cursor-nesw-resize shadow-md flex items-center justify-center"
+                  title="Resize top-right"
                 />
                 <div
                   onPointerDown={(e) => handlePointerDown(e, 'se')}
                   className="absolute -bottom-2.5 -right-2.5 w-6 h-6 rounded-full bg-[#9EE617] border-2 border-black cursor-nwse-resize shadow-md flex items-center justify-center"
+                  title="Resize bottom-right"
                 />
                 <div
                   onPointerDown={(e) => handlePointerDown(e, 'sw')}
                   className="absolute -bottom-2.5 -left-2.5 w-6 h-6 rounded-full bg-[#9EE617] border-2 border-black cursor-nesw-resize shadow-md flex items-center justify-center"
+                  title="Resize bottom-left"
                 />
 
                 {/* 4 Edge Handles (Cropping from ALL sides) */}
                 <div
                   onPointerDown={(e) => handlePointerDown(e, 'n')}
                   className="absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-4 rounded-full bg-[#9EE617] border-2 border-black cursor-ns-resize shadow-md flex items-center justify-center"
+                  title="Crop top side"
                 />
                 <div
                   onPointerDown={(e) => handlePointerDown(e, 's')}
                   className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-10 h-4 rounded-full bg-[#9EE617] border-2 border-black cursor-ns-resize shadow-md flex items-center justify-center"
+                  title="Crop bottom side"
                 />
                 <div
                   onPointerDown={(e) => handlePointerDown(e, 'w')}
                   className="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-10 rounded-full bg-[#9EE617] border-2 border-black cursor-ew-resize shadow-md flex items-center justify-center"
+                  title="Crop left side"
                 />
                 <div
                   onPointerDown={(e) => handlePointerDown(e, 'e')}
                   className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-10 rounded-full bg-[#9EE617] border-2 border-black cursor-ew-resize shadow-md flex items-center justify-center"
+                  title="Crop right side"
                 />
               </div>
             )}
@@ -485,6 +554,17 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
               <div className="grid grid-cols-4 gap-2">
                 <button
                   type="button"
+                  onClick={() => adjustCropBoxForRatio('3:4')}
+                  className={`py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                    aspectRatio === '3:4'
+                      ? 'bg-[#9EE617] text-black shadow-xs'
+                      : 'bg-[#F8FAF9] text-slate-700 border border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  3:4 Portrait (Default)
+                </button>
+                <button
+                  type="button"
                   onClick={() => adjustCropBoxForRatio('4:3')}
                   className={`py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer ${
                     aspectRatio === '4:3'
@@ -493,17 +573,6 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                   }`}
                 >
                   4:3 Ratio
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustCropBoxForRatio('3:4')}
-                  className={`py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    aspectRatio === '3:4'
-                      ? 'bg-[#9EE617] text-black shadow-xs'
-                      : 'bg-[#F8FAF9] text-slate-700 border border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  3:4 Portrait
                 </button>
                 <button
                   type="button"
@@ -534,7 +603,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
           {activeTab === 'Enhance' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800">Photo Quality Enhancer:</span>
+                <span className="text-xs font-bold text-slate-800">Biometric Quality Enhancer:</span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -672,7 +741,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="py-2 px-3 rounded-xl border border-slate-200 text-slate-600 hover:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                className="py-2 px-3 rounded-xl border border-slate-200 text-slate-600 hover:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:bg-slate-50"
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>Upload New</span>
@@ -683,17 +752,27 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="py-2 px-4 rounded-xl border border-slate-200 text-slate-600 hover:text-black text-xs font-bold cursor-pointer"
+                className="py-2 px-4 rounded-xl border border-slate-200 text-slate-600 hover:text-black text-xs font-bold cursor-pointer hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={handleSaveAndApply}
-                className="py-2 px-5 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-black font-black text-xs shadow-xs flex items-center gap-2 cursor-pointer"
+                className="py-2 px-5 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-black font-black text-xs shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-60"
               >
-                <Check className="w-4 h-4 stroke-[2.5]" />
-                <span>Apply & Save Photo</span>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Applying Crop...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 stroke-[2.5]" />
+                    <span>Apply & Save Photo</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

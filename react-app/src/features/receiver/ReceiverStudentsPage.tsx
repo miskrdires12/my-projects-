@@ -6,7 +6,7 @@ import {
   Download, Image as ImageIcon, QrCode as QrIcon,
   Sliders, FileText, CheckCircle2, AlertTriangle, Phone,
   MapPin, Clock, ExternalLink, RefreshCw, FileSpreadsheet,
-  Archive, ArrowUpDown, Filter, Sparkles
+  Archive, ArrowUpDown, Filter, Sparkles, Crop
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
@@ -69,6 +69,12 @@ export const ReceiverStudentsPage: React.FC = () => {
   // Delete Modal
   const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Mistake Analyzer Pop-up Modal State (Screen Overlay in Directory)
+  const [isMistakeModalOpen, setIsMistakeModalOpen] = useState(false);
+  const [mistakeFilterType, setMistakeFilterType] = useState<'ALL' | 'Missing Photo' | 'Duplicate ID' | 'Invalid Phone Number'>('ALL');
+  const [mistakeSearch, setMistakeSearch] = useState('');
+  const [resolvedMistakeKeys, setResolvedMistakeKeys] = useState<Set<string>>(new Set());
 
   // Lightbox for Full Size Photo
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
@@ -240,6 +246,79 @@ export const ReceiverStudentsPage: React.FC = () => {
       return matchSearch && matchGrade && matchSection && matchBranch && matchSchool && matchStatus;
     });
   }, [students, search, gradeFilter, sectionFilter, branchFilter, schoolFilter, statusFilter]);
+
+  // Dynamically computed registry anomalies for the Mistake Analyzer pop-up
+  const mistakeItems = useMemo(() => {
+    const list: Array<{
+      key: string;
+      student: Student;
+      type: 'Missing Photo' | 'Duplicate ID' | 'Invalid Phone Number';
+      severity: 'High' | 'Medium';
+      detail: string;
+    }> = [];
+
+    const idCounts = new Map<string, number>();
+    students.forEach(s => {
+      idCounts.set(s.studentId, (idCounts.get(s.studentId) || 0) + 1);
+    });
+
+    students.forEach(s => {
+      // 1. Missing Photo: placeholder or empty
+      const photo = s.photoPath || s.previewPath || '';
+      if (!photo || photo.includes('data:image/svg') || photo.trim() === '') {
+        const key = `photo_${s.studentId}`;
+        if (!resolvedMistakeKeys.has(key)) {
+          list.push({
+            key,
+            student: s,
+            type: 'Missing Photo',
+            severity: 'High',
+            detail: 'Missing biometric portrait photo (default avatar)'
+          });
+        }
+      }
+
+      // 2. Duplicate ID
+      if ((idCounts.get(s.studentId) || 0) > 1) {
+        const key = `dupe_${s.id || s.studentId}`;
+        if (!resolvedMistakeKeys.has(key)) {
+          list.push({
+            key,
+            student: s,
+            type: 'Duplicate ID',
+            severity: 'High',
+            detail: `ID collision: ${idCounts.get(s.studentId)} students share ${s.studentId}`
+          });
+        }
+      }
+
+      // 3. Invalid Phone
+      const digits = (s.phone || '').replace(/\D/g, '');
+      if (s.phone && (digits.length < 9 || digits.length > 13 || (!s.phone.startsWith('+251') && !s.phone.startsWith('09') && !s.phone.startsWith('07')))) {
+        const key = `phone_${s.studentId}`;
+        if (!resolvedMistakeKeys.has(key)) {
+          list.push({
+            key,
+            student: s,
+            type: 'Invalid Phone Number',
+            severity: 'Medium',
+            detail: `Format issue: "${s.phone}" (expected +251 9... / 09...)`
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [students, resolvedMistakeKeys]);
+
+  const handleQuickFixPhone = (s: Student) => {
+    const fixed = formatPhoneNumber(s.phone || '');
+    if (fixed && fixed !== s.phone) {
+      updateStudent(s.studentId, { phone: fixed });
+      setStudents(prev => prev.map(item => item.studentId === s.studentId ? { ...item, phone: fixed } : item));
+      setResolvedMistakeKeys(prev => new Set([...prev, `phone_${s.studentId}`]));
+    }
+  };
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const pagedStudents = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -425,7 +504,7 @@ export const ReceiverStudentsPage: React.FC = () => {
   // DOWNLOAD ENGINES (SINGLE & BULK WITH PROGRESS MODAL)
   // =========================================================================
 
-  // Single Student Photo Download
+  // Single Student Photo Download (Direct Native Download via Edge Proxy or Blob)
   const downloadSinglePhoto = async (s: Student, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const photoUrl = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath);
@@ -443,9 +522,19 @@ export const ReceiverStudentsPage: React.FC = () => {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-      } else {
-        const res = await fetch(photoUrl, { mode: 'cors' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return;
+      }
+
+      // Same-Origin Proxy URL with Content-Disposition: attachment header
+      const proxyDownloadUrl = `/api/proxy-photo?url=${encodeURIComponent(photoUrl)}&filename=${encodeURIComponent(fileName)}&download=1`;
+
+      // 1. Fetch as blob to trigger instant browser save
+      let res = await fetch(proxyDownloadUrl).catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch(photoUrl, { mode: 'cors' }).catch(() => null);
+      }
+
+      if (res && res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -455,13 +544,22 @@ export const ReceiverStudentsPage: React.FC = () => {
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
       }
+
+      // 2. Direct browser navigation to same-origin download proxy
+      const a = document.createElement('a');
+      a.href = proxyDownloadUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch (err: any) {
       console.warn('Fallback download for photo:', fileName, err);
+      const directProxy = `/api/proxy-photo?url=${encodeURIComponent(photoUrl)}&filename=${encodeURIComponent(fileName)}&download=1`;
       const a = document.createElement('a');
-      a.href = photoUrl;
+      a.href = directProxy;
       a.download = fileName;
-      a.target = '_blank';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -529,8 +627,12 @@ export const ReceiverStudentsPage: React.FC = () => {
               folder.file(fileName, base64Data, { base64: true });
               count++;
             } else {
-              const res = await fetch(photoUrl, { mode: 'cors' });
-              if (res.ok) {
+              let res = await fetch(photoUrl, { mode: 'cors' }).catch(() => null);
+              if (!res || !res.ok) {
+                // Try proxy
+                res = await fetch(`/api/proxy-photo?url=${encodeURIComponent(photoUrl)}`).catch(() => null);
+              }
+              if (res && res.ok) {
                 const blob = await res.blob();
                 folder.file(fileName, blob);
                 count++;
@@ -807,8 +909,23 @@ export const ReceiverStudentsPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Global Export Toolbar */}
+        {/* Global Export Toolbar & Mistake Analyzer */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsMistakeModalOpen(true)}
+            className="py-2 px-3.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-black flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            title="Scan student directory for mistakes & anomalies"
+          >
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <span>Mistake Analyzer</span>
+            {mistakeItems.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md bg-amber-600 text-white text-[10px] font-black">
+                {mistakeItems.length}
+              </span>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => exportExcel(false)}
@@ -1144,6 +1261,16 @@ export const ReceiverStudentsPage: React.FC = () => {
                             title="View Student Details Dossier"
                           >
                             <Eye className="w-4 h-4" />
+                          </button>
+
+                          {/* Crop & Edit Photo (3:4 Portrait default) */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenPhotoEditor(s, e)}
+                            className="p-1.5 rounded-lg text-slate-600 hover:text-[#256002] hover:bg-[#9EE617]/20 transition-colors cursor-pointer"
+                            title="Crop & Edit Student Photograph (3:4 Portrait)"
+                          >
+                            <Crop className="w-4 h-4" />
                           </button>
 
                           {/* Download Photo */}
@@ -1842,6 +1969,264 @@ export const ReceiverStudentsPage: React.FC = () => {
                   {isDeleting ? 'Erasing...' : 'Permanent Purge Everywhere'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* =========================================================================
+          MISTAKE ANALYZER POP-UP MODAL (Screen Overlay in Student Directory)
+         ========================================================================= */}
+      {isMistakeModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 select-none animate-in fade-in duration-200">
+          <div className="bg-white border border-[#CBD5E1] rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shadow-xs">
+                  <AlertTriangle className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading font-black text-lg text-[#0B1118]">
+                      Mistake Analyzer & Quality Control
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 uppercase">
+                      {mistakeItems.length} Flagged Anomalies
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#64748B]">
+                    Automated heuristic scan of student photographs, duplicate IDs, and phone formats
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsMistakeModalOpen(false)}
+                className="w-9 h-9 rounded-xl border border-slate-200 hover:border-slate-300 flex items-center justify-center text-slate-500 hover:text-black hover:bg-slate-100 transition-all cursor-pointer"
+                title="Close Analyzer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Metric Category Filter Cards */}
+            <div className="p-5 border-b border-[#E2E8F0] bg-[#F8FAF9] shrink-0">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
+                <button
+                  type="button"
+                  onClick={() => setMistakeFilterType('ALL')}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer text-left ${
+                    mistakeFilterType === 'ALL'
+                      ? 'bg-[#9EE617] border-black text-black font-black shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">All Anomalies</div>
+                  <div className="text-2xl font-black">{mistakeItems.length}</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMistakeFilterType('Missing Photo')}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer text-left ${
+                    mistakeFilterType === 'Missing Photo'
+                      ? 'bg-amber-100 border-amber-400 text-amber-950 font-black shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-amber-300 text-slate-700'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Missing Photos</div>
+                  <div className="text-2xl font-black text-amber-600">
+                    {mistakeItems.filter(m => m.type === 'Missing Photo').length}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMistakeFilterType('Duplicate ID')}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer text-left ${
+                    mistakeFilterType === 'Duplicate ID'
+                      ? 'bg-rose-100 border-rose-400 text-rose-950 font-black shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-rose-300 text-slate-700'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-rose-800">Duplicate IDs</div>
+                  <div className="text-2xl font-black text-rose-600">
+                    {mistakeItems.filter(m => m.type === 'Duplicate ID').length}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMistakeFilterType('Invalid Phone Number')}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer text-left ${
+                    mistakeFilterType === 'Invalid Phone Number'
+                      ? 'bg-purple-100 border-purple-400 text-purple-950 font-black shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-purple-300 text-slate-700'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-purple-800">Phone Issues</div>
+                  <div className="text-2xl font-black text-purple-600">
+                    {mistakeItems.filter(m => m.type === 'Invalid Phone Number').length}
+                  </div>
+                </button>
+              </div>
+
+              {/* Search Within Anomalies */}
+              <div className="mt-3 relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={mistakeSearch}
+                  onChange={(e) => setMistakeSearch(e.target.value)}
+                  placeholder="Filter anomaly by student name or ID..."
+                  className="w-full bg-white border border-[#CBD5E1] rounded-xl pl-9 pr-3 py-1.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
+                />
+              </div>
+            </div>
+
+            {/* Anomalies List / Scroll Area */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-white">
+              {(() => {
+                const filteredMistakes = mistakeItems.filter(m => {
+                  const matchType = mistakeFilterType === 'ALL' || m.type === mistakeFilterType;
+                  const q = mistakeSearch.toLowerCase().trim();
+                  const matchSearch = !q || m.student.fullName.toLowerCase().includes(q) || m.student.studentId.toLowerCase().includes(q);
+                  return matchType && matchSearch;
+                });
+
+                if (filteredMistakes.length === 0) {
+                  return (
+                    <div className="py-12 text-center text-slate-500">
+                      <CheckCircle2 className="w-12 h-12 text-[#85E510] mx-auto mb-2 stroke-[1.8]" />
+                      <div className="font-heading font-black text-base text-[#0B1118]">No Active Anomalies Found</div>
+                      <p className="text-xs text-slate-500 mt-1">All student records match quality standards.</p>
+                    </div>
+                  );
+                }
+
+                return filteredMistakes.map(m => {
+                  const s = m.student;
+                  const photoSrc = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath) || DEFAULT_AVATAR;
+
+                  return (
+                    <div
+                      key={m.key}
+                      className="p-3.5 rounded-2xl border border-slate-200 hover:border-slate-300 bg-white shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Student Photo */}
+                        <div
+                          onClick={() => handleOpenPhotoEditor(s)}
+                          className="w-12 h-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-300 shrink-0 cursor-pointer group relative shadow-2xs"
+                          title="Click to crop and edit photo in 3:4 portrait"
+                        >
+                          <img src={photoSrc} alt={s.fullName} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Crop className="w-4 h-4 text-[#9EE617]" />
+                          </div>
+                        </div>
+
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-heading font-black text-xs text-[#0B1118] truncate">
+                              {s.fullName}
+                            </span>
+                            <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {s.studentId}
+                            </span>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${
+                              m.type === 'Missing Photo' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                              m.type === 'Duplicate ID' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                              'bg-purple-100 text-purple-800 border border-purple-300'
+                            }`}>
+                              {m.type}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] text-slate-600 font-medium">
+                            {m.detail}
+                          </div>
+
+                          <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                            <span>Grade {s.grade || 'N/A'} ({getSection(s)})</span>
+                            <span>&bull;</span>
+                            <span>{s.school || 'YMS'}</span>
+                            {s.phone && (
+                              <>
+                                <span>&bull;</span>
+                                <span className="font-mono">{s.phone}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                        {/* Crop & Edit Photo */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPhotoEditor(s)}
+                          className="py-1.5 px-2.5 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-black font-black text-[11px] shadow-2xs flex items-center gap-1 cursor-pointer transition-all"
+                          title="Open Biometric Photo Cropper (3:4)"
+                        >
+                          <Crop className="w-3.5 h-3.5" />
+                          <span>Edit Photo</span>
+                        </button>
+
+                        {/* Quick-fix phone if applicable */}
+                        {m.type === 'Invalid Phone Number' && (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickFixPhone(s)}
+                            className="py-1.5 px-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] shadow-2xs flex items-center gap-1 cursor-pointer transition-all"
+                            title="Format to +251 standard"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Fix Phone</span>
+                          </button>
+                        )}
+
+                        {/* Edit Student Info */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditData(s)}
+                          className="py-1.5 px-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-[11px] shadow-2xs flex items-center gap-1 cursor-pointer transition-all"
+                          title="Edit academic and contact info"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>Edit Data</span>
+                        </button>
+
+                        {/* Dismiss */}
+                        <button
+                          type="button"
+                          onClick={() => setResolvedMistakeKeys(prev => new Set([...prev, m.key]))}
+                          className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          title="Dismiss anomaly"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAF9] flex items-center justify-between shrink-0">
+              <span className="text-xs text-slate-500 font-medium">
+                Click "Edit Photo" to crop in default 3:4 portrait or "Edit Data" to resolve registry mistakes.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsMistakeModalOpen(false)}
+                className="py-2 px-4 rounded-xl bg-black text-white font-bold text-xs hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                Close Analyzer
+              </button>
             </div>
           </div>
         </div>

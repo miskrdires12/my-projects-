@@ -1040,7 +1040,7 @@ export default {
       return new Response("Photo not found", { status: 404, headers: corsHeaders });
     }
 
-    if (url.pathname === "/api/proxy-photo") {
+    if (url.pathname === "/api/proxy-photo" || url.pathname === "/api/download-proxy") {
       const targetPhotoUrl = url.searchParams.get("url");
       const filename = url.searchParams.get("filename") || "photo.jpg";
       if (!targetPhotoUrl) return new Response("Missing url param", { status: 400 });
@@ -1052,7 +1052,7 @@ export default {
         const headers = new Headers(photoRes.headers);
         headers.set("Access-Control-Allow-Origin", "*");
         headers.set("Cache-Control", "public, max-age=31536000, immutable");
-        if (url.searchParams.get("download") === "1") {
+        if (url.searchParams.get("download") === "1" || url.pathname === "/api/download-proxy") {
           headers.set("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
         }
         return new Response(photoRes.body, { status: 200, headers });
@@ -1168,7 +1168,7 @@ export default {
         }
 
         // 1-Device Lock Enforcement
-        if (user.boundDeviceId && user.boundDeviceId !== clientHwId && user.role !== "SUPER_ADMIN") {
+        if (user.boundDeviceId && user.boundDeviceId !== clientHwId) {
           return new Response(JSON.stringify({
             error: "DEVICE_LOCKED",
             message: "1-Device lock enforced: This account is bound to another hardware terminal.",

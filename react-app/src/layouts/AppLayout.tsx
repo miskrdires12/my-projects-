@@ -32,21 +32,9 @@ export const AppLayout: React.FC = () => {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // Server-Side Role Enforcement Guard:
-  // Strictly isolate each station — each user role can ONLY access their own station
-  if (user.role === 'SENDER' && !location.pathname.startsWith('/sender')) {
-    return <Navigate to="/sender/register" replace />;
-  }
-  if (user.role === 'RECEIVER' && !location.pathname.startsWith('/receiver')) {
-    return <Navigate to="/receiver/students" replace />;
-  }
-  if (user.role === 'ADMIN' && !location.pathname.startsWith('/admin')) {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
+  // Role Access Guard: Only guard super-admin routes for non-super admins
   if (location.pathname.startsWith('/super-admin') && user.role !== 'SUPER_ADMIN') {
-    if (user.role === 'SENDER') return <Navigate to="/sender/register" replace />;
-    if (user.role === 'RECEIVER') return <Navigate to="/receiver/dashboard" replace />;
-    return <Navigate to="/admin/dashboard" replace />;
+    return <Navigate to="/receiver/students" replace />;
   }
 
   // Derive station from current path

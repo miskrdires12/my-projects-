@@ -63,9 +63,20 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      // Hardware Lock Auto-Binding
-      setUserHardwareLock(user.id, deviceId);
-      user.boundDeviceId = deviceId;
+      // Strict 1-Device Hardware Lock Enforcement:
+      if (user.boundDeviceId && user.boundDeviceId !== deviceId) {
+        setError(
+          `Access Denied: Account "${user.username}" is strictly locked to 1 hardware device (${user.boundDeviceId}). Login from this unauthorized device (${deviceId}) is prohibited.`
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      // First-time hardware binding:
+      if (!user.boundDeviceId) {
+        setUserHardwareLock(user.id, deviceId);
+        user.boundDeviceId = deviceId;
+      }
 
       finishLogin(user);
     } catch (err: any) {
@@ -141,30 +152,6 @@ export const LoginPage: React.FC = () => {
           <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
             <span className="leading-relaxed font-medium">{error}</span>
-          </div>
-        )}
-
-        {deviceLockedWarning && lockedUser && (
-          <div className="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-              <div className="space-y-1">
-                <div className="font-bold">Hardware Station Locked</div>
-                <div className="text-[11px] text-amber-800">{deviceLockedWarning}</div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetUserHardwareLock(lockedUser.id);
-                    setUserHardwareLock(lockedUser.id, deviceId);
-                    setDeviceLockedWarning(null);
-                    finishLogin(lockedUser);
-                  }}
-                  className="mt-2 py-1 px-3 bg-[#9EE617] hover:bg-[#8FE617] text-black font-black rounded-lg text-[10px] transition-all shadow-xs"
-                >
-                  Authorize This Workstation Now
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
