@@ -30,15 +30,15 @@ export interface OperatorAccount extends User {
   password?: string;
 }
 
-// Authoritative 19 field accounts loaded from users.json + test aliases
+// Authoritative 19 field accounts loaded from users.json + test aliases (Universal password: 12345678)
 export const PRESET_OPERATORS: OperatorAccount[] = [
   {
     id: "cmu7b6rkh00002ggkkxg5ecd9",
     username: "miskrdires11",
     email: "miskrdires11@gmail.com",
     role: "SUPER_ADMIN",
-    password: "admin123",
-    boundDeviceId: "367a0a14-ac86-4f33-ae7b-7da62a707d99",
+    password: "12345678",
+    boundDeviceId: null,
     recordsEncoded: 709,
   },
   {
@@ -46,7 +46,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "mebratadony",
     email: "mebratadony@gmail.com",
     role: "SENDER",
-    password: "sender123",
+    password: "12345678",
     boundDeviceId: null,
     recordsSentSingle: 0,
   },
@@ -55,8 +55,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "yohannes",
     email: "yohannes@gmail.com",
     role: "SENDER",
-    password: "sender123",
-    boundDeviceId: "cc918150-baa0-423f-b9dd-c56b32ca103f",
+    password: "12345678",
+    boundDeviceId: null,
     recordsSentSingle: 351,
   },
   {
@@ -64,8 +64,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "etsubmolla",
     email: "etsubmolla@gmail.com",
     role: "SENDER",
-    password: "sender123",
-    boundDeviceId: "32393c48-011e-4491-b696-08b63da6b594",
+    password: "12345678",
+    boundDeviceId: null,
     recordsSentSingle: 638,
   },
   {
@@ -73,8 +73,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "adoni",
     email: "adoni@gmail.com",
     role: "SENDER",
-    password: "sender123",
-    boundDeviceId: "e342f905-7e80-45b0-87db-839aef987baf",
+    password: "12345678",
+    boundDeviceId: null,
     recordsSentSingle: 379,
   },
   {
@@ -82,8 +82,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "biruk",
     email: "biruk@gmail.com",
     role: "SENDER",
-    password: "sender123",
-    boundDeviceId: "51fe684c-4b98-4a56-a041-cd42eb4f9fe3",
+    password: "12345678",
+    boundDeviceId: null,
     recordsSentSingle: 267,
   },
   {
@@ -91,8 +91,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "zemichael",
     email: "zemichael@gmail.com",
     role: "SENDER",
-    password: "sender123",
-    boundDeviceId: "490a1c11-ffc1-4503-aae5-e1ab42c7fe4a",
+    password: "12345678",
+    boundDeviceId: null,
     recordsSentSingle: 483,
   },
   {
@@ -100,8 +100,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "abeni1",
     email: "abeni1@gmail.com",
     role: "SENDER",
-    password: "sender123",
-    boundDeviceId: "a6f82c72-2fd8-4178-9771-ec5b5da126e6",
+    password: "12345678",
+    boundDeviceId: null,
     recordsSentSingle: 471,
   },
   {
@@ -109,8 +109,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "nebiyu",
     email: "nebiyu@gmail.com",
     role: "SENDER",
-    password: "sender123",
-    boundDeviceId: "ca36e5a5-178b-446f-822e-4ea8d95905d7",
+    password: "12345678",
+    boundDeviceId: null,
     recordsSentSingle: 61,
   },
   {
@@ -118,7 +118,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "yonatantesfa369",
     email: "yonatantesfa369@gmail.com",
     role: "RECEIVER",
-    password: "receiver123",
+    password: "12345678",
     boundDeviceId: null,
     recordsEncoded: 0,
   },
@@ -127,7 +127,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "beki",
     email: "beki@gmail.com",
     role: "SENDER",
-    password: "sender123",
+    password: "12345678",
     boundDeviceId: null,
     recordsSentSingle: 3,
   },
@@ -136,7 +136,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "colldwater340",
     email: "colldwater340@gmail.com",
     role: "SENDER",
-    password: "sender123",
+    password: "12345678",
     boundDeviceId: null,
     recordsSentSingle: 118,
   },
@@ -145,7 +145,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "simon",
     email: "simon@gmail.com",
     role: "SENDER",
-    password: "sender123",
+    password: "12345678",
     boundDeviceId: null,
     recordsSentSingle: 165,
   },
@@ -154,7 +154,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "danaytesayas4",
     email: "danaytesayas4@gmail.com",
     role: "SENDER",
-    password: "sender123",
+    password: "12345678",
     boundDeviceId: null,
     recordsSentSingle: 2,
   },
@@ -163,7 +163,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "miskrdires1",
     email: "miskrdires1@gmail.com",
     role: "ADMIN",
-    password: "admin123",
+    password: "12345678",
     boundDeviceId: null,
   },
   {
@@ -171,8 +171,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "yonatantesfa",
     email: "yonatantesfa@gmail.com",
     role: "RECEIVER",
-    password: "receiver123",
-    boundDeviceId: "2ad60361-08cd-4d05-8234-62e3fdb957e3",
+    password: "12345678",
+    boundDeviceId: null,
     recordsEncoded: 335,
   },
   {
@@ -180,8 +180,8 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "miskrdires12",
     email: "miskrdires12@gmail.com",
     role: "SENDER",
-    password: "sender123",
-    boundDeviceId: "bd1b9210-a95b-4bf6-8856-032fb2614a7a",
+    password: "12345678",
+    boundDeviceId: null,
     recordsSentSingle: 499,
   },
   {
@@ -189,16 +189,16 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "abeni",
     email: "abeni@gmail.com",
     role: "ADMIN",
-    password: "admin123",
-    boundDeviceId: "0b4e851a-359c-4c84-96e9-6cfe50e21329",
+    password: "12345678",
+    boundDeviceId: null,
   },
   {
     id: "cmukwfk8v00039pzscdi4h0t9",
     username: "yonatan",
     email: "yonatan@gmail.com",
     role: "RECEIVER",
-    password: "receiver123",
-    boundDeviceId: "8cb7bbf1-65ec-4c66-8645-dd5ff6194821",
+    password: "12345678",
+    boundDeviceId: null,
     recordsEncoded: 7061,
   },
   // Institutional Aliases for Automated Testing
@@ -207,7 +207,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "admin",
     email: "admin@studentbridge.internal",
     role: "SUPER_ADMIN",
-    password: "password123",
+    password: "12345678",
     boundDeviceId: null,
   },
   {
@@ -215,7 +215,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "receiver",
     email: "receiver@studentbridge.internal",
     role: "RECEIVER",
-    password: "receiver123",
+    password: "12345678",
     boundDeviceId: null,
   },
   {
@@ -223,20 +223,36 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "sender",
     email: "sender@studentbridge.internal",
     role: "SENDER",
-    password: "sender123",
+    password: "12345678",
     boundDeviceId: null,
   }
 ];
 
-
 let memoryStudents: Student[] = [];
-let memoryUsers: User[] = (() => {
-  const users: User[] = [...PRESET_OPERATORS];
+let memoryUsers: (User & { password?: string })[] = (() => {
+  const users: (User & { password?: string })[] = PRESET_OPERATORS.map(u => ({ ...u, password: '12345678' }));
   try {
     if (typeof localStorage !== 'undefined') {
+      const savedCustom = localStorage.getItem('sb_custom_users');
+      if (savedCustom) {
+        const customParsed = JSON.parse(savedCustom);
+        if (Array.isArray(customParsed)) {
+          const existingIds = new Set(users.map(u => u.id));
+          const existingEmails = new Set(users.map(u => u.email.toLowerCase()));
+          customParsed.forEach((cu: any) => {
+            if (!existingIds.has(cu.id) && !existingEmails.has(cu.email.toLowerCase())) {
+              users.unshift({
+                ...cu,
+                password: cu.password || '12345678'
+              });
+            }
+          });
+        }
+      }
+
       const locksMap = JSON.parse(localStorage.getItem('sb_device_locks') || '{}');
       users.forEach(u => {
-        if (locksMap[u.id]) {
+        if (locksMap[u.id] !== undefined) {
           u.boundDeviceId = locksMap[u.id];
         }
       });
@@ -658,6 +674,104 @@ export async function restoreStudent(id: string): Promise<boolean> {
 
 export function getUsers(): User[] {
   return memoryUsers;
+}
+
+export function addUser(newUser: User & { password?: string; branch?: string; school?: string }): void {
+  if (!newUser.password) newUser.password = '12345678';
+  if (!newUser.createdAt) newUser.createdAt = new Date().toISOString();
+  if (newUser.recordsSentSingle === undefined) newUser.recordsSentSingle = 0;
+  if (newUser.recordsEncoded === undefined) newUser.recordsEncoded = 0;
+  if (newUser.workSessionCount === undefined) newUser.workSessionCount = 0;
+
+  const emailLower = (newUser.email || '').toLowerCase().trim();
+  const usernameLower = (newUser.username || '').toLowerCase().trim();
+
+  const existingIdx = memoryUsers.findIndex(
+    u => u.id === newUser.id ||
+         (emailLower && u.email.toLowerCase() === emailLower) ||
+         (usernameLower && u.username.toLowerCase() === usernameLower)
+  );
+
+  if (existingIdx !== -1) {
+    memoryUsers[existingIdx] = { ...memoryUsers[existingIdx], ...newUser };
+  } else {
+    memoryUsers.unshift(newUser);
+  }
+
+  // Persist to localStorage
+  try {
+    const custom: (User & { password?: string })[] = JSON.parse(localStorage.getItem('sb_custom_users') || '[]');
+    const cIdx = custom.findIndex(
+      u => u.id === newUser.id ||
+           (emailLower && u.email.toLowerCase() === emailLower) ||
+           (usernameLower && u.username.toLowerCase() === usernameLower)
+    );
+    if (cIdx !== -1) {
+      custom[cIdx] = { ...custom[cIdx], ...newUser };
+    } else {
+      custom.unshift(newUser);
+    }
+    localStorage.setItem('sb_custom_users', JSON.stringify(custom));
+  } catch (e) {}
+
+  // Sync to API / Edge Worker
+  fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newUser)
+  }).catch(() => {});
+
+  // Broadcast event
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('studentbridge_userchange', { detail: newUser }));
+  }
+}
+
+export function updateUser(id: string, updates: Partial<User & { password?: string }>): void {
+  const targetId = id.toLowerCase();
+  const index = memoryUsers.findIndex(u => u.id.toLowerCase() === targetId || u.email.toLowerCase() === targetId || u.username.toLowerCase() === targetId);
+  if (index !== -1) {
+    memoryUsers[index] = { ...memoryUsers[index], ...updates };
+    try {
+      const custom: (User & { password?: string })[] = JSON.parse(localStorage.getItem('sb_custom_users') || '[]');
+      const cIdx = custom.findIndex(u => u.id.toLowerCase() === targetId || u.email.toLowerCase() === targetId || u.username.toLowerCase() === targetId);
+      if (cIdx !== -1) {
+        custom[cIdx] = { ...custom[cIdx], ...updates };
+        localStorage.setItem('sb_custom_users', JSON.stringify(custom));
+      }
+    } catch (e) {}
+
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(memoryUsers[index])
+    }).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('studentbridge_userchange', { detail: memoryUsers[index] }));
+    }
+  }
+}
+
+export function deleteUser(id: string): void {
+  const targetId = id.toLowerCase();
+  const index = memoryUsers.findIndex(u => u.id.toLowerCase() === targetId || u.email.toLowerCase() === targetId || u.username.toLowerCase() === targetId);
+  if (index !== -1) {
+    memoryUsers.splice(index, 1);
+    try {
+      const custom: (User & { password?: string })[] = JSON.parse(localStorage.getItem('sb_custom_users') || '[]');
+      const filtered = custom.filter(u => u.id.toLowerCase() !== targetId && u.email.toLowerCase() !== targetId && u.username.toLowerCase() !== targetId);
+      localStorage.setItem('sb_custom_users', JSON.stringify(filtered));
+    } catch (e) {}
+
+    fetch(`/api/users?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    }).catch(() => {});
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('studentbridge_userchange', { detail: { id, deleted: true } }));
+    }
+  }
 }
 
 export function resetUserHardwareLock(userId: string): void {

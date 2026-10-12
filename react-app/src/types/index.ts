@@ -5,6 +5,9 @@ export interface User {
   username: string;
   email: string;
   role: UserRole;
+  password?: string;
+  branch?: string;
+  school?: string;
   boundDeviceId?: string | null;
   boundDeviceInfo?: string | null;
   lastActiveAt?: string | null;

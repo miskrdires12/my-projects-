@@ -828,6 +828,63 @@ export default {
       return new Response(JSON.stringify({ error: "Student not found", studentId }), { status: 404, headers: corsHeaders });
     }
 
+    // -------------------------------------------------------------------------
+    // USERS API (Cloudflare Edge & Supabase Users)
+    // -------------------------------------------------------------------------
+    if (url.pathname === "/api/users") {
+      if (request.method === "GET") {
+        let usersList = cachedUsers;
+        if (!usersList) {
+          try {
+            const userRes = await fetch(new URL("/data/users.json", request.url));
+            if (userRes.ok) {
+              usersList = await userRes.json();
+              cachedUsers = usersList;
+            }
+          } catch (e) {}
+        }
+        if (!usersList) usersList = [];
+        return new Response(JSON.stringify(usersList), {
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      }
+
+      if (request.method === "POST") {
+        try {
+          const newUser = await request.json();
+          if (!newUser.password) newUser.password = "12345678";
+          if (!cachedUsers) {
+            try {
+              const userRes = await fetch(new URL("/data/users.json", request.url));
+              if (userRes.ok) cachedUsers = await userRes.json();
+            } catch (e) {}
+          }
+          if (!cachedUsers) cachedUsers = [];
+          const idx = cachedUsers.findIndex(u => u.id === newUser.id || (u.email && u.email.toLowerCase() === (newUser.email || "").toLowerCase()));
+          if (idx !== -1) {
+            cachedUsers[idx] = { ...cachedUsers[idx], ...newUser };
+          } else {
+            cachedUsers.unshift(newUser);
+          }
+          return new Response(JSON.stringify({ success: true, user: newUser }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders }
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ error: err.message }), { status: 400, headers: corsHeaders });
+        }
+      }
+
+      if (request.method === "DELETE") {
+        const userId = url.searchParams.get("id");
+        if (cachedUsers && userId) {
+          cachedUsers = cachedUsers.filter(u => u.id !== userId && u.email?.toLowerCase() !== userId.toLowerCase());
+        }
+        return new Response(JSON.stringify({ success: true, deleted: userId }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      }
+    }
+
     if (url.pathname === "/api/qr") {
       const studentId = url.searchParams.get("studentId");
       if (!studentId) {
