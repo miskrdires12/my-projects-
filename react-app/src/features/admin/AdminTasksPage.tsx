@@ -1,20 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { CheckSquare, Plus, Trash2, Calendar, User, School, X, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-import { getTasks, addTask, updateTaskStatus } from '@/lib/store';
-import { Task } from '@/types';
+import { getTasks, addTask, updateTaskStatus, getUsers } from '@/lib/store';
+import { Task, User as UserType } from '@/types';
 
 export const AdminTasksPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'In Progress' | 'Completed'>('All');
   const [modalOpen, setModalOpen] = useState(false);
   const [title, setTitle] = useState('');
-  const [assignedTo, setAssignedTo] = useState('Loza Bereket');
+  const [assignedTo, setAssignedTo] = useState('mebratadony');
   const [school, setSchool] = useState('YMS');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('High');
   const [deadline, setDeadline] = useState('2026-10-18');
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [senders, setSenders] = useState<UserType[]>([]);
 
   useEffect(() => {
     setTasks(getTasks());
+    const uList = getUsers().filter(u => u.role === 'SENDER');
+    setSenders(uList);
+    if (uList.length > 0) {
+      setAssignedTo(uList[0].username);
+    }
   }, []);
 
   const handleCreateTask = (e: React.FormEvent) => {
@@ -215,11 +221,20 @@ export const AdminTasksPage: React.FC = () => {
                     onChange={(e) => setAssignedTo(e.target.value)}
                     className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-semibold text-[#202833]"
                   >
-                    <option value="Loza Bereket">Loza Bereket</option>
-                    <option value="Alemu Tadesse">Alemu Tadesse</option>
-                    <option value="Hana Tadesse">Hana Tadesse</option>
-                    <option value="Getnet Kassa">Getnet Kassa</option>
-                    <option value="Dawit Alemu">Dawit Alemu</option>
+                    {senders.length > 0 ? (
+                      senders.map(u => (
+                        <option key={u.id || u.username} value={u.username}>
+                          {u.username} ({u.email})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="mebratadony">mebratadony (mebratadony@gmail.com)</option>
+                        <option value="yohannes">yohannes (yohannes@gmail.com)</option>
+                        <option value="etsubmolla">etsubmolla (etsubmolla@gmail.com)</option>
+                        <option value="biruk">biruk (biruk@gmail.com)</option>
+                      </>
+                    )}
                   </select>
                 </div>
 

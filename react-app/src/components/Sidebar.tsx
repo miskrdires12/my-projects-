@@ -14,12 +14,14 @@ interface SidebarProps {
   onStationChange?: (station: UserRole) => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  onClose?: () => void;
   desktopOpen?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen,
   onCloseMobile,
+  onClose,
   desktopOpen = true
 }) => {
   const location = useLocation();
@@ -53,7 +55,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { to: '/receiver/students', label: 'Student Directory', icon: Users },
         { to: '/sender/register', label: 'Register Student', icon: UserPlus },
-        { to: '/receiver/mistakes', label: 'Mistake Analyzer', icon: AlertTriangle },
       ]
     },
     {
@@ -138,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Prominent 'X' Close Button */}
           <button
             type="button"
-            onClick={onCloseMobile}
+            onClick={onClose || onCloseMobile}
             className="w-8 h-8 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-600 hover:text-black transition-all cursor-pointer shadow-2xs shrink-0"
             title="Close navigation menu"
             aria-label="Close navigation"

@@ -4,34 +4,40 @@ import {
   UserPlus, Camera, CheckCircle2, Clock, AlertTriangle, ArrowUpRight,
   TrendingUp, BarChart3, Users, Award, ChevronRight, Calendar, UserCheck
 } from 'lucide-react';
-import { getStudents, getTasks, getCurrentUser } from '@/lib/store';
+import { getStudents, getTasks, getCurrentUser, getCorrectionLogs, CorrectionLog } from '@/lib/store';
 import { Student, Task } from '@/types';
 
 export const SenderDashboardPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
+  const [correctionNotices, setCorrectionNotices] = useState<CorrectionLog[]>([]);
   const user = getCurrentUser();
 
   useEffect(() => {
     const refreshData = () => {
       setStudents(getStudents());
+      setCorrectionNotices(getCorrectionLogs(user?.username));
     };
     refreshData();
 
     window.addEventListener('studentbridge_datachange', refreshData);
-    return () => window.removeEventListener('studentbridge_datachange', refreshData);
-  }, []);
+    window.addEventListener('studentbridge_correction_event', refreshData);
+    return () => {
+      window.removeEventListener('studentbridge_datachange', refreshData);
+      window.removeEventListener('studentbridge_correction_event', refreshData);
+    };
+  }, [user]);
 
   const totalRegistered = students.length;
   const recentStudents = students.slice(0, 6);
 
   return (
     <div className="space-y-6">
-      {/* Header Banner - Matching Screenshot 3 */}
+      {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#1e2e42]">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-heading font-extrabold text-white tracking-tight">
-              Welcome, {user?.username || 'Loza Bereket'}
+              Welcome, {user?.username || 'Field Operator'}
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#85e510]/15 text-[#85e510] border border-[#85e510]/30">
               Live Station Active
@@ -39,19 +45,19 @@ export const SenderDashboardPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 text-xs text-[#94a3b8] mt-1">
             <Calendar className="w-3.5 h-3.5 text-[#85e510]" />
-            <span>Oct 13, 2025</span>
+            <span>Academic Year 2026-2027</span>
             <span>&bull;</span>
-            <span>School: <strong className="text-white">YMS Campus</strong></span>
+            <span>School: <strong className="text-white">Debebech & YMS Campuses</strong></span>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[#131e2b] border border-[#1e2e42]">
             <div className="w-8 h-8 rounded-full bg-[#85e510]/20 text-[#85e510] flex items-center justify-center font-bold text-xs">
-              {(user?.username || 'LB').substring(0, 2).toUpperCase()}
+              {(user?.username || 'OP').substring(0, 2).toUpperCase()}
             </div>
             <div className="text-left">
-              <div className="text-xs font-bold text-white">{user?.username || 'Loza Bereket'}</div>
+              <div className="text-xs font-bold text-white">{user?.username || 'Field Operator'}</div>
               <div className="text-[10px] text-[#85e510] font-semibold uppercase">{user?.role || 'Sender'}</div>
             </div>
           </div>
@@ -65,6 +71,34 @@ export const SenderDashboardPage: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {/* Resolved Mistake Notification Banner for Sender */}
+      {correctionNotices.length > 0 && (
+        <div className="bg-[#132219] border border-emerald-500/30 rounded-2xl p-4 shadow-lg space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-emerald-400 font-heading font-black text-xs">
+              <CheckCircle2 className="w-4 h-4 text-[#85e510]" />
+              <span>Resolved Mistake Feedback ({correctionNotices.length} student records corrected by Receiver Desk)</span>
+            </div>
+            <span className="text-[10px] text-emerald-300 font-bold bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-500/40">
+              Approved & Ready for ID Print
+            </span>
+          </div>
+          <div className="divide-y divide-emerald-900/50 max-h-36 overflow-y-auto custom-scrollbar">
+            {correctionNotices.slice(0, 5).map(notice => (
+              <div key={notice.id} className="py-2 flex items-start justify-between text-xs gap-3">
+                <div>
+                  <span className="font-bold text-white">{notice.studentName} ({notice.studentId}):</span>{' '}
+                  <span className="text-emerald-200/80 font-medium">{notice.description}</span>
+                </div>
+                <span className="text-[10px] text-emerald-400/60 font-mono shrink-0">
+                  {new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Row 1 Metric Cards: Today, This Week, This Month - Exact match to screenshot 3 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

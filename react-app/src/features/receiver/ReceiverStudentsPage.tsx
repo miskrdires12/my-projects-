@@ -15,7 +15,8 @@ import {
   getStudents, addStudent, updateStudent, deleteStudent,
   getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP,
-  generateStudentQrToken, getStudentPhotoFileName, getStudentQrFileName
+  generateStudentQrToken, getStudentPhotoFileName, getStudentQrFileName,
+  addCorrectionLog
 } from '@/lib/store';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
@@ -36,9 +37,9 @@ export const ReceiverStudentsPage: React.FC = () => {
   // Selected Students for Bulk Operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Pagination
+  // Pagination (Default: 500 students per page as required)
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(500);
 
   // Active Student Detail Drawer (Opens ONLY when eye/view icon is clicked)
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
@@ -317,6 +318,15 @@ export const ReceiverStudentsPage: React.FC = () => {
       updateStudent(s.studentId, { phone: fixed });
       setStudents(prev => prev.map(item => item.studentId === s.studentId ? { ...item, phone: fixed } : item));
       setResolvedMistakeKeys(prev => new Set([...prev, `phone_${s.studentId}`]));
+      addCorrectionLog({
+        studentId: s.studentId,
+        studentName: s.fullName || 'Student',
+        senderId: s.senderId,
+        senderName: s.senderName || 'Field Sender',
+        actionType: 'PHONE_FORMATTED',
+        description: `Phone standardized to valid Ethiopian format (${fixed}) for ${s.fullName}`,
+        resolvedBy: 'Receiver Desk'
+      });
     }
   };
 
@@ -434,6 +444,17 @@ export const ReceiverStudentsPage: React.FC = () => {
       } : null);
     }
 
+    // Add feedback log so the sender sees their mistake has been corrected:
+    addCorrectionLog({
+      studentId: targetSid,
+      studentName: editingPhotoStudent.fullName || 'Student',
+      senderId: editingPhotoStudent.senderId,
+      senderName: editingPhotoStudent.senderName || 'Field Sender',
+      actionType: 'PHOTO_CORRECTED',
+      description: `Photograph re-centered & enhanced to 3:4 portrait standard for ${editingPhotoStudent.fullName}`,
+      resolvedBy: 'Receiver Desk'
+    });
+
     setEditingPhotoStudent(null);
   };
 
@@ -486,6 +507,16 @@ export const ReceiverStudentsPage: React.FC = () => {
     if (detailStudent?.studentId === targetSid) {
       setDetailStudent(prev => prev ? { ...prev, ...updates } : null);
     }
+
+    addCorrectionLog({
+      studentId: targetSid,
+      studentName: editingDataStudent.fullName || 'Student',
+      senderId: editingDataStudent.senderId,
+      senderName: editingDataStudent.senderName || 'Field Sender',
+      actionType: 'DATA_UPDATED',
+      description: `Student metadata and academic records updated for ${editingDataStudent.fullName}`,
+      resolvedBy: 'Receiver Desk'
+    });
 
     setIsEditModalOpen(false);
     setEditingDataStudent(null);
@@ -1118,6 +1149,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <th className="py-3 px-3">Grade & Sec</th>
                 <th className="py-3 px-3">School & Branch</th>
                 <th className="py-3 px-3">Phone</th>
+                <th className="py-3 px-3 text-center">Blood Type</th>
                 <th className="py-3 px-3">Sender Operator</th>
                 <th className="py-3 px-3">Date Transmitted</th>
                 <th className="py-3 px-3 text-center">QR Code</th>
@@ -1127,7 +1159,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             <tbody className="divide-y divide-[#F1F5F9]">
               {pagedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-[#64748B]">
+                  <td colSpan={11} className="py-12 text-center text-[#64748B]">
                     <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
                       <Search className="w-6 h-6" />
                     </div>
@@ -1219,6 +1251,13 @@ export const ReceiverStudentsPage: React.FC = () => {
                       {/* Phone */}
                       <td className="py-3 px-3 font-mono text-[11px] text-slate-700">
                         {s.phone || '-'}
+                      </td>
+
+                      {/* Blood Type */}
+                      <td className="py-3 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                          {s.bloodType || 'Unknown'}
+                        </span>
                       </td>
 
                       {/* Sender */}
@@ -1351,10 +1390,12 @@ export const ReceiverStudentsPage: React.FC = () => {
               onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
               className="ml-2 bg-white border border-[#CBD5E1] rounded-lg px-2 py-1 text-xs font-bold text-[#0B1118]"
             >
-              <option value={10}>10 per page</option>
               <option value={25}>25 per page</option>
               <option value={50}>50 per page</option>
               <option value={100}>100 per page</option>
+              <option value={250}>250 per page</option>
+              <option value={500}>500 per page (Default)</option>
+              <option value={1000}>1000 per page</option>
             </select>
           </div>
         </div>

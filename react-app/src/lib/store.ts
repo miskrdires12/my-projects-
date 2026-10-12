@@ -281,12 +281,51 @@ let memoryUsers: (User & { password?: string })[] = (() => {
   return users;
 })();
 let memorySchools: School[] = DEFAULT_SCHOOLS;
+const DEFAULT_TASKS: Task[] = [
+  {
+    id: 'TSK-1001',
+    title: 'Audit Grade 9 Biometric Portrait Alignment (3:4 ratio)',
+    assignedTo: 'mebratadony',
+    school: 'YMS',
+    priority: 'High',
+    deadline: '2026-10-18',
+    status: 'In Progress'
+  },
+  {
+    id: 'TSK-1002',
+    title: 'Standardize Parent Emergency Contact Codes (+251 format)',
+    assignedTo: 'yohannes',
+    school: 'Adika Youth',
+    priority: 'Medium',
+    deadline: '2026-10-20',
+    status: 'Pending'
+  },
+  {
+    id: 'TSK-1003',
+    title: 'Batch Hologram Verification for Senior Cards',
+    assignedTo: 'etsubmolla',
+    school: 'School of America',
+    priority: 'High',
+    deadline: '2026-10-16',
+    status: 'Completed'
+  },
+  {
+    id: 'TSK-1004',
+    title: 'Biometric Station Queue Clearance & Sync Review',
+    assignedTo: 'biruk',
+    school: 'Warka',
+    priority: 'Low',
+    deadline: '2026-10-22',
+    status: 'Pending'
+  }
+];
+
 let memoryTasks: Task[] = (() => {
   try {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('sb_admin_tasks') : null;
-    return saved ? JSON.parse(saved) : [];
+    return saved && JSON.parse(saved).length > 0 ? JSON.parse(saved) : DEFAULT_TASKS;
   } catch (e) {
-    return [];
+    return DEFAULT_TASKS;
   }
 })();
 let memoryAuditLogs: AuditLog[] = [];
@@ -795,27 +834,103 @@ export function deleteUser(id: string): void {
 }
 
 export function resetUserHardwareLock(userId: string): void {
-  const u = memoryUsers.find(x => x.id === userId || x.username === userId || x.email === userId);
+  const norm = userId.toLowerCase();
+  const u = memoryUsers.find(x => x.id.toLowerCase() === norm || x.username.toLowerCase() === norm || x.email.toLowerCase() === norm);
   if (u) {
     u.boundDeviceId = null;
     try {
       const locksMap = JSON.parse(localStorage.getItem('sb_device_locks') || '{}');
-      locksMap[u.id] = null;
+      delete locksMap[u.id];
+      delete locksMap[u.username.toLowerCase()];
+      delete locksMap[u.email.toLowerCase()];
       localStorage.setItem('sb_device_locks', JSON.stringify(locksMap));
     } catch (e) {}
   }
 }
 
 export function setUserHardwareLock(userId: string, deviceId: string): void {
-  const u = memoryUsers.find(x => x.id === userId || x.username === userId || x.email === userId);
+  const norm = userId.toLowerCase();
+  const u = memoryUsers.find(x => x.id.toLowerCase() === norm || x.username.toLowerCase() === norm || x.email.toLowerCase() === norm);
   if (u) {
     u.boundDeviceId = deviceId;
     try {
       const locksMap = JSON.parse(localStorage.getItem('sb_device_locks') || '{}');
       locksMap[u.id] = deviceId;
+      locksMap[u.email.toLowerCase()] = deviceId;
+      locksMap[u.username.toLowerCase()] = deviceId;
       localStorage.setItem('sb_device_locks', JSON.stringify(locksMap));
     } catch (e) {}
   }
+}
+
+/**
+ * Strict 1-Device Hardware Lock Policy:
+ * 1 email/user is strictly bound to 1 physical device. Any secondary device is rejected.
+ */
+export function checkDeviceLock(user: User, currentDeviceId: string): { allowed: boolean; boundDeviceId?: string; reason?: string } {
+  if (!user) return { allowed: false, reason: 'Unrecognized user account' };
+
+  let boundId: string | null = user.boundDeviceId || null;
+  try {
+    const locksMap = JSON.parse(localStorage.getItem('sb_device_locks') || '{}');
+    boundId = boundId || locksMap[user.id] || locksMap[user.email?.toLowerCase()] || locksMap[user.username?.toLowerCase()] || null;
+  } catch (e) {}
+
+  if (boundId && boundId !== currentDeviceId) {
+    return {
+      allowed: false,
+      boundDeviceId: boundId,
+      reason: `Access Denied: Account "${user.email}" is strictly locked to 1 hardware device (${boundId}). Access from this unauthorized workstation (${currentDeviceId}) is rejected.`
+    };
+  }
+
+  return { allowed: true, boundDeviceId: boundId || currentDeviceId };
+}
+
+// ----------------------------------------------------
+// Mistake Correction Logs & Senders Notification Feed
+// ----------------------------------------------------
+export interface CorrectionLog {
+  id: string;
+  studentId: string;
+  studentName: string;
+  senderId?: string;
+  senderName?: string;
+  actionType: 'PHOTO_CORRECTED' | 'PHONE_FORMATTED' | 'DATA_UPDATED' | 'MISTAKE_RESOLVED';
+  description: string;
+  resolvedBy: string;
+  timestamp: string;
+}
+
+export function getCorrectionLogs(senderIdentifier?: string): CorrectionLog[] {
+  try {
+    const raw = localStorage.getItem('sb_correction_logs');
+    const logs: CorrectionLog[] = raw ? JSON.parse(raw) : [];
+    if (!senderIdentifier) return logs;
+    const norm = senderIdentifier.toLowerCase().trim();
+    return logs.filter(l =>
+      (l.senderName && l.senderName.toLowerCase().trim() === norm) ||
+      (l.senderId && l.senderId.toLowerCase().trim() === norm)
+    );
+  } catch (e) {
+    return [];
+  }
+}
+
+export function addCorrectionLog(log: Omit<CorrectionLog, 'id' | 'timestamp'>): void {
+  try {
+    const logs: CorrectionLog[] = JSON.parse(localStorage.getItem('sb_correction_logs') || '[]');
+    const newLog: CorrectionLog = {
+      ...log,
+      id: `corr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString()
+    };
+    logs.unshift(newLog);
+    localStorage.setItem('sb_correction_logs', JSON.stringify(logs.slice(0, 100)));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('studentbridge_correction_event', { detail: newLog }));
+    }
+  } catch (e) {}
 }
 
 export function getTasks(): Task[] {
@@ -1025,6 +1140,9 @@ export interface SenderMetrics {
   email: string;
   role: string;
   boundDeviceId: string | null;
+  status: 'Active' | 'Idle' | 'Locked';
+  efficiency: number; // Percentage e.g. 98.4%
+  mistakesCount: number;
   today: number;
   week: number;
   month: number;
@@ -1056,10 +1174,26 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   const baseRecorded = user?.recordsSentSingle || 0;
   const total = Math.max(baseRecorded, matchingStudents.length);
 
-  // If user has historical volume in users.json, derive realistic distribution
+  // Derive realistic volume distribution
   const today = liveToday > 0 ? liveToday : (total > 0 ? Math.max(1, Math.round(total * 0.08)) : 0);
   const week = liveWeek > 0 ? liveWeek : (total > 0 ? Math.max(today, Math.round(total * 0.35)) : 0);
   const month = liveMonth > 0 ? liveMonth : total;
+
+  // Mistakes count & quality efficiency calculation
+  const mistakesCount = matchingStudents.filter(s => {
+    const hasPhoto = s.photoPath && !s.photoPath.includes('avatar') && !s.photoPath.includes('placeholder');
+    const hasValidPhone = s.phone && /^\+251[0-9]{9}$/.test(s.phone.replace(/[\s\-]/g, ''));
+    return !hasPhoto || !hasValidPhone || s.hasMistake;
+  }).length;
+
+  // High-fidelity quality rating (clean transmissions ratio)
+  const efficiency = total > 0
+    ? Math.max(85, Math.min(100, Math.round((1 - (mistakesCount / Math.max(total, 1))) * 1000) / 10))
+    : 100;
+
+  const status: 'Active' | 'Idle' | 'Locked' = user?.boundDeviceId
+    ? (today > 0 ? 'Active' : 'Idle')
+    : 'Active';
 
   return {
     id: user?.id || `usr-${norm}`,
@@ -1067,6 +1201,9 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
     email: user?.email || `${norm}@gmail.com`,
     role: user?.role || 'SENDER',
     boundDeviceId: user?.boundDeviceId || null,
+    status,
+    efficiency,
+    mistakesCount,
     today,
     week,
     month,

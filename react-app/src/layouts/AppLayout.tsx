@@ -68,6 +68,10 @@ export const AppLayout: React.FC = () => {
         currentStation={currentStation}
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
+        onClose={() => {
+          setMobileSidebarOpen(false);
+          setDesktopSidebarOpen(false);
+        }}
         desktopOpen={desktopSidebarOpen}
       />
 
@@ -77,6 +81,7 @@ export const AppLayout: React.FC = () => {
           currentStation={currentStation}
           onStationChange={handleStationChange}
           onToggleMobileSidebar={handleToggleSidebar}
+          isSidebarOpen={typeof window !== 'undefined' && window.innerWidth < 1024 ? mobileSidebarOpen : desktopSidebarOpen}
         />
 
         <main className="flex-1 min-w-0 bg-[#F8FAFC] p-3 sm:p-5 lg:p-6 overflow-y-auto">

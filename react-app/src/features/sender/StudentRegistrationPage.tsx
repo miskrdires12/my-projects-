@@ -9,7 +9,7 @@ import {
 import {
   getStudents, addStudent, getSchools, getCurrentUser,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP, getSenderMetrics, SenderMetrics,
-  generateStudentQrToken
+  generateStudentQrToken, getCorrectionLogs, CorrectionLog
 } from '@/lib/store';
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
@@ -33,9 +33,10 @@ export const StudentRegistrationPage: React.FC = () => {
   const [sex, setSex] = useState<'Female' | 'Male'>('Female');
   const [grade, setGrade] = useState('9C');
   const [phone, setPhone] = useState('');
-  const [bloodType, setBloodType] = useState('O+');
+  const [bloodType, setBloodType] = useState('Unknown');
   const [location, setLocation] = useState('Addis Ababa');
   const [school, setSchool] = useState('YMS');
+  const [correctionNotices, setCorrectionNotices] = useState<CorrectionLog[]>([]);
 
   // Extra Details (Expandable)
   const [showExtraDetails, setShowExtraDetails] = useState(false);
@@ -89,10 +90,22 @@ export const StudentRegistrationPage: React.FC = () => {
 
   useEffect(() => {
     refreshMetrics();
-    const handleDataChange = () => refreshMetrics();
+    const loadCorrections = () => {
+      setCorrectionNotices(getCorrectionLogs(user?.username));
+    };
+    loadCorrections();
+
+    const handleDataChange = () => {
+      refreshMetrics();
+      loadCorrections();
+    };
     window.addEventListener('studentbridge_datachange', handleDataChange);
-    return () => window.removeEventListener('studentbridge_datachange', handleDataChange);
-  }, [refreshMetrics, submittedStudent]);
+    window.addEventListener('studentbridge_correction_event', loadCorrections);
+    return () => {
+      window.removeEventListener('studentbridge_datachange', handleDataChange);
+      window.removeEventListener('studentbridge_correction_event', loadCorrections);
+    };
+  }, [refreshMetrics, submittedStudent, user]);
 
   // Check ID Uniqueness dynamically against all students
   useEffect(() => {
@@ -486,6 +499,7 @@ export const StudentRegistrationPage: React.FC = () => {
     setEmergencyContact('');
     setGuardianName('');
     setDateOfBirth('');
+    setBloodType('Unknown');
     setCapturedPhoto(null);
     setBrightness(100);
     setContrast(100);
@@ -564,6 +578,34 @@ export const StudentRegistrationPage: React.FC = () => {
           <div className="text-[10px] text-[#366804] font-bold">Lifetime records</div>
         </div>
       </div>
+
+      {/* Resolved Mistake Feedback For Sender */}
+      {correctionNotices.length > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-emerald-900 font-heading font-black text-xs">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <span>Resolved Mistake Feedback ({correctionNotices.length} updates for your submissions)</span>
+            </div>
+            <span className="text-[10px] text-emerald-700 font-bold bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+              Verified by Receiver Desk
+            </span>
+          </div>
+          <div className="divide-y divide-emerald-100 max-h-36 overflow-y-auto custom-scrollbar">
+            {correctionNotices.slice(0, 5).map(notice => (
+              <div key={notice.id} className="py-2 flex items-start justify-between text-xs gap-3">
+                <div>
+                  <span className="font-bold text-[#0B1118]">{notice.studentName} ({notice.studentId}):</span>{' '}
+                  <span className="text-slate-600 font-medium">{notice.description}</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                  {new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
 
       {submitError && (
@@ -854,6 +896,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   onChange={(e) => setBloodType(e.target.value)}
                   className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#202833] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
                 >
+                  <option value="Unknown">Unknown (Default)</option>
                   <option value="A+">A+</option>
                   <option value="A-">A-</option>
                   <option value="B+">B+</option>
@@ -862,7 +905,6 @@ export const StudentRegistrationPage: React.FC = () => {
                   <option value="AB-">AB-</option>
                   <option value="O+">O+</option>
                   <option value="O-">O-</option>
-                  <option value="Unknown">Unknown</option>
                 </select>
               </div>
 

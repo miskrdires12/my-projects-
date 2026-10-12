@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import {
   getUsers, setCurrentUser, getOrCreateDeviceId,
-  setUserHardwareLock, resetUserHardwareLock
+  setUserHardwareLock, resetUserHardwareLock, checkDeviceLock
 } from '@/lib/store';
 import { User as UserType } from '@/types';
 
@@ -63,10 +63,12 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      // Strict 1-Device Hardware Lock Enforcement:
-      if (user.boundDeviceId && user.boundDeviceId !== deviceId) {
+      // Strict 1-Email = 1-Device Hardware Lock Policy:
+      const lockCheck = checkDeviceLock(user, deviceId);
+      if (!lockCheck.allowed) {
         setError(
-          `Access Denied: Account "${user.username}" is strictly locked to 1 hardware device (${user.boundDeviceId}). Login from this unauthorized device (${deviceId}) is prohibited.`
+          lockCheck.reason ||
+          `Access Denied: Account "${user.email}" is strictly locked to another authorized physical device. Multi-device access from (${deviceId}) is prohibited.`
         );
         setIsSubmitting(false);
         return;

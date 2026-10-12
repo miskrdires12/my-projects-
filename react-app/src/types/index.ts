@@ -36,6 +36,7 @@ export interface Student {
   photoIntegrityStatus?: 'PHOTO_VERIFIED' | 'NO_PHOTO' | 'REPAIR_REQUIRED' | string;
   qrCodeData?: string;
   senderName?: string;
+  senderId?: string;
   status?: string;
   bulkedStatus?: 'BULKED' | 'UNBULKED' | string;
   emergencyContactName?: string;

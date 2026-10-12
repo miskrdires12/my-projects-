@@ -296,7 +296,7 @@ export default {
                              parseInt(url.searchParams.get("limit") || "0", 10) >= 1000;
 
       const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
-      const limit = isAllRequested ? 10000 : Math.min(500, Math.max(10, parseInt(url.searchParams.get("limit") || "100", 10)));
+      const limit = isAllRequested ? 10000 : Math.min(2000, Math.max(10, parseInt(url.searchParams.get("limit") || "500", 10)));
       const offset = (page - 1) * limit;
 
       const search = (url.searchParams.get("search") || "").trim().toLowerCase();
