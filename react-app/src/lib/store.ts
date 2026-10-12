@@ -99,7 +99,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     id: "cmumd6g4y00043vo7wf1afj62",
     username: "abeni1",
     email: "abeni1@gmail.com",
-    role: "SENDER",
+    role: "SUPER_ADMIN",
     password: "12345678",
     boundDeviceId: null,
     recordsSentSingle: 471,
@@ -182,7 +182,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 499,
+    recordsSentSingle: 677,
   },
   {
     id: "cmuxuut8t001s90y8x5t88jqt",
@@ -278,6 +278,23 @@ let memoryUsers: (User & { password?: string })[] = (() => {
   } catch (e) {
     console.error('Error loading custom users from localStorage:', e);
   }
+
+  // Strict role enforcement per authoritative specifications:
+  // miskrdires11@gmail.com and abeni1@gmail.com are SUPER_ADMIN, all other 12 field accounts are SENDER
+  users.forEach(u => {
+    const em = (u.email || '').toLowerCase().trim();
+    if (em === 'miskrdires11@gmail.com' || em === 'abeni1@gmail.com') {
+      u.role = 'SUPER_ADMIN';
+    } else if ([
+      'mebratadony@gmail.com', 'yohannes@gmail.com', 'etsubmolla@gmail.com',
+      'adoni@gmail.com', 'biruk@gmail.com', 'zemichael@gmail.com',
+      'nebiyu@gmail.com', 'beki@gmail.com', 'colldwater340@gmail.com',
+      'simon@gmail.com', 'danaytesayas4@gmail.com', 'miskrdires12@gmail.com'
+    ].includes(em)) {
+      u.role = 'SENDER';
+    }
+  });
+
   return users;
 })();
 let memorySchools: School[] = DEFAULT_SCHOOLS;
@@ -402,12 +419,33 @@ export async function initStore(): Promise<void> {
     if (res.ok) {
       const loadedUsers: User[] = await res.json();
       if (Array.isArray(loadedUsers) && loadedUsers.length > 0) {
-        const existingEmails = new Set(memoryUsers.map(u => u.email.toLowerCase()));
+        let locksMap: Record<string, string> = {};
+        try {
+          locksMap = JSON.parse(localStorage.getItem('sb_device_locks') || '{}');
+        } catch (e) {}
+
         loadedUsers.forEach(u => {
-          if (!existingEmails.has(u.email.toLowerCase())) {
+          const existing = memoryUsers.find(mu => mu.email.toLowerCase() === u.email.toLowerCase() || mu.id === u.id);
+          if (existing) {
+            if (u.boundDeviceId) {
+              existing.boundDeviceId = u.boundDeviceId;
+              locksMap[existing.id] = u.boundDeviceId;
+              locksMap[existing.email.toLowerCase()] = u.boundDeviceId;
+              locksMap[existing.username.toLowerCase()] = u.boundDeviceId;
+            }
+          } else {
             memoryUsers.push(u);
+            if (u.boundDeviceId) {
+              locksMap[u.id] = u.boundDeviceId;
+              locksMap[u.email.toLowerCase()] = u.boundDeviceId;
+              locksMap[u.username.toLowerCase()] = u.boundDeviceId;
+            }
           }
         });
+
+        try {
+          localStorage.setItem('sb_device_locks', JSON.stringify(locksMap));
+        } catch (e) {}
       }
     }
   } catch (e) {
@@ -860,6 +898,19 @@ export function setUserHardwareLock(userId: string, deviceId: string): void {
       locksMap[u.username.toLowerCase()] = deviceId;
       localStorage.setItem('sb_device_locks', JSON.stringify(locksMap));
     } catch (e) {}
+
+    // Synchronize hardware terminal lock to edge worker
+    fetch('/api/auth/bind-lock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: u.id, email: u.email, username: u.username, deviceId })
+    }).catch(() => {});
+
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...u, boundDeviceId: deviceId })
+    }).catch(() => {});
   }
 }
 

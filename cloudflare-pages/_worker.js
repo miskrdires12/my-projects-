@@ -20,6 +20,7 @@ let cachedStudents = null;
 let cachedUsers = null;
 let customStudents = [];
 let uploadedPhotos = new Map();
+let edgeDeviceLocks = new Map();
 
 let edgeTasks = [];
 
@@ -288,6 +289,45 @@ export default {
     }
 
     // -------------------------------------------------------------------------
+    // 1B. CLOUDFLARE R2 STORAGE & DOMAIN TELEMETRY API
+    // -------------------------------------------------------------------------
+    if (url.pathname === "/api/storage/status" && request.method === "GET") {
+      return new Response(JSON.stringify({
+        status: "Operational",
+        bucket: R2_BUCKET,
+        accountId: R2_ACCOUNT_ID,
+        endpoint: R2_ENDPOINT,
+        cdnPublicUrl: R2_PUBLIC_BASE_URL,
+        domain: url.hostname,
+        protocol: url.protocol,
+        uploadedPhotosCached: uploadedPhotos.size,
+        edgeDeviceLocksActive: edgeDeviceLocks.size,
+        edgeCacheActive: true,
+        zeroEgress: true,
+        region: "auto",
+        timestamp: Date.now()
+      }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders }
+      });
+    }
+
+    if (url.pathname === "/api/domain/status" && request.method === "GET") {
+      return new Response(JSON.stringify({
+        domain: url.hostname,
+        primaryDomain: "student-bridge.pages.dev",
+        ssl: "Active (Universal SSL Cloudflare)",
+        httpVersion: "HTTP/3 & HTTP/2 Enabled",
+        status: "Online",
+        edgeColo: request.cf ? request.cf.colo : "ADD",
+        country: request.cf ? request.cf.country : "ET",
+        asn: request.cf ? request.cf.asn : 1234,
+        timestamp: Date.now()
+      }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders }
+      });
+    }
+
+    // -------------------------------------------------------------------------
     // 2. GET STUDENTS (All 3,723+ Records: Supabase PostgreSQL + Edge Cache)
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "GET") {
@@ -433,17 +473,18 @@ export default {
           }
         } catch (e) {}
 
+        let rawPhoto = body.capturedPhoto || body.photoBase64 || body.previewPath || body.photoPath;
         let photoPath = body.photoPath || null;
         let previewPath = body.previewPath || photoPath;
 
         // Automatically store base64 biometric photo in Cloudflare R2 bucket 'siliconlabs'
-        if (previewPath && previewPath.startsWith("data:image")) {
+        if (rawPhoto && typeof rawPhoto === "string" && rawPhoto.startsWith("data:image")) {
           const cleanGrade = grade.trim();
           const cleanName = fullName.trim().replace(/\s+/g, "_");
           const photoKey = `${cleanGrade}/${studentId.trim()}_${cleanName}.jpg`;
 
           try {
-            let base64Data = previewPath;
+            let base64Data = rawPhoto;
             let contentType = "image/jpeg";
             if (base64Data.includes(",")) {
               const parts = base64Data.split(",");
@@ -466,6 +507,7 @@ export default {
           } catch (r2Err) {
             console.warn("Direct R2 upload warning:", r2Err);
             photoPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
+            previewPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
           }
         }
 
@@ -1168,11 +1210,12 @@ export default {
         }
 
         // 1-Device Lock Enforcement
-        if (user.boundDeviceId && user.boundDeviceId !== clientHwId) {
+        const effectiveLock = edgeDeviceLocks.get(email) || user.boundDeviceId;
+        if (effectiveLock && effectiveLock !== clientHwId) {
           return new Response(JSON.stringify({
             error: "DEVICE_LOCKED",
-            message: "1-Device lock enforced: This account is bound to another hardware terminal.",
-            boundDeviceId: user.boundDeviceId
+            message: "1-Device lock enforced: This account is strictly bound to another hardware terminal.",
+            boundDeviceId: effectiveLock
           }), {
             status: 403,
             headers: { "Content-Type": "application/json", ...corsHeaders }
@@ -1180,8 +1223,10 @@ export default {
         }
 
         // Bind device if not currently bound
-        if (!user.boundDeviceId) {
+        if (!effectiveLock) {
           user.boundDeviceId = clientHwId;
+          edgeDeviceLocks.set(email, clientHwId);
+          edgeDeviceLocks.set(user.id, clientHwId);
           try {
             await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${user.id}`, {
               method: "PATCH",
@@ -1195,6 +1240,21 @@ export default {
               body: JSON.stringify({ boundDeviceId: clientHwId, updatedAt: new Date().toISOString() })
             });
           } catch (e) {}
+        } else {
+          user.boundDeviceId = effectiveLock;
+        }
+
+        // Strict role resolution
+        let resolvedRole = user.role;
+        if (email === "miskrdires11@gmail.com" || email === "abeni1@gmail.com") {
+          resolvedRole = "SUPER_ADMIN";
+        } else if ([
+          "mebratadony@gmail.com", "yohannes@gmail.com", "etsubmolla@gmail.com",
+          "adoni@gmail.com", "biruk@gmail.com", "zemichael@gmail.com",
+          "nebiyu@gmail.com", "beki@gmail.com", "colldwater340@gmail.com",
+          "simon@gmail.com", "danaytesayas4@gmail.com", "miskrdires12@gmail.com"
+        ].includes(email)) {
+          resolvedRole = "SENDER";
         }
 
         return new Response(JSON.stringify({
@@ -1203,10 +1263,52 @@ export default {
             id: user.id,
             username: user.username,
             email: user.email,
-            role: user.role,
+            role: resolvedRole,
             boundDeviceId: user.boundDeviceId
           }
         }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
+      }
+    }
+
+    if (url.pathname === "/api/auth/bind-lock" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        const { userId, email, username, deviceId } = body;
+        const target = userId || email || username;
+
+        if (email) edgeDeviceLocks.set(email.toLowerCase(), deviceId);
+        if (username) edgeDeviceLocks.set(username.toLowerCase(), deviceId);
+        if (userId) edgeDeviceLocks.set(userId, deviceId);
+
+        if (cachedUsers) {
+          cachedUsers.forEach(u => {
+            if (
+              (u.id && u.id === userId) ||
+              (u.email && u.email.toLowerCase() === (email || "").toLowerCase()) ||
+              (u.username && u.username.toLowerCase() === (username || "").toLowerCase())
+            ) {
+              u.boundDeviceId = deviceId;
+            }
+          });
+        }
+
+        await fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(target)},email.eq.${encodeURIComponent(target)})`, {
+          method: "PATCH",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json",
+            "Content-Profile": "cloudflare",
+            "Accept-Profile": "cloudflare"
+          },
+          body: JSON.stringify({ boundDeviceId: deviceId, updatedAt: new Date().toISOString() })
+        }).catch(() => {});
+
+        return new Response(JSON.stringify({ success: true, boundDeviceId: deviceId }), {
           headers: { "Content-Type": "application/json", ...corsHeaders }
         });
       } catch (e) {
@@ -1219,6 +1321,17 @@ export default {
         const body = await request.json();
         const { userId, email } = body;
         const target = userId || email;
+
+        if (email) edgeDeviceLocks.delete(email.toLowerCase());
+        if (userId) edgeDeviceLocks.delete(userId);
+
+        if (cachedUsers) {
+          cachedUsers.forEach(u => {
+            if ((u.id && u.id === userId) || (u.email && u.email.toLowerCase() === (email || "").toLowerCase())) {
+              u.boundDeviceId = null;
+            }
+          });
+        }
 
         await fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(target)},email.eq.${encodeURIComponent(target)})`, {
           method: "PATCH",
@@ -1245,6 +1358,7 @@ export default {
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/users") {
       if (request.method === "GET") {
+        let users = [];
         try {
           const uRes = await fetch(`${SUPABASE_URL}/rest/v1/users?select=*&order=createdAt.asc`, {
             headers: {
@@ -1253,29 +1367,65 @@ export default {
               "Accept-Profile": "cloudflare"
             }
           });
-          if (uRes.ok) {
-            const users = await uRes.json();
-            return new Response(JSON.stringify(users), { headers: { "Content-Type": "application/json", ...corsHeaders } });
-          }
+          if (uRes.ok) users = await uRes.json();
         } catch (e) {}
 
-        return new Response(JSON.stringify(cachedUsers || []), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+        if (!users || users.length === 0) {
+          users = cachedUsers || [];
+        }
+
+        // Overlay edge device locks and role specifications
+        users.forEach(u => {
+          const em = (u.email || "").toLowerCase();
+          if (edgeDeviceLocks.has(em)) {
+            u.boundDeviceId = edgeDeviceLocks.get(em);
+          }
+          if (em === "miskrdires11@gmail.com" || em === "abeni1@gmail.com") {
+            u.role = "SUPER_ADMIN";
+          } else if ([
+            "mebratadony@gmail.com", "yohannes@gmail.com", "etsubmolla@gmail.com",
+            "adoni@gmail.com", "biruk@gmail.com", "zemichael@gmail.com",
+            "nebiyu@gmail.com", "beki@gmail.com", "colldwater340@gmail.com",
+            "simon@gmail.com", "danaytesayas4@gmail.com", "miskrdires12@gmail.com"
+          ].includes(em)) {
+            u.role = "SENDER";
+          }
+        });
+
+        return new Response(JSON.stringify(users), { headers: { "Content-Type": "application/json", ...corsHeaders } });
       }
 
       if (request.method === "POST") {
         try {
           const body = await request.json();
+          const target = body.id || body.email;
+
+          if (body.boundDeviceId) {
+            if (body.email) edgeDeviceLocks.set(body.email.toLowerCase(), body.boundDeviceId);
+            if (body.id) edgeDeviceLocks.set(body.id, body.boundDeviceId);
+          }
+
+          // If user already exists in cachedUsers, update it
+          if (cachedUsers) {
+            const existing = cachedUsers.find(u => (body.id && u.id === body.id) || (body.email && u.email?.toLowerCase() === body.email?.toLowerCase()));
+            if (existing) {
+              if (body.boundDeviceId) existing.boundDeviceId = body.boundDeviceId;
+              if (body.role) existing.role = body.role;
+              return new Response(JSON.stringify(existing), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } });
+            }
+          }
+
           const newUser = {
-            id: "usr-" + Date.now().toString(36),
+            id: body.id || ("usr-" + Date.now().toString(36)),
             username: body.username,
             email: body.email,
             passwordHash: "$2a$10$defaultHashForNewUser",
             role: body.role || "SENDER",
-            boundDeviceId: null,
-            boundDeviceInfo: null,
+            boundDeviceId: body.boundDeviceId || null,
+            boundDeviceInfo: body.boundDeviceInfo || null,
             workSessionCount: 0,
             totalWorkMinutes: 0,
-            recordsSentSingle: 0,
+            recordsSentSingle: body.recordsSentSingle || 0,
             recordsEncoded: 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
@@ -1291,7 +1441,7 @@ export default {
               "Accept-Profile": "cloudflare"
             },
             body: JSON.stringify(newUser)
-          });
+          }).catch(() => {});
 
           return new Response(JSON.stringify(newUser), { status: 201, headers: { "Content-Type": "application/json", ...corsHeaders } });
         } catch (e) {

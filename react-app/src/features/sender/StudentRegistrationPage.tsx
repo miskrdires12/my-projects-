@@ -4,10 +4,10 @@ import {
   Camera, RefreshCw, CheckCircle2, AlertCircle, RotateCw, ZoomIn, ZoomOut,
   Upload, UserCheck, ArrowRight, ShieldCheck, Sparkles, X, Sliders, Crop,
   ChevronDown, ChevronUp, Image as ImageIcon, Check, Printer, SwitchCamera,
-  TrendingUp, Calendar, Clock, BarChart2, MapPin
+  TrendingUp, Calendar, Clock, BarChart2, MapPin, Scissors
 } from 'lucide-react';
 import {
-  getStudents, addStudent, getSchools, getCurrentUser,
+  getStudents, addStudent, getSchools, getCurrentUser, getTasks,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP, getSenderMetrics, SenderMetrics,
   generateStudentQrToken, getCorrectionLogs, CorrectionLog
 } from '@/lib/store';
@@ -33,10 +33,10 @@ export const StudentRegistrationPage: React.FC = () => {
   const [sex, setSex] = useState<'Female' | 'Male'>('Female');
   const [grade, setGrade] = useState('');
   const [phone, setPhone] = useState('');
-  const [bloodType, setBloodType] = useState('Unknown');
+  const [bloodType, setBloodType] = useState('');
   const [location, setLocation] = useState('Addis Ababa');
   const [school, setSchool] = useState('YMS');
-  const [schoolBusUsage, setSchoolBusUsage] = useState<'Yes' | 'No'>('No');
+  const [schoolBusUsage, setSchoolBusUsage] = useState<'Yes' | 'No' | ''>('');
   const [correctionNotices, setCorrectionNotices] = useState<CorrectionLog[]>([]);
 
   // Extra Details (Expandable)
@@ -383,6 +383,7 @@ export const StudentRegistrationPage: React.FC = () => {
             body: JSON.stringify({
               studentId: studentId.trim(),
               grade: cleanGrade,
+              fullName: cleanName,
               filename: photoKey,
               data: capturedPhoto
             })
@@ -400,14 +401,14 @@ export const StudentRegistrationPage: React.FC = () => {
 
       const finalPhotoUrl = r2PhotoUrl || (capturedPhoto ? `${R2_PUBLIC_BASE_URL}/${photoKey}` : undefined);
 
-      const studentPayload: Student = {
+      const studentPayload: Student & { capturedPhoto?: string; photoBase64?: string } = {
         id: 'cmu-' + Date.now().toString(36),
         studentId: studentId.trim(),
         fullName: fullName.trim(),
         sex,
         grade: grade.trim(),
         phone: phone.trim(),
-        bloodType,
+        bloodType: bloodType || undefined,
         school: school.trim(),
         location,
         country: 'Ethiopia',
@@ -418,9 +419,11 @@ export const StudentRegistrationPage: React.FC = () => {
         schoolBusUsage,
         nationality,
         photoPath: finalPhotoUrl,
-        previewPath: finalPhotoUrl || capturedPhoto || undefined,
-        thumbnailPath: finalPhotoUrl || capturedPhoto || undefined,
+        previewPath: capturedPhoto || finalPhotoUrl || undefined,
+        thumbnailPath: capturedPhoto || finalPhotoUrl || undefined,
         originalPhotoPath: finalPhotoUrl,
+        capturedPhoto: capturedPhoto || undefined,
+        photoBase64: capturedPhoto || undefined,
         photoIntegrityStatus: capturedPhoto ? 'PHOTO_VERIFIED' : 'NO_PHOTO',
         // QR Code token strictly formatted as {"id":"...","name":"...","roll":"","grade":"..."}
         qrCodeData: generateStudentQrToken({
@@ -499,7 +502,9 @@ export const StudentRegistrationPage: React.FC = () => {
     setEmergencyContact('');
     setGuardianName('');
     setDateOfBirth('');
-    setBloodType('Unknown');
+    setBloodType('');
+    setGrade('');
+    setSchoolBusUsage('');
     setCapturedPhoto(null);
     setBrightness(100);
     setContrast(100);
@@ -511,6 +516,14 @@ export const StudentRegistrationPage: React.FC = () => {
     setSubmitError(null);
     refreshMetrics();
   };
+
+  // Active task assigned to current operator
+  const userTasks = getTasks().filter(
+    t => (t.assignedTo?.toLowerCase() === user?.username?.toLowerCase() ||
+          t.assignedTo?.toLowerCase() === user?.email?.toLowerCase()) &&
+         t.status !== 'Completed'
+  );
+  const activeTask = userTasks.length > 0 ? userTasks[0] : null;
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto pb-12">
@@ -532,89 +545,81 @@ export const StudentRegistrationPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Sender Transmission Telemetry (Daily, Weekly, Monthly, Total) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-xs">
+      {/* Sender Transmission Telemetry (Daily, Weekly, Monthly, Total) - Small & Compact */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-2.5 shadow-xs">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-            <span>Daily (Today)</span>
-            <Calendar className="w-3.5 h-3.5 text-[#9EE617]" />
+            <span>Today</span>
+            <Calendar className="w-3.5 h-3.5 text-[#85E510]" />
           </div>
-          <div className="mt-1 text-xl font-heading font-black text-[#0B1118]">
+          <div className="mt-0.5 text-base sm:text-lg font-heading font-black text-[#0B1118]">
             {senderMetrics.today.toLocaleString()}
           </div>
-          <div className="text-[10px] text-slate-500 font-medium">Daily transmissions</div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-xs">
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-2.5 shadow-xs">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
             <span>This Week</span>
-            <TrendingUp className="w-3.5 h-3.5 text-[#9EE617]" />
+            <TrendingUp className="w-3.5 h-3.5 text-[#85E510]" />
           </div>
-          <div className="mt-1 text-xl font-heading font-black text-[#0B1118]">
+          <div className="mt-0.5 text-base sm:text-lg font-heading font-black text-[#0B1118]">
             {senderMetrics.week.toLocaleString()}
           </div>
-          <div className="text-[10px] text-slate-500 font-medium">7-day volume run</div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-xs">
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-2.5 shadow-xs">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
             <span>This Month</span>
-            <BarChart2 className="w-3.5 h-3.5 text-[#9EE617]" />
+            <BarChart2 className="w-3.5 h-3.5 text-[#85E510]" />
           </div>
-          <div className="mt-1 text-xl font-heading font-black text-[#0B1118]">
+          <div className="mt-0.5 text-base sm:text-lg font-heading font-black text-[#0B1118]">
             {senderMetrics.month.toLocaleString()}
           </div>
-          <div className="text-[10px] text-slate-500 font-medium">Monthly quota total</div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-xs">
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-2.5 shadow-xs">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
             <span>Total Sent</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-[#9EE617]" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#85E510]" />
           </div>
-          <div className="mt-1 text-xl font-heading font-black text-[#0B1118]">
+          <div className="mt-0.5 text-base sm:text-lg font-heading font-black text-[#0B1118]">
             {senderMetrics.total.toLocaleString()}
           </div>
-          <div className="text-[10px] text-[#366804] font-bold">Lifetime records</div>
         </div>
       </div>
 
-      {/* Target Task Quota on Top */}
-      <div className="bg-gradient-to-r from-slate-900 to-[#101F08] border border-[#85E510]/30 rounded-2xl p-4 text-white shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="space-y-1 w-full sm:w-auto">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse" />
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#85E510]">
-              Assigned Field Work Quota
-            </span>
+      {/* Target Task Quota - ONLY rendered when there is an active task for this operator! */}
+      {activeTask && (
+        <div className="bg-gradient-to-r from-slate-900 to-[#101F08] border border-[#85E510]/30 rounded-2xl p-3.5 text-white shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="space-y-0.5 w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-[#85E510]">
+                Assigned Task: {activeTask.id}
+              </span>
+            </div>
+            <div className="text-base font-heading font-black tracking-tight">
+              {activeTask.title}
+            </div>
+            <p className="text-xs text-slate-300">
+              Campus: {activeTask.school} • Priority: {activeTask.priority}
+            </p>
           </div>
-          <div className="text-xl font-heading font-black tracking-tight">
-            Target Task: 275 Students
-          </div>
-          <p className="text-xs text-slate-300">
-            Real-time verification & transmission tracking for assigned campus
-          </p>
-        </div>
 
-        <div className="w-full sm:w-72 bg-black/40 border border-slate-700/60 rounded-xl p-3 flex flex-col gap-1.5 shrink-0">
-          <div className="flex items-center justify-between text-xs font-bold">
-            <span className="text-slate-300">Progress:</span>
-            <span className="text-[#85E510] font-mono font-black">
-              {senderMetrics.total} / 275 ({Math.min(100, Math.round((senderMetrics.total / 275) * 100))}%)
-            </span>
-          </div>
-          <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
-            <div
-              className="bg-[#85E510] h-full rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(133,229,16,0.5)]"
-              style={{ width: `${Math.min(100, (senderMetrics.total / 275) * 100)}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
-            <span>{Math.max(0, 275 - senderMetrics.total)} remaining</span>
-            <span>Live Sync Active</span>
+          <div className="w-full sm:w-64 bg-black/40 border border-slate-700/60 rounded-xl p-2.5 flex flex-col gap-1 shrink-0">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="text-slate-300">Status:</span>
+              <span className="text-[#85E510] font-mono font-black">
+                {activeTask.status}
+              </span>
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
+              <span>Deadline: {activeTask.deadline}</span>
+              <span>Live Sync Active</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Resolved Mistake Reminder Notes (Always shown for sender whose data was corrected) */}
       {correctionNotices.length > 0 && (
@@ -704,8 +709,6 @@ export const StudentRegistrationPage: React.FC = () => {
                       <span className="font-semibold text-slate-200">Connecting camera sensor...</span>
                     </div>
                   )}
-                  {/* Portrait Alignment Guide */}
-                  <div className="absolute inset-x-8 inset-y-6 border-2 border-dashed border-[#85E510]/70 rounded-full pointer-events-none z-20 shadow-sm" />
                 </div>
               ) : capturedPhoto ? (
                 <div className="relative w-full h-full bg-slate-900 flex items-center justify-center overflow-hidden">
@@ -748,54 +751,60 @@ export const StudentRegistrationPage: React.FC = () => {
           <div className="space-y-2 pt-2">
             {isCameraActive ? (
               <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={capturePhoto}
+                  className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <Camera className="w-4 h-4 text-[#062404]" />
+                  <span>Take Student Photo</span>
+                </button>
+
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={capturePhoto}
-                    className="py-2.5 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                    onClick={toggleCameraFacing}
+                    className="py-2 px-3 rounded-xl bg-white hover:bg-slate-50 border border-[#CBD5E1] text-[#202833] font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
                   >
-                    <Camera className="w-4 h-4" />
-                    <span>Take Photo</span>
+                    <SwitchCamera className="w-3.5 h-3.5 text-[#4D8A07]" />
+                    <span>Flip Camera</span>
                   </button>
                   <button
                     type="button"
                     onClick={stopCamera}
-                    className="py-2.5 px-4 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] text-[#202833] font-bold text-xs cursor-pointer"
+                    className="py-2 px-3 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] text-[#202833] font-bold text-xs cursor-pointer"
                   >
                     Cancel
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={toggleCameraFacing}
-                  className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-50 border border-[#CBD5E1] text-[#202833] font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
-                >
-                  <SwitchCamera className="w-3.5 h-3.5 text-[#4D8A07]" />
-                  <span>Switch Camera ({cameraFacing === 'user' ? 'Front' : 'Back'})</span>
-                </button>
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => startCamera()}
-                    className="py-2.5 px-3 rounded-xl bg-[#202833] hover:bg-[#161D26] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                  >
-                    <Camera className="w-4 h-4 text-[#85E510]" />
-                    <span>Take Photo</span>
-                  </button>
+                {/* Button 1: Solid Lime Green Button matching screenshot */}
+                <button
+                  type="button"
+                  onClick={() => startCamera()}
+                  className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Camera className="w-4 h-4 text-[#062404]" />
+                  <span>Take Student Photo</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="py-2.5 px-3 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <Upload className="w-4 h-4 text-[#64748B]" />
-                    <span>Upload Image</span>
-                  </button>
-                </div>
+                {/* Button 2: Bordered Edit & Crop Button matching screenshot */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (capturedPhoto) {
+                      setIsEditorOpen(true);
+                    } else {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-[#85E510] text-[#202833] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+                >
+                  <Scissors className="w-4 h-4 text-[#4D8A07]" />
+                  <span>{capturedPhoto ? 'Edit & Crop Photo' : 'Upload & Crop Photo'}</span>
+                </button>
 
                 <input
                   ref={fileInputRef}
@@ -806,16 +815,7 @@ export const StudentRegistrationPage: React.FC = () => {
                 />
 
                 {capturedPhoto && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditorOpen(true)}
-                      className="py-2 px-3 rounded-xl bg-white hover:bg-[#F8FAF9] border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Sliders className="w-3.5 h-3.5 text-[#4D8A07]" />
-                      <span>Edit & Crop</span>
-                    </button>
-
+                  <div className="flex justify-end pt-0.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -826,10 +826,9 @@ export const StudentRegistrationPage: React.FC = () => {
                         setRotation(0);
                         setZoom(1);
                       }}
-                      className="py-2 px-3 rounded-xl bg-white hover:bg-red-50 border border-[#CBD5E1] hover:border-red-200 text-red-600 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 cursor-pointer"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Retake</span>
+                      <RefreshCw className="w-3 h-3" /> Retake Photo
                     </button>
                   </div>
                 )}
@@ -841,26 +840,38 @@ export const StudentRegistrationPage: React.FC = () => {
         {/* Card 2: Student Information Card (7 cols) */}
         <div className="lg:col-span-7 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-6">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-black text-[#202833] uppercase tracking-wider flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-[#4D8A07]" />
-                <span>Student Information</span>
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#F1F5F9]">
+              <h2 className="text-sm font-black text-[#0B1118] uppercase tracking-wider flex items-center gap-2">
+                <span>STUDENT INFORMATION</span>
               </h2>
-              <span className="text-[11px] font-semibold text-[#64748B]">All fields verified</span>
+              <span className="text-[11px] font-black uppercase tracking-wider text-[#4D8A07] bg-[#85E510]/20 px-2.5 py-0.5 rounded-md border border-[#85E510]/40">
+                REQUIRED
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-4">
               {/* Student ID */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-[#202833]">Student ID</label>
-                  <button
-                    type="button"
-                    onClick={() => setStudentId(generateNewId())}
-                    className="text-[10px] text-[#4D8A07] hover:underline font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <RefreshCw className="w-2.5 h-2.5" /> Auto-Generate
-                  </button>
+                  <label className="text-xs font-bold text-[#0B1118]">Student ID <span className="text-red-500">*</span></label>
+                  <div className="flex items-center gap-2">
+                    {isIdTaken ? (
+                      <span className="text-[11px] font-bold text-red-600 flex items-center gap-1">
+                        <X className="w-3.5 h-3.5" /> Taken
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-[#4D8A07] flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Available
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setStudentId(generateNewId())}
+                      className="text-[10px] text-[#4D8A07] hover:underline font-bold flex items-center gap-1 cursor-pointer ml-1"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" /> Auto-Gen
+                    </button>
+                  </div>
                 </div>
                 <div className="relative">
                   <input
@@ -868,243 +879,237 @@ export const StudentRegistrationPage: React.FC = () => {
                     required
                     value={studentId}
                     onChange={(e) => setStudentId(e.target.value.toUpperCase())}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-[#202833] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
+                    placeholder="SB-2026-12788"
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] transition-all"
                   />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {isIdTaken ? (
-                      <span className="text-[10px] font-bold text-red-600 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> Taken
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-[#4D8A07] flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Available
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
 
               {/* Full Name */}
               <div>
-                <label className="block text-xs font-bold text-[#202833] mb-1.5">Full Name</label>
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
                   value={fullName}
                   onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="e.g. Loza Bereket Tadesse"
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs text-[#202833] font-medium focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
+                  placeholder="Loza Bereket"
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3.5 py-2.5 text-xs text-[#0B1118] font-medium focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] transition-all"
                 />
               </div>
 
               {/* Sex */}
               <div>
-                <label className="block text-xs font-bold text-[#202833] mb-1.5">Sex</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSex('Female')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      sex === 'Female'
-                        ? 'bg-purple-50 text-purple-700 border-purple-300 shadow-sm'
-                        : 'bg-[#F8FAF9] text-[#64748B] border-[#CBD5E1] hover:bg-white'
-                    }`}
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
+                  Sex <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={sex}
+                    onChange={(e) => setSex(e.target.value as 'Female' | 'Male')}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] cursor-pointer appearance-none transition-all"
                   >
-                    Female
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSex('Male')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      sex === 'Male'
-                        ? 'bg-blue-50 text-blue-700 border-blue-300 shadow-sm'
-                        : 'bg-[#F8FAF9] text-[#64748B] border-[#CBD5E1] hover:bg-white'
-                    }`}
-                  >
-                    Male
-                  </button>
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
-              {/* Blood Group (Professional nomenclature without 'Default' wording) */}
+              {/* Blood Group / Type */}
               <div>
-                <label className="block text-xs font-bold text-[#202833] mb-1.5">Blood Group</label>
-                <select
-                  value={bloodType}
-                  onChange={(e) => setBloodType(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#202833] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
-                >
-                  <option value="Unknown">Unknown / Not Tested</option>
-                  <option value="A+">A+</option>
-                  <option value="A-">A-</option>
-                  <option value="B+">B+</option>
-                  <option value="B-">B-</option>
-                  <option value="AB+">AB+</option>
-                  <option value="AB-">AB-</option>
-                  <option value="O+">O+</option>
-                  <option value="O-">O-</option>
-                </select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-[#0B1118]">Blood Group / Type</label>
+                  <span className="text-xs text-slate-400 font-semibold">Optional</span>
+                </div>
+                <div className="relative">
+                  <select
+                    value={bloodType}
+                    onChange={(e) => setBloodType(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] cursor-pointer appearance-none transition-all"
+                  >
+                    <option value="">-- No Blood Group Selected --</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
               </div>
 
-              {/* Branch / Location Dropdown */}
+              {/* Grade / Class (with light lavender/blue tint matching screenshot) */}
               <div>
-                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Branch Location</label>
-                <select
-                  value={location}
-                  onChange={(e) => handleLocationChange(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
-                >
-                  {DEFAULT_BRANCHES.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* School (Strictly mapped to selected branch) */}
-              <div>
-                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Assigned School ({location})</label>
-                <select
-                  value={school}
-                  onChange={(e) => setSchool(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
-                >
-                  {availableSchools.map(schName => (
-                    <option key={schName} value={schName}>
-                      {schName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Grade / Section with 9C placeholder */}
-              <div>
-                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Grade / Section</label>
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
+                  Grade / Class <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
                   value={grade}
                   onChange={(e) => setGrade(e.target.value.toUpperCase())}
                   placeholder="9C"
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
+                  className="w-full bg-[#EEF2FF] border border-[#C7D2FE] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1E1B4B] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] transition-all"
                 />
               </div>
 
-              {/* Phone Number (Auto converts 09 and 07 to +2519 and +2517, blank stays blank) */}
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-[#0B1118] mb-1.5 flex items-center justify-between">
-                  <span>Phone Number</span>
-                  <span className="text-[10px] text-slate-400 font-normal">Auto converts 09/07 &rarr; +2519/+2517</span>
+              {/* Phone Number */}
+              <div>
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
+                  Phone Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
+                  required
                   value={phone}
                   onChange={(e) => handlePhoneFormat(e.target.value, setPhone)}
                   onBlur={() => handlePhoneFormat(phone, setPhone)}
-                  placeholder="e.g. 0911223344 (blank if empty)"
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
+                  placeholder="251912480376"
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] transition-all"
                 />
               </div>
 
-              {/* School Bus Identification (2 Radio Buttons in Main Form) */}
-              <div className="sm:col-span-2 bg-[#F8FAF9] border border-[#E2E8F0] p-3 rounded-xl">
-                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
-                  School Bus User Identification
-                </label>
-                <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+              {/* School Bus Usage (2 Dedicated Radio Buttons - unselected by default, toggleable) */}
+              <div className="bg-[#F8FAF9] border border-[#E2E8F0] p-3.5 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-[#0B1118]">
+                    School Bus Usage
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">Click selected option to unselect</span>
+                </div>
+                <div className="flex items-center gap-6 pt-0.5">
+                  <label className="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-800 select-none">
                     <input
                       type="radio"
                       name="schoolBusUsage"
                       value="Yes"
                       checked={schoolBusUsage === 'Yes'}
-                      onChange={() => setSchoolBusUsage('Yes')}
+                      onClick={() => setSchoolBusUsage(schoolBusUsage === 'Yes' ? '' : 'Yes')}
+                      onChange={() => {}}
                       className="w-4 h-4 accent-[#85E510] cursor-pointer"
                     />
                     <span>Yes (Uses Bus)</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                  <label className="flex items-center gap-2.5 cursor-pointer text-xs font-bold text-slate-800 select-none">
                     <input
                       type="radio"
                       name="schoolBusUsage"
                       value="No"
                       checked={schoolBusUsage === 'No'}
-                      onChange={() => setSchoolBusUsage('No')}
+                      onClick={() => setSchoolBusUsage(schoolBusUsage === 'No' ? '' : 'No')}
+                      onChange={() => {}}
                       className="w-4 h-4 accent-[#85E510] cursor-pointer"
                     />
                     <span>No (Private Transport)</span>
                   </label>
                 </div>
               </div>
-            </div>
 
-            {/* Expandable Extra Details */}
-            <div className="mt-4 pt-4 border-t border-[#E2E8F0]">
-              <button
-                type="button"
-                onClick={() => setShowExtraDetails(!showExtraDetails)}
-                className="w-full flex items-center justify-between text-xs font-bold text-[#202833] py-2 px-3 rounded-xl bg-[#F8FAF9] hover:bg-[#F1F5F3] border border-[#CBD5E1] transition-all cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Sliders className="w-3.5 h-3.5 text-[#4D8A07]" />
-                  <span>Extra Details (Guardian, DOB, Address)</span>
-                </span>
-                {showExtraDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
+              {/* Collapsible Extra Details */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowExtraDetails(!showExtraDetails)}
+                  className="w-full flex items-center justify-between text-xs font-bold text-slate-600 hover:text-slate-900 py-1.5 transition-all cursor-pointer"
+                >
+                  <span>{showExtraDetails ? 'Hide Extra Details' : 'Show Extra Details'}</span>
+                  <ChevronDown className={`w-4 h-4 text-[#85E510] transition-transform duration-200 ${showExtraDetails ? 'rotate-180' : ''}`} />
+                </button>
 
-              {showExtraDetails && (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#F8FAF9] rounded-xl border border-[#E2E8F0]">
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#202833] mb-1">Date of Birth</label>
-                    <input
-                      type="date"
-                      value={dateOfBirth}
-                      onChange={(e) => setDateOfBirth(e.target.value)}
-                      className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs"
-                    />
+                {showExtraDetails && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-[#F8FAF9] rounded-xl border border-[#E2E8F0]">
+                    {/* Branch Location */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202833] mb-1">Branch Location</label>
+                      <select
+                        value={location}
+                        onChange={(e) => handleLocationChange(e.target.value)}
+                        className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
+                      >
+                        {DEFAULT_BRANCHES.map(b => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* School */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202833] mb-1">Assigned School ({location})</label>
+                      <select
+                        value={school}
+                        onChange={(e) => setSchool(e.target.value)}
+                        className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
+                      >
+                        {availableSchools.map(schName => (
+                          <option key={schName} value={schName}>{schName}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Guardian Full Name */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202833] mb-1">Guardian Full Name</label>
+                      <input
+                        type="text"
+                        value={guardianName}
+                        onChange={(e) => setGuardianName(e.target.value)}
+                        placeholder="Parent / Guardian"
+                        className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+
+                    {/* Date of Birth */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202833] mb-1">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={dateOfBirth}
+                        onChange={(e) => setDateOfBirth(e.target.value)}
+                        className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+
+                    {/* Emergency Contact Phone */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202833] mb-1">Emergency Contact Phone</label>
+                      <input
+                        type="tel"
+                        value={emergencyContact}
+                        onChange={(e) => handlePhoneFormat(e.target.value, setEmergencyContact)}
+                        placeholder="e.g. 0911223344"
+                        className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs font-mono"
+                      />
+                    </div>
+
+                    {/* Residential Address */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202833] mb-1">Residential Address</label>
+                      <input
+                        type="text"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="e.g. Woreda 03, House 412"
+                        className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
                   </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#202833] mb-1">Guardian Full Name</label>
-                    <input
-                      type="text"
-                      value={guardianName}
-                      onChange={(e) => setGuardianName(e.target.value)}
-                      placeholder="Parent / Guardian"
-                      className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#202833] mb-1">Emergency Contact Phone</label>
-                    <input
-                      type="tel"
-                      value={emergencyContact}
-                      onChange={(e) => handlePhoneFormat(e.target.value, setEmergencyContact)}
-                      className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#202833] mb-1">Residential Address</label>
-                    <input
-                      type="text"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      placeholder="e.g. Woreda 03, House 412"
-                      className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs"
-                    />
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
           {/* Action Buttons: Clear Form + Submit */}
-          <div className="pt-4 border-t border-[#E2E8F0] flex items-center gap-3">
+          <div className="pt-4 border-t border-[#E2E8F0] flex flex-col sm:flex-row items-center gap-3">
             <button
               type="button"
               onClick={resetFormForNext}
-              className="py-3.5 px-4 rounded-xl border border-[#CBD5E1] hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-700 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+              className="w-full sm:w-auto py-3.5 px-4 rounded-xl border border-[#CBD5E1] hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-700 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
               <RefreshCw className="w-4 h-4" />
               <span>Clear Form</span>
@@ -1113,20 +1118,29 @@ export const StudentRegistrationPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting || isIdTaken || !fullName.trim()}
-              className="flex-1 py-3.5 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] disabled:opacity-50 text-[#062404] font-heading font-black text-sm shadow-[0_4px_15px_rgba(133,229,16,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full sm:flex-1 py-3.5 px-5 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] disabled:opacity-50 text-[#062404] font-heading font-black text-sm shadow-[0_4px_15px_rgba(133,229,16,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>{submitStatusText || 'Saving to Authoritative Database...'}</span>
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#062404]" />
+                  <span>{submitStatusText || 'Saving to Cloudflare R2 Storage...'}</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 text-[#062404]" />
                   <span>Register & Transmit Student</span>
                 </>
               )}
             </button>
+          </div>
+
+          {/* Cloudflare R2 Security & Sync Status Footer */}
+          <div className="pt-1 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-100">
+            <span className="flex items-center gap-1.5 text-[#2E7D32] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-pulse" />
+              Cloudflare R2 Bucket 'siliconlabs' Active
+            </span>
+            <span className="font-mono text-[10px]">Zero Egress Secured</span>
           </div>
         </div>
       </form>

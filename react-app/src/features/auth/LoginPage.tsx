@@ -24,7 +24,7 @@ export const LoginPage: React.FC = () => {
   const deviceId = getOrCreateDeviceId();
   const allUsers = getUsers();
 
-  const handleLogin = (e?: React.FormEvent) => {
+  const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError(null);
     setDeviceLockedWarning(null);
@@ -76,7 +76,35 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      // Strict 1-Email = 1-Device Hardware Lock Policy:
+      // Asynchronously query edge auth & 1-device hardware lock
+      let edgeAuthPassed = false;
+      try {
+        const edgeRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({ email: user.email, deviceId, password: pwd })
+        });
+        if (edgeRes.status === 403) {
+          const errData = await edgeRes.json().catch(() => ({}));
+          const bound = errData.boundDeviceId || 'Registered Terminal';
+          setError(
+            `Access Denied: Account "${user.email}" is strictly locked to another physical device (${bound}). Multi-device access from (${deviceId}) is prohibited.`
+          );
+          setIsSubmitting(false);
+          return;
+        } else if (edgeRes.ok) {
+          const edgeData = await edgeRes.json();
+          if (edgeData.user) {
+            user.boundDeviceId = edgeData.user.boundDeviceId || deviceId;
+            user.role = edgeData.user.role || user.role;
+            edgeAuthPassed = true;
+          }
+        }
+      } catch (e) {
+        // Edge offline, continue with local authoritative lock verification
+      }
+
+      // Strict 1-Email = 1-Device Hardware Lock Policy (Local verification):
       const lockCheck = checkDeviceLock(user, deviceId);
       if (!lockCheck.allowed) {
         setError(
@@ -104,20 +132,23 @@ export const LoginPage: React.FC = () => {
   const finishLogin = (user: UserType) => {
     setCurrentUser(user);
 
-    // If redirected from a specific page, return there
-    const fromPath = (location.state as any)?.from?.pathname;
-    if (fromPath && fromPath !== '/login') {
-      navigate(fromPath, { replace: true });
-      return;
+    // Direct role-specific workspace landing (Senders always go to /sender/register)
+    if (user.role === 'SUPER_ADMIN') {
+      navigate('/super-admin/dashboard', { replace: true });
+    } else if (user.role === 'ADMIN') {
+      navigate('/admin/dashboard', { replace: true });
+    } else if (user.role === 'RECEIVER') {
+      navigate('/receiver/students', { replace: true });
+    } else {
+      navigate('/sender/register', { replace: true });
     }
-
-    // Role-specific workspace landing
-    if (user.role === 'SENDER') navigate('/sender/register');
-    else if (user.role === 'RECEIVER') navigate('/receiver/students');
-    else if (user.role === 'ADMIN') navigate('/admin/dashboard');
-    else if (user.role === 'SUPER_ADMIN') navigate('/super-admin/dashboard');
-    else navigate('/receiver/students');
   };
+
+  const identifiedUser = allUsers.find(
+    u => u.email.toLowerCase() === email.trim().toLowerCase() ||
+         u.username.toLowerCase() === email.trim().toLowerCase() ||
+         (!email.includes('@') && u.email.toLowerCase().startsWith(email.trim().toLowerCase() + '@'))
+  );
 
   return (
     <div className="flex flex-col items-center justify-center py-8 px-4 font-sans select-none min-h-[90vh]">
@@ -173,9 +204,24 @@ export const LoginPage: React.FC = () => {
         <form onSubmit={handleLogin} className="space-y-4">
           {/* USERNAME OR EMAIL */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              ACCOUNT EMAIL OR USERNAME
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                ACCOUNT EMAIL OR USERNAME
+              </label>
+              {identifiedUser && (
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                  identifiedUser.role === 'SUPER_ADMIN'
+                    ? 'bg-purple-100 text-purple-800 border-purple-300'
+                    : identifiedUser.role === 'ADMIN'
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : identifiedUser.role === 'RECEIVER'
+                    ? 'bg-blue-100 text-blue-800 border-blue-300'
+                    : 'bg-[#9EE617]/20 text-[#256002] border-[#9EE617]/40'
+                }`}>
+                  {identifiedUser.role === 'SUPER_ADMIN' ? 'SUPER ADMIN' : identifiedUser.role}
+                </span>
+              )}
+            </div>
             <div className="relative flex items-center">
               <User className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
               <input
