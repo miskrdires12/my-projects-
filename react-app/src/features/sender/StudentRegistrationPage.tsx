@@ -14,6 +14,7 @@ import {
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
+import { CloudflareStatusBadge } from '@/components/CloudflareLiveStatus';
 import { R2_PUBLIC_BASE_URL } from '@/lib/syncEngine';
 
 export const StudentRegistrationPage: React.FC = () => {
@@ -306,49 +307,6 @@ export const StudentRegistrationPage: React.FC = () => {
     }
   };
 
-  // Photo Cropping Engine (supports 3:4 ID Portrait, 1:1 Square, 4:5 Card, 2:3 Classic)
-  const applyCrop = () => {
-    if (!capturedPhoto) return;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let targetRatio = 3 / 4;
-      if (aspectRatio === '1:1') targetRatio = 1;
-      else if (aspectRatio === '4:5') targetRatio = 4 / 5;
-      else if (aspectRatio === '2:3') targetRatio = 2 / 3;
-
-      let srcW = img.width;
-      let srcH = img.height;
-      let cropW = srcW;
-      let cropH = srcW / targetRatio;
-
-      if (cropH > srcH) {
-        cropH = srcH;
-        cropW = srcH * targetRatio;
-      }
-
-      // Apply zoom factor
-      cropW = cropW / zoom;
-      cropH = cropH / zoom;
-
-      const startX = Math.max(0, (srcW - cropW) / 2);
-      const startY = Math.max(0, (srcH - cropH) / 2);
-
-      canvas.width = 600;
-      canvas.height = Math.round(600 / targetRatio);
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
-        ctx.drawImage(img, startX, startY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        setCapturedPhoto(croppedDataUrl);
-        setZoom(1);
-        setIsEditorOpen(false);
-      }
-    };
-    img.src = capturedPhoto;
-  };
 
   // Student Registration Submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1135,12 +1093,12 @@ export const StudentRegistrationPage: React.FC = () => {
           </div>
 
           {/* Cloudflare R2 Security & Sync Status Footer */}
-          <div className="pt-1 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-100">
-            <span className="flex items-center gap-1.5 text-[#2E7D32] font-semibold">
+          <div className="pt-2 flex items-center justify-between border-t border-slate-100 flex-wrap gap-2">
+            <CloudflareStatusBadge />
+            <div className="flex items-center gap-1.5 text-[11px] text-[#2E7D32] font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-pulse" />
-              Cloudflare R2 Bucket 'siliconlabs' Active
-            </span>
-            <span className="font-mono text-[10px]">Zero Egress Secured</span>
+              <span>R2 Storage 100% JPEG Biometrics</span>
+            </div>
           </div>
         </div>
       </form>

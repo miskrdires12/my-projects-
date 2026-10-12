@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, LogOut, Menu, X } from 'lucide-react';
 import { getCurrentUser, setCurrentUser } from '@/lib/store';
 import { UserRole } from '@/types';
+import { CloudflareStatusBadge } from '@/components/CloudflareLiveStatus';
 
 interface HeaderProps {
   currentStation: UserRole;
@@ -74,6 +75,11 @@ export const Header: React.FC<HeaderProps> = ({ currentStation, onToggleMobileSi
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Center: Live Cloudflare Network & R2 Storage Status */}
+      <div className="flex items-center">
+        <CloudflareStatusBadge />
       </div>
 
       {/* Right Controls: Notifications & User Profile */}
