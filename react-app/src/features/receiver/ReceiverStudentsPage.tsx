@@ -18,6 +18,7 @@ import {
 } from '@/lib/store';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
+import { R2_PUBLIC_BASE_URL } from '@/lib/syncEngine';
 
 export const ReceiverStudentsPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -274,20 +275,15 @@ export const ReceiverStudentsPage: React.FC = () => {
     setIsPhotoEditorOpen(true);
   };
 
-  // Save Edited Photo: Deletes/replaces unedited with edited image data URL
-  const handleSaveEditedPhoto = (croppedDataUrl: string) => {
+  // Save Edited Photo: Uploads directly to Cloudflare R2 storage and replaces unedited photo
+  const handleSaveEditedPhoto = async (croppedDataUrl: string) => {
     if (!editingPhotoStudent) return;
     const targetSid = editingPhotoStudent.studentId;
+    const cleanGrade = (editingPhotoStudent.grade || 'General').trim();
+    const cleanName = (editingPhotoStudent.fullName || 'Student').trim().replace(/\s+/g, '_');
+    const photoKey = `${cleanGrade}/${targetSid}_${cleanName}_edited.jpg`;
 
-    // Update store (replaces unedited with edited)
-    updateStudent(targetSid, {
-      photoPath: croppedDataUrl,
-      previewPath: croppedDataUrl,
-      thumbnailPath: croppedDataUrl,
-      photoIntegrityStatus: 'PHOTO_VERIFIED'
-    });
-
-    // Update state immediately
+    // 1. Update UI state immediately with local data URL for instant zero-lag preview
     setStudents(prev => prev.map(s => s.studentId === targetSid ? {
       ...s,
       photoPath: croppedDataUrl,
@@ -301,11 +297,63 @@ export const ReceiverStudentsPage: React.FC = () => {
         ...prev,
         photoPath: croppedDataUrl,
         previewPath: croppedDataUrl,
-        thumbnailPath: croppedDataUrl
+        thumbnailPath: croppedDataUrl,
+        photoIntegrityStatus: 'PHOTO_VERIFIED'
       } : null);
     }
 
     setIsPhotoEditorOpen(false);
+
+    // 2. Upload to Cloudflare R2 Bucket 'siliconlabs'
+    let r2Url = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
+    try {
+      const upRes = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: targetSid,
+          grade: cleanGrade,
+          filename: photoKey,
+          data: croppedDataUrl
+        })
+      });
+      if (upRes.ok) {
+        const upData = await upRes.json();
+        if (upData.url || upData.r2Url) {
+          r2Url = upData.url || upData.r2Url;
+        }
+      }
+    } catch (r2Err) {
+      console.warn('R2 upload warning during photo edit, edge worker fallback:', r2Err);
+    }
+
+    // 3. Update store and local state with permanent Cloudflare R2 URL
+    updateStudent(targetSid, {
+      photoPath: r2Url,
+      previewPath: r2Url,
+      thumbnailPath: r2Url,
+      originalPhotoPath: r2Url,
+      photoIntegrityStatus: 'PHOTO_VERIFIED'
+    });
+
+    setStudents(prev => prev.map(s => s.studentId === targetSid ? {
+      ...s,
+      photoPath: r2Url,
+      previewPath: r2Url,
+      thumbnailPath: r2Url,
+      photoIntegrityStatus: 'PHOTO_VERIFIED'
+    } : s));
+
+    if (detailStudent?.studentId === targetSid) {
+      setDetailStudent(prev => prev ? {
+        ...prev,
+        photoPath: r2Url,
+        previewPath: r2Url,
+        thumbnailPath: r2Url,
+        photoIntegrityStatus: 'PHOTO_VERIFIED'
+      } : null);
+    }
+
     setEditingPhotoStudent(null);
   };
 

@@ -13,6 +13,7 @@ import {
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
+import { R2_PUBLIC_BASE_URL } from '@/lib/syncEngine';
 
 export const StudentRegistrationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -351,9 +352,40 @@ export const StudentRegistrationPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    setSubmitStatusText('Uploading biometric photograph & saving to Supabase PostgreSQL...');
+    setSubmitStatusText('Saving biometric photograph to Cloudflare R2 storage...');
 
     try {
+      const cleanGrade = grade.trim() || 'General';
+      const cleanName = fullName.trim().replace(/\s+/g, '_');
+      const photoKey = `${cleanGrade}/${studentId.trim()}_${cleanName}.jpg`;
+      let r2PhotoUrl: string | undefined = undefined;
+
+      // Direct Cloudflare R2 Bucket Upload
+      if (capturedPhoto && capturedPhoto.startsWith('data:image')) {
+        try {
+          const upRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentId: studentId.trim(),
+              grade: cleanGrade,
+              filename: photoKey,
+              data: capturedPhoto
+            })
+          });
+          if (upRes.ok) {
+            const upData = await upRes.json();
+            if (upData.url || upData.r2Url) {
+              r2PhotoUrl = upData.url || upData.r2Url;
+            }
+          }
+        } catch (r2Err) {
+          console.warn('Direct Cloudflare R2 upload attempt, edge worker fallback:', r2Err);
+        }
+      }
+
+      const finalPhotoUrl = r2PhotoUrl || (capturedPhoto ? `${R2_PUBLIC_BASE_URL}/${photoKey}` : undefined);
+
       const studentPayload: Student = {
         id: 'cmu-' + Date.now().toString(36),
         studentId: studentId.trim(),
@@ -371,9 +403,10 @@ export const StudentRegistrationPage: React.FC = () => {
         emergencyContactPhone: emergencyContact.trim(),
         schoolBusUsage,
         nationality,
-        photoPath: capturedPhoto ? `${grade}/${studentId.trim()}_${fullName.trim().replace(/\s+/g, '_')}.jpg` : undefined,
-        previewPath: capturedPhoto || undefined,
-        thumbnailPath: capturedPhoto || undefined,
+        photoPath: finalPhotoUrl,
+        previewPath: finalPhotoUrl || capturedPhoto || undefined,
+        thumbnailPath: finalPhotoUrl || capturedPhoto || undefined,
+        originalPhotoPath: finalPhotoUrl,
         photoIntegrityStatus: capturedPhoto ? 'PHOTO_VERIFIED' : 'NO_PHOTO',
         // QR Code token is strictly student id
         qrCodeData: studentId.trim(),

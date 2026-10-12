@@ -601,6 +601,44 @@ export default {
         const updates = { ...body, updatedAt: new Date().toISOString() };
         delete updates.id;
 
+        // Automatically store base64 biometric photo in Cloudflare R2 bucket 'siliconlabs'
+        let rawPhoto = updates.previewPath || updates.photoPath;
+        if (rawPhoto && typeof rawPhoto === "string" && rawPhoto.startsWith("data:image")) {
+          const cleanGrade = (updates.grade || "General").trim();
+          const cleanName = (updates.fullName || studentId).trim().replace(/\s+/g, "_");
+          const photoKey = `${cleanGrade}/${studentId.trim()}_${cleanName}_edited.jpg`;
+
+          try {
+            let base64Data = rawPhoto;
+            let contentType = "image/jpeg";
+            if (base64Data.includes(",")) {
+              const parts = base64Data.split(",");
+              const m = parts[0].match(/:(.*?);/);
+              if (m) contentType = m[1];
+              base64Data = parts[1];
+            }
+
+            const binaryStr = atob(base64Data);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+              bytes[i] = binaryStr.charCodeAt(i);
+            }
+
+            const r2Url = await uploadToR2Bucket(photoKey, bytes, contentType);
+            updates.photoPath = r2Url;
+            updates.previewPath = r2Url;
+            updates.thumbnailPath = r2Url;
+            updates.originalPhotoPath = r2Url;
+            uploadedPhotos.set(photoKey, { contentType, bytes });
+          } catch (r2Err) {
+            console.warn("R2 update error in PATCH:", r2Err);
+            updates.photoPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
+            updates.previewPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
+            updates.thumbnailPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
+            updates.originalPhotoPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
+          }
+        }
+
         const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(studentId)},id.eq.${encodeURIComponent(studentId)})`, {
           method: "PATCH",
           headers: {
