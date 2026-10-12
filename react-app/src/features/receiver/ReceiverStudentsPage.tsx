@@ -360,7 +360,7 @@ export const ReceiverStudentsPage: React.FC = () => {
   const currentPhoto = getPhotoUrl(activeDossier.photoPath || activeDossier.previewPath || activeDossier.thumbnailPath) || DEFAULT_AVATAR;
 
   return (
-    <div className="space-y-6 pb-12 font-sans selection:bg-[#85E510] selection:text-[#062404]">
+    <div className="space-y-6 pb-12 font-sans selection:bg-[#9EE617] selection:text-[#062404]">
       {/* =========================================================================
           SECTION 1: TOP ROW (STUDENT DIRECTORY + STUDENT DETAILS DOSSIER)
          ========================================================================= */}
@@ -384,7 +384,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 setFormStudentId('STU' + Math.floor(100000 + Math.random() * 900000));
                 setIsAddModalOpen(true);
               }}
-              className="px-3.5 py-2 rounded-xl bg-white hover:bg-emerald-50 text-[#256002] border border-[#85E510] text-xs font-black shadow-xs transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#9EE617]/10 text-[#256002] border border-[#9EE617] text-xs font-black shadow-xs transition-all flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4 text-[#3B7E05]" />
               <span>Add Student</span>
@@ -401,7 +401,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder="Search students..."
-                className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[#1E293B] placeholder-[#94A3B8] focus:outline-none focus:border-[#85E510]"
+                className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[#1E293B] placeholder-[#94A3B8] focus:outline-none focus:border-[#9EE617]"
               />
             </div>
 
@@ -409,7 +409,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             <select
               value={gradeFilter}
               onChange={(e) => { setGradeFilter(e.target.value); setPage(1); }}
-              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#85E510]"
+              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#9EE617]"
             >
               <option value="ALL">All Grades</option>
               {distinctGrades.map(g => (
@@ -421,7 +421,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             <select
               value={sectionFilter}
               onChange={(e) => { setSectionFilter(e.target.value); setPage(1); }}
-              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#85E510]"
+              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#9EE617]"
             >
               <option value="ALL">All Sections</option>
               {['10-A', '9-B', '11-A', '10-B', '9-A', '12-A', '11-B', '4-B', '2-A', '2-B'].map(sec => (
@@ -433,7 +433,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#85E510]"
+              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#9EE617]"
             >
               <option value="ALL">All Statuses</option>
               <option value="Active">Active</option>
@@ -445,7 +445,7 @@ export const ReceiverStudentsPage: React.FC = () => {
               <select
                 value={academicYearFilter}
                 onChange={(e) => setAcademicYearFilter(e.target.value)}
-                className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-8 pr-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#85E510] appearance-none"
+                className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-8 pr-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#9EE617] appearance-none"
               >
                 <option value="2026-2027">Academic Year</option>
                 <option value="2026-2027">2026-2027</option>
@@ -454,11 +454,11 @@ export const ReceiverStudentsPage: React.FC = () => {
               <Calendar className="w-3.5 h-3.5 text-[#64748B] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
-            {/* Green Search Action Button */}
+            {/* Light Lemon Green Search Action Button */}
             <button
               type="button"
               onClick={() => setPage(1)}
-              className="px-4 py-1.5 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] text-xs font-black shadow-xs transition-all flex items-center gap-1.5"
+              className="px-4 py-1.5 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black shadow-xs transition-all flex items-center gap-1.5"
             >
               <Search className="w-3.5 h-3.5" />
               <span>Search</span>
@@ -475,7 +475,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                       type="checkbox"
                       checked={selectedIds.size === pagedStudents.length && pagedStudents.length > 0}
                       onChange={toggleSelectAll}
-                      className="rounded border-[#CBD5E1] text-[#85E510] focus:ring-[#85E510]"
+                      className="rounded border-[#CBD5E1] text-[#9EE617] focus:ring-[#9EE617]"
                     />
                   </th>
                   <th className="py-3 px-2">Photo</th>
@@ -483,6 +483,8 @@ export const ReceiverStudentsPage: React.FC = () => {
                   <th className="py-3 px-2">Name</th>
                   <th className="py-3 px-2">Grade</th>
                   <th className="py-3 px-2">Section</th>
+                  <th className="py-3 px-2">Sender</th>
+                  <th className="py-3 px-2">Date / Time</th>
                   <th className="py-3 px-2">Status</th>
                   <th className="py-3 px-2 text-right pr-4">Actions</th>
                 </tr>
@@ -499,7 +501,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                       key={s.id || s.studentId}
                       onClick={() => handleSelectStudent(s)}
                       className={`cursor-pointer transition-colors ${
-                        isSelected ? 'bg-[#F0FDF4] border-l-4 border-l-[#85E510]' : 'hover:bg-slate-50'
+                        isSelected ? 'bg-[#F0FDF4] border-l-4 border-l-[#9EE617]' : 'hover:bg-slate-50'
                       }`}
                     >
                       <td className="py-2.5 pl-3.5" onClick={(e) => toggleSelectRow(s.studentId, e)}>
@@ -507,7 +509,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                           type="checkbox"
                           checked={isSelected || selectedIds.has(s.studentId)}
                           onChange={() => {}}
-                          className="rounded border-[#CBD5E1] text-[#85E510] focus:ring-[#85E510]"
+                          className="rounded border-[#CBD5E1] text-[#9EE617] focus:ring-[#9EE617]"
                         />
                       </td>
 
@@ -547,9 +549,28 @@ export const ReceiverStudentsPage: React.FC = () => {
                         {sec}
                       </td>
 
-                      {/* Status Active Badge matching screenshot */}
+                      {/* Sender / Who sent it */}
                       <td className="py-2.5 px-2">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E6F8CE] text-[#256002] border border-[#85E510]/30 inline-block">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200 whitespace-nowrap">
+                          {s.senderName || 'Field Sender'}
+                        </span>
+                      </td>
+
+                      {/* Transmission Date & Time */}
+                      <td className="py-2.5 px-2 font-mono text-[11px] text-[#475569] whitespace-nowrap">
+                        {s.createdAt ? (
+                          <div>
+                            <div className="font-semibold text-slate-700">{new Date(s.createdAt).toLocaleDateString()}</div>
+                            <div className="text-[9px] text-[#94A3B8]">{new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                          </div>
+                        ) : (
+                          '2026-10-12'
+                        )}
+                      </td>
+
+                      {/* Status Active Badge */}
+                      <td className="py-2.5 px-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/40 inline-block">
                           Active
                         </span>
                       </td>
@@ -679,12 +700,12 @@ export const ReceiverStudentsPage: React.FC = () => {
             <h3 className="font-heading font-black text-lg text-[#1E293B]">
               Student Details
             </h3>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E6F8CE] text-[#256002] border border-[#85E510]/30">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/30">
               Active
             </span>
           </div>
 
-          {/* Student Dossier Summary matching Screenshot */}
+          {/* Student Dossier Summary */}
           <div className="flex gap-4 items-start pb-2">
             {/* Student Portrait */}
             <div className="w-28 h-36 rounded-xl overflow-hidden bg-slate-100 border border-[#CBD5E1] shrink-0 shadow-xs">
@@ -723,6 +744,22 @@ export const ReceiverStudentsPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <ExternalLink className="w-3.5 h-3.5 text-[#366804] shrink-0" />
+                  <span className="text-slate-400">Sender</span>
+                  <span className="font-bold text-[#1E293B] bg-slate-100 px-1.5 py-0.5 rounded text-[11px] truncate max-w-[130px]">
+                    {activeDossier.senderName || 'Field Sender'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-[#366804] shrink-0" />
+                  <span className="text-slate-400 truncate">Transmitted</span>
+                  <span className="font-mono text-[#1E293B] font-semibold text-[10px]">
+                    {activeDossier.createdAt ? new Date(activeDossier.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '2026-10-12 08:30'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
                   <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span className="text-slate-400 truncate">Date of Birth</span>
                   <span className="font-mono text-[#1E293B] font-medium">{getDob(activeDossier)}</span>
@@ -752,7 +789,7 @@ export const ReceiverStudentsPage: React.FC = () => {
               >
                 <span>{tab}</span>
                 {dossierTab === tab && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#85E510] rounded-full" />
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#9EE617] rounded-full" />
                 )}
               </button>
             ))}
@@ -784,7 +821,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setLightboxPhoto(currentPhoto)}
-                    className="w-full py-1.5 px-2.5 rounded-lg bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] text-[11px] font-black transition-all flex items-center justify-center gap-1.5 shadow-xs"
+                    className="w-full py-1.5 px-2.5 rounded-lg bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-[11px] font-black transition-all flex items-center justify-center gap-1.5 shadow-xs"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     <span>View Full Size</span>
@@ -829,7 +866,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             <div className="space-y-2 pt-1 text-xs">
               <div className="flex justify-between py-1 border-b border-slate-100">
                 <span className="text-slate-400">Primary Phone</span>
-                <span className="font-mono font-bold text-[#1E293B]">{activeDossier.phone || '+251911000000'}</span>
+                <span className="font-mono font-bold text-[#1E293B]">{activeDossier.phone || 'N/A'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100">
                 <span className="text-slate-400">City / Region</span>
@@ -845,12 +882,14 @@ export const ReceiverStudentsPage: React.FC = () => {
           {dossierTab === 'Activity' && (
             <div className="space-y-2 pt-1 text-xs">
               <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Enrolled Date</span>
-                <span className="font-mono text-[#1E293B]">{activeDossier.createdAt?.substring(0, 10) || '2026-10-11'}</span>
+                <span className="text-slate-400">Sender / Field Operator</span>
+                <span className="font-bold text-[#1E293B]">{activeDossier.senderName || 'Field Sender'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Field Sender</span>
-                <span className="font-bold text-[#1E293B]">{activeDossier.senderName || 'Sender Station 1'}</span>
+                <span className="text-slate-400">Transmission Date & Time</span>
+                <span className="font-mono text-[#1E293B]">
+                  {activeDossier.createdAt ? new Date(activeDossier.createdAt).toLocaleString() : '2026-10-12 08:30'}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100">
                 <span className="text-slate-400">Dual-Channel Sync</span>
@@ -901,7 +940,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 onClick={() => setDesignerSide('Front')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                   designerSide === 'Front'
-                    ? 'bg-[#E6F8CE] text-[#256002] shadow-xs'
+                    ? 'bg-[#9EE617]/20 text-[#256002] shadow-xs'
                     : 'text-[#64748B] hover:text-[#1E293B]'
                 }`}
               >
@@ -912,7 +951,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 onClick={() => setDesignerSide('Back')}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                   designerSide === 'Back'
-                    ? 'bg-[#E6F8CE] text-[#256002] shadow-xs'
+                    ? 'bg-[#9EE617]/20 text-[#256002] shadow-xs'
                     : 'text-[#64748B] hover:text-[#1E293B]'
                 }`}
               >
@@ -929,7 +968,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             <div className="space-y-3">
               {/* Tabs: Templates / Elements */}
               <div className="flex items-center gap-4 border-b border-[#E2E8F0] pb-2 text-xs font-bold">
-                <button type="button" className="text-[#1E293B] border-b-2 border-[#85E510] pb-1 font-black">
+                <button type="button" className="text-[#1E293B] border-b-2 border-[#9EE617] pb-1 font-black">
                   Templates
                 </button>
                 <button type="button" className="text-[#64748B] hover:text-[#1E293B] pb-1">
@@ -952,7 +991,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   type="button"
                   onClick={() => setActiveTemplate('modern')}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                    activeTemplate === 'modern' ? 'bg-[#85E510] text-[#062404] shadow-xs' : 'bg-white border border-[#CBD5E1] text-[#64748B]'
+                    activeTemplate === 'modern' ? 'bg-[#9EE617] text-[#062404] shadow-xs' : 'bg-white border border-[#CBD5E1] text-[#64748B]'
                   }`}
                 >
                   Modern
@@ -974,11 +1013,11 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <div
                   onClick={() => setActiveTemplate('modern')}
                   className={`cursor-pointer rounded-lg border-2 p-1 bg-white shadow-xs transition-all ${
-                    activeTemplate === 'modern' ? 'border-[#85E510] ring-2 ring-[#85E510]/30' : 'border-slate-200'
+                    activeTemplate === 'modern' ? 'border-[#9EE617] ring-2 ring-[#9EE617]/30' : 'border-slate-200'
                   }`}
                 >
                   <div className="h-12 bg-gradient-to-r from-slate-900 to-slate-800 rounded flex items-center justify-center p-1">
-                    <span className="text-[8px] font-black text-[#85E510]">MODERN</span>
+                    <span className="text-[8px] font-black text-[#9EE617]">MODERN</span>
                   </div>
                 </div>
 
@@ -986,7 +1025,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <div
                   onClick={() => setActiveTemplate('school')}
                   className={`cursor-pointer rounded-lg border-2 p-1 bg-white shadow-xs transition-all ${
-                    activeTemplate === 'school' ? 'border-[#85E510] ring-2 ring-[#85E510]/30' : 'border-slate-200'
+                    activeTemplate === 'school' ? 'border-[#9EE617] ring-2 ring-[#9EE617]/30' : 'border-slate-200'
                   }`}
                 >
                   <div className="h-12 bg-gradient-to-r from-indigo-900 to-indigo-700 rounded flex items-center justify-center p-1">
@@ -998,7 +1037,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <div
                   onClick={() => setActiveTemplate('classic')}
                   className={`cursor-pointer rounded-lg border-2 p-1 bg-white shadow-xs transition-all ${
-                    activeTemplate === 'classic' ? 'border-[#85E510] ring-2 ring-[#85E510]/30' : 'border-slate-200'
+                    activeTemplate === 'classic' ? 'border-[#9EE617] ring-2 ring-[#9EE617]/30' : 'border-slate-200'
                   }`}
                 >
                   <div className="h-12 bg-gradient-to-r from-slate-200 to-slate-300 rounded flex items-center justify-center p-1">
@@ -1028,11 +1067,11 @@ export const ReceiverStudentsPage: React.FC = () => {
                     onClick={() => setCardOrientation('portrait')}
                     className={`py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                       cardOrientation === 'portrait'
-                        ? 'border-[#85E510] bg-[#E6F8CE] text-[#256002]'
+                        ? 'border-[#9EE617] bg-[#9EE617]/20 text-[#256002]'
                         : 'border-[#CBD5E1] bg-white text-[#64748B]'
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${cardOrientation === 'portrait' ? 'bg-[#85E510]' : 'border border-slate-300'}`} />
+                    <span className={`w-2 h-2 rounded-full ${cardOrientation === 'portrait' ? 'bg-[#9EE617]' : 'border border-slate-300'}`} />
                     <span>Portrait</span>
                   </button>
 
@@ -1041,11 +1080,11 @@ export const ReceiverStudentsPage: React.FC = () => {
                     onClick={() => setCardOrientation('landscape')}
                     className={`py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                       cardOrientation === 'landscape'
-                        ? 'border-[#85E510] bg-[#E6F8CE] text-[#256002]'
+                        ? 'border-[#9EE617] bg-[#9EE617]/20 text-[#256002]'
                         : 'border-[#CBD5E1] bg-white text-[#64748B]'
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${cardOrientation === 'landscape' ? 'bg-[#85E510]' : 'border border-slate-300'}`} />
+                    <span className={`w-2 h-2 rounded-full ${cardOrientation === 'landscape' ? 'bg-[#9EE617]' : 'border border-slate-300'}`} />
                     <span>Landscape</span>
                   </button>
                 </div>
@@ -1059,11 +1098,11 @@ export const ReceiverStudentsPage: React.FC = () => {
                     onClick={() => setDesignerSide('Front')}
                     className={`py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                       designerSide === 'Front'
-                        ? 'border-[#85E510] bg-[#E6F8CE] text-[#256002]'
+                        ? 'border-[#9EE617] bg-[#9EE617]/20 text-[#256002]'
                         : 'border-[#CBD5E1] bg-white text-[#64748B]'
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${designerSide === 'Front' ? 'bg-[#85E510]' : 'border border-slate-300'}`} />
+                    <span className={`w-2 h-2 rounded-full ${designerSide === 'Front' ? 'bg-[#9EE617]' : 'border border-slate-300'}`} />
                     <span>Front Side</span>
                   </button>
 
@@ -1072,11 +1111,11 @@ export const ReceiverStudentsPage: React.FC = () => {
                     onClick={() => setDesignerSide('Back')}
                     className={`py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                       designerSide === 'Back'
-                        ? 'border-[#85E510] bg-[#E6F8CE] text-[#256002]'
+                        ? 'border-[#9EE617] bg-[#9EE617]/20 text-[#256002]'
                         : 'border-[#CBD5E1] bg-white text-[#64748B]'
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${designerSide === 'Back' ? 'bg-[#85E510]' : 'border border-slate-300'}`} />
+                    <span className={`w-2 h-2 rounded-full ${designerSide === 'Back' ? 'bg-[#9EE617]' : 'border border-slate-300'}`} />
                     <span>Back Side</span>
                   </button>
                 </div>
@@ -1097,7 +1136,7 @@ export const ReceiverStudentsPage: React.FC = () => {
               <button
                 key={tool.label}
                 type="button"
-                className="w-12 h-12 rounded-xl bg-white border border-[#CBD5E1] hover:border-[#85E510] hover:text-[#256002] flex flex-col items-center justify-center gap-1 text-[#64748B] shadow-xs transition-all"
+                className="w-12 h-12 rounded-xl bg-white border border-[#CBD5E1] hover:border-[#9EE617] hover:text-[#256002] flex flex-col items-center justify-center gap-1 text-[#64748B] shadow-xs transition-all"
                 title={tool.label}
               >
                 <tool.icon className="w-4 h-4" />
@@ -1117,7 +1156,7 @@ export const ReceiverStudentsPage: React.FC = () => {
               <div className="pt-3 px-4 flex items-start justify-between relative">
                 {/* Brand */}
                 <div className="flex items-center gap-2 z-10">
-                  <div className="w-6 h-6 rounded-md bg-[#85E510] flex items-center justify-center p-1 text-[#062404] shadow-xs">
+                  <div className="w-6 h-6 rounded-md bg-[#9EE617] flex items-center justify-center p-1 text-[#062404] shadow-xs">
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                       <rect x="3" y="3" width="8" height="8" rx="2" />
                       <rect x="13" y="3" width="8" height="8" rx="2" fillOpacity="0.8" />
@@ -1137,7 +1176,7 @@ export const ReceiverStudentsPage: React.FC = () => {
 
                 {/* Decorative Green Curve on Top Right */}
                 <div className="absolute top-0 right-0 w-28 h-20 overflow-hidden pointer-events-none">
-                  <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#85E510] to-[#65B703] opacity-80 -mr-10 -mt-10" />
+                  <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#9EE617] to-[#7CB305] opacity-80 -mr-10 -mt-10" />
                 </div>
               </div>
 
@@ -1197,7 +1236,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <span className="text-[9px] font-black tracking-wider text-white uppercase">
                   STUDENT ID CARD
                 </span>
-                <span className="text-[9px] font-bold text-[#85E510]">
+                <span className="text-[9px] font-bold text-[#9EE617]">
                   Learn • Grow • Succeed
                 </span>
               </div>
@@ -1253,11 +1292,11 @@ export const ReceiverStudentsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Print Ready Button matching Screenshot */}
+            {/* Print Ready Button */}
             <button
               type="button"
               onClick={handlePrintReady}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] active:scale-[0.99] text-[#062404] text-xs font-black shadow-sm transition-all flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] active:scale-[0.99] text-[#062404] text-xs font-black shadow-sm transition-all flex items-center justify-center gap-2"
             >
               <Printer className="w-4 h-4" />
               <span>Print Ready</span>
@@ -1373,7 +1412,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                       reader.readAsDataURL(file);
                     }
                   }}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-[#85E510] file:text-[#062404] file:font-black"
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-[#9EE617] file:text-[#062404] file:font-black"
                 />
               </div>
 
@@ -1388,7 +1427,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSavingStudent}
-                  className="px-4 py-2 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] text-xs font-black"
+                  className="px-4 py-2 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black"
                 >
                   {isSavingStudent ? 'Saving...' : 'Save & Upload to Cloudflare'}
                 </button>
@@ -1468,7 +1507,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                     } : null);
                     setIsEditModalOpen(false);
                   }}
-                  className="px-4 py-2 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] text-xs font-black"
+                  className="px-4 py-2 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black"
                 >
                   Update Record
                 </button>

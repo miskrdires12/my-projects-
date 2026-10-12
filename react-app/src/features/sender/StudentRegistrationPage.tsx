@@ -3,9 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   Camera, RefreshCw, CheckCircle2, AlertCircle, RotateCw, ZoomIn, ZoomOut,
   Upload, UserCheck, ArrowRight, ShieldCheck, Sparkles, X, Sliders, Crop,
-  ChevronDown, ChevronUp, Image as ImageIcon, Check, Printer, SwitchCamera
+  ChevronDown, ChevronUp, Image as ImageIcon, Check, Printer, SwitchCamera,
+  TrendingUp, Calendar, Clock, BarChart2, MapPin
 } from 'lucide-react';
-import { getStudents, addStudent, getSchools, getCurrentUser } from '@/lib/store';
+import {
+  getStudents, addStudent, getSchools, getCurrentUser,
+  DEFAULT_BRANCHES, getSenderMetrics, SenderMetrics
+} from '@/lib/store';
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
 
@@ -19,13 +23,13 @@ export const StudentRegistrationPage: React.FC = () => {
     return `SB-2026-${randomNum}`;
   };
 
-  // Form States
+  // Form States (Phone default is strictly blank per user specification)
   const [studentId, setStudentId] = useState(generateNewId);
   const [isIdTaken, setIsIdTaken] = useState(false);
   const [fullName, setFullName] = useState('');
   const [sex, setSex] = useState<'Female' | 'Male'>('Female');
   const [grade, setGrade] = useState('9C');
-  const [phone, setPhone] = useState('+251');
+  const [phone, setPhone] = useState('');
   const [bloodType, setBloodType] = useState('O+');
   const [school, setSchool] = useState('YMS');
   const [location, setLocation] = useState('Addis Ababa');
@@ -35,7 +39,7 @@ export const StudentRegistrationPage: React.FC = () => {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [address, setAddress] = useState('Addis Ababa');
   const [guardianName, setGuardianName] = useState('');
-  const [emergencyContact, setEmergencyContact] = useState('+251');
+  const [emergencyContact, setEmergencyContact] = useState('');
   const [schoolBusUsage, setSchoolBusUsage] = useState<'Yes' | 'No'>('Yes');
   const [nationality, setNationality] = useState('Ethiopian');
 
@@ -50,14 +54,20 @@ export const StudentRegistrationPage: React.FC = () => {
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
-  // Photo Editor Modal States
+  // Photo Editor & Crop Modal States
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [editorActiveTab, setEditorActiveTab] = useState<'Brightness' | 'Contrast' | 'Saturation' | 'Crop' | 'Rotate'>('Brightness');
+  const [editorActiveTab, setEditorActiveTab] = useState<'Crop' | 'Brightness' | 'Contrast' | 'Saturation' | 'Rotate'>('Crop');
+  const [aspectRatio, setAspectRatio] = useState<'3:4' | '1:1' | '4:5' | '2:3'>('3:4');
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
   const [saturation, setSaturation] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [zoom, setZoom] = useState(1);
+
+  // Sender Transmission Metrics (Daily, Weekly, Monthly, Total)
+  const [senderMetrics, setSenderMetrics] = useState<SenderMetrics>(() =>
+    getSenderMetrics(user?.username || '')
+  );
 
   // Submission States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,6 +76,20 @@ export const StudentRegistrationPage: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const schools = getSchools();
+
+  // Refresh Sender Metrics dynamically on mount, after submission, or data changes
+  const refreshMetrics = useCallback(() => {
+    if (user?.username) {
+      setSenderMetrics(getSenderMetrics(user.username));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshMetrics();
+    const handleDataChange = () => refreshMetrics();
+    window.addEventListener('studentbridge_datachange', handleDataChange);
+    return () => window.removeEventListener('studentbridge_datachange', handleDataChange);
+  }, [refreshMetrics, submittedStudent]);
 
   // Check ID Uniqueness dynamically against all students
   useEffect(() => {
@@ -82,6 +106,7 @@ export const StudentRegistrationPage: React.FC = () => {
       .join(' ');
     setFullName(capitalized);
   };
+
 
   // Ethiopian Phone Number Auto-Formatter
   // 09... -> +2519... and 07... -> +2517...
@@ -250,6 +275,50 @@ export const StudentRegistrationPage: React.FC = () => {
     }
   };
 
+  // Photo Cropping Engine (supports 3:4 ID Portrait, 1:1 Square, 4:5 Card, 2:3 Classic)
+  const applyCrop = () => {
+    if (!capturedPhoto) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let targetRatio = 3 / 4;
+      if (aspectRatio === '1:1') targetRatio = 1;
+      else if (aspectRatio === '4:5') targetRatio = 4 / 5;
+      else if (aspectRatio === '2:3') targetRatio = 2 / 3;
+
+      let srcW = img.width;
+      let srcH = img.height;
+      let cropW = srcW;
+      let cropH = srcW / targetRatio;
+
+      if (cropH > srcH) {
+        cropH = srcH;
+        cropW = srcH * targetRatio;
+      }
+
+      // Apply zoom factor
+      cropW = cropW / zoom;
+      cropH = cropH / zoom;
+
+      const startX = Math.max(0, (srcW - cropW) / 2);
+      const startY = Math.max(0, (srcH - cropH) / 2);
+
+      canvas.width = 600;
+      canvas.height = Math.round(600 / targetRatio);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+        ctx.drawImage(img, startX, startY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+        const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        setCapturedPhoto(croppedDataUrl);
+        setZoom(1);
+        setIsEditorOpen(false);
+      }
+    };
+    img.src = capturedPhoto;
+  };
+
   // Student Registration Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -353,6 +422,7 @@ export const StudentRegistrationPage: React.FC = () => {
       // 2. Persist in local store & notify Receiver Station immediately
       addStudent(persistedStudent);
       setSubmittedStudent(persistedStudent);
+      refreshMetrics();
     } catch (err: any) {
       setSubmitError(err.message || 'Error occurred during registration.');
     } finally {
@@ -364,8 +434,8 @@ export const StudentRegistrationPage: React.FC = () => {
   const resetFormForNext = () => {
     setStudentId(generateNewId());
     setFullName('');
-    setPhone('+251');
-    setEmergencyContact('+251');
+    setPhone('');
+    setEmergencyContact('');
     setGuardianName('');
     setDateOfBirth('');
     setCapturedPhoto(null);
@@ -374,12 +444,14 @@ export const StudentRegistrationPage: React.FC = () => {
     setSaturation(100);
     setRotation(0);
     setZoom(1);
+    setAspectRatio('3:4');
     setSubmittedStudent(null);
     setSubmitError(null);
+    refreshMetrics();
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-5 max-w-5xl mx-auto pb-12">
       {/* Hidden Canvas for snapshot processing */}
       <canvas ref={canvasRef} className="hidden" />
 
@@ -387,10 +459,10 @@ export const StudentRegistrationPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-heading font-black text-[#202833] tracking-tight">
-              Register Student
+            <h1 className="text-2xl font-heading font-black text-[#0B1118] tracking-tight">
+              Register Student & Biometric Camera Capture
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#85E510]/20 text-[#366804] border border-[#85E510]/40 uppercase">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#9EE617]/20 text-[#366804] border border-[#9EE617]/40 uppercase">
               Station One &bull; Sender
             </span>
           </div>
@@ -401,10 +473,58 @@ export const StudentRegistrationPage: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-[#64748B] bg-white px-3 py-1.5 rounded-xl border border-[#E2E8F0]">
-            Operator: <strong className="text-[#202833]">{user?.username || 'Sender'}</strong>
+            Operator: <strong className="text-[#0B1118]">{user?.username || 'Sender'}</strong>
           </span>
         </div>
       </div>
+
+      {/* Sender Transmission Telemetry (Daily, Weekly, Monthly, Total) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-xs">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+            <span>Daily (Today)</span>
+            <Calendar className="w-3.5 h-3.5 text-[#9EE617]" />
+          </div>
+          <div className="mt-1 text-xl font-heading font-black text-[#0B1118]">
+            {senderMetrics.today.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-slate-500 font-medium">Daily transmissions</div>
+        </div>
+
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-xs">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+            <span>This Week</span>
+            <TrendingUp className="w-3.5 h-3.5 text-[#9EE617]" />
+          </div>
+          <div className="mt-1 text-xl font-heading font-black text-[#0B1118]">
+            {senderMetrics.week.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-slate-500 font-medium">7-day volume run</div>
+        </div>
+
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-xs">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+            <span>This Month</span>
+            <BarChart2 className="w-3.5 h-3.5 text-[#9EE617]" />
+          </div>
+          <div className="mt-1 text-xl font-heading font-black text-[#0B1118]">
+            {senderMetrics.month.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-slate-500 font-medium">Monthly quota total</div>
+        </div>
+
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3 shadow-xs">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+            <span>Total Sent</span>
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#9EE617]" />
+          </div>
+          <div className="mt-1 text-xl font-heading font-black text-[#0B1118]">
+            {senderMetrics.total.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#366804] font-bold">Lifetime records</div>
+        </div>
+      </div>
+
 
       {submitError && (
         <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
@@ -706,17 +826,13 @@ export const StudentRegistrationPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* School */}
+              {/* School (Selected Separately) */}
               <div>
-                <label className="block text-xs font-bold text-[#202833] mb-1.5">Assigned School</label>
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Assigned School</label>
                 <select
                   value={school}
-                  onChange={(e) => {
-                    setSchool(e.target.value);
-                    const found = schools.find(s => s.name === e.target.value);
-                    if (found) setLocation(found.location);
-                  }}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#202833] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
+                  onChange={(e) => setSchool(e.target.value)}
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
                 >
                   {schools.map(s => (
                     <option key={s.id} value={s.name}>
@@ -726,37 +842,48 @@ export const StudentRegistrationPage: React.FC = () => {
                 </select>
               </div>
 
+              {/* Branch / Location Dropdown (Selected Separately) */}
+              <div>
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Branch Location</label>
+                <select
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
+                >
+                  {DEFAULT_BRANCHES.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Grade / Section */}
               <div>
-                <label className="block text-xs font-bold text-[#202833] mb-1.5">Grade / Section</label>
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Grade / Section</label>
                 <input
                   type="text"
                   required
                   value={grade}
                   onChange={(e) => setGrade(e.target.value.toUpperCase())}
                   placeholder="e.g. 9C or 10A"
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#202833] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
                 />
               </div>
 
-              {/* Phone Number */}
+              {/* Phone Number (Blank Default, No +251 Forced) */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-[#202833] mb-1.5">
-                  Phone Number (Ethiopia +251)
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
+                  Phone Number
                 </label>
                 <input
                   type="tel"
-                  required
                   value={phone}
-                  onChange={(e) => handlePhoneFormat(e.target.value, setPhone)}
-                  placeholder="+251911234567"
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-[#202833] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. 0911223344 (blank default)"
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
                 />
-                <span className="text-[10px] text-[#64748B] mt-1 block">
-                  Auto-formats: 09... &rarr; +2519... and 07... &rarr; +2517...
-                </span>
               </div>
             </div>
+
 
             {/* Expandable Extra Details */}
             <div className="mt-4 pt-4 border-t border-[#E2E8F0]">
@@ -873,8 +1000,16 @@ export const StudentRegistrationPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Canvas Preview in Modal */}
-            <div className="relative aspect-[3/4] w-48 mx-auto bg-slate-900 rounded-xl overflow-hidden shadow-inner">
+            {/* Canvas Preview in Modal with dynamic Aspect Ratio */}
+            <div
+              style={{
+                aspectRatio:
+                  aspectRatio === '1:1' ? '1 / 1' :
+                  aspectRatio === '4:5' ? '4 / 5' :
+                  aspectRatio === '2:3' ? '2 / 3' : '3 / 4'
+              }}
+              className="relative w-48 mx-auto bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 transition-all"
+            >
               {capturedPhoto && (
                 <img
                   src={capturedPhoto}
@@ -890,15 +1025,15 @@ export const StudentRegistrationPage: React.FC = () => {
 
             {/* Slider Tabs */}
             <div className="flex items-center justify-center gap-1 bg-[#F4F7F5] p-1 rounded-xl text-xs font-bold text-[#64748B]">
-              {(['Brightness', 'Contrast', 'Saturation', 'Crop', 'Rotate'] as const).map(tab => (
+              {(['Crop', 'Brightness', 'Contrast', 'Saturation', 'Rotate'] as const).map(tab => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setEditorActiveTab(tab)}
                   className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
                     editorActiveTab === tab
-                      ? 'bg-white text-[#202833] shadow-sm font-black'
-                      : 'hover:text-[#202833]'
+                      ? 'bg-white text-[#0B1118] shadow-sm font-black'
+                      : 'hover:text-[#0B1118]'
                   }`}
                 >
                   {tab}
@@ -907,10 +1042,71 @@ export const StudentRegistrationPage: React.FC = () => {
             </div>
 
             {/* Controls */}
-            <div className="p-3 bg-[#F8FAF9] rounded-xl space-y-3">
+            <div className="p-3.5 bg-[#F8FAF9] rounded-xl space-y-3.5">
+              {editorActiveTab === 'Crop' && (
+                <div className="space-y-3">
+                  {/* Aspect Ratio Selector */}
+                  <div>
+                    <div className="text-xs font-bold text-[#0B1118] mb-1.5 flex items-center justify-between">
+                      <span>Aspect Ratio Options</span>
+                      <span className="text-[10px] text-[#366804] font-bold bg-[#9EE617]/20 border border-[#9EE617]/40 px-2 py-0.5 rounded">
+                        Active: {aspectRatio}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[
+                        { label: '3:4 ID Portrait', val: '3:4' },
+                        { label: '1:1 Square', val: '1:1' },
+                        { label: '4:5 Dossier', val: '4:5' },
+                        { label: '2:3 Classic', val: '2:3' },
+                      ].map(r => (
+                        <button
+                          key={r.val}
+                          type="button"
+                          onClick={() => setAspectRatio(r.val as any)}
+                          className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                            aspectRatio === r.val
+                              ? 'bg-[#9EE617] text-[#062404] border-[#9EE617] font-black shadow-xs'
+                              : 'bg-white text-slate-600 border-[#CBD5E1] hover:bg-slate-50'
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Zoom Factor */}
+                  <div>
+                    <div className="flex justify-between text-xs font-bold text-[#0B1118] mb-1">
+                      <span>Zoom Factor & Scale</span>
+                      <span>{zoom.toFixed(1)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="3"
+                      step="0.1"
+                      value={zoom}
+                      onChange={(e) => setZoom(Number(e.target.value))}
+                      className="w-full accent-[#9EE617]"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={applyCrop}
+                    className="w-full py-2 px-3 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] font-black text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Crop className="w-3.5 h-3.5" />
+                    <span>Apply Aspect Ratio Crop ({aspectRatio})</span>
+                  </button>
+                </div>
+              )}
+
               {editorActiveTab === 'Brightness' && (
                 <div>
-                  <div className="flex justify-between text-xs font-bold text-[#202833] mb-1">
+                  <div className="flex justify-between text-xs font-bold text-[#0B1118] mb-1">
                     <span>Brightness</span>
                     <span>{brightness}%</span>
                   </div>
@@ -920,14 +1116,14 @@ export const StudentRegistrationPage: React.FC = () => {
                     max="150"
                     value={brightness}
                     onChange={(e) => setBrightness(Number(e.target.value))}
-                    className="w-full accent-[#85E510]"
+                    className="w-full accent-[#9EE617]"
                   />
                 </div>
               )}
 
               {editorActiveTab === 'Contrast' && (
                 <div>
-                  <div className="flex justify-between text-xs font-bold text-[#202833] mb-1">
+                  <div className="flex justify-between text-xs font-bold text-[#0B1118] mb-1">
                     <span>Contrast</span>
                     <span>{contrast}%</span>
                   </div>
@@ -937,14 +1133,14 @@ export const StudentRegistrationPage: React.FC = () => {
                     max="150"
                     value={contrast}
                     onChange={(e) => setContrast(Number(e.target.value))}
-                    className="w-full accent-[#85E510]"
+                    className="w-full accent-[#9EE617]"
                   />
                 </div>
               )}
 
               {editorActiveTab === 'Saturation' && (
                 <div>
-                  <div className="flex justify-between text-xs font-bold text-[#202833] mb-1">
+                  <div className="flex justify-between text-xs font-bold text-[#0B1118] mb-1">
                     <span>Saturation</span>
                     <span>{saturation}%</span>
                   </div>
@@ -954,7 +1150,7 @@ export const StudentRegistrationPage: React.FC = () => {
                     max="200"
                     value={saturation}
                     onChange={(e) => setSaturation(Number(e.target.value))}
-                    className="w-full accent-[#85E510]"
+                    className="w-full accent-[#9EE617]"
                   />
                 </div>
               )}
@@ -966,27 +1162,9 @@ export const StudentRegistrationPage: React.FC = () => {
                     onClick={() => setRotation(r => (r + 90) % 360)}
                     className="px-4 py-2 bg-white border border-[#CBD5E1] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
                   >
-                    <RotateCw className="w-4 h-4 text-[#4D8A07]" />
+                    <RotateCw className="w-4 h-4 text-[#366804]" />
                     <span>Rotate 90&deg;</span>
                   </button>
-                </div>
-              )}
-
-              {editorActiveTab === 'Crop' && (
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-[#202833] mb-1">
-                    <span>Zoom Factor</span>
-                    <span>{zoom.toFixed(1)}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="2.5"
-                    step="0.1"
-                    value={zoom}
-                    onChange={(e) => setZoom(Number(e.target.value))}
-                    className="w-full accent-[#85E510]"
-                  />
                 </div>
               )}
             </div>
@@ -1000,15 +1178,16 @@ export const StudentRegistrationPage: React.FC = () => {
                   setSaturation(100);
                   setRotation(0);
                   setZoom(1);
+                  setAspectRatio('3:4');
                 }}
-                className="px-3 py-2 text-xs font-bold text-[#64748B] hover:text-[#202833] cursor-pointer"
+                className="px-3 py-2 text-xs font-bold text-[#64748B] hover:text-[#0B1118] cursor-pointer"
               >
                 Reset Default
               </button>
               <button
                 type="button"
                 onClick={() => setIsEditorOpen(false)}
-                className="px-4 py-2 rounded-xl bg-[#85E510] text-[#062404] font-black text-xs shadow-sm cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] font-black text-xs shadow-sm cursor-pointer"
               >
                 Apply Adjustments
               </button>
@@ -1016,6 +1195,7 @@ export const StudentRegistrationPage: React.FC = () => {
           </div>
         </div>
       )}
+
 
       {/* Success Receipt Modal */}
       {submittedStudent && (

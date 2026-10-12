@@ -9,8 +9,17 @@ export const AppLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const user = getCurrentUser();
   const deviceId = getOrCreateDeviceId();
+
+  const handleToggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setMobileSidebarOpen(prev => !prev);
+    } else {
+      setDesktopSidebarOpen(prev => !prev);
+    }
+  };
 
   // If not logged in, redirect to login page immediately
   if (!user) {
@@ -29,7 +38,7 @@ export const AppLayout: React.FC = () => {
     return <Navigate to="/sender/register" replace />;
   }
   if (user.role === 'RECEIVER' && !location.pathname.startsWith('/receiver')) {
-    return <Navigate to="/receiver/dashboard" replace />;
+    return <Navigate to="/receiver/students" replace />;
   }
   if (user.role === 'ADMIN' && !location.pathname.startsWith('/admin')) {
     return <Navigate to="/admin/dashboard" replace />;
@@ -65,12 +74,13 @@ export const AppLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] text-[#1E293B] flex font-sans selection:bg-[#85E510] selection:text-[#062404]">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0B1118] flex font-sans selection:bg-[#9EE617] selection:text-[#062404]">
       {/* Role-Specific Persistent Sidebar */}
       <Sidebar
         currentStation={currentStation}
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
+        desktopOpen={desktopSidebarOpen}
       />
 
       {/* Main Content Area with Header */}
@@ -78,10 +88,10 @@ export const AppLayout: React.FC = () => {
         <Header
           currentStation={currentStation}
           onStationChange={handleStationChange}
-          onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+          onToggleMobileSidebar={handleToggleSidebar}
         />
 
-        <main className="flex-1 min-w-0 bg-[#F1F5F9] p-3 sm:p-5 lg:p-6 overflow-y-auto">
+        <main className="flex-1 min-w-0 bg-[#F8FAFC] p-3 sm:p-5 lg:p-6 overflow-y-auto">
           <div className="max-w-[1780px] mx-auto w-full">
             <Outlet />
           </div>

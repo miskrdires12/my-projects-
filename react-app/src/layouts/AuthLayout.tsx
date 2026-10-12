@@ -3,9 +3,9 @@ import { Outlet } from 'react-router-dom';
 
 export const AuthLayout: React.FC = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#F2FBF5] via-[#E6F8ED] to-[#F2FBF5] text-[#202833] flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans selection:bg-[#00DF68] selection:text-black">
+    <div className="min-h-screen bg-gradient-to-b from-[#F8FAFC] via-[#F1F9E8] to-[#F8FAFC] text-[#0B1118] flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans selection:bg-[#9EE617] selection:text-black">
       {/* Soft Ambient Radiance */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#00DF68]/8 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#9EE617]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-lg relative z-10 my-auto flex flex-col items-center">
         <Outlet />

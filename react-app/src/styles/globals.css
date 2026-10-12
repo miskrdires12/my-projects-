@@ -3,15 +3,16 @@
 @tailwind utilities;
 
 :root {
-  --background: #F4F7F5;
+  --background: #F8FAFC;
   --surface: #FFFFFF;
-  --surface-muted: #F8FAF9;
-  --charcoal: #202833;
-  --charcoal-dark: #141A22;
-  --accent: #85E510;
-  --accent-hover: #76CF0C;
-  --accent-glow: rgba(133, 229, 16, 0.35);
-  --foreground: #202833;
+  --surface-muted: #F1F5F9;
+  --charcoal: #0B1118;
+  --charcoal-dark: #05080C;
+  --accent: #9EE617;
+  --accent-light: #BEF264;
+  --accent-hover: #8FE617;
+  --accent-glow: rgba(158, 230, 23, 0.35);
+  --foreground: #0B1118;
   --foreground-muted: #64748B;
   --border: #E2E8F0;
   --border-subtle: #EDF2F7;
@@ -38,11 +39,11 @@ body {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
 }
 
-/* Custom Badges Matching Brand Guidelines */
+/* Custom Badges Matching Brand Guidelines - Light Lemon Green Accent */
 .badge-accepted {
-  background: rgba(133, 229, 16, 0.15);
-  color: #4d8a07;
-  border: 1px solid rgba(133, 229, 16, 0.35);
+  background: rgba(158, 230, 23, 0.18);
+  color: #366804;
+  border: 1px solid rgba(158, 230, 23, 0.45);
 }
 
 .badge-pending {
@@ -75,12 +76,13 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #F4F7F5;
+  background: #F1F5F9;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(32, 40, 51, 0.2);
+  background: rgba(11, 17, 24, 0.2);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(133, 229, 16, 0.6);
+  background: rgba(158, 230, 23, 0.8);
 }
+

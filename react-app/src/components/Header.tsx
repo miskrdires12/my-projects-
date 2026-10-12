@@ -39,39 +39,46 @@ export const Header: React.FC<HeaderProps> = ({ currentStation, onStationChange,
         <button
           type="button"
           onClick={onToggleMobileSidebar}
-          className="p-2 text-[#1E293B] hover:text-[#062404] hover:bg-[#85E510]/15 rounded-xl border border-transparent hover:border-[#85E510]/30 transition-all flex items-center justify-center shrink-0 cursor-pointer"
+          className="p-2 text-[#1E293B] hover:text-[#062404] hover:bg-[#9EE617]/20 rounded-xl border border-transparent hover:border-[#9EE617]/40 transition-all flex items-center justify-center shrink-0 cursor-pointer"
           aria-label="Toggle Navigation Menu"
           title="Toggle Navigation Menu"
         >
           <Menu className="w-5 h-5 text-[#1E293B]" />
         </button>
 
-        {/* Global Search Input matching Screenshot */}
-        <div className="relative w-full">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
-          <input
-            type="text"
-            placeholder="Search by student ID, name, grade, or section..."
-            className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-10 pr-9 py-2 text-xs font-medium text-[#1E293B] placeholder-[#94A3B8] focus:outline-none focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] transition-all"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const target = e.currentTarget.value;
-                const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="Search students..."]');
-                if (searchInput) {
-                  searchInput.value = target;
-                  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        {/* Global Search Input (Hidden on Sender Station per user request) */}
+        {currentStation !== 'SENDER' ? (
+          <div className="relative w-full">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+            <input
+              type="text"
+              placeholder="Search by student ID, name, grade, or section..."
+              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-10 pr-9 py-2 text-xs font-medium text-[#1E293B] placeholder-[#94A3B8] focus:outline-none focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617] transition-all"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const target = e.currentTarget.value;
+                  const searchInput = document.querySelector<HTMLInputElement>('input[placeholder="Search students..."]');
+                  if (searchInput) {
+                    searchInput.value = target;
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                  }
                 }
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#1E293B]"
-            title="Search"
-          >
-            <Search className="w-3.5 h-3.5" />
-          </button>
-        </div>
+              }}
+            />
+            <button
+              type="button"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#1E293B]"
+              title="Search"
+            >
+              <Search className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs font-bold text-[#0B1118]">
+            <span className="w-2 h-2 rounded-full bg-[#9EE617] animate-pulse" />
+            <span className="text-slate-600 font-semibold">Sender Biometric Field Workstation Active</span>
+          </div>
+        )}
       </div>
 
       {/* Right Controls: Notifications, Station Switcher & User Profile */}
@@ -82,28 +89,28 @@ export const Header: React.FC<HeaderProps> = ({ currentStation, onStationChange,
             <button
               type="button"
               onClick={() => onStationChange('RECEIVER')}
-              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'RECEIVER' ? 'bg-[#85E510] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'RECEIVER' ? 'bg-[#9EE617] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
             >
               Receiver
             </button>
             <button
               type="button"
               onClick={() => onStationChange('SENDER')}
-              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SENDER' ? 'bg-[#85E510] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SENDER' ? 'bg-[#9EE617] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
             >
               Sender
             </button>
             <button
               type="button"
               onClick={() => onStationChange('ADMIN')}
-              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'ADMIN' ? 'bg-[#85E510] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'ADMIN' ? 'bg-[#9EE617] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
             >
               Admin
             </button>
             <button
               type="button"
               onClick={() => onStationChange('SUPER_ADMIN')}
-              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SUPER_ADMIN' ? 'bg-[#85E510] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${currentStation === 'SUPER_ADMIN' ? 'bg-[#9EE617] text-[#062404] shadow-xs font-black' : 'text-[#64748B] hover:text-[#1E293B]'}`}
             >
               Super Admin
             </button>

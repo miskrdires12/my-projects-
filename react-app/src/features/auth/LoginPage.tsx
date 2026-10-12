@@ -30,7 +30,7 @@ export const LoginPage: React.FC = () => {
       const pwd = password.trim();
       const allUsers = getUsers();
 
-      // Find user by email or username
+      // Find user strictly from authorized operator accounts (19 personnel + test aliases)
       let user = allUsers.find(
         u => u.email.toLowerCase() === term || u.username.toLowerCase() === term
       );
@@ -38,24 +38,16 @@ export const LoginPage: React.FC = () => {
       // Institutional aliases fallback
       if (!user) {
         if (term === 'admin@studentbridge.internal' || term === 'admin') {
-          user = allUsers.find(u => u.role === 'ADMIN' || u.role === 'SUPER_ADMIN') || PRESET_OPERATORS.find(u => u.role === 'ADMIN');
+          user = allUsers.find(u => u.role === 'ADMIN' || u.role === 'SUPER_ADMIN') || PRESET_OPERATORS.find(u => u.role === 'SUPER_ADMIN');
         } else if (term === 'receiver@studentbridge.internal' || term === 'receiver') {
           user = allUsers.find(u => u.role === 'RECEIVER') || PRESET_OPERATORS.find(u => u.role === 'RECEIVER');
         } else if (term === 'sender@studentbridge.internal' || term === 'sender') {
           user = allUsers.find(u => u.role === 'SENDER') || PRESET_OPERATORS.find(u => u.role === 'SENDER');
-        } else if (term.includes('sender')) {
-          user = PRESET_OPERATORS.find(u => u.role === 'SENDER');
-        } else if (term.includes('receiver')) {
-          user = PRESET_OPERATORS.find(u => u.role === 'RECEIVER');
-        } else if (term.includes('admin') && !term.includes('super')) {
-          user = PRESET_OPERATORS.find(u => u.role === 'ADMIN');
-        } else if (term.includes('super') || term.includes('miskr')) {
-          user = PRESET_OPERATORS.find(u => u.role === 'SUPER_ADMIN');
         }
       }
 
       if (!user) {
-        setError('Invalid credentials. Check username or institutional email.');
+        setError('Access Denied: Only the 19 authorized personnel accounts are permitted to sign in.');
         setIsSubmitting(false);
         return;
       }
@@ -134,26 +126,26 @@ export const LoginPage: React.FC = () => {
         />
       </div>
 
-      {/* Brand Title matching Screenshot */}
+      {/* Brand Title with Light Lemon Green Accent */}
       <div className="flex items-center gap-1.5 text-2xl font-black text-black tracking-tight font-heading">
         <span>SILICON</span>
-        <span className="bg-[#00DF68] text-black text-xs font-black px-2 py-0.5 rounded-md leading-none shadow-xs">
+        <span className="bg-[#9EE617] text-black text-xs font-black px-2 py-0.5 rounded-md leading-none shadow-xs">
           LABS
         </span>
       </div>
 
-      {/* Institutional Subtitle matching Screenshot */}
+      {/* Institutional Subtitle */}
       <div className="text-[10px] sm:text-[11px] font-semibold text-slate-500 tracking-wider uppercase mt-1 text-center">
         STUDENT IDENTITY & CARD MANUFACTURING PLATFORM
       </div>
 
-      {/* Secure Sign-In Card matching Screenshot */}
+      {/* Secure Sign-In Card */}
       <div className="w-full max-w-[390px] bg-white rounded-[24px] border border-slate-100 shadow-[0_12px_36px_rgba(0,0,0,0.03)] p-6 sm:p-7 mt-5 relative">
         <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-snug">
           Secure Sign In
         </h2>
         <p className="text-xs text-slate-500 mt-0.5 mb-5 font-normal">
-          Enter your credentials to access your workstation
+          Authorized personnel sign-in (19 field accounts restricted)
         </p>
 
         {error && (
@@ -183,7 +175,7 @@ export const LoginPage: React.FC = () => {
           {/* USERNAME OR INSTITUTIONAL EMAIL */}
           <div>
             <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              USERNAME OR INSTITUTIONAL EMAIL
+              AUTHORIZED USERNAME OR EMAIL
             </label>
             <div className="relative flex items-center">
               <User className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
@@ -192,8 +184,8 @@ export const LoginPage: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@studentbridge.internal"
-                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 font-medium focus:outline-none focus:border-[#00DF68] focus:ring-2 focus:ring-[#00DF68]/20 transition-all"
+                placeholder="e.g. miskrdires11@gmail.com or username"
+                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 font-medium focus:outline-none focus:border-[#9EE617] focus:ring-2 focus:ring-[#9EE617]/20 transition-all"
               />
             </div>
           </div>
@@ -211,7 +203,7 @@ export const LoginPage: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
-                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 font-medium tracking-widest focus:outline-none focus:border-[#00DF68] focus:ring-2 focus:ring-[#00DF68]/20 transition-all"
+                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl pl-10 pr-3.5 py-2.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 font-medium tracking-widest focus:outline-none focus:border-[#9EE617] focus:ring-2 focus:ring-[#9EE617]/20 transition-all"
               />
             </div>
           </div>
@@ -220,7 +212,7 @@ export const LoginPage: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full mt-2 py-3 px-4 rounded-xl bg-[#00DF68] hover:bg-[#00CA5D] active:bg-[#00B854] text-black font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+            className="w-full mt-2 py-3 px-4 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] active:bg-[#80D60E] text-black font-black text-xs uppercase tracking-wider shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
           >
             <span>AUTHENTICATE SESSION</span>
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />
@@ -229,7 +221,7 @@ export const LoginPage: React.FC = () => {
 
         {/* Workstation Lock Security Status Badge */}
         <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-semibold tracking-wide">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#00DF68]" />
+          <ShieldCheck className="w-3.5 h-3.5 text-[#9EE617]" />
           <span>Workstation Locked • {deviceId}</span>
         </div>
       </div>
