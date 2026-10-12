@@ -8,10 +8,11 @@ import {
 } from 'lucide-react';
 import {
   getStudents, addStudent, getSchools, getCurrentUser,
-  DEFAULT_BRANCHES, getSenderMetrics, SenderMetrics
+  DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP, getSenderMetrics, SenderMetrics
 } from '@/lib/store';
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
+import { PhoneCropModal } from '@/components/PhoneCropModal';
 
 export const StudentRegistrationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,8 +32,8 @@ export const StudentRegistrationPage: React.FC = () => {
   const [grade, setGrade] = useState('9C');
   const [phone, setPhone] = useState('');
   const [bloodType, setBloodType] = useState('O+');
-  const [school, setSchool] = useState('YMS');
   const [location, setLocation] = useState('Addis Ababa');
+  const [school, setSchool] = useState('YMS');
 
   // Extra Details (Expandable)
   const [showExtraDetails, setShowExtraDetails] = useState(false);
@@ -109,9 +110,13 @@ export const StudentRegistrationPage: React.FC = () => {
 
 
   // Ethiopian Phone Number Auto-Formatter
-  // 09... -> +2519... and 07... -> +2517...
+  // 09... -> +2519... and 07... -> +2517... (blank stays blank)
   const handlePhoneFormat = (val: string, setter: (v: string) => void) => {
     let clean = val.trim();
+    if (!clean) {
+      setter('');
+      return;
+    }
     if (clean.startsWith('09')) {
       clean = '+2519' + clean.slice(2);
     } else if (clean.startsWith('07')) {
@@ -122,6 +127,17 @@ export const StudentRegistrationPage: React.FC = () => {
       clean = '+2517' + clean.slice(1);
     }
     setter(clean);
+  };
+
+  // Available schools dynamically filtered by selected branch location
+  const availableSchools = BRANCH_SCHOOL_MAP[location] || ['YMS'];
+
+  const handleLocationChange = (newLoc: string) => {
+    setLocation(newLoc);
+    const schoolsForBranch = BRANCH_SCHOOL_MAP[newLoc] || [];
+    if (schoolsForBranch.length > 0 && !schoolsForBranch.includes(school)) {
+      setSchool(schoolsForBranch[0]);
+    }
   };
 
   // Bulletproof Callback Ref to immediately bind video element upon mounting
@@ -359,15 +375,8 @@ export const StudentRegistrationPage: React.FC = () => {
         previewPath: capturedPhoto || undefined,
         thumbnailPath: capturedPhoto || undefined,
         photoIntegrityStatus: capturedPhoto ? 'PHOTO_VERIFIED' : 'NO_PHOTO',
-        qrCodeData: JSON.stringify({
-          id: studentId.trim(),
-          name: fullName.trim(),
-          grade: grade.trim(),
-          school: school.trim(),
-          status: 'Accepted',
-          verified: true,
-          issuer: 'Silicon Labs StudentBridge'
-        }),
+        // QR Code token is strictly student id
+        qrCodeData: studentId.trim(),
         senderName: user?.username || 'Field Operator',
         status: 'Accepted',
         idProductionStatus: 'READY',
@@ -826,32 +835,32 @@ export const StudentRegistrationPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* School (Selected Separately) */}
+              {/* Branch / Location Dropdown */}
               <div>
-                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Assigned School</label>
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Branch Location</label>
+                <select
+                  value={location}
+                  onChange={(e) => handleLocationChange(e.target.value)}
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
+                >
+                  {DEFAULT_BRANCHES.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* School (Strictly mapped to selected branch) */}
+              <div>
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Assigned School ({location})</label>
                 <select
                   value={school}
                   onChange={(e) => setSchool(e.target.value)}
                   className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
                 >
-                  {schools.map(s => (
-                    <option key={s.id} value={s.name}>
-                      {s.name} ({s.location})
+                  {availableSchools.map(schName => (
+                    <option key={schName} value={schName}>
+                      {schName}
                     </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Branch / Location Dropdown (Selected Separately) */}
-              <div>
-                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Branch Location</label>
-                <select
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
-                >
-                  {DEFAULT_BRANCHES.map(b => (
-                    <option key={b} value={b}>{b}</option>
                   ))}
                 </select>
               </div>
@@ -869,16 +878,18 @@ export const StudentRegistrationPage: React.FC = () => {
                 />
               </div>
 
-              {/* Phone Number (Blank Default, No +251 Forced) */}
+              {/* Phone Number (Auto converts 09 and 07 to +2519 and +2517, blank stays blank) */}
               <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
-                  Phone Number
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5 flex items-center justify-between">
+                  <span>Phone Number</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Auto converts 09/07 &rarr; +2519/+2517</span>
                 </label>
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. 0911223344 (blank default)"
+                  onChange={(e) => handlePhoneFormat(e.target.value, setPhone)}
+                  onBlur={() => handlePhoneFormat(phone, setPhone)}
+                  placeholder="e.g. 0911223344 (blank if empty)"
                   className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
                 />
               </div>
@@ -982,219 +993,17 @@ export const StudentRegistrationPage: React.FC = () => {
         </div>
       </form>
 
-      {/* In-Browser Photo Editor Modal */}
-      {isEditorOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E2E8F0] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <h3 className="font-heading font-black text-base text-[#202833] flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-[#4D8A07]" />
-                <span>Photo Adjustments & Crop</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsEditorOpen(false)}
-                className="p-1 rounded-lg hover:bg-[#F4F7F5] text-[#64748B] cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Canvas Preview in Modal with dynamic Aspect Ratio */}
-            <div
-              style={{
-                aspectRatio:
-                  aspectRatio === '1:1' ? '1 / 1' :
-                  aspectRatio === '4:5' ? '4 / 5' :
-                  aspectRatio === '2:3' ? '2 / 3' : '3 / 4'
-              }}
-              className="relative w-48 mx-auto bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 transition-all"
-            >
-              {capturedPhoto && (
-                <img
-                  src={capturedPhoto}
-                  alt="Editor Preview"
-                  style={{
-                    filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`,
-                    transform: `rotate(${rotation}deg) scale(${zoom})`,
-                  }}
-                  className="w-full h-full object-cover"
-                />
-              )}
-            </div>
-
-            {/* Slider Tabs */}
-            <div className="flex items-center justify-center gap-1 bg-[#F4F7F5] p-1 rounded-xl text-xs font-bold text-[#64748B]">
-              {(['Crop', 'Brightness', 'Contrast', 'Saturation', 'Rotate'] as const).map(tab => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setEditorActiveTab(tab)}
-                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                    editorActiveTab === tab
-                      ? 'bg-white text-[#0B1118] shadow-sm font-black'
-                      : 'hover:text-[#0B1118]'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            {/* Controls */}
-            <div className="p-3.5 bg-[#F8FAF9] rounded-xl space-y-3.5">
-              {editorActiveTab === 'Crop' && (
-                <div className="space-y-3">
-                  {/* Aspect Ratio Selector */}
-                  <div>
-                    <div className="text-xs font-bold text-[#0B1118] mb-1.5 flex items-center justify-between">
-                      <span>Aspect Ratio Options</span>
-                      <span className="text-[10px] text-[#366804] font-bold bg-[#9EE617]/20 border border-[#9EE617]/40 px-2 py-0.5 rounded">
-                        Active: {aspectRatio}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {[
-                        { label: '3:4 ID Portrait', val: '3:4' },
-                        { label: '1:1 Square', val: '1:1' },
-                        { label: '4:5 Dossier', val: '4:5' },
-                        { label: '2:3 Classic', val: '2:3' },
-                      ].map(r => (
-                        <button
-                          key={r.val}
-                          type="button"
-                          onClick={() => setAspectRatio(r.val as any)}
-                          className={`py-1.5 px-2 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                            aspectRatio === r.val
-                              ? 'bg-[#9EE617] text-[#062404] border-[#9EE617] font-black shadow-xs'
-                              : 'bg-white text-slate-600 border-[#CBD5E1] hover:bg-slate-50'
-                          }`}
-                        >
-                          {r.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Zoom Factor */}
-                  <div>
-                    <div className="flex justify-between text-xs font-bold text-[#0B1118] mb-1">
-                      <span>Zoom Factor & Scale</span>
-                      <span>{zoom.toFixed(1)}x</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="3"
-                      step="0.1"
-                      value={zoom}
-                      onChange={(e) => setZoom(Number(e.target.value))}
-                      className="w-full accent-[#9EE617]"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={applyCrop}
-                    className="w-full py-2 px-3 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] font-black text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Crop className="w-3.5 h-3.5" />
-                    <span>Apply Aspect Ratio Crop ({aspectRatio})</span>
-                  </button>
-                </div>
-              )}
-
-              {editorActiveTab === 'Brightness' && (
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-[#0B1118] mb-1">
-                    <span>Brightness</span>
-                    <span>{brightness}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="50"
-                    max="150"
-                    value={brightness}
-                    onChange={(e) => setBrightness(Number(e.target.value))}
-                    className="w-full accent-[#9EE617]"
-                  />
-                </div>
-              )}
-
-              {editorActiveTab === 'Contrast' && (
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-[#0B1118] mb-1">
-                    <span>Contrast</span>
-                    <span>{contrast}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="50"
-                    max="150"
-                    value={contrast}
-                    onChange={(e) => setContrast(Number(e.target.value))}
-                    className="w-full accent-[#9EE617]"
-                  />
-                </div>
-              )}
-
-              {editorActiveTab === 'Saturation' && (
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-[#0B1118] mb-1">
-                    <span>Saturation</span>
-                    <span>{saturation}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="200"
-                    value={saturation}
-                    onChange={(e) => setSaturation(Number(e.target.value))}
-                    className="w-full accent-[#9EE617]"
-                  />
-                </div>
-              )}
-
-              {editorActiveTab === 'Rotate' && (
-                <div className="flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRotation(r => (r + 90) % 360)}
-                    className="px-4 py-2 bg-white border border-[#CBD5E1] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
-                  >
-                    <RotateCw className="w-4 h-4 text-[#366804]" />
-                    <span>Rotate 90&deg;</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setBrightness(100);
-                  setContrast(100);
-                  setSaturation(100);
-                  setRotation(0);
-                  setZoom(1);
-                  setAspectRatio('3:4');
-                }}
-                className="px-3 py-2 text-xs font-bold text-[#64748B] hover:text-[#0B1118] cursor-pointer"
-              >
-                Reset Default
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsEditorOpen(false)}
-                className="px-4 py-2 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] font-black text-xs shadow-sm cursor-pointer"
-              >
-                Apply Adjustments
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Smartphone-Style Photo Editor & Crop Modal */}
+      <PhoneCropModal
+        isOpen={isEditorOpen}
+        imageUrl={capturedPhoto || ''}
+        studentId={studentId}
+        onClose={() => setIsEditorOpen(false)}
+        onSave={(cropped) => {
+          setCapturedPhoto(cropped);
+          setIsEditorOpen(false);
+        }}
+      />
 
 
       {/* Success Receipt Modal */}

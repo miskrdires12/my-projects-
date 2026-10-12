@@ -3,17 +3,21 @@ import {
   Search, Eye, Edit2, Trash2, X, Plus, Calendar,
   UserCheck, Shield, ChevronLeft, ChevronRight,
   BookOpen, Users as UsersIcon, Check, Printer,
-  RotateCcw, Download, Sparkles, Type, Image as ImageIcon,
-  QrCode as QrIcon, Shapes, Award, Maximize2, ZoomIn, ZoomOut,
-  Sliders, FileText, CheckCircle2, AlertTriangle, Phone, Mail,
-  MapPin, Clock, ExternalLink, CreditCard
+  Download, Image as ImageIcon, QrCode as QrIcon,
+  Sliders, FileText, CheckCircle2, AlertTriangle, Phone,
+  MapPin, Clock, ExternalLink, RefreshCw, FileSpreadsheet,
+  Archive, ArrowUpDown, Filter, Sparkles
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import JSZip from 'jszip';
+import * as XLSX from 'xlsx';
 import {
-  getStudents, addStudent, updateStudent, deleteStudent, restoreStudent,
-  getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync
+  getStudents, addStudent, updateStudent, deleteStudent,
+  getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync,
+  DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP
 } from '@/lib/store';
 import { Student } from '@/types';
+import { PhoneCropModal } from '@/components/PhoneCropModal';
 
 export const ReceiverStudentsPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -23,50 +27,80 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState('ALL');
   const [sectionFilter, setSectionFilter] = useState('ALL');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [schoolFilter, setSchoolFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [academicYearFilter, setAcademicYearFilter] = useState('2026-2027');
 
-  // Selected Student (powers the Right Dossier Panel and Bottom ID Card Studio)
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  // Selected Students for Bulk Operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  // Right Dossier Tabs: 'Photo' | 'Academic' | 'Contact' | 'Activity'
-  const [dossierTab, setDossierTab] = useState<'Photo' | 'Academic' | 'Contact' | 'Activity'>('Photo');
 
   // Pagination
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Bottom ID Card Studio States
-  const [designerSide, setDesignerSide] = useState<'Front' | 'Back'>('Front');
-  const [activeTemplate, setActiveTemplate] = useState<'modern' | 'school' | 'classic'>('modern');
-  const [cardOrientation, setCardOrientation] = useState<'portrait' | 'landscape'>('portrait');
-  const [zoomLevel, setZoomLevel] = useState(100);
-  const [printLayout, setPrintLayout] = useState<'a4_8' | 'a4_10' | 'single'>('a4_8');
+  // Active Student Detail Drawer (Opens ONLY when eye/view icon is clicked)
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [detailStudent, setDetailStudent] = useState<Student | null>(null);
+  const [detailQrDataUrl, setDetailQrDataUrl] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'Photo' | 'Academic' | 'Contact' | 'Activity'>('Photo');
 
-  // QR Code Data URL for Selected Student
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  // Online Photo Editor State (Opens when student photo is clicked)
+  const [isPhotoEditorOpen, setIsPhotoEditorOpen] = useState(false);
+  const [editingPhotoStudent, setEditingPhotoStudent] = useState<Student | null>(null);
 
-  // Modals
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  // Student Data Edit Modal State (All fields EXCEPT photo & QR)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingDataStudent, setEditingDataStudent] = useState<Student | null>(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editSex, setEditSex] = useState<'Male' | 'Female'>('Male');
+  const [editGrade, setEditGrade] = useState('');
+  const [editSection, setEditSection] = useState('');
+  const [editBranch, setEditBranch] = useState('Addis Ababa');
+  const [editSchool, setEditSchool] = useState('YMS');
+  const [editPhone, setEditPhone] = useState('');
+  const [editDob, setEditDob] = useState('');
+  const [editBloodType, setEditBloodType] = useState('O+');
+  const [editGuardianName, setEditGuardianName] = useState('');
+  const [editEmergencyPhone, setEditEmergencyPhone] = useState('');
+  const [editBusUsage, setEditBusUsage] = useState<'Yes' | 'No'>('Yes');
+
+  // Delete Modal
   const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Lightbox for Full Size Photo
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
-  // Form States for Add/Edit
-  const [formFullName, setFormFullName] = useState('');
-  const [formStudentId, setFormStudentId] = useState('');
-  const [formSex, setFormSex] = useState('Male');
-  const [formGrade, setFormGrade] = useState('10');
-  const [formSection, setFormSection] = useState('10-A');
-  const [formSchool, setFormSchool] = useState('YMS');
-  const [formPhone, setFormPhone] = useState('+251911000000');
-  const [formDob, setFormDob] = useState('2010-03-15');
-  const [formPhotoBase64, setFormPhotoBase64] = useState<string | null>(null);
-  const [isSavingStudent, setIsSavingStudent] = useState(false);
+  // Interactive Download Progress Modal
+  const [progressModal, setProgressModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    current: number;
+    total: number;
+    statusText: string;
+  }>({
+    isOpen: false,
+    title: '',
+    current: 0,
+    total: 0,
+    statusText: ''
+  });
 
-  // 1. Authoritative Data Synchronization
+  // Default Avatar Placeholder
+  const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23F1F5F9'/%3E%3Ccircle cx='50' cy='38' r='20' fill='%23CBD5E1'/%3E%3Cpath d='M20 85 C20 65, 35 60, 50 60 C65 60, 80 65, 80 85 Z' fill='%23CBD5E1'/%3E%3C/svg%3E";
+
+  // Ethiopian Phone Number Auto-Formatter: 09 -> +2519, 07 -> +2517 (blank stays blank)
+  const formatPhoneNumber = (val: string): string => {
+    let clean = val.trim();
+    if (!clean) return '';
+    if (clean.startsWith('09')) return '+2519' + clean.slice(2);
+    if (clean.startsWith('07')) return '+2517' + clean.slice(2);
+    if (clean.startsWith('9') && !clean.startsWith('+')) return '+2519' + clean.slice(1);
+    if (clean.startsWith('7') && !clean.startsWith('+')) return '+2517' + clean.slice(1);
+    return clean;
+  };
+
+  // 1. Authoritative Data Loading
   const loadData = async () => {
     try {
       setIsLoading(true);
@@ -79,10 +113,6 @@ export const ReceiverStudentsPage: React.FC = () => {
           const localOnly = memory.filter(m => !serverIds.has(m.studentId));
           const combined = [...localOnly, ...json.students];
           setStudents(combined);
-          if (!selectedStudent && combined.length > 0) {
-            setSelectedStudent(combined[0]);
-            setSelectedIds(new Set([combined[0].studentId]));
-          }
           return;
         }
       }
@@ -93,20 +123,13 @@ export const ReceiverStudentsPage: React.FC = () => {
     }
     const mem = getStudents();
     setStudents([...mem]);
-    if (!selectedStudent && mem.length > 0) {
-      setSelectedStudent(mem[0]);
-      setSelectedIds(new Set([mem[0].studentId]));
-    }
   };
 
   useEffect(() => {
     const initial = getStudents();
     if (initial.length > 0) {
       setStudents(initial);
-      setSelectedStudent(initial[0]);
-      setSelectedIds(new Set([initial[0].studentId]));
     }
-
     loadData();
 
     const handleDataChange = () => {
@@ -140,29 +163,23 @@ export const ReceiverStudentsPage: React.FC = () => {
     };
   }, []);
 
-  // Update QR Code whenever selectedStudent changes
+  // Update Detail QR Code when detail student changes
   useEffect(() => {
-    if (selectedStudent) {
-      const payload = selectedStudent.qrCodeData || JSON.stringify({
-        id: selectedStudent.studentId,
-        name: selectedStudent.fullName,
-        grade: selectedStudent.grade || '10',
-        school: selectedStudent.school || 'YMS',
-        verified: true,
-        issuer: 'Silicon Labs StudentBridge'
-      });
-
-      QRCode.toDataURL(payload, {
-        width: 130,
+    if (detailStudent) {
+      // Token is strictly only student ID
+      QRCode.toDataURL(detailStudent.studentId, {
+        width: 320,
         margin: 1,
-        color: { dark: '#0F172A', light: '#FFFFFF' }
+        color: { dark: '#0B1118', light: '#FFFFFF' }
       })
-        .then(url => setQrDataUrl(url))
-        .catch(() => setQrDataUrl(null));
+        .then(url => setDetailQrDataUrl(url))
+        .catch(() => setDetailQrDataUrl(null));
+    } else {
+      setDetailQrDataUrl(null);
     }
-  }, [selectedStudent]);
+  }, [detailStudent]);
 
-  // Normalize Section (e.g., '10A' -> '10-A', '9B' -> '9-B')
+  // Normalize Section
   const getSection = (s: Student): string => {
     if (s.department) return s.department;
     const g = (s.grade || '10').trim();
@@ -173,22 +190,21 @@ export const ReceiverStudentsPage: React.FC = () => {
         return `${num}-${letter}`;
       }
     }
-    return '10-A';
+    return s.grade || '10-A';
   };
 
-  // Extract DOB (or consistent academic DOB based on grade)
-  const getDob = (s: Student): string => {
-    if (s.dateOfBirth) return s.dateOfBirth.substring(0, 10);
-    const gNum = parseInt(s.grade?.replace(/\D/g, '') || '10', 10);
-    const birthYear = 2026 - (gNum + 6);
-    return `${birthYear}-03-15`;
-  };
-
-  // Distinct Grades and Sections for Filters
+  // Distinct Filter Values
   const distinctGrades = useMemo(() => {
     const set = new Set<string>();
+    students.forEach(s => { if (s.grade) set.add(s.grade); });
+    return Array.from(set).sort();
+  }, [students]);
+
+  const distinctSections = useMemo(() => {
+    const set = new Set<string>();
     students.forEach(s => {
-      if (s.grade) set.add(s.grade);
+      const sec = getSection(s);
+      if (sec) set.add(sec);
     });
     return Array.from(set).sort();
   }, [students]);
@@ -203,11 +219,14 @@ export const ReceiverStudentsPage: React.FC = () => {
         (s.fullName || '').toLowerCase().includes(q) ||
         (s.studentId || '').toLowerCase().includes(q) ||
         (s.phone && s.phone.includes(q)) ||
-        (s.school && s.school.toLowerCase().includes(q));
+        (s.school && s.school.toLowerCase().includes(q)) ||
+        (s.senderName && s.senderName.toLowerCase().includes(q));
 
       const matchGrade = gradeFilter === 'ALL' || s.grade === gradeFilter;
       const sec = getSection(s);
       const matchSection = sectionFilter === 'ALL' || sec === sectionFilter;
+      const matchBranch = branchFilter === 'ALL' || s.location === branchFilter;
+      const matchSchool = schoolFilter === 'ALL' || s.school === schoolFilter;
 
       const st = (s.status || 'Active').toUpperCase();
       const isAccepted = st === 'ACCEPTED' || st === 'ACTIVE' || st === 'VERIFIED';
@@ -216,28 +235,20 @@ export const ReceiverStudentsPage: React.FC = () => {
         (statusFilter === 'Active' && isAccepted && !s.receiverHidden) ||
         (statusFilter === 'Hidden' && s.receiverHidden === true);
 
-      return matchSearch && matchGrade && matchSection && matchStatus;
+      return matchSearch && matchGrade && matchSection && matchBranch && matchSchool && matchStatus;
     });
-  }, [students, search, gradeFilter, sectionFilter, statusFilter]);
+  }, [students, search, gradeFilter, sectionFilter, branchFilter, schoolFilter, statusFilter]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const pagedStudents = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  // Row selection handler
-  const handleSelectStudent = (s: Student) => {
-    setSelectedStudent(s);
-    setSelectedIds(new Set([s.studentId]));
-  };
-
+  // Selection Checkboxes
   const toggleSelectRow = (studentId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const next = new Set(selectedIds);
     if (next.has(studentId)) next.delete(studentId);
     else next.add(studentId);
     setSelectedIds(next);
-
-    const match = students.find(s => s.studentId === studentId);
-    if (match) setSelectedStudent(match);
   };
 
   const toggleSelectAll = () => {
@@ -245,6 +256,443 @@ export const ReceiverStudentsPage: React.FC = () => {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(pagedStudents.map(s => s.studentId)));
+    }
+  };
+
+  // Open Student Detail Drawer (View Action)
+  const handleOpenDetail = (s: Student, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDetailStudent(s);
+    setDetailTab('Photo');
+    setIsDetailDrawerOpen(true);
+  };
+
+  // Open Online Photo Editor (Triggered when photo thumbnail or avatar is clicked)
+  const handleOpenPhotoEditor = (s: Student, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingPhotoStudent(s);
+    setIsPhotoEditorOpen(true);
+  };
+
+  // Save Edited Photo: Deletes/replaces unedited with edited image data URL
+  const handleSaveEditedPhoto = (croppedDataUrl: string) => {
+    if (!editingPhotoStudent) return;
+    const targetSid = editingPhotoStudent.studentId;
+
+    // Update store (replaces unedited with edited)
+    updateStudent(targetSid, {
+      photoPath: croppedDataUrl,
+      previewPath: croppedDataUrl,
+      thumbnailPath: croppedDataUrl,
+      photoIntegrityStatus: 'PHOTO_VERIFIED'
+    });
+
+    // Update state immediately
+    setStudents(prev => prev.map(s => s.studentId === targetSid ? {
+      ...s,
+      photoPath: croppedDataUrl,
+      previewPath: croppedDataUrl,
+      thumbnailPath: croppedDataUrl,
+      photoIntegrityStatus: 'PHOTO_VERIFIED'
+    } : s));
+
+    if (detailStudent?.studentId === targetSid) {
+      setDetailStudent(prev => prev ? {
+        ...prev,
+        photoPath: croppedDataUrl,
+        previewPath: croppedDataUrl,
+        thumbnailPath: croppedDataUrl
+      } : null);
+    }
+
+    setIsPhotoEditorOpen(false);
+    setEditingPhotoStudent(null);
+  };
+
+  // Open Edit Student Data Modal (Excludes photo and QR per requirement)
+  const handleOpenEditData = (s: Student, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingDataStudent(s);
+    setEditFullName(s.fullName || '');
+    setEditSex(s.sex === 'Female' ? 'Female' : 'Male');
+    setEditGrade(s.grade || '9');
+    setEditSection(getSection(s));
+    const loc = s.location || 'Addis Ababa';
+    setEditBranch(loc);
+    const validSchools = BRANCH_SCHOOL_MAP[loc] || ['YMS'];
+    setEditSchool(validSchools.includes(s.school || '') ? s.school! : validSchools[0]);
+    setEditPhone(s.phone || '');
+    setEditDob(s.dateOfBirth ? s.dateOfBirth.substring(0, 10) : '2010-01-01');
+    setEditBloodType(s.bloodType || 'O+');
+    setEditGuardianName(s.guardianFullName || '');
+    setEditEmergencyPhone(s.emergencyContactPhone || '');
+    setEditBusUsage(s.schoolBusUsage === 'No' ? 'No' : 'Yes');
+    setIsEditModalOpen(true);
+  };
+
+  // Save Student Data Updates
+  const handleSaveStudentData = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDataStudent) return;
+    const targetSid = editingDataStudent.studentId;
+
+    const updates: Partial<Student> = {
+      fullName: editFullName.trim(),
+      sex: editSex,
+      grade: editGrade.trim(),
+      department: editSection.trim(),
+      location: editBranch,
+      school: editSchool,
+      phone: formatPhoneNumber(editPhone),
+      dateOfBirth: editDob,
+      bloodType: editBloodType,
+      guardianFullName: editGuardianName.trim(),
+      emergencyContactPhone: formatPhoneNumber(editEmergencyPhone),
+      schoolBusUsage: editBusUsage
+    };
+
+    updateStudent(targetSid, updates);
+
+    setStudents(prev => prev.map(s => s.studentId === targetSid ? { ...s, ...updates } : s));
+
+    if (detailStudent?.studentId === targetSid) {
+      setDetailStudent(prev => prev ? { ...prev, ...updates } : null);
+    }
+
+    setIsEditModalOpen(false);
+    setEditingDataStudent(null);
+  };
+
+  // Branch change in Edit Modal
+  const handleEditBranchChange = (newBranch: string) => {
+    setEditBranch(newBranch);
+    const allowed = BRANCH_SCHOOL_MAP[newBranch] || ['YMS'];
+    if (!allowed.includes(editSchool)) {
+      setEditSchool(allowed[0]);
+    }
+  };
+
+  // =========================================================================
+  // DOWNLOAD ENGINES (SINGLE & BULK WITH PROGRESS MODAL)
+  // =========================================================================
+
+  // Single Student Photo Download
+  const downloadSinglePhoto = async (s: Student, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const photoUrl = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath);
+    if (!photoUrl) {
+      alert(`No biometric photograph available for ${s.fullName} (${s.studentId}).`);
+      return;
+    }
+
+    try {
+      if (photoUrl.startsWith('data:')) {
+        const a = document.createElement('a');
+        a.href = photoUrl;
+        a.download = `${s.studentId}_${s.fullName.replace(/\s+/g, '_')}_photo.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        const res = await fetch(photoUrl);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${s.studentId}_${s.fullName.replace(/\s+/g, '_')}_photo.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err: any) {
+      alert('Error downloading photo: ' + err.message);
+    }
+  };
+
+  // Single Student QR Code Download (PNG - Token strictly studentId)
+  const downloadSingleQr = async (s: Student, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      // Auto QR generation with token strictly = studentId
+      const qrUrl = await QRCode.toDataURL(s.studentId, {
+        width: 600,
+        margin: 2,
+        color: { dark: '#0B1118', light: '#FFFFFF' }
+      });
+      const a = document.createElement('a');
+      a.href = qrUrl;
+      a.download = `${s.studentId}_QR.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err: any) {
+      alert('Error generating QR code: ' + err.message);
+    }
+  };
+
+  // Bulk Selected Photos Download (ZIP with Progress)
+  const downloadSelectedPhotosZip = async () => {
+    const targets = students.filter(s => selectedIds.has(s.studentId));
+    if (targets.length === 0) {
+      alert('Please select at least one student from the table.');
+      return;
+    }
+
+    setProgressModal({
+      isOpen: true,
+      title: 'Downloading Selected Photographs (ZIP Archive)',
+      current: 0,
+      total: targets.length,
+      statusText: 'Initializing compression engine...'
+    });
+
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder('student_photos') || zip;
+      let count = 0;
+
+      for (let i = 0; i < targets.length; i++) {
+        const s = targets[i];
+        setProgressModal({
+          isOpen: true,
+          title: 'Downloading Selected Photographs (ZIP Archive)',
+          current: i + 1,
+          total: targets.length,
+          statusText: `Fetching photo ${i + 1}/${targets.length}: ${s.fullName} (${s.studentId})...`
+        });
+
+        const photoUrl = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath);
+        if (photoUrl) {
+          try {
+            if (photoUrl.startsWith('data:')) {
+              const base64Data = photoUrl.split(',')[1];
+              folder.file(`${s.studentId}_${s.fullName.replace(/\s+/g, '_')}.jpg`, base64Data, { base64: true });
+              count++;
+            } else {
+              const res = await fetch(photoUrl);
+              if (res.ok) {
+                const blob = await res.blob();
+                folder.file(`${s.studentId}_${s.fullName.replace(/\s+/g, '_')}.jpg`, blob);
+                count++;
+              }
+            }
+          } catch (e) {
+            console.warn('Skipping photo for', s.studentId, e);
+          }
+        }
+        await new Promise(r => setTimeout(r, 20));
+      }
+
+      if (count === 0) {
+        alert('None of the selected students have photos available.');
+        setProgressModal(prev => ({ ...prev, isOpen: false }));
+        return;
+      }
+
+      setProgressModal(prev => ({ ...prev, statusText: 'Building ZIP archive for download...' }));
+      const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+        setProgressModal(prev => ({
+          ...prev,
+          statusText: `Compressing ZIP archive (${metadata.percent.toFixed(0)}%)...`
+        }));
+      });
+
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `student_photos_pack_${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Error creating photo archive: ' + err.message);
+    } finally {
+      setTimeout(() => {
+        setProgressModal(prev => ({ ...prev, isOpen: false }));
+      }, 500);
+    }
+  };
+
+  // Bulk Selected QR Codes Download (ZIP with Progress - Token strictly studentId)
+  const downloadSelectedQrsZip = async () => {
+    const targets = students.filter(s => selectedIds.has(s.studentId));
+    if (targets.length === 0) {
+      alert('Please select at least one student from the table.');
+      return;
+    }
+
+    setProgressModal({
+      isOpen: true,
+      title: 'Auto-Generating Student QR Codes (ZIP Archive)',
+      current: 0,
+      total: targets.length,
+      statusText: 'Encoding QR codes with strictly Student ID token...'
+    });
+
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder('student_qr_codes') || zip;
+
+      for (let i = 0; i < targets.length; i++) {
+        const s = targets[i];
+        setProgressModal({
+          isOpen: true,
+          title: 'Auto-Generating Student QR Codes (ZIP Archive)',
+          current: i + 1,
+          total: targets.length,
+          statusText: `Rendering QR token for ${s.studentId} (${i + 1}/${targets.length})...`
+        });
+
+        // Token strictly only student id
+        const qrDataUrl = await QRCode.toDataURL(s.studentId, {
+          width: 500,
+          margin: 2,
+          color: { dark: '#0B1118', light: '#FFFFFF' }
+        });
+
+        const base64Data = qrDataUrl.split(',')[1];
+        folder.file(`${s.studentId}_QR.png`, base64Data, { base64: true });
+
+        await new Promise(r => setTimeout(r, 15));
+      }
+
+      setProgressModal(prev => ({ ...prev, statusText: 'Packaging QR codes ZIP...' }));
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `student_qr_codes_pack_${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Error generating QR archive: ' + err.message);
+    } finally {
+      setTimeout(() => {
+        setProgressModal(prev => ({ ...prev, isOpen: false }));
+      }, 500);
+    }
+  };
+
+  // Excel Export (.xlsx with Progress)
+  const exportExcel = async (onlySelected: boolean = false) => {
+    const targets = onlySelected
+      ? students.filter(s => selectedIds.has(s.studentId))
+      : filtered;
+
+    if (targets.length === 0) {
+      alert('No student records available for Excel export.');
+      return;
+    }
+
+    setProgressModal({
+      isOpen: true,
+      title: 'Compiling Excel Spreadsheet (.xlsx)',
+      current: 0,
+      total: targets.length,
+      statusText: 'Formatting student records...'
+    });
+
+    try {
+      const rows = targets.map((s, idx) => ({
+        '#': idx + 1,
+        'Student ID': s.studentId,
+        'Full Name': s.fullName,
+        'Gender': s.sex || 'Male',
+        'Grade': s.grade || '',
+        'Section': getSection(s),
+        'Branch Location': s.location || 'Addis Ababa',
+        'Assigned School': s.school || '',
+        'Phone Number': s.phone || '',
+        'Emergency Phone': s.emergencyContactPhone || '',
+        'Date of Birth': s.dateOfBirth ? s.dateOfBirth.substring(0, 10) : '',
+        'Blood Group': s.bloodType || 'O+',
+        'School Bus': s.schoolBusUsage || 'Yes',
+        'Sender / Field Op': s.senderName || 'Field Sender',
+        'Transmitted Date': s.createdAt ? new Date(s.createdAt).toLocaleString() : '',
+        'Biometric Status': s.photoIntegrityStatus || 'PHOTO_VERIFIED',
+        'System Status': s.status || 'Accepted'
+      }));
+
+      setProgressModal(prev => ({ ...prev, current: targets.length, statusText: 'Building Excel workbook...' }));
+      await new Promise(r => setTimeout(r, 100));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Students Directory');
+      XLSX.writeFile(workbook, `studentbridge_directory_${Date.now()}.xlsx`);
+    } catch (err: any) {
+      alert('Excel export error: ' + err.message);
+    } finally {
+      setTimeout(() => {
+        setProgressModal(prev => ({ ...prev, isOpen: false }));
+      }, 400);
+    }
+  };
+
+  // CSV Export (.csv with Progress)
+  const exportCsv = async (onlySelected: boolean = false) => {
+    const targets = onlySelected
+      ? students.filter(s => selectedIds.has(s.studentId))
+      : filtered;
+
+    if (targets.length === 0) {
+      alert('No student records available for CSV export.');
+      return;
+    }
+
+    setProgressModal({
+      isOpen: true,
+      title: 'Compiling CSV Data File',
+      current: 0,
+      total: targets.length,
+      statusText: 'Writing comma-separated rows...'
+    });
+
+    try {
+      const headers = ['Student ID', 'Full Name', 'Gender', 'Grade', 'Section', 'Branch', 'School', 'Phone', 'Date of Birth', 'Blood Group', 'Sender', 'Transmitted At', 'Status'];
+      const csvRows = [headers.join(',')];
+
+      targets.forEach(s => {
+        const row = [
+          `"${s.studentId}"`,
+          `"${(s.fullName || '').replace(/"/g, '""')}"`,
+          `"${s.sex || 'Male'}"`,
+          `"${s.grade || ''}"`,
+          `"${getSection(s)}"`,
+          `"${s.location || 'Addis Ababa'}"`,
+          `"${(s.school || '').replace(/"/g, '""')}"`,
+          `"${s.phone || ''}"`,
+          `"${s.dateOfBirth ? s.dateOfBirth.substring(0, 10) : ''}"`,
+          `"${s.bloodType || 'O+'}"`,
+          `"${s.senderName || 'Field Sender'}"`,
+          `"${s.createdAt || ''}"`,
+          `"${s.status || 'Accepted'}"`
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      setProgressModal(prev => ({ ...prev, current: targets.length, statusText: 'Downloading CSV file...' }));
+      await new Promise(r => setTimeout(r, 100));
+
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `studentbridge_export_${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('CSV export error: ' + err.message);
+    } finally {
+      setTimeout(() => {
+        setProgressModal(prev => ({ ...prev, isOpen: false }));
+      }, 400);
     }
   };
 
@@ -256,7 +704,6 @@ export const ReceiverStudentsPage: React.FC = () => {
     const targetId = deleteTarget.id;
 
     try {
-      // Optimistic update
       if (permanent) {
         setStudents(prev => prev.filter(s => s.studentId !== targetSid && s.id !== targetId));
       } else {
@@ -268,9 +715,9 @@ export const ReceiverStudentsPage: React.FC = () => {
         }));
       }
 
-      if (selectedStudent?.studentId === targetSid || selectedStudent?.id === targetId) {
-        const remaining = students.filter(s => s.studentId !== targetSid && s.id !== targetId);
-        setSelectedStudent(remaining[0] || null);
+      if (detailStudent?.studentId === targetSid || detailStudent?.id === targetId) {
+        setIsDetailDrawerOpen(false);
+        setDetailStudent(null);
       }
       setDeleteTarget(null);
 
@@ -283,1153 +730,939 @@ export const ReceiverStudentsPage: React.FC = () => {
     }
   };
 
-  // Save new student safely
-  const handleSaveAddStudent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formFullName.trim() || !formStudentId.trim()) {
-      alert('Please provide Full Name and Student ID.');
-      return;
-    }
-    setIsSavingStudent(true);
-
-    try {
-      const newSt: Student = {
-        id: 'stu-' + Date.now().toString(36),
-        studentId: formStudentId.trim(),
-        fullName: formFullName.trim(),
-        sex: formSex as any,
-        grade: formGrade.trim(),
-        school: formSchool.trim(),
-        phone: formPhone.trim(),
-        status: 'Accepted',
-        photoPath: formPhotoBase64 || null,
-        previewPath: formPhotoBase64 || null,
-        photoIntegrityStatus: formPhotoBase64 ? 'PHOTO_VERIFIED' : 'PHOTO_PENDING',
-        dateOfBirth: formDob,
-        department: formSection,
-        createdAt: new Date().toISOString()
-      };
-
-      // Add to store
-      addStudent(newSt);
-      setStudents(prev => [newSt, ...prev]);
-      setSelectedStudent(newSt);
-      setSelectedIds(new Set([newSt.studentId]));
-      setIsAddModalOpen(false);
-
-      // Reset form
-      setFormFullName('');
-      setFormStudentId('');
-      setFormPhotoBase64(null);
-
-      // Push to Supabase PostgreSQL & R2
-      await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSt)
-      });
-    } catch (err) {
-      console.error('Error saving student:', err);
-    } finally {
-      setIsSavingStudent(false);
-    }
-  };
-
-  // Print Ready handler
-  const handlePrintReady = () => {
-    window.print();
-  };
-
-  // Default avatar SVG placeholder for records pending photo capture
-  const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23F1F5F9'/%3E%3Ccircle cx='50' cy='38' r='20' fill='%23CBD5E1'/%3E%3Cpath d='M20 85 C20 65, 35 60, 50 60 C65 60, 80 65, 80 85 Z' fill='%23CBD5E1'/%3E%3C/svg%3E";
-
-  // Active student dossier (prefers user selection, then first loaded student)
-  const activeDossier = selectedStudent || (students.length > 0 ? students[0] : ({
-    id: 'STU001245',
-    studentId: 'STU001245',
-    fullName: 'Daniel Kim',
-    grade: 'Grade 10',
-    sex: 'Male',
-    school: 'Silicon Labs Central',
-    phone: '+251911445566',
-    status: 'Active',
-    dateOfBirth: '2010-03-15',
-    department: '10-A'
-  } as Student));
-
-  const currentPhoto = getPhotoUrl(activeDossier.photoPath || activeDossier.previewPath || activeDossier.thumbnailPath) || DEFAULT_AVATAR;
-
   return (
-    <div className="space-y-6 pb-12 font-sans selection:bg-[#9EE617] selection:text-[#062404]">
-      {/* =========================================================================
-          SECTION 1: TOP ROW (STUDENT DIRECTORY + STUDENT DETAILS DOSSIER)
-         ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* LEFT COLUMN: Student Directory Table (8 Cols on Desktop) */}
-        <div className="lg:col-span-8 bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-xs space-y-4">
-          {/* Header Row */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-[#1E293B]">
-                <UserCheck className="w-5 h-5 text-[#1E293B]" />
-              </div>
-              <h2 className="text-xl font-heading font-black text-[#1E293B] tracking-tight">
-                Student Directory
-              </h2>
-            </div>
+    <div className="space-y-5 pb-16 animate-in fade-in duration-200">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-[#E2E8F0] shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-heading font-black text-[#0B1118] tracking-tight">
+              Student Directory
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/40 font-mono">
+              {filtered.length.toLocaleString()} Records
+            </span>
+          </div>
+          <p className="text-xs text-[#64748B] mt-1">
+            Authoritative institutional registry &bull; Auto-generated QR codes &bull; Single & batch downloads
+          </p>
+        </div>
 
+        {/* Global Export Toolbar */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => exportExcel(false)}
+            className="py-2 px-3.5 rounded-xl bg-white border border-[#CBD5E1] hover:bg-[#F8FAF9] text-[#0B1118] text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Excel (.xlsx)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => exportCsv(false)}
+            className="py-2 px-3.5 rounded-xl bg-white border border-[#CBD5E1] hover:bg-[#F8FAF9] text-[#0B1118] text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+          >
+            <FileText className="w-4 h-4 text-blue-600" />
+            <span>CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={isLoading}
+            className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#0B1118] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Refresh from server"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Selected Items Bulk Action Bar (Visible when 1 or more rows selected) */}
+      {selectedIds.size > 0 && (
+        <div className="p-3.5 bg-[#0B1118] text-white rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3 shadow-lg border border-[#2D3748] animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#9EE617] animate-pulse" />
+            <span className="text-xs font-black text-white">
+              {selectedIds.size} {selectedIds.size === 1 ? 'student selected' : 'students selected'}
+            </span>
             <button
               type="button"
-              onClick={() => {
-                setFormStudentId('STU' + Math.floor(100000 + Math.random() * 900000));
-                setIsAddModalOpen(true);
-              }}
-              className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#9EE617]/10 text-[#256002] border border-[#9EE617] text-xs font-black shadow-xs transition-all flex items-center gap-1.5"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-[11px] text-slate-400 hover:text-white underline ml-1 cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-[#3B7E05]" />
-              <span>Add Student</span>
+              Clear selection
             </button>
           </div>
 
-          {/* Filter Bar matching Screenshot */}
-          <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[160px] sm:min-w-[200px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                placeholder="Search students..."
-                className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[#1E293B] placeholder-[#94A3B8] focus:outline-none focus:border-[#9EE617]"
-              />
-            </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={downloadSelectedPhotosZip}
+              className="py-1.5 px-3 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>Download Photos (ZIP)</span>
+            </button>
 
-            {/* Grades Filter */}
+            <button
+              type="button"
+              onClick={downloadSelectedQrsZip}
+              className="py-1.5 px-3 rounded-xl bg-white hover:bg-slate-100 text-[#0B1118] text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <QrIcon className="w-3.5 h-3.5 text-[#366804]" />
+              <span>Download QRs (ZIP)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => exportExcel(true)}
+              className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Export Selected (Excel)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => exportCsv(true)}
+              className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5 text-blue-400" />
+              <span>Export Selected (CSV)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filter and Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5">
+          {/* Search Box */}
+          <div className="lg:col-span-2 relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search by ID, name, phone, school or sender..."
+              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-black cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Branch Filter */}
+          <div>
+            <select
+              value={branchFilter}
+              onChange={(e) => { setBranchFilter(e.target.value); setPage(1); }}
+              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
+            >
+              <option value="ALL">All Branches</option>
+              {DEFAULT_BRANCHES.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* School Filter */}
+          <div>
+            <select
+              value={schoolFilter}
+              onChange={(e) => { setSchoolFilter(e.target.value); setPage(1); }}
+              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
+            >
+              <option value="ALL">All Schools</option>
+              {Object.entries(BRANCH_SCHOOL_MAP).flatMap(([branch, schs]) =>
+                schs.map(sName => (
+                  <option key={`${branch}-${sName}`} value={sName}>
+                    {sName} ({branch})
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          {/* Grade Filter */}
+          <div>
             <select
               value={gradeFilter}
               onChange={(e) => { setGradeFilter(e.target.value); setPage(1); }}
-              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#9EE617]"
+              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
             >
               <option value="ALL">All Grades</option>
               {distinctGrades.map(g => (
-                <option key={g} value={g}>{g.startsWith('Grade') ? g : `Grade ${g}`}</option>
+                <option key={g} value={g}>Grade {g}</option>
               ))}
             </select>
+          </div>
 
-            {/* Sections Filter */}
-            <select
-              value={sectionFilter}
-              onChange={(e) => { setSectionFilter(e.target.value); setPage(1); }}
-              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#9EE617]"
-            >
-              <option value="ALL">All Sections</option>
-              {['10-A', '9-B', '11-A', '10-B', '9-A', '12-A', '11-B', '4-B', '2-A', '2-B'].map(sec => (
-                <option key={sec} value={sec}>{sec}</option>
-              ))}
-            </select>
-
-            {/* Statuses Filter */}
+          {/* Status Filter */}
+          <div>
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-              className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#9EE617]"
+              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
             >
-              <option value="ALL">All Statuses</option>
-              <option value="Active">Active</option>
-              <option value="Hidden">Hidden (Trash)</option>
+              <option value="ALL">All Status</option>
+              <option value="Active">Active Only</option>
+              <option value="Hidden">Hidden Records</option>
             </select>
-
-            {/* Academic Year Filter with Calendar Icon */}
-            <div className="relative">
-              <select
-                value={academicYearFilter}
-                onChange={(e) => setAcademicYearFilter(e.target.value)}
-                className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl pl-8 pr-3 py-1.5 text-xs font-semibold text-[#1E293B] focus:outline-none focus:border-[#9EE617] appearance-none"
-              >
-                <option value="2026-2027">Academic Year</option>
-                <option value="2026-2027">2026-2027</option>
-                <option value="2025-2026">2025-2026</option>
-              </select>
-              <Calendar className="w-3.5 h-3.5 text-[#64748B] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-
-            {/* Light Lemon Green Search Action Button */}
-            <button
-              type="button"
-              onClick={() => setPage(1)}
-              className="px-4 py-1.5 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black shadow-xs transition-all flex items-center gap-1.5"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span>Search</span>
-            </button>
           </div>
+        </div>
+      </div>
 
-          {/* Directory Data Table */}
-          <div className="overflow-x-auto border border-[#E2E8F0] rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] text-[11px] font-bold">
+      {/* Full-Width Student Directory Table */}
+      <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-[#F8FAF9] border-b border-[#E2E8F0] text-[11px] font-black text-[#0B1118] uppercase tracking-wider">
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === pagedStudents.length && pagedStudents.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded text-[#9EE617] focus:ring-[#9EE617] cursor-pointer"
+                  />
+                </th>
+                <th className="py-3 px-3">Student & Biometric</th>
+                <th className="py-3 px-3">Student ID</th>
+                <th className="py-3 px-3">Grade & Sec</th>
+                <th className="py-3 px-3">School & Branch</th>
+                <th className="py-3 px-3">Phone</th>
+                <th className="py-3 px-3">Sender Operator</th>
+                <th className="py-3 px-3">Date Transmitted</th>
+                <th className="py-3 px-3 text-center">QR Code</th>
+                <th className="py-3 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#F1F5F9]">
+              {pagedStudents.length === 0 ? (
                 <tr>
-                  <th className="py-3 pl-3.5 w-9">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.size === pagedStudents.length && pagedStudents.length > 0}
-                      onChange={toggleSelectAll}
-                      className="rounded border-[#CBD5E1] text-[#9EE617] focus:ring-[#9EE617]"
-                    />
-                  </th>
-                  <th className="py-3 px-2">Photo</th>
-                  <th className="py-3 px-2">Student ID</th>
-                  <th className="py-3 px-2">Name</th>
-                  <th className="py-3 px-2">Grade</th>
-                  <th className="py-3 px-2">Section</th>
-                  <th className="py-3 px-2">Sender</th>
-                  <th className="py-3 px-2">Date / Time</th>
-                  <th className="py-3 px-2">Status</th>
-                  <th className="py-3 px-2 text-right pr-4">Actions</th>
+                  <td colSpan={10} className="py-12 text-center text-[#64748B]">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                      <Search className="w-6 h-6" />
+                    </div>
+                    <div className="font-bold text-sm text-[#0B1118]">No students found</div>
+                    <p className="text-xs text-slate-500 mt-0.5">Try adjusting your search query or branch filters</p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E2E8F0]">
-                {pagedStudents.map((s) => {
-                  const photoSrc = getPhotoUrl(s.thumbnailPath || s.previewPath || s.photoPath);
-                  const isSelected = selectedStudent?.studentId === s.studentId;
-                  const sec = getSection(s);
-                  const gradeLabel = s.grade?.startsWith('Grade') ? s.grade : `Grade ${s.grade || '10'}`;
+              ) : (
+                pagedStudents.map((s) => {
+                  const isSelected = selectedIds.has(s.studentId);
+                  const photoSrc = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath) || DEFAULT_AVATAR;
 
                   return (
                     <tr
-                      key={s.id || s.studentId}
-                      onClick={() => handleSelectStudent(s)}
-                      className={`cursor-pointer transition-colors ${
-                        isSelected ? 'bg-[#F0FDF4] border-l-4 border-l-[#9EE617]' : 'hover:bg-slate-50'
+                      key={s.studentId}
+                      className={`hover:bg-[#F8FAF9] transition-colors ${
+                        isSelected ? 'bg-[#BEF264]/10' : ''
                       }`}
                     >
-                      <td className="py-2.5 pl-3.5" onClick={(e) => toggleSelectRow(s.studentId, e)}>
+                      {/* Checkbox */}
+                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
-                          checked={isSelected || selectedIds.has(s.studentId)}
-                          onChange={() => {}}
-                          className="rounded border-[#CBD5E1] text-[#9EE617] focus:ring-[#9EE617]"
+                          checked={isSelected}
+                          onChange={(e) => toggleSelectRow(s.studentId, e as any)}
+                          className="rounded text-[#9EE617] focus:ring-[#9EE617] cursor-pointer"
                         />
                       </td>
 
-                      {/* Circular Avatar Photo */}
-                      <td className="py-2.5 px-2">
-                        <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-100 border border-[#CBD5E1] shrink-0 flex items-center justify-center">
-                          {photoSrc ? (
+                      {/* Photo & Name (Click photo to edit online) */}
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            onClick={(e) => handleOpenPhotoEditor(s, e)}
+                            className="relative w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-[#CBD5E1] shrink-0 cursor-pointer group shadow-2xs"
+                            title="Click photograph to crop and edit online"
+                          >
                             <img
                               src={photoSrc}
                               alt={s.fullName}
-                              className="w-full h-full object-cover"
-                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                              }}
                             />
-                          ) : (
-                            <span className="text-[10px] font-bold text-slate-400">ID</span>
-                          )}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <Edit2 className="w-3.5 h-3.5 text-[#9EE617]" />
+                            </div>
+                          </div>
+
+                          <div className="min-w-0">
+                            <div
+                              onClick={() => handleOpenDetail(s)}
+                              className="font-bold text-[#0B1118] hover:text-[#256002] cursor-pointer truncate max-w-[170px]"
+                              title={s.fullName}
+                            >
+                              {s.fullName}
+                            </div>
+                            <div className="text-[10px] text-slate-500 flex items-center gap-1 font-medium">
+                              <span>{s.sex || 'Male'}</span>
+                              <span>&bull;</span>
+                              <span className="text-[#366804] font-semibold">{s.status || 'Accepted'}</span>
+                            </div>
+                          </div>
                         </div>
                       </td>
 
                       {/* Student ID */}
-                      <td className="py-2.5 px-2 font-mono font-bold text-[#1E293B]">
+                      <td className="py-3 px-3 font-mono font-bold text-[#0B1118] text-[11px]">
                         {s.studentId}
                       </td>
 
-                      {/* Student Name */}
-                      <td className="py-2.5 px-2 font-bold text-[#1E293B]">
-                        {s.fullName}
+                      {/* Grade & Section */}
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-[#0B1118] font-bold text-[11px]">
+                          {s.grade || '10'} ({getSection(s)})
+                        </span>
                       </td>
 
-                      {/* Grade */}
-                      <td className="py-2.5 px-2 text-[#475569] font-medium">
-                        {gradeLabel}
+                      {/* School & Branch */}
+                      <td className="py-3 px-3">
+                        <div className="font-bold text-[#0B1118] truncate max-w-[140px]">{s.school || 'YMS'}</div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-0.5">
+                          <MapPin className="w-2.5 h-2.5 text-[#366804]" />
+                          <span>{s.location || 'Addis Ababa'}</span>
+                        </div>
                       </td>
 
-                      {/* Section */}
-                      <td className="py-2.5 px-2 font-mono text-[#475569]">
-                        {sec}
+                      {/* Phone */}
+                      <td className="py-3 px-3 font-mono text-[11px] text-slate-700">
+                        {s.phone || '-'}
                       </td>
 
-                      {/* Sender / Who sent it */}
-                      <td className="py-2.5 px-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200 whitespace-nowrap">
+                      {/* Sender */}
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
                           {s.senderName || 'Field Sender'}
                         </span>
                       </td>
 
-                      {/* Transmission Date & Time */}
-                      <td className="py-2.5 px-2 font-mono text-[11px] text-[#475569] whitespace-nowrap">
-                        {s.createdAt ? (
-                          <div>
-                            <div className="font-semibold text-slate-700">{new Date(s.createdAt).toLocaleDateString()}</div>
-                            <div className="text-[9px] text-[#94A3B8]">{new Date(s.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                          </div>
-                        ) : (
-                          '2026-10-12'
-                        )}
+                      {/* Date Transmitted */}
+                      <td className="py-3 px-3 font-mono text-[10px] text-slate-600">
+                        {s.createdAt ? new Date(s.createdAt).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) : 'Oct 12, 08:30'}
                       </td>
 
-                      {/* Status Active Badge */}
-                      <td className="py-2.5 px-2">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/40 inline-block">
-                          Active
-                        </span>
+                      {/* QR Code Action (Token strictly studentId) */}
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => downloadSingleQr(s, e)}
+                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-[#9EE617]/20 hover:text-[#256002] text-slate-700 transition-colors cursor-pointer"
+                          title="Download QR Code (PNG - Token: Student ID)"
+                        >
+                          <QrIcon className="w-4 h-4" />
+                        </button>
                       </td>
 
-                      {/* Actions Column (Eye, Pencil, Trash) */}
-                      <td className="py-2.5 px-2 text-right pr-4 space-x-1" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectStudent(s)}
-                          className="p-1 rounded-md text-slate-400 hover:text-[#1E293B] hover:bg-slate-100 transition-all"
-                          title="Select / View Dossier"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedStudent(s);
-                            setFormFullName(s.fullName);
-                            setFormGrade(s.grade || '10');
-                            setFormPhone(s.phone || '');
-                            setIsEditModalOpen(true);
-                          }}
-                          className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-                          title="Edit Student"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(s)}
-                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                          title="Delete Record"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      {/* Row Action Buttons */}
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* View Dossier (Eye icon opens details drawer) */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenDetail(s, e)}
+                            className="p-1.5 rounded-lg text-slate-600 hover:text-[#256002] hover:bg-[#9EE617]/20 transition-colors cursor-pointer"
+                            title="View Student Details Dossier"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+
+                          {/* Download Photo */}
+                          <button
+                            type="button"
+                            onClick={(e) => downloadSinglePhoto(s, e)}
+                            className="p-1.5 rounded-lg text-slate-600 hover:text-[#256002] hover:bg-[#9EE617]/20 transition-colors cursor-pointer"
+                            title="Download Biometric Photograph"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+
+                          {/* Edit Student Data (excludes photo & qr) */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenEditData(s, e)}
+                            className="p-1.5 rounded-lg text-slate-600 hover:text-[#256002] hover:bg-[#9EE617]/20 transition-colors cursor-pointer"
+                            title="Edit Student Information (Text/Academic)"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+
+                          {/* Delete */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(s);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Delete Student"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
-                })}
-
-                {pagedStudents.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="py-10 text-center text-[#64748B]">
-                      {isLoading ? (
-                        <div className="flex flex-col items-center justify-center gap-2">
-                          <div className="w-6 h-6 border-2 border-[#85E510] border-t-transparent rounded-full animate-spin" />
-                          <span className="text-xs font-semibold">Streaming students from Supabase & Cloudflare R2...</span>
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <span className="font-bold text-xs text-[#1E293B]">No student records found</span>
-                          <p className="text-[11px] text-[#94A3B8]">Try adjusting your search query or reset filter options.</p>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Footer matching Screenshot */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1 text-xs text-[#64748B]">
-            <div>
-              Showing <strong className="text-[#1E293B]">{filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to{' '}
-              <strong className="text-[#1E293B]">{Math.min(page * pageSize, filtered.length)}</strong> of{' '}
-              <strong className="text-[#1E293B]">{filtered.length.toLocaleString()}</strong> students
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                className="w-7 h-7 rounded-lg border border-[#CBD5E1] bg-white flex items-center justify-center disabled:opacity-40 hover:bg-slate-50 text-[#1E293B]"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Numbered pagination badges */}
-              {[1, 2, 3, 4, 5].map((pageNum) => (
-                <button
-                  key={pageNum}
-                  type="button"
-                  onClick={() => setPage(pageNum)}
-                  className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
-                    page === pageNum
-                      ? 'bg-[#85E510] text-[#062404] shadow-xs'
-                      : 'border border-[#CBD5E1] bg-white text-[#475569] hover:bg-slate-50'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              ))}
-
-              <span className="px-1 text-slate-400">...</span>
-
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                className="w-7 h-7 rounded-lg border border-[#CBD5E1] bg-white flex items-center justify-center disabled:opacity-40 hover:bg-slate-50 text-[#1E293B]"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Page size dropdown */}
-              <select
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                className="ml-2 bg-white border border-[#CBD5E1] rounded-lg px-2 py-1 text-xs font-bold text-[#1E293B]"
-              >
-                <option value={10}>10 per page</option>
-                <option value={25}>25 per page</option>
-                <option value={50}>50 per page</option>
-                <option value={100}>100 per page</option>
-              </select>
-            </div>
-          </div>
+                })
+              )}
+            </tbody>
+          </table>
         </div>
 
-        {/* RIGHT COLUMN: Student Details Dossier Panel (4 Cols on Desktop) */}
-        <div className="lg:col-span-4 bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-xs space-y-4">
-          {/* Header Row */}
-          <div className="flex items-center justify-between">
-            <h3 className="font-heading font-black text-lg text-[#1E293B]">
-              Student Details
-            </h3>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/30">
-              Active
-            </span>
+        {/* Pagination Bar */}
+        <div className="p-3.5 bg-[#F8FAF9] border-t border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="text-slate-600 font-medium">
+            Showing <span className="font-bold text-[#0B1118]">{pagedStudents.length > 0 ? (page - 1) * pageSize + 1 : 0}</span> to{' '}
+            <span className="font-bold text-[#0B1118]">{Math.min(filtered.length, page * pageSize)}</span> of{' '}
+            <span className="font-bold text-[#0B1118]">{filtered.length.toLocaleString()}</span> entries
           </div>
 
-          {/* Student Dossier Summary */}
-          <div className="flex gap-4 items-start pb-2">
-            {/* Student Portrait */}
-            <div className="w-28 h-36 rounded-xl overflow-hidden bg-slate-100 border border-[#CBD5E1] shrink-0 shadow-xs">
-              <img
-                src={currentPhoto}
-                alt={activeDossier.fullName}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
-                }}
-              />
-            </div>
-
-            {/* Metadata Fields with Icons */}
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <div>
-                <h4 className="text-lg font-heading font-black text-[#1E293B] leading-tight truncate">
-                  {activeDossier.fullName}
-                </h4>
-                <div className="text-xs font-mono font-bold text-[#64748B]">
-                  {activeDossier.studentId}
-                </div>
-              </div>
-
-              <div className="space-y-1 pt-1 text-xs text-[#475569]">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="text-slate-400">Grade</span>
-                  <span className="font-bold text-[#1E293B]">{activeDossier.grade?.replace('Grade', '').trim() || '10'}</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <UsersIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="text-slate-400">Section</span>
-                  <span className="font-bold text-[#1E293B]">{getSection(activeDossier)}</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <ExternalLink className="w-3.5 h-3.5 text-[#366804] shrink-0" />
-                  <span className="text-slate-400">Sender</span>
-                  <span className="font-bold text-[#1E293B] bg-slate-100 px-1.5 py-0.5 rounded text-[11px] truncate max-w-[130px]">
-                    {activeDossier.senderName || 'Field Sender'}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 text-[#366804] shrink-0" />
-                  <span className="text-slate-400 truncate">Transmitted</span>
-                  <span className="font-mono text-[#1E293B] font-semibold text-[10px]">
-                    {activeDossier.createdAt ? new Date(activeDossier.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '2026-10-12 08:30'}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="text-slate-400 truncate">Date of Birth</span>
-                  <span className="font-mono text-[#1E293B] font-medium">{getDob(activeDossier)}</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="text-slate-400">Gender</span>
-                  <span className="font-bold text-[#1E293B]">{activeDossier.sex || 'Male'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Dossier Navigation Tabs */}
-          <div className="border-b border-[#E2E8F0] flex items-center gap-4 text-xs font-bold">
-            {(['Photo', 'Academic', 'Contact', 'Activity'] as const).map(tab => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setDossierTab(tab)}
-                className={`pb-2 transition-all relative ${
-                  dossierTab === tab
-                    ? 'text-[#256002] font-black'
-                    : 'text-[#64748B] hover:text-[#1E293B]'
-                }`}
-              >
-                <span>{tab}</span>
-                {dossierTab === tab && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#9EE617] rounded-full" />
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content */}
-          {dossierTab === 'Photo' && (
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              {/* Photo Preview Frame on Left */}
-              <div className="w-full h-36 rounded-xl overflow-hidden bg-slate-100 border border-[#CBD5E1]">
-                <img
-                  src={currentPhoto}
-                  alt={activeDossier.fullName}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              {/* R2 Cloudflare Source & View Full Size button on Right */}
-              <div className="flex flex-col justify-between py-0.5">
-                <div className="space-y-2">
-                  <div>
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#1E293B]">
-                      <Eye className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Original Photo</span>
-                    </div>
-                    <div className="text-[10px] text-[#64748B] mt-0.5">From Cloudflare R2</div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setLightboxPhoto(currentPhoto)}
-                    className="w-full py-1.5 px-2.5 rounded-lg bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-[11px] font-black transition-all flex items-center justify-center gap-1.5 shadow-xs"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>View Full Size</span>
-                  </button>
-                </div>
-
-                <div className="pt-2 border-t border-[#E2E8F0] flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-md overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-                    <img src={currentPhoto} alt="Thumbnail" className="w-full h-full object-cover" />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold text-[#1E293B]">Thumbnail</div>
-                    <div className="text-[9px] text-[#64748B]">From Cloudflare R2</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {dossierTab === 'Academic' && (
-            <div className="space-y-2 pt-1 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">School Campus</span>
-                <span className="font-bold text-[#1E293B]">{activeDossier.school || 'Silicon Labs Central'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Academic Year</span>
-                <span className="font-mono text-[#1E293B]">{activeDossier.academicYear || '2026-2027'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Roll Number</span>
-                <span className="font-mono text-[#1E293B]">{activeDossier.rollNumber || 'R-104'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Biometric Verification</span>
-                <span className="font-bold text-emerald-700">VERIFIED (Cloudflare R2)</span>
-              </div>
-            </div>
-          )}
-
-          {dossierTab === 'Contact' && (
-            <div className="space-y-2 pt-1 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Primary Phone</span>
-                <span className="font-mono font-bold text-[#1E293B]">{activeDossier.phone || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">City / Region</span>
-                <span className="font-bold text-[#1E293B]">{activeDossier.address || activeDossier.cityRegion || 'Addis Ababa'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Emergency Contact</span>
-                <span className="font-medium text-[#1E293B]">{activeDossier.emergencyContactName || 'Guardian'}</span>
-              </div>
-            </div>
-          )}
-
-          {dossierTab === 'Activity' && (
-            <div className="space-y-2 pt-1 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Sender / Field Operator</span>
-                <span className="font-bold text-[#1E293B]">{activeDossier.senderName || 'Field Sender'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Transmission Date & Time</span>
-                <span className="font-mono text-[#1E293B]">
-                  {activeDossier.createdAt ? new Date(activeDossier.createdAt).toLocaleString() : '2026-10-12 08:30'}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-400">Dual-Channel Sync</span>
-                <span className="font-bold text-emerald-700">0ms Realtime SSE</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* =========================================================================
-          SECTION 2: BOTTOM STUDIO (ID CARD DESIGNER + PRINT ENGINE PANEL)
-         ========================================================================= */}
-      <div id="id-card-designer" className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-xs space-y-4">
-        {/* Studio Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-[#1E293B]">
-              <CreditCard className="w-5 h-5 text-[#1E293B]" />
-            </div>
-            <h3 className="text-xl font-heading font-black text-[#1E293B] tracking-tight">
-              ID Card Designer
-            </h3>
-          </div>
-
-          {/* Center Toolbar: Undo, Redo, Zoom, Front/Back Side Toggle */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-[#64748B]">
-              <button type="button" className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-[#1E293B]" title="Undo">
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-              <button type="button" className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-[#1E293B] scale-x-[-1]" title="Redo">
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Zoom Controls */}
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 text-xs font-mono font-bold text-[#1E293B]">
-              <button type="button" onClick={() => setZoomLevel(z => Math.max(75, z - 10))} className="hover:text-black">-</button>
-              <span>{zoomLevel}%</span>
-              <button type="button" onClick={() => setZoomLevel(z => Math.min(150, z + 10))} className="hover:text-black">+</button>
-            </div>
-
-            {/* Side Switcher Pills */}
-            <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setDesignerSide('Front')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  designerSide === 'Front'
-                    ? 'bg-[#9EE617]/20 text-[#256002] shadow-xs'
-                    : 'text-[#64748B] hover:text-[#1E293B]'
-                }`}
-              >
-                Front Side
-              </button>
-              <button
-                type="button"
-                onClick={() => setDesignerSide('Back')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  designerSide === 'Back'
-                    ? 'bg-[#9EE617]/20 text-[#256002] shadow-xs'
-                    : 'text-[#64748B] hover:text-[#1E293B]'
-                }`}
-              >
-                Back Side
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Studio Workspace Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch min-h-[460px]">
-          {/* COLUMN 1: Templates & Settings Sidebar (3 Cols) */}
-          <div className="lg:col-span-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-4 flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              {/* Tabs: Templates / Elements */}
-              <div className="flex items-center gap-4 border-b border-[#E2E8F0] pb-2 text-xs font-bold">
-                <button type="button" className="text-[#1E293B] border-b-2 border-[#9EE617] pb-1 font-black">
-                  Templates
-                </button>
-                <button type="button" className="text-[#64748B] hover:text-[#1E293B] pb-1">
-                  Elements
-                </button>
-              </div>
-
-              {/* Template Category Pills */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setActiveTemplate('school')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                    activeTemplate === 'school' ? 'bg-[#EEF2FF] text-[#4F46E5] border border-indigo-200' : 'bg-white border border-[#CBD5E1] text-[#64748B]'
-                  }`}
-                >
-                  School
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTemplate('modern')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                    activeTemplate === 'modern' ? 'bg-[#9EE617] text-[#062404] shadow-xs' : 'bg-white border border-[#CBD5E1] text-[#64748B]'
-                  }`}
-                >
-                  Modern
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTemplate('classic')}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                    activeTemplate === 'classic' ? 'bg-slate-200 text-[#1E293B]' : 'bg-white border border-[#CBD5E1] text-[#64748B]'
-                  }`}
-                >
-                  Classic
-                </button>
-              </div>
-
-              {/* Template Preview Thumbnails */}
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                {/* Modern Thumb */}
-                <div
-                  onClick={() => setActiveTemplate('modern')}
-                  className={`cursor-pointer rounded-lg border-2 p-1 bg-white shadow-xs transition-all ${
-                    activeTemplate === 'modern' ? 'border-[#9EE617] ring-2 ring-[#9EE617]/30' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="h-12 bg-gradient-to-r from-slate-900 to-slate-800 rounded flex items-center justify-center p-1">
-                    <span className="text-[8px] font-black text-[#9EE617]">MODERN</span>
-                  </div>
-                </div>
-
-                {/* School Thumb */}
-                <div
-                  onClick={() => setActiveTemplate('school')}
-                  className={`cursor-pointer rounded-lg border-2 p-1 bg-white shadow-xs transition-all ${
-                    activeTemplate === 'school' ? 'border-[#9EE617] ring-2 ring-[#9EE617]/30' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="h-12 bg-gradient-to-r from-indigo-900 to-indigo-700 rounded flex items-center justify-center p-1">
-                    <span className="text-[8px] font-black text-white">SCHOOL</span>
-                  </div>
-                </div>
-
-                {/* Classic Thumb */}
-                <div
-                  onClick={() => setActiveTemplate('classic')}
-                  className={`cursor-pointer rounded-lg border-2 p-1 bg-white shadow-xs transition-all ${
-                    activeTemplate === 'classic' ? 'border-[#9EE617] ring-2 ring-[#9EE617]/30' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="h-12 bg-gradient-to-r from-slate-200 to-slate-300 rounded flex items-center justify-center p-1">
-                    <span className="text-[8px] font-black text-slate-800">CLASSIC</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Template Settings at bottom of Column 1 */}
-            <div className="pt-3 border-t border-[#E2E8F0] space-y-2.5 text-xs">
-              <div className="font-bold text-[#1E293B]">Template Settings</div>
-
-              <div>
-                <label className="text-[11px] text-[#64748B] block mb-1">Card Size</label>
-                <select className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#1E293B]">
-                  <option>CR80 (85.60 x 53.98 mm)</option>
-                  <option>CR79 (83.90 x 52.10 mm)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[11px] text-[#64748B] block mb-1">Orientation</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCardOrientation('portrait')}
-                    className={`py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      cardOrientation === 'portrait'
-                        ? 'border-[#9EE617] bg-[#9EE617]/20 text-[#256002]'
-                        : 'border-[#CBD5E1] bg-white text-[#64748B]'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${cardOrientation === 'portrait' ? 'bg-[#9EE617]' : 'border border-slate-300'}`} />
-                    <span>Portrait</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCardOrientation('landscape')}
-                    className={`py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      cardOrientation === 'landscape'
-                        ? 'border-[#9EE617] bg-[#9EE617]/20 text-[#256002]'
-                        : 'border-[#CBD5E1] bg-white text-[#64748B]'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${cardOrientation === 'landscape' ? 'bg-[#9EE617]' : 'border border-slate-300'}`} />
-                    <span>Landscape</span>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] text-[#64748B] block mb-1">Layout</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDesignerSide('Front')}
-                    className={`py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      designerSide === 'Front'
-                        ? 'border-[#9EE617] bg-[#9EE617]/20 text-[#256002]'
-                        : 'border-[#CBD5E1] bg-white text-[#64748B]'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${designerSide === 'Front' ? 'bg-[#9EE617]' : 'border border-slate-300'}`} />
-                    <span>Front Side</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDesignerSide('Back')}
-                    className={`py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      designerSide === 'Back'
-                        ? 'border-[#9EE617] bg-[#9EE617]/20 text-[#256002]'
-                        : 'border-[#CBD5E1] bg-white text-[#64748B]'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${designerSide === 'Back' ? 'bg-[#9EE617]' : 'border border-slate-300'}`} />
-                    <span>Back Side</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* COLUMN 2: Tool Palette (1 Col on Desktop) */}
-          <div className="lg:col-span-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-2 flex flex-col items-center justify-center gap-3">
-            {[
-              { icon: Type, label: 'Text' },
-              { icon: ImageIcon, label: 'Image' },
-              { icon: QrIcon, label: 'QR Code' },
-              { icon: Shapes, label: 'Shape' },
-              { icon: Award, label: 'Logo' },
-              { icon: Maximize2, label: 'Frame' },
-            ].map(tool => (
-              <button
-                key={tool.label}
-                type="button"
-                className="w-12 h-12 rounded-xl bg-white border border-[#CBD5E1] hover:border-[#9EE617] hover:text-[#256002] flex flex-col items-center justify-center gap-1 text-[#64748B] shadow-xs transition-all"
-                title={tool.label}
-              >
-                <tool.icon className="w-4 h-4" />
-                <span className="text-[9px] font-bold leading-none">{tool.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* COLUMN 3: Center Canvas (Live Interactive CR80 ID Card - 5 Cols) */}
-          <div className="lg:col-span-5 bg-[#F1F5F9] border border-[#CBD5E1] rounded-xl p-6 flex items-center justify-center relative overflow-hidden bg-[radial-gradient(#CBD5E1_1px,transparent_1px)] [background-size:16px_16px]">
-            {/* The CR80 Physical Student ID Card Preview matching Screenshot */}
-            <div
-              style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center center' }}
-              className="w-[380px] h-[240px] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden relative flex flex-col justify-between transition-transform duration-200"
-            >
-              {/* Card Top Banner with StudentBridge Logo & Decorative Emerald Wave */}
-              <div className="pt-3 px-4 flex items-start justify-between relative">
-                {/* Brand */}
-                <div className="flex items-center gap-2 z-10">
-                  <div className="w-6 h-6 rounded-md bg-[#9EE617] flex items-center justify-center p-1 text-[#062404] shadow-xs">
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                      <rect x="3" y="3" width="8" height="8" rx="2" />
-                      <rect x="13" y="3" width="8" height="8" rx="2" fillOpacity="0.8" />
-                      <rect x="3" y="13" width="8" height="8" rx="2" fillOpacity="0.8" />
-                      <rect x="13" y="13" width="8" height="8" rx="2" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="text-xs font-black tracking-tight text-[#0F172A] leading-tight">
-                      StudentBridge
-                    </div>
-                    <div className="text-[8px] font-extrabold tracking-widest text-[#64748B] uppercase">
-                      SILICON LABS
-                    </div>
-                  </div>
-                </div>
-
-                {/* Decorative Green Curve on Top Right */}
-                <div className="absolute top-0 right-0 w-28 h-20 overflow-hidden pointer-events-none">
-                  <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#9EE617] to-[#7CB305] opacity-80 -mr-10 -mt-10" />
-                </div>
-              </div>
-
-              {/* Card Body: Student Portrait on Left + Details & QR Code on Right */}
-              <div className="px-4 flex items-center gap-3.5 z-10">
-                {/* Biometric Portrait Frame */}
-                <div className="w-24 h-28 rounded-xl overflow-hidden bg-slate-100 border-2 border-slate-200 shadow-sm shrink-0">
-                  <img
-                    src={currentPhoto}
-                    alt={activeDossier.fullName}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-
-                {/* Details & Live Scannable QR Code */}
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-base font-heading font-black text-[#0F172A] leading-tight truncate">
-                    {activeDossier.fullName}
-                  </h4>
-                  <div className="text-[11px] font-mono font-bold text-[#64748B]">
-                    {activeDossier.studentId}
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 mt-2">
-                    <div className="space-y-1 text-[10px] text-[#475569]">
-                      <div className="flex items-center gap-1.5">
-                        <BookOpen className="w-3 h-3 text-slate-400" />
-                        <span>Grade</span>
-                        <strong className="text-[#0F172A]">{activeDossier.grade?.replace('Grade', '').trim() || '10'}</strong>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <UsersIcon className="w-3 h-3 text-slate-400" />
-                        <span>Section</span>
-                        <strong className="text-[#0F172A]">{getSection(activeDossier)}</strong>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3 h-3 text-slate-400" />
-                        <span>DOB</span>
-                        <strong className="text-[#0F172A] font-mono">{getDob(activeDossier)}</strong>
-                      </div>
-                    </div>
-
-                    {/* QR Code */}
-                    <div className="w-14 h-14 bg-white p-1 rounded-lg border border-slate-200 shadow-xs shrink-0 flex items-center justify-center">
-                      {qrDataUrl ? (
-                        <img src={qrDataUrl} alt="Security QR" className="w-full h-full object-contain" />
-                      ) : (
-                        <QrIcon className="w-8 h-8 text-slate-400" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Dark Ribbon with Slogan */}
-              <div className="h-7 bg-[#0F172A] px-4 flex items-center justify-between z-10">
-                <span className="text-[9px] font-black tracking-wider text-white uppercase">
-                  STUDENT ID CARD
-                </span>
-                <span className="text-[9px] font-bold text-[#9EE617]">
-                  Learn • Grow • Succeed
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* COLUMN 4: Print Preview & A4 Sheet Arrangement (3 Cols) */}
-          <div id="print-preview" className="lg:col-span-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-4 flex flex-col justify-between space-y-3">
-            <div className="space-y-2.5">
-              {/* Header and Dropdown matching Screenshot */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-black text-[#1E293B]">
-                  <Printer className="w-3.5 h-3.5 text-[#1E293B]" />
-                  <span>Print Preview</span>
-                </div>
-
-                <select
-                  value={printLayout}
-                  onChange={(e) => setPrintLayout(e.target.value as any)}
-                  className="bg-white border border-[#CBD5E1] rounded-lg px-2 py-1 text-[11px] font-bold text-[#1E293B]"
-                >
-                  <option value="a4_8">A4 Sheet (8 Cards)</option>
-                  <option value="a4_10">A4 Sheet (10 Cards)</option>
-                  <option value="single">Single Card</option>
-                </select>
-              </div>
-
-              {/* Miniature A4 Sheet Preview showing 8 arranged cards matching Screenshot */}
-              <div className="bg-white border border-slate-300 rounded-xl p-2 shadow-xs aspect-[1/1.3] flex flex-col justify-between overflow-hidden">
-                <div className="grid grid-cols-2 gap-1.5 h-full">
-                  {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-                    const st = students[i] || activeDossier;
-                    const thumb = getPhotoUrl(st.thumbnailPath || st.photoPath) || currentPhoto;
-                    return (
-                      <div
-                        key={i}
-                        className="border border-slate-200 rounded p-1 flex items-center gap-1 bg-[#FAFAFA] text-[6px] overflow-hidden leading-none"
-                      >
-                        <div className="w-5 h-6 rounded bg-slate-200 shrink-0 overflow-hidden">
-                          <img src={thumb} alt="" className="w-full h-full object-cover" />
-                        </div>
-                        <div className="min-w-0 flex-1 truncate">
-                          <div className="font-bold text-[#0F172A] truncate">{st.fullName}</div>
-                          <div className="text-[5px] text-slate-400 font-mono">{st.studentId}</div>
-                        </div>
-                        <div className="w-3 h-3 bg-white border border-slate-300 shrink-0 rounded-xs flex items-center justify-center">
-                          <div className="w-1.5 h-1.5 bg-[#0F172A]" />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Print Ready Button */}
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={handlePrintReady}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] active:scale-[0.99] text-[#062404] text-xs font-black shadow-sm transition-all flex items-center justify-center gap-2"
+              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              className="p-1.5 rounded-lg border border-[#CBD5E1] bg-white disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print Ready</span>
+              <ChevronLeft className="w-4 h-4" />
             </button>
+
+            <span className="px-3 py-1 font-bold text-xs bg-white border border-[#CBD5E1] rounded-lg">
+              Page {page} of {totalPages}
+            </span>
+
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              className="p-1.5 rounded-lg border border-[#CBD5E1] bg-white disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="ml-2 bg-white border border-[#CBD5E1] rounded-lg px-2 py-1 text-xs font-bold text-[#0B1118]"
+            >
+              <option value={10}>10 per page</option>
+              <option value={25}>25 per page</option>
+              <option value={50}>50 per page</option>
+              <option value={100}>100 per page</option>
+            </select>
           </div>
         </div>
       </div>
 
       {/* =========================================================================
-          MODALS FOR COMPLETE ENTERPRISE FUNCTIONALITY & DATA SAFETY
+          SLIDE-OVER DRAWER: STUDENT DETAIL DOSSIER (Appears ONLY when eye icon clicked)
          ========================================================================= */}
+      {isDetailDrawerOpen && detailStudent && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col overflow-hidden border-l border-[#E2E8F0] animate-in slide-in-from-right duration-200">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAF9]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#9EE617]/20 border border-[#9EE617]/40 flex items-center justify-center text-[#256002]">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-sm text-[#0B1118]">Student Dossier</h3>
+                  <p className="text-[10px] text-slate-500 font-mono">{detailStudent.studentId}</p>
+                </div>
+              </div>
 
-      {/* 1. Add Student Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#CBD5E1] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="font-heading font-black text-lg text-[#1E293B]">Enroll New Student</h3>
-              <button type="button" onClick={() => setIsAddModalOpen(false)} className="p-1 text-slate-400 hover:text-black">
+              <button
+                type="button"
+                onClick={() => setIsDetailDrawerOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-black transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveAddStudent} className="space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-[#1E293B] block mb-1">Student ID *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formStudentId}
-                    onChange={(e) => setFormStudentId(e.target.value)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-mono font-bold"
+            {/* Drawer Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {/* Profile Card */}
+              <div className="flex gap-4 items-start pb-4 border-b border-[#E2E8F0]">
+                {/* Photo (Clickable to edit online) */}
+                <div
+                  onClick={() => handleOpenPhotoEditor(detailStudent)}
+                  className="relative w-28 h-36 rounded-xl overflow-hidden bg-slate-100 border border-[#CBD5E1] shrink-0 shadow-xs cursor-pointer group"
+                  title="Click photo to crop and adjust online"
+                >
+                  <img
+                    src={getPhotoUrl(detailStudent.photoPath || detailStudent.previewPath || detailStudent.thumbnailPath) || DEFAULT_AVATAR}
+                    alt={detailStudent.fullName}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                    }}
                   />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition-opacity">
+                    <Edit2 className="w-4 h-4 text-[#9EE617] mb-1" />
+                    <span>Edit Photo</span>
+                  </div>
                 </div>
-                <div>
-                  <label className="font-bold text-[#1E293B] block mb-1">Full Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formFullName}
-                    onChange={(e) => setFormFullName(e.target.value)}
-                    placeholder="e.g. Student Full Name"
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold"
-                  />
+
+                {/* Identity Metadata */}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="text-base font-heading font-black text-[#0B1118] truncate leading-tight">
+                    {detailStudent.fullName}
+                  </h4>
+                  <div className="text-xs font-mono font-bold text-[#366804]">
+                    {detailStudent.studentId}
+                  </div>
+
+                  <div className="space-y-1 pt-2 text-xs text-slate-600">
+                    <div className="flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>Grade:</span>
+                      <span className="font-bold text-[#0B1118]">{detailStudent.grade || '10'}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <UsersIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>Section:</span>
+                      <span className="font-bold text-[#0B1118]">{getSection(detailStudent)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>Branch:</span>
+                      <span className="font-bold text-[#0B1118]">{detailStudent.location || 'Addis Ababa'}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>Transmitted:</span>
+                      <span className="font-mono text-[10px] font-semibold text-[#0B1118]">
+                        {detailStudent.createdAt ? new Date(detailStudent.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Oct 12, 08:30'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              {/* Quick Actions Row */}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadSinglePhoto(detailStudent)}
+                  className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-[#9EE617]/20 text-[#0B1118] text-[11px] font-bold flex flex-col items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#366804]" />
+                  <span>Download Photo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => downloadSingleQr(detailStudent)}
+                  className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-[#9EE617]/20 text-[#0B1118] text-[11px] font-bold flex flex-col items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <QrIcon className="w-3.5 h-3.5 text-[#366804]" />
+                  <span>Download QR</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditData(detailStudent)}
+                  className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-[#9EE617]/20 text-[#0B1118] text-[11px] font-bold flex flex-col items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-[#366804]" />
+                  <span>Edit Data</span>
+                </button>
+              </div>
+
+              {/* Auto-Generated QR Code Panel (Token: Strictly studentId) */}
+              <div className="p-4 bg-[#F8FAF9] rounded-2xl border border-[#E2E8F0] flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-[#0B1118]">
+                    <QrIcon className="w-4 h-4 text-[#366804]" />
+                    <span>Auto QR Code</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 max-w-[180px]">
+                    Token strictly encoded with Student ID <span className="font-mono font-bold text-[#0B1118]">({detailStudent.studentId})</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => downloadSingleQr(detailStudent)}
+                    className="text-[11px] text-[#256002] font-black hover:underline pt-1 inline-block cursor-pointer"
+                  >
+                    Save QR PNG &rarr;
+                  </button>
+                </div>
+
+                <div className="w-20 h-20 bg-white p-1 rounded-xl border border-[#CBD5E1] shadow-2xs flex items-center justify-center">
+                  {detailQrDataUrl ? (
+                    <img src={detailQrDataUrl} alt="QR Code" className="w-full h-full object-contain" />
+                  ) : (
+                    <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+                  )}
+                </div>
+              </div>
+
+              {/* Dossier Tabs */}
+              <div className="border-b border-[#E2E8F0] flex items-center gap-4 text-xs font-bold">
+                {(['Photo', 'Academic', 'Contact', 'Activity'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setDetailTab(tab)}
+                    className={`pb-2 transition-all relative cursor-pointer ${
+                      detailTab === tab ? 'text-[#256002] font-black' : 'text-slate-500 hover:text-black'
+                    }`}
+                  >
+                    <span>{tab}</span>
+                    {detailTab === tab && (
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#9EE617] rounded-full" />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Contents */}
+              {detailTab === 'Photo' && (
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Biometric Integrity:</span>
+                    <span className="font-bold text-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Cloud Storage:</span>
+                    <span className="font-mono text-slate-800">Cloudflare R2 Bucket</span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Aspect Ratio:</span>
+                    <span className="font-bold text-[#0B1118]">3:4 ID Portrait</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPhotoEditor(detailStudent)}
+                    className="w-full py-2.5 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] font-black text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Open Phone-Style Photo Editor</span>
+                  </button>
+                </div>
+              )}
+
+              {detailTab === 'Academic' && (
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">School Campus:</span>
+                    <span className="font-bold text-[#0B1118]">{detailStudent.school || 'YMS'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Branch Location:</span>
+                    <span className="font-bold text-[#0B1118]">{detailStudent.location || 'Addis Ababa'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Grade & Section:</span>
+                    <span className="font-mono font-bold text-[#0B1118]">{detailStudent.grade || '10'} - {getSection(detailStudent)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">School Bus Transport:</span>
+                    <span className="font-bold text-[#0B1118]">{detailStudent.schoolBusUsage || 'Yes'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Blood Group:</span>
+                    <span className="font-bold text-[#0B1118]">{detailStudent.bloodType || 'O+'}</span>
+                  </div>
+                </div>
+              )}
+
+              {detailTab === 'Contact' && (
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Student Phone:</span>
+                    <span className="font-mono font-bold text-[#0B1118]">{detailStudent.phone || 'None provided'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Guardian Name:</span>
+                    <span className="font-bold text-[#0B1118]">{detailStudent.guardianFullName || 'Parent / Guardian'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Emergency Phone:</span>
+                    <span className="font-mono font-bold text-[#0B1118]">{detailStudent.emergencyContactPhone || 'None provided'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Date of Birth:</span>
+                    <span className="font-mono text-slate-800">{detailStudent.dateOfBirth ? detailStudent.dateOfBirth.substring(0, 10) : '2010-01-01'}</span>
+                  </div>
+                </div>
+              )}
+
+              {detailTab === 'Activity' && (
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Sender Operator:</span>
+                    <span className="font-bold text-[#0B1118]">{detailStudent.senderName || 'Field Sender'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Transmission Timestamp:</span>
+                    <span className="font-mono text-slate-800">{detailStudent.createdAt ? new Date(detailStudent.createdAt).toLocaleString() : 'Oct 12, 2026 08:30'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Database Sync:</span>
+                    <span className="font-bold text-emerald-700">Supabase PostgreSQL (Live)</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAF9] flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(detailStudent)}
+                className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+              >
+                Delete Student
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenEditData(detailStudent)}
+                className="py-2 px-4 rounded-xl bg-[#0B1118] text-white text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Edit Student Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          ONLINE PHOTO EDITOR & PHONE CROP MODAL
+         ========================================================================= */}
+      {isPhotoEditorOpen && editingPhotoStudent && (
+        <PhoneCropModal
+          isOpen={isPhotoEditorOpen}
+          imageUrl={getPhotoUrl(editingPhotoStudent.photoPath || editingPhotoStudent.previewPath || editingPhotoStudent.thumbnailPath) || DEFAULT_AVATAR}
+          studentId={editingPhotoStudent.studentId}
+          title={`Edit Student Photograph (${editingPhotoStudent.fullName})`}
+          onClose={() => {
+            setIsPhotoEditorOpen(false);
+            setEditingPhotoStudent(null);
+          }}
+          onSave={handleSaveEditedPhoto}
+        />
+      )}
+
+      {/* =========================================================================
+          EDIT STUDENT DATA MODAL (All fields EXCEPT Photo and QR)
+         ========================================================================= */}
+      {isEditModalOpen && editingDataStudent && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-[#CBD5E1] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div>
+                <h3 className="font-heading font-black text-base text-[#0B1118]">
+                  Edit Student Information
+                </h3>
+                <p className="text-[11px] text-slate-500 font-mono">
+                  {editingDataStudent.studentId} &bull; Academic & Contact metadata
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-black cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStudentData} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="font-bold text-[#0B1118] block mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
+                  />
+                </div>
+
                 <div>
-                  <label className="font-bold text-[#1E293B] block mb-1">Gender</label>
+                  <label className="font-bold text-[#0B1118] block mb-1">Gender</label>
                   <select
-                    value={formSex}
-                    onChange={(e) => setFormSex(e.target.value)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold"
+                    value={editSex}
+                    onChange={(e) => setEditSex(e.target.value as any)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                   </select>
                 </div>
-                <div>
-                  <label className="font-bold text-[#1E293B] block mb-1">Grade</label>
-                  <input
-                    type="text"
-                    value={formGrade}
-                    onChange={(e) => setFormGrade(e.target.value)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-[#1E293B] block mb-1">Section</label>
-                  <input
-                    type="text"
-                    value={formSection}
-                    onChange={(e) => setFormSection(e.target.value)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-[#1E293B] block mb-1">Phone Number</label>
+                  <label className="font-bold text-[#0B1118] block mb-1">Grade</label>
                   <input
                     type="text"
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-mono"
+                    required
+                    value={editGrade}
+                    onChange={(e) => setEditGrade(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
                   />
                 </div>
+
                 <div>
-                  <label className="font-bold text-[#1E293B] block mb-1">Date of Birth</label>
+                  <label className="font-bold text-[#0B1118] block mb-1">Section</label>
+                  <input
+                    type="text"
+                    required
+                    value={editSection}
+                    onChange={(e) => setEditSection(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#0B1118] block mb-1">Blood Group</label>
+                  <select
+                    value={editBloodType}
+                    onChange={(e) => setEditBloodType(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
+                  >
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+
+                {/* Branch Location */}
+                <div>
+                  <label className="font-bold text-[#0B1118] block mb-1">Branch Location</label>
+                  <select
+                    value={editBranch}
+                    onChange={(e) => handleEditBranchChange(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
+                  >
+                    {DEFAULT_BRANCHES.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Assigned School (Filtered to branch) */}
+                <div>
+                  <label className="font-bold text-[#0B1118] block mb-1">Assigned School ({editBranch})</label>
+                  <select
+                    value={editSchool}
+                    onChange={(e) => setEditSchool(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
+                  >
+                    {(BRANCH_SCHOOL_MAP[editBranch] || ['YMS']).map(sch => (
+                      <option key={sch} value={sch}>{sch}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Phone (auto formats 09/07 to +2519/+2517, blank stays blank) */}
+                <div className="col-span-2">
+                  <label className="font-bold text-[#0B1118] block mb-1 flex items-center justify-between">
+                    <span>Student Phone Number</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Auto 09/07 &rarr; +2519/+2517 (blank if empty)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(formatPhoneNumber(e.target.value))}
+                    onBlur={() => setEditPhone(formatPhoneNumber(editPhone))}
+                    placeholder="e.g. 0911223344"
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-mono font-bold text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#0B1118] block mb-1">Guardian Name</label>
+                  <input
+                    type="text"
+                    value={editGuardianName}
+                    onChange={(e) => setEditGuardianName(e.target.value)}
+                    placeholder="Parent / Guardian"
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#0B1118] block mb-1">Emergency Contact Phone</label>
+                  <input
+                    type="tel"
+                    value={editEmergencyPhone}
+                    onChange={(e) => setEditEmergencyPhone(formatPhoneNumber(e.target.value))}
+                    onBlur={() => setEditEmergencyPhone(formatPhoneNumber(editEmergencyPhone))}
+                    placeholder="e.g. 0911223344"
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#0B1118] block mb-1">Date of Birth</label>
                   <input
                     type="date"
-                    value={formDob}
-                    onChange={(e) => setFormDob(e.target.value)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2"
+                    value={editDob}
+                    onChange={(e) => setEditDob(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs"
                   />
                 </div>
-              </div>
 
-              {/* Photo Upload */}
-              <div>
-                <label className="font-bold text-[#1E293B] block mb-1">Biometric Portrait</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (re) => setFormPhotoBase64(re.target?.result as string);
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-[#9EE617] file:text-[#062404] file:font-black"
-                />
+                <div>
+                  <label className="font-bold text-[#0B1118] block mb-1">School Bus Transport</label>
+                  <select
+                    value={editBusUsage}
+                    onChange={(e) => setEditBusUsage(e.target.value as any)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
+                  >
+                    <option value="Yes">Yes (School Bus)</option>
+                    <option value="No">No (Private)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-[#CBD5E1] bg-white text-xs font-bold text-[#64748B]"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-[#CBD5E1] bg-white text-xs font-bold text-[#64748B] hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSavingStudent}
-                  className="px-4 py-2 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black"
+                  className="px-5 py-2 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black shadow-xs cursor-pointer"
                 >
-                  {isSavingStudent ? 'Saving...' : 'Save & Upload to Cloudflare'}
+                  Save Changes
                 </button>
               </div>
             </form>
@@ -1437,96 +1670,69 @@ export const ReceiverStudentsPage: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Edit Student Modal */}
-      {isEditModalOpen && selectedStudent && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#CBD5E1] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="font-heading font-black text-lg text-[#1E293B]">Edit Student Information</h3>
-              <button type="button" onClick={() => setIsEditModalOpen(false)} className="p-1 text-slate-400 hover:text-black">
-                <X className="w-5 h-5" />
-              </button>
+      {/* =========================================================================
+          INTERACTIVE DOWNLOAD PROGRESS MODAL
+         ========================================================================= */}
+      {progressModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#0B1118] text-white border border-[#2D3748] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#9EE617]/20 border border-[#9EE617]/40 flex items-center justify-center text-[#9EE617]">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+              </div>
+              <div>
+                <h3 className="font-heading font-black text-sm text-white">
+                  {progressModal.title}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Please wait while files are processed</p>
+              </div>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-[#1E293B] block mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={formFullName}
-                  onChange={(e) => setFormFullName(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold"
-                />
+            {/* Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-mono font-bold">
+                <span className="text-slate-400 truncate max-w-[240px]">{progressModal.statusText}</span>
+                <span className="text-[#9EE617]">
+                  {progressModal.total > 0
+                    ? Math.round((progressModal.current / progressModal.total) * 100)
+                    : 100}%
+                </span>
               </div>
-              <div>
-                <label className="font-bold text-[#1E293B] block mb-1">Grade</label>
-                <input
-                  type="text"
-                  value={formGrade}
-                  onChange={(e) => setFormGrade(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold"
-                />
-              </div>
-              <div>
-                <label className="font-bold text-[#1E293B] block mb-1">Phone</label>
-                <input
-                  type="text"
-                  value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-mono"
-                />
-              </div>
-
-              <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-[#CBD5E1] bg-white text-xs font-bold text-[#64748B]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    updateStudent(selectedStudent.studentId, {
-                      fullName: formFullName.trim(),
-                      grade: formGrade.trim(),
-                      phone: formPhone.trim()
-                    });
-                    setStudents(prev => prev.map(s => s.studentId === selectedStudent.studentId ? {
-                      ...s,
-                      fullName: formFullName.trim(),
-                      grade: formGrade.trim(),
-                      phone: formPhone.trim()
-                    } : s));
-                    setSelectedStudent(prev => prev ? {
-                      ...prev,
-                      fullName: formFullName.trim(),
-                      grade: formGrade.trim(),
-                      phone: formPhone.trim()
-                    } : null);
-                    setIsEditModalOpen(false);
+              <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                <div
+                  className="h-full bg-gradient-to-r from-[#9EE617] to-[#BEF264] transition-all duration-150 rounded-full"
+                  style={{
+                    width: `${progressModal.total > 0
+                      ? Math.min(100, Math.round((progressModal.current / progressModal.total) * 100))
+                      : 100}%`
                   }}
-                  className="px-4 py-2 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black"
-                >
-                  Update Record
-                </button>
+                />
+              </div>
+              <div className="text-[11px] text-slate-400 flex justify-between">
+                <span>Processed: {progressModal.current} of {progressModal.total}</span>
+                <span>Active thread</span>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* 3. Delete Confirmation Modal (Temporary vs Permanent) */}
+      {/* =========================================================================
+          DELETE MODAL (Temporary hide vs Permanent purge)
+         ========================================================================= */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-[#CBD5E1] rounded-2xl max-w-md w-full overflow-hidden shadow-2xl">
             <div className="p-5 border-b border-[#E2E8F0] flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2 text-rose-600">
                 <AlertTriangle className="w-5 h-5" />
-                <h3 className="font-heading font-black text-base text-[#1E293B]">Delete Confirmation</h3>
+                <h3 className="font-heading font-black text-base text-[#0B1118]">Delete Confirmation</h3>
               </div>
-              <button type="button" onClick={() => setDeleteTarget(null)} className="p-1 text-slate-400 hover:text-black">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="p-1 text-slate-400 hover:text-black cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1535,70 +1741,48 @@ export const ReceiverStudentsPage: React.FC = () => {
               <div className="p-3 bg-slate-100 rounded-xl flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white border border-slate-300 overflow-hidden shrink-0">
                   <img
-                    src={getPhotoUrl(deleteTarget.photoPath || deleteTarget.previewPath) || ''}
+                    src={getPhotoUrl(deleteTarget.photoPath || deleteTarget.previewPath) || DEFAULT_AVATAR}
                     alt=""
                     className="w-full h-full object-cover"
                   />
                 </div>
                 <div>
-                  <div className="font-bold text-[#1E293B]">{deleteTarget.fullName}</div>
+                  <div className="font-bold text-[#0B1118]">{deleteTarget.fullName}</div>
                   <div className="font-mono text-[#64748B] text-[11px]">{deleteTarget.studentId}</div>
                 </div>
               </div>
 
-              {/* Option 1: Temporary Delete */}
+              {/* Temporary Hide */}
               <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50 space-y-2">
-                <div className="font-bold text-amber-900">Temporary Delete (Hide Only)</div>
+                <div className="font-bold text-amber-900">Temporary Hide</div>
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Hides student from directory view. Data remains safe in Supabase and can be restored at any time.
+                  Hides student from table view. Record remains safe in database and can be restored.
                 </p>
                 <button
                   type="button"
                   disabled={isDeleting}
                   onClick={() => executeDelete(false)}
-                  className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs"
+                  className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs cursor-pointer"
                 >
-                  {isDeleting ? 'Updating...' : 'Hide from System'}
+                  {isDeleting ? 'Updating...' : 'Hide from Directory'}
                 </button>
               </div>
 
-              {/* Option 2: Permanent Delete */}
+              {/* Permanent Delete */}
               <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50 space-y-2">
-                <div className="font-bold text-rose-900">Permanent Delete (Purge Everywhere)</div>
+                <div className="font-bold text-rose-900">Permanent Purge</div>
                 <p className="text-[11px] text-rose-800 leading-relaxed">
-                  Irreversibly removes student from Supabase database and purges photo from Cloudflare R2 bucket.
+                  Irreversibly removes student from database and purges photograph from Cloudflare R2 bucket.
                 </p>
                 <button
                   type="button"
                   disabled={isDeleting}
                   onClick={() => executeDelete(true)}
-                  className="w-full py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs"
+                  className="w-full py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer"
                 >
-                  {isDeleting ? 'Erasing...' : 'Permanent Delete Everywhere'}
+                  {isDeleting ? 'Erasing...' : 'Permanent Purge Everywhere'}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Lightbox Full Size Photo Modal */}
-      {lightboxPhoto && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setLightboxPhoto(null)}
-        >
-          <div className="relative max-w-lg w-full bg-slate-900 p-2 rounded-2xl border border-slate-700 shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setLightboxPhoto(null)}
-              className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-white hover:bg-white hover:text-black transition-all"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img src={lightboxPhoto} alt="Full Size" className="w-full h-auto max-h-[80vh] rounded-xl object-contain mx-auto" />
-            <div className="text-center text-xs font-mono text-slate-400 py-2">
-              Cloudflare R2 Bucket &bull; siliconlabs
             </div>
           </div>
         </div>

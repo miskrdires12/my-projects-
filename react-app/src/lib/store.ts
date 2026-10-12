@@ -3,30 +3,27 @@ import { publishStudentSync, subscribeToStudentSync, getPhotoUrl, getPhotoEncode
 
 export { getPhotoUrl, getPhotoEncodeClass, publishStudentSync, subscribeToStudentSync };
 
-// Initial fallback schools
+// Branch to School Mapping
+export const BRANCH_SCHOOL_MAP: Record<string, string[]> = {
+  'Addis Ababa': ['YMS', 'Adika Youth', 'Warka', 'Ferway', 'School of America'],
+  'Adama': ['Yacine', 'Debebech'],
+  'Mojo': ['Mojo'],
+  'Harar': ['High Tech']
+};
+
+export const DEFAULT_BRANCHES = Object.keys(BRANCH_SCHOOL_MAP);
+
+// Initial fallback schools strictly mapped to authorized branches
 const DEFAULT_SCHOOLS: School[] = [
   { id: "sch_yms", name: "YMS", location: "Addis Ababa", status: "Active", studentsCount: 1245 },
   { id: "sch_adika", name: "Adika Youth", location: "Addis Ababa", status: "Active", studentsCount: 982 },
-  { id: "sch_soa", name: "School of America", location: "Addis Ababa", status: "Active", studentsCount: 756 },
-  { id: "sch_ferway", name: "Ferway", location: "Addis Ababa", status: "Active", studentsCount: 542 },
   { id: "sch_warka", name: "Warka", location: "Addis Ababa", status: "Active", studentsCount: 398 },
+  { id: "sch_ferway", name: "Ferway", location: "Addis Ababa", status: "Active", studentsCount: 542 },
+  { id: "sch_soa", name: "School of America", location: "Addis Ababa", status: "Active", studentsCount: 756 },
   { id: "sch_yacine", name: "Yacine", location: "Adama", status: "Active", studentsCount: 420 },
   { id: "sch_debebech", name: "Debebech", location: "Adama", status: "Active", studentsCount: 510 },
+  { id: "sch_mojo", name: "Mojo", location: "Mojo", status: "Active", studentsCount: 360 },
   { id: "sch_hightech", name: "High Tech", location: "Harar", status: "Active", studentsCount: 380 }
-];
-
-const DEFAULT_TASKS: Task[] = [];
-
-export const DEFAULT_BRANCHES = [
-  'Addis Ababa',
-  'Adama',
-  'Hawassa',
-  'Dire Dawa',
-  'Bahir Dar',
-  'Harar',
-  'Mekelle',
-  'Jimma',
-  'Bishoftu'
 ];
 
 export interface OperatorAccount extends User {
@@ -402,17 +399,8 @@ export function addStudent(newStudent: Student): void {
   if (!newStudent.photoIntegrityStatus) {
     newStudent.photoIntegrityStatus = (newStudent.photoPath || newStudent.previewPath || newStudent.thumbnailPath) ? 'PHOTO_VERIFIED' : 'NO_PHOTO';
   }
-  if (!newStudent.qrCodeData) {
-    newStudent.qrCodeData = JSON.stringify({
-      id: newStudent.studentId,
-      name: newStudent.fullName,
-      grade: newStudent.grade || '',
-      school: newStudent.school || '',
-      status: 'Accepted',
-      verified: true,
-      issuer: 'Silicon Labs StudentBridge'
-    });
-  }
+  // QR Code payload token is strictly only student id
+  newStudent.qrCodeData = newStudent.studentId;
   if (!newStudent.recordHistory || newStudent.recordHistory.length === 0) {
     newStudent.recordHistory = [
       {
