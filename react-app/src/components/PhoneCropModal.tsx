@@ -53,6 +53,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [activeTab, setActiveTab] = useState<'crop' | 'adjust'>('crop');
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number }>({ width: 600, height: 800 });
 
   // Viewport Container & Crop Box State
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -84,6 +85,13 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
 
     if (imageUrl.startsWith('data:')) {
       setCurrentImageSrc(imageUrl);
+      const tempImg = new Image();
+      tempImg.onload = () => {
+        if (isMounted && tempImg.naturalWidth && tempImg.naturalHeight) {
+          setImageDimensions({ width: tempImg.naturalWidth, height: tempImg.naturalHeight });
+        }
+      };
+      tempImg.src = imageUrl;
       return;
     }
 
@@ -91,9 +99,13 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
+        const nw = img.naturalWidth || 600;
+        const nh = img.naturalHeight || 800;
+        if (isMounted) setImageDimensions({ width: nw, height: nh });
+
         const c = document.createElement('canvas');
-        c.width = img.naturalWidth || 600;
-        c.height = img.naturalHeight || 800;
+        c.width = nw;
+        c.height = nh;
         const ctx = c.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0);
@@ -116,8 +128,8 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     };
   }, [imageUrl, isOpen]);
 
-  // Initialize or re-center crop box when aspect ratio changes
-  const applyAspectRatio = useCallback((ratio: AspectRatioMode, cWidth: number, cHeight: number) => {
+  // Initialize or re-center crop box when aspect ratio changes (preserving user center)
+  const applyAspectRatio = useCallback((ratio: AspectRatioMode, cWidth: number, cHeight: number, prevCrop?: CropRect) => {
     const pad = 24;
     const maxW = cWidth - pad * 2;
     const maxH = cHeight - pad * 2;
@@ -148,17 +160,25 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
         newH = newW / targetAspect;
       }
     } else {
-      // FREE: Default to 80% coverage
-      newW = maxW * 0.9;
-      newH = maxH * 0.9;
+      // FREE: Default to 85% coverage
+      newW = maxW * 0.85;
+      newH = maxH * 0.85;
     }
 
-    const newX = Math.round((cWidth - newW) / 2);
-    const newY = Math.round((cHeight - newH) / 2);
+    // Preserve selected center if previous crop exists, otherwise center in viewport
+    const curCenterX = prevCrop ? (prevCrop.x + prevCrop.width / 2) : (cWidth / 2);
+    const curCenterY = prevCrop ? (prevCrop.y + prevCrop.height / 2) : (cHeight / 2);
+
+    let newX = Math.round(curCenterX - newW / 2);
+    let newY = Math.round(curCenterY - newH / 2);
+
+    // Boundary clamp
+    newX = Math.max(0, Math.min(newX, cWidth - newW));
+    newY = Math.max(0, Math.min(newY, cHeight - newH));
 
     setCropBox({
-      x: Math.max(0, newX),
-      y: Math.max(0, newY),
+      x: Math.round(newX),
+      y: Math.round(newY),
       width: Math.round(newW),
       height: Math.round(newH)
     });
@@ -184,10 +204,10 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     };
   }, [isOpen, aspectRatio, applyAspectRatio]);
 
-  // Handle Aspect Ratio Tab Switching
+  // Handle Aspect Ratio Tab Switching preserving crop center
   const handleSelectAspectRatio = (mode: AspectRatioMode) => {
     setAspectRatio(mode);
-    applyAspectRatio(mode, containerSize.width, containerSize.height);
+    applyAspectRatio(mode, containerSize.width, containerSize.height, cropBox);
   };
 
   // Start drag handler
@@ -470,6 +490,14 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     }
   };
 
+  const cW = containerSize.width || 320;
+  const cH = containerSize.height || 420;
+  const imgNatW = imageDimensions.width || 600;
+  const imgNatH = imageDimensions.height || 800;
+  const scaleFit = Math.min(cW / imgNatW, cH / imgNatH);
+  const baseW = Math.max(50, Math.round(imgNatW * scaleFit));
+  const baseH = Math.max(50, Math.round(imgNatH * scaleFit));
+
   if (!isOpen) return null;
 
   return (
@@ -555,13 +583,22 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
               className="relative w-[300px] h-[390px] sm:w-[330px] sm:h-[420px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-xl flex items-center justify-center select-none"
               style={{ touchAction: 'none' }}
             >
-              {/* Scaled/Transformed Image */}
+              {/* Scaled/Transformed Image fitted to viewport */}
               <img
                 src={currentImageSrc}
                 alt="Student preview"
                 draggable={false}
-                className="max-w-none transition-transform duration-75 select-none pointer-events-none"
+                onLoad={(e) => {
+                  const target = e.currentTarget;
+                  if (target.naturalWidth && target.naturalHeight) {
+                    setImageDimensions({ width: target.naturalWidth, height: target.naturalHeight });
+                  }
+                }}
+                className="transition-transform duration-75 select-none pointer-events-none"
                 style={{
+                  width: `${baseW}px`,
+                  height: `${baseH}px`,
+                  maxWidth: 'none',
                   transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
                   filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`
                 }}

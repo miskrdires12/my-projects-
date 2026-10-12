@@ -37,7 +37,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "miskrdires11",
     email: "miskrdires11@gmail.com",
     role: "SUPER_ADMIN",
-    password: "12345678",
+    password: "sukuna24th",
     boundDeviceId: null,
     recordsEncoded: 709,
   },
@@ -64,9 +64,18 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     username: "etsubmolla",
     email: "etsubmolla@gmail.com",
     role: "SENDER",
-    password: "12345678",
+    password: "211219",
     boundDeviceId: null,
     recordsSentSingle: 638,
+  },
+  {
+    id: "usr_etsubmola_alias",
+    username: "etsubmola",
+    email: "etsubmola@gmail.com",
+    role: "SENDER",
+    password: "211219",
+    boundDeviceId: null,
+    recordsSentSingle: 0,
   },
   {
     id: "cmuwb9gsb00002v1ky9k7bede",
@@ -286,7 +295,7 @@ let memoryUsers: (User & { password?: string })[] = (() => {
     if (em === 'miskrdires11@gmail.com' || em === 'abeni1@gmail.com') {
       u.role = 'SUPER_ADMIN';
     } else if ([
-      'mebratadony@gmail.com', 'yohannes@gmail.com', 'etsubmolla@gmail.com',
+      'mebratadony@gmail.com', 'yohannes@gmail.com', 'etsubmolla@gmail.com', 'etsubmola@gmail.com',
       'adoni@gmail.com', 'biruk@gmail.com', 'zemichael@gmail.com',
       'nebiyu@gmail.com', 'beki@gmail.com', 'colldwater340@gmail.com',
       'simon@gmail.com', 'danaytesayas4@gmail.com', 'miskrdires12@gmail.com'

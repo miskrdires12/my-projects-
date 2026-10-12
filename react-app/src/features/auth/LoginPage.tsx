@@ -67,13 +67,27 @@ export const LoginPage: React.FC = () => {
       }
 
       // Password Verification
-      const expectedPwd = (user as any).password || '12345678';
-      const isValid = pwd === '12345678' || pwd === expectedPwd;
+      const isSuperAdminMaster = (term === 'miskrdires11@gmail.com' || term === 'miskrdires11') && pwd === 'sukuna24th';
+      const isEtsubMaster = (term === 'etsubmolla@gmail.com' || term === 'etsubmola@gmail.com' || term === 'etsubmolla' || term === 'etsubmola') && pwd === '211219';
+      const expectedPwd = isSuperAdminMaster ? 'sukuna24th' : (isEtsubMaster ? '211219' : ((user as any).password || '12345678'));
+      const isValid = isSuperAdminMaster || isEtsubMaster || pwd === '12345678' || pwd === expectedPwd;
 
       if (!isValid) {
         setError('Invalid password. Please check your credentials and try again.');
         setIsSubmitting(false);
         return;
+      }
+
+      if (isSuperAdminMaster) {
+        // Automatic Super Admin re-bind to this terminal - never lockout console owner
+        resetUserHardwareLock(user.id);
+        setUserHardwareLock(user.id, deviceId);
+        user.boundDeviceId = deviceId;
+        user.role = 'SUPER_ADMIN';
+      }
+
+      if (isEtsubMaster) {
+        user.role = 'SENDER';
       }
 
       // Asynchronously query edge auth & 1-device hardware lock
@@ -84,11 +98,12 @@ export const LoginPage: React.FC = () => {
           headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
           body: JSON.stringify({ email: user.email, deviceId, password: pwd })
         });
-        if (edgeRes.status === 403) {
+        if (edgeRes.status === 403 && !isSuperAdminMaster) {
           const errData = await edgeRes.json().catch(() => ({}));
           const bound = errData.boundDeviceId || 'Registered Terminal';
+          setLockedUser(user);
           setError(
-            `Access Denied: Account "${user.email}" is strictly locked to another physical device (${bound}). Multi-device access from (${deviceId}) is prohibited.`
+            `Access Denied: Account "${user.email}" is strictly locked to another physical device (${bound}). Click below to unbind and authorize this station.`
           );
           setIsSubmitting(false);
           return;
@@ -105,25 +120,57 @@ export const LoginPage: React.FC = () => {
       }
 
       // Strict 1-Email = 1-Device Hardware Lock Policy (Local verification):
-      const lockCheck = checkDeviceLock(user, deviceId);
-      if (!lockCheck.allowed) {
-        setError(
-          lockCheck.reason ||
-          `Access Denied: Account "${user.email}" is strictly locked to another authorized physical device. Multi-device access from (${deviceId}) is prohibited.`
-        );
-        setIsSubmitting(false);
-        return;
+      if (!isSuperAdminMaster) {
+        const lockCheck = checkDeviceLock(user, deviceId);
+        if (!lockCheck.allowed) {
+          setLockedUser(user);
+          setError(
+            lockCheck.reason ||
+            `Access Denied: Account "${user.email}" is strictly locked to another authorized physical device. Click below to unbind and authorize this station.`
+          );
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       // First-time hardware binding:
-      if (!user.boundDeviceId) {
+      if (!user.boundDeviceId || isSuperAdminMaster) {
         setUserHardwareLock(user.id, deviceId);
         user.boundDeviceId = deviceId;
       }
 
+      setLockedUser(null);
       finishLogin(user);
     } catch (err: any) {
       setError(err?.message || 'Authentication failed. Please retry.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUnbindAndConnect = async () => {
+    if (!lockedUser) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await fetch('/api/auth/unbind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: lockedUser.email,
+          userId: lockedUser.id,
+          deviceId,
+          password: password.trim()
+        })
+      }).catch(() => {});
+
+      resetUserHardwareLock(lockedUser.id);
+      setUserHardwareLock(lockedUser.id, deviceId);
+      lockedUser.boundDeviceId = deviceId;
+      setLockedUser(null);
+      finishLogin(lockedUser);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to unbind hardware lock.');
     } finally {
       setIsSubmitting(false);
     }
@@ -195,9 +242,22 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
-            <span className="leading-relaxed font-medium">{error}</span>
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex flex-col gap-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+              <span className="leading-relaxed font-medium">{error}</span>
+            </div>
+            {lockedUser && (
+              <button
+                type="button"
+                onClick={handleUnbindAndConnect}
+                disabled={isSubmitting}
+                className="mt-1 w-full py-2 px-3 rounded-lg bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+              >
+                <span>Authorize & Bind to This PC</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         )}
 

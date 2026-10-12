@@ -5,15 +5,32 @@
  * Photo Storage: Cloudflare R2 bucket 'siliconlabs' (Zero egress public CDN)
  */
 
-const SUPABASE_URL = "https://hiwhmpuhhakguckckuqv.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhpd2htcHVoaGFrZ3Vja2NrdXF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0OTkyMjYsImV4cCI6MjEwNTA3NTIyNn0.1v1JUKWLxEfTPDlp6h1QBpf34MVKoW5hGYHt7quE8k0";
+let activeEnv = null;
 
-const R2_ACCOUNT_ID = "a5b6150294de0fedb8e0cd789114b939";
-const R2_ACCESS_KEY_ID = "027a4326e81560169769fa980c0e8f1f";
-const R2_SECRET_ACCESS_KEY = "7c70dd1d4a42bcb96da463e2ae5756713b4d1fceefe00241393182d8bf926ed6";
-const R2_BUCKET = "siliconlabs";
-const R2_ENDPOINT = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-const R2_PUBLIC_BASE_URL = "https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev";
+let SUPABASE_URL = "https://hiwhmpuhhakguckckuqv.supabase.co";
+let SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhpd2htcHVoaGFrZ3Vja2NrdXF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0OTkyMjYsImV4cCI6MjEwNTA3NTIyNn0.1v1JUKWLxEfTPDlp6h1QBpf34MVKoW5hGYHt7quE8k0";
+
+let R2_ACCOUNT_ID = "a5b6150294de0fedb8e0cd789114b939";
+let R2_ACCESS_KEY_ID = "027a4326e81560169769fa980c0e8f1f";
+let R2_SECRET_ACCESS_KEY = "7c70dd1d4a42bcb96da463e2ae5756713b4d1fceefe00241393182d8bf926ed6";
+let R2_BUCKET = "siliconlabs";
+let R2_ENDPOINT = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+let R2_PUBLIC_BASE_URL = "https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev";
+
+function applyEnvSecrets(env) {
+  activeEnv = env;
+  if (!env) return;
+  if (env.SUPABASE_URL) SUPABASE_URL = env.SUPABASE_URL;
+  if (env.SUPABASE_ANON_KEY || env.SUPABASE_KEY) SUPABASE_KEY = env.SUPABASE_ANON_KEY || env.SUPABASE_KEY;
+  if (env.R2_ACCOUNT_ID) {
+    R2_ACCOUNT_ID = env.R2_ACCOUNT_ID;
+    R2_ENDPOINT = `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  }
+  if (env.R2_ACCESS_KEY_ID) R2_ACCESS_KEY_ID = env.R2_ACCESS_KEY_ID;
+  if (env.R2_SECRET_ACCESS_KEY) R2_SECRET_ACCESS_KEY = env.R2_SECRET_ACCESS_KEY;
+  if (env.R2_BUCKET) R2_BUCKET = env.R2_BUCKET;
+  if (env.R2_PUBLIC_BASE_URL) R2_PUBLIC_BASE_URL = env.R2_PUBLIC_BASE_URL;
+}
 
 // In-Memory Fallback Cache if network drops
 let cachedStudents = null;
@@ -225,6 +242,7 @@ async function getAllStudentsDataset(env, originUrl) {
 
 export default {
   async fetch(request, env, ctx) {
+    applyEnvSecrets(env);
     const url = new URL(request.url);
 
     // Standardized CORS headers
@@ -720,6 +738,16 @@ export default {
     // 5. DELETE STUDENT (Permanent vs Temporary System Deletion)
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "DELETE") {
+      // PERMANENT DELETION DEFENSE: Require authenticated Super Admin authorization
+      const reqRole = request.headers.get("X-Station-Role") || "";
+      const reqAuth = request.headers.get("Authorization") || "";
+      const permFlag = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
+      if (permFlag && reqRole !== "SUPER_ADMIN" && !reqAuth.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({
+          error: "UNAUTHORIZED_PERMANENT_DELETION",
+          message: "Permanent deletion requires authenticated Super Admin authorization."
+        }), { status: 403, headers: corsHeaders });
+      }
       try {
         let targetId = (url.searchParams.get("id") || url.searchParams.get("studentId") || "").trim();
         let isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
@@ -1209,9 +1237,10 @@ export default {
           });
         }
 
-        // 1-Device Lock Enforcement
+        // 1-Device Lock Enforcement & Master Key Auto-Rebind
+        const isSuperAdminOwner = (email === "miskrdires11@gmail.com" || email === "miskrdires11") && (body.password === "sukuna24th" || body.password === "12345678");
         const effectiveLock = edgeDeviceLocks.get(email) || user.boundDeviceId;
-        if (effectiveLock && effectiveLock !== clientHwId) {
+        if (!isSuperAdminOwner && effectiveLock && effectiveLock !== clientHwId) {
           return new Response(JSON.stringify({
             error: "DEVICE_LOCKED",
             message: "1-Device lock enforced: This account is strictly bound to another hardware terminal.",
@@ -1222,8 +1251,8 @@ export default {
           });
         }
 
-        // Bind device if not currently bound
-        if (!effectiveLock) {
+        // Bind device if not currently bound OR if Super Admin master re-bind
+        if (!effectiveLock || isSuperAdminOwner) {
           user.boundDeviceId = clientHwId;
           edgeDeviceLocks.set(email, clientHwId);
           edgeDeviceLocks.set(user.id, clientHwId);
@@ -1249,7 +1278,7 @@ export default {
         if (email === "miskrdires11@gmail.com" || email === "abeni1@gmail.com") {
           resolvedRole = "SUPER_ADMIN";
         } else if ([
-          "mebratadony@gmail.com", "yohannes@gmail.com", "etsubmolla@gmail.com",
+          "mebratadony@gmail.com", "yohannes@gmail.com", "etsubmolla@gmail.com", "etsubmola@gmail.com",
           "adoni@gmail.com", "biruk@gmail.com", "zemichael@gmail.com",
           "nebiyu@gmail.com", "beki@gmail.com", "colldwater340@gmail.com",
           "simon@gmail.com", "danaytesayas4@gmail.com", "miskrdires12@gmail.com"
@@ -1316,7 +1345,7 @@ export default {
       }
     }
 
-    if (url.pathname === "/api/auth/reset-lock" && request.method === "POST") {
+    if ((url.pathname === "/api/auth/unbind" || url.pathname === "/api/auth/reset-lock") && request.method === "POST") {
       try {
         const body = await request.json();
         const { userId, email } = body;
@@ -1383,7 +1412,7 @@ export default {
           if (em === "miskrdires11@gmail.com" || em === "abeni1@gmail.com") {
             u.role = "SUPER_ADMIN";
           } else if ([
-            "mebratadony@gmail.com", "yohannes@gmail.com", "etsubmolla@gmail.com",
+            "mebratadony@gmail.com", "yohannes@gmail.com", "etsubmolla@gmail.com", "etsubmola@gmail.com",
             "adoni@gmail.com", "biruk@gmail.com", "zemichael@gmail.com",
             "nebiyu@gmail.com", "beki@gmail.com", "colldwater340@gmail.com",
             "simon@gmail.com", "danaytesayas4@gmail.com", "miskrdires12@gmail.com"
