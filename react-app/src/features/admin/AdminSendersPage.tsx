@@ -30,6 +30,8 @@ export const AdminSendersPage: React.FC = () => {
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePassword, setInvitePassword] = useState('12345678');
+  const [inviteRole, setInviteRole] = useState<'SENDER' | 'RECEIVER' | 'ADMIN'>('SENDER');
   const [inviteSchool, setInviteSchool] = useState('YMS');
 
   const loadSenders = () => {
@@ -65,17 +67,20 @@ export const AdminSendersPage: React.FC = () => {
       id: `usr-${Date.now()}`,
       username: cleanUsername,
       email: inviteEmail.trim(),
-      role: 'SENDER',
+      password: invitePassword.trim() || '12345678',
+      role: inviteRole,
       boundDeviceId: null,
       school: inviteSchool,
       recordsSentSingle: 0,
       recordsEncoded: 0,
       workSessionCount: 0
     });
-    setToastMessage(`Invitation dispatched to ${inviteEmail} for school ${inviteSchool}.`);
+    setToastMessage(`Operator "${cleanUsername}" successfully provisioned with role [${inviteRole}] and credentials.`);
     setInviteModalOpen(false);
     setInviteName('');
     setInviteEmail('');
+    setInvitePassword('12345678');
+    setInviteRole('SENDER');
     loadSenders();
     setTimeout(() => setToastMessage(null), 4000);
   };
@@ -276,6 +281,31 @@ export const AdminSendersPage: React.FC = () => {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="dawit@gmail.com"
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs text-[#202833] font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#202833] font-bold mb-1">Assigned Operational Role</label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as any)}
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-bold text-[#202833]"
+                >
+                  <option value="SENDER">Field Sender (Registration & Photo Capture)</option>
+                  <option value="RECEIVER">Receiver (Directory, 8-Up Print & Badges)</option>
+                  <option value="ADMIN">Admin (Supervision & Telemetrics)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[#202833] font-bold mb-1">Terminal Password</label>
+                <input
+                  type="text"
+                  required
+                  value={invitePassword}
+                  onChange={(e) => setInvitePassword(e.target.value)}
+                  placeholder="Password (default: 12345678)"
                   className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs text-[#202833] font-mono"
                 />
               </div>

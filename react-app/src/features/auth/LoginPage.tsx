@@ -34,16 +34,29 @@ export const LoginPage: React.FC = () => {
       const term = email.trim().toLowerCase();
       const pwd = password.trim();
 
-      // Find user strictly or by alias
-      let user = allUsers.find(
+      // Fresh user lookup from authoritative in-memory store and localStorage
+      const currentUsers = getUsers();
+      let user = currentUsers.find(
         u => u.email.toLowerCase() === term || u.username.toLowerCase() === term
       );
 
       // Handle username-only input without @gmail.com
       if (!user && !term.includes('@')) {
-        user = allUsers.find(
+        user = currentUsers.find(
           u => u.email.toLowerCase().startsWith(term + '@') || u.username.toLowerCase() === term
         );
+      }
+
+      // Fallback direct check against custom provisioned users
+      if (!user) {
+        try {
+          const custom = JSON.parse(localStorage.getItem('sb_custom_users') || '[]');
+          user = custom.find((cu: any) =>
+            cu.email.toLowerCase() === term ||
+            cu.username.toLowerCase() === term ||
+            (!term.includes('@') && cu.email.toLowerCase().startsWith(term + '@'))
+          );
+        } catch {}
       }
 
       // If user is not yet registered in directory

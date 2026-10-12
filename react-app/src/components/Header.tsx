@@ -34,25 +34,19 @@ export const Header: React.FC<HeaderProps> = ({ currentStation, onToggleMobileSi
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-4 sm:px-6 gap-4 shadow-xs select-none">
-      {/* Left: Navigation Menu Toggle with Menu -> X transition & Silicon Labs Logo Brand */}
+      {/* Left: Navigation Menu Toggle & Silicon Labs Logo Brand */}
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onToggleMobileSidebar}
-          className={`p-2 rounded-xl border transition-all flex items-center justify-center shrink-0 cursor-pointer ${
-            isSidebarOpen
-              ? 'bg-[#9EE617] text-black border-[#9EE617] shadow-xs'
-              : 'text-slate-800 hover:text-black hover:bg-[#9EE617]/20 border-slate-200 hover:border-[#9EE617]/40'
-          }`}
-          aria-label={isSidebarOpen ? "Close Navigation Menu" : "Open Navigation Menu"}
-          title={isSidebarOpen ? "Close Navigation Menu" : "Open Navigation Menu"}
-        >
-          {isSidebarOpen ? (
-            <X className="w-5 h-5 text-black stroke-[2.5]" />
-          ) : (
+        {!isSidebarOpen && (
+          <button
+            type="button"
+            onClick={onToggleMobileSidebar}
+            className="p-2 rounded-xl border border-slate-200 hover:border-[#9EE617]/50 text-slate-800 hover:text-black hover:bg-[#9EE617]/20 transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-2xs"
+            aria-label="Open Navigation Menu"
+            title="Open Navigation Menu"
+          >
             <Menu className="w-5 h-5 text-slate-900" />
-          )}
-        </button>
+          </button>
+        )}
 
         {/* Silicon Labs Logo & Brand Title */}
         <div className="flex items-center gap-2.5">

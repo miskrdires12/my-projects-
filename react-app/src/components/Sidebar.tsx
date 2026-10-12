@@ -48,49 +48,85 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ? 'Super Admin'
     : (user?.role ? user.role.charAt(0) + user.role.slice(1).toLowerCase() : 'Super Admin');
 
-  // Unified, joined navigation structure (all stations joined into one structured menu)
-  const navSections = [
+  // Role-specific navigation sections strictly matching system responsibilities
+  const role = user?.role || 'SENDER';
+  
+  const navSections = isSuperAdmin ? [
     {
-      title: 'REGISTRY & FIELD',
+      title: 'SENDER SUITE',
+      items: [
+        { to: '/sender/register', label: 'Student Registration', icon: UserPlus },
+      ]
+    },
+    {
+      title: 'RECEIVER SUITE',
       items: [
         { to: '/receiver/students', label: 'Student Directory', icon: Users },
-        { to: '/sender/register', label: 'Register Student', icon: UserPlus },
+        { to: '/receiver/review', label: '8-Up Print Engine', icon: Printer },
+        { to: '/receiver/id-production', label: 'Badge Design Studio', icon: CreditCard },
       ]
     },
     {
-      title: 'STUDIO & PRODUCTION',
+      title: 'ADMIN & CONTROL SUITE',
       items: [
-        { to: '/receiver/id-production', label: 'ID Card Designer & Studio', icon: CreditCard },
-        { to: '/receiver/review', label: 'Print Engine', icon: Printer },
-        { to: '/receiver/exports', label: 'Bulk Operations & Exports', icon: Layers },
-      ]
-    },
-    {
-      title: 'ADMIN & OPERATIONS',
-      items: [
-        { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutGrid },
+        { to: '/admin/dashboard', label: 'Live Dashboard & Metrics', icon: LayoutGrid },
+        { to: '/admin/senders', label: 'Provision Operator & RBAC', icon: Users },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare },
-        { to: '/admin/senders', label: 'Sender Monitoring', icon: Users },
-        { to: '/admin/performance', label: 'Performance Analytics', icon: BarChart2 },
-        { to: '/admin/reports', label: 'Reports & Audits', icon: Layers },
-        { to: '/admin/settings', label: 'Admin Settings', icon: Settings },
+        { to: '/admin/performance', label: 'Telemetricity & Performance', icon: BarChart2 },
+        { to: '/super-admin/devices', label: 'Hardware Lock & Devices', icon: Smartphone },
+        { to: '/super-admin/settings', label: 'System Settings', icon: Settings },
+      ]
+    }
+  ] : role === 'SENDER' ? [
+    {
+      title: 'FIELD OPERATIONS',
+      items: [
+        { to: '/sender/register', label: 'Student Registration', icon: UserPlus },
       ]
     },
-    ...(isSuperAdmin || !user || user.role === 'ADMIN' ? [
-      {
-        title: 'SUPER ADMIN SUITE',
-        items: [
-          { to: '/super-admin/dashboard', label: 'Root Dashboard', icon: LayoutGrid },
-          { to: '/super-admin/users', label: 'User & Role Management', icon: Users },
-          { to: '/super-admin/devices', label: 'Hardware Lock & Devices', icon: Smartphone },
-          { to: '/super-admin/schools', label: 'School & Location Mgmt', icon: Layers },
-          { to: '/super-admin/database', label: 'Database Control Room', icon: Database },
-          { to: '/super-admin/storage', label: 'R2 Storage Diagnostics', icon: HardDrive },
-          { to: '/super-admin/audit-logs', label: 'Global Audit Logs', icon: Activity },
-          { to: '/super-admin/settings', label: 'System Configuration', icon: Settings },
-        ]
-      }
-    ] : [])
+    {
+      title: 'SETTINGS',
+      items: [
+        { to: '/sender/settings', label: 'Station Settings', icon: Settings },
+      ]
+    }
+  ] : role === 'RECEIVER' ? [
+    {
+      title: 'STUDENT REGISTRY',
+      items: [
+        { to: '/receiver/students', label: 'Student Directory', icon: Users },
+      ]
+    },
+    {
+      title: 'PRINT & PRODUCTION',
+      items: [
+        { to: '/receiver/review', label: '8-Up Print Engine', icon: Printer },
+        { to: '/receiver/id-production', label: 'Badge Design Studio', icon: CreditCard },
+      ]
+    },
+    {
+      title: 'SETTINGS',
+      items: [
+        { to: '/receiver/settings', label: 'Station Settings', icon: Settings },
+      ]
+    }
+  ] : [
+    // ADMIN
+    {
+      title: 'COMMAND & CONTROL',
+      items: [
+        { to: '/admin/dashboard', label: 'Live Dashboard & Metrics', icon: LayoutGrid },
+        { to: '/admin/senders', label: 'Provision Operator & RBAC', icon: Users },
+        { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare },
+        { to: '/admin/performance', label: 'Telemetricity & Performance', icon: BarChart2 },
+      ]
+    },
+    {
+      title: 'SETTINGS',
+      items: [
+        { to: '/admin/settings', label: 'System Settings', icon: Settings },
+      ]
+    }
   ];
 
   return (

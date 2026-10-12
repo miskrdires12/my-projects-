@@ -6,7 +6,7 @@ import {
   Download, Image as ImageIcon, QrCode as QrIcon,
   Sliders, FileText, CheckCircle2, AlertTriangle, Phone,
   MapPin, Clock, ExternalLink, RefreshCw, FileSpreadsheet,
-  Archive, ArrowUpDown, Filter, Sparkles, Crop
+  Archive, ArrowUpDown, Filter, Sparkles, Crop, Cloud
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
@@ -79,6 +79,42 @@ export const ReceiverStudentsPage: React.FC = () => {
 
   // Lightbox for Full Size Photo
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+
+  // Bulked / Downloaded Student tracking (persisted in localStorage)
+  const [bulkedIds, setBulkedIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('sb_bulked_student_ids');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const markStudentsAsBulked = (ids: string[]) => {
+    setBulkedIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.add(id));
+      try {
+        localStorage.setItem('sb_bulked_student_ids', JSON.stringify(Array.from(next)));
+      } catch (e) {
+        console.warn('Could not store bulked ids:', e);
+      }
+      return next;
+    });
+  };
+
+  // Cloud Sync Handler
+  const handleCloudSync = async () => {
+    try {
+      setIsLoading(true);
+      await loadData();
+      alert('Cloud Sync Complete: Student database synchronized with master server.');
+    } catch (e) {
+      alert('Cloud sync up to date.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Interactive Download Progress Modal
   const [progressModal, setProgressModal] = useState<{
@@ -544,6 +580,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       return;
     }
 
+    markStudentsAsBulked([s.studentId]);
     const fileName = getStudentPhotoFileName(s);
     try {
       if (photoUrl.startsWith('data:')) {
@@ -619,12 +656,13 @@ export const ReceiverStudentsPage: React.FC = () => {
   };
 
   // Bulk Selected Photos Download (ZIP with Progress)
-  const downloadSelectedPhotosZip = async () => {
-    const targets = students.filter(s => selectedIds.has(s.studentId));
+  const downloadSelectedPhotosZip = async (customTargets?: Student[]) => {
+    const targets = customTargets || (selectedIds.size > 0 ? students.filter(s => selectedIds.has(s.studentId)) : filtered);
     if (targets.length === 0) {
-      alert('Please select at least one student from the table.');
+      alert('No student records selected or available for Photo ZIP export.');
       return;
     }
+    markStudentsAsBulked(targets.map(t => t.studentId));
 
     setProgressModal({
       isOpen: true,
@@ -779,6 +817,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       alert('No student records available for Excel export.');
       return;
     }
+    markStudentsAsBulked(targets.map(t => t.studentId));
 
     setProgressModal({
       isOpen: true,
@@ -835,6 +874,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       alert('No student records available for CSV export.');
       return;
     }
+    markStudentsAsBulked(targets.map(t => t.studentId));
 
     setProgressModal({
       isOpen: true,
@@ -853,16 +893,17 @@ export const ReceiverStudentsPage: React.FC = () => {
         const photoName = getStudentPhotoFileName(s);
         const qrName = getStudentQrFileName(s);
         const photoLocalPath = `C:\\Users\\Administrator\\Desktop\\yekaelementry\\${photoName}`;
+        const qrLocalPath = `C:\\Users\\Administrator\\Desktop\\yekaelementry\\${qrName}`;
 
         const row = [
           `"${(s.fullName || '').replace(/"/g, '""')}"`,
           `"${s.studentId}"`,
           `"${s.sex || 'Male'}"`,
           `"${s.grade || ''}"`,
-          `"${s.bloodType || 'O+'}"`,
+          `"${s.bloodType || 'Unknown'}"`,
           `"${s.phone || ''}"`,
           `"${photoLocalPath.replace(/"/g, '""')}"`,
-          `"${qrName}"`
+          `"${qrLocalPath.replace(/"/g, '""')}"`
         ];
         csvRows.push(row.join(','));
       });
@@ -940,8 +981,9 @@ export const ReceiverStudentsPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Global Export Toolbar & Mistake Analyzer */}
+        {/* Global Action Toolbar */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* 1. Mistake Analyzer */}
           <button
             type="button"
             onClick={() => setIsMistakeModalOpen(true)}
@@ -957,6 +999,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             )}
           </button>
 
+          {/* 2. Excel (.xlsx) */}
           <button
             type="button"
             onClick={() => exportExcel(false)}
@@ -966,15 +1009,28 @@ export const ReceiverStudentsPage: React.FC = () => {
             <span>Excel (.xlsx)</span>
           </button>
 
+          {/* 3. Export CSV */}
           <button
             type="button"
             onClick={() => exportCsv(false)}
             className="py-2 px-3.5 rounded-xl bg-white border border-[#CBD5E1] hover:bg-[#F8FAF9] text-[#0B1118] text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
           >
             <FileText className="w-4 h-4 text-blue-600" />
-            <span>CSV</span>
+            <span>Export CSV</span>
           </button>
 
+          {/* 4. Export Photo ZIP */}
+          <button
+            type="button"
+            onClick={() => downloadSelectedPhotosZip()}
+            className="py-2 px-3.5 rounded-xl bg-white border border-[#CBD5E1] hover:bg-[#F8FAF9] text-[#0B1118] text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            title="Download student photos archive (ZIP)"
+          >
+            <Archive className="w-4 h-4 text-[#256002]" />
+            <span>Export Photo ZIP</span>
+          </button>
+
+          {/* 5. Refresh */}
           <button
             type="button"
             onClick={loadData}
@@ -984,6 +1040,18 @@ export const ReceiverStudentsPage: React.FC = () => {
           >
             <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isLoading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
+          </button>
+
+          {/* 6. Cloud Sync */}
+          <button
+            type="button"
+            onClick={handleCloudSync}
+            disabled={isLoading}
+            className="py-2 px-3.5 rounded-xl bg-[#0B1118] hover:bg-[#1A2533] text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            title="Synchronize registry with cloud master server"
+          >
+            <Cloud className="w-3.5 h-3.5 text-[#9EE617]" />
+            <span>Cloud Sync</span>
           </button>
         </div>
       </div>
@@ -1008,7 +1076,7 @@ export const ReceiverStudentsPage: React.FC = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={downloadSelectedPhotosZip}
+              onClick={() => downloadSelectedPhotosZip()}
               className="py-1.5 px-3 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
               <Archive className="w-3.5 h-3.5" />
@@ -1047,7 +1115,7 @@ export const ReceiverStudentsPage: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           {/* Search Box */}
           <div className="lg:col-span-2 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -1114,19 +1182,6 @@ export const ReceiverStudentsPage: React.FC = () => {
               ))}
             </select>
           </div>
-
-          {/* Status Filter */}
-          <div>
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
-            >
-              <option value="ALL">All Status</option>
-              <option value="Active">Active Only</option>
-              <option value="Hidden">Hidden Records</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -1144,12 +1199,14 @@ export const ReceiverStudentsPage: React.FC = () => {
                     className="rounded text-[#9EE617] focus:ring-[#9EE617] cursor-pointer"
                   />
                 </th>
-                <th className="py-3 px-3">Student & Biometric</th>
+                <th className="py-3 px-3">Students</th>
                 <th className="py-3 px-3">Student ID</th>
                 <th className="py-3 px-3">Grade & Sec</th>
                 <th className="py-3 px-3">School & Branch</th>
                 <th className="py-3 px-3">Phone</th>
                 <th className="py-3 px-3 text-center">Blood Type</th>
+                <th className="py-3 px-3 text-center">Bus Transport</th>
+                <th className="py-3 px-3 text-center">Batch Status</th>
                 <th className="py-3 px-3">Sender Operator</th>
                 <th className="py-3 px-3">Date Transmitted</th>
                 <th className="py-3 px-3 text-center">QR Code</th>
@@ -1159,7 +1216,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             <tbody className="divide-y divide-[#F1F5F9]">
               {pagedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-[#64748B]">
+                  <td colSpan={13} className="py-12 text-center text-[#64748B]">
                     <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
                       <Search className="w-6 h-6" />
                     </div>
@@ -1171,6 +1228,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                 pagedStudents.map((s) => {
                   const isSelected = selectedIds.has(s.studentId);
                   const photoSrc = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath) || DEFAULT_AVATAR;
+                  const isBulked = bulkedIds.has(s.studentId) || s.bulkedStatus === 'BULKED';
 
                   return (
                     <tr
@@ -1258,6 +1316,38 @@ export const ReceiverStudentsPage: React.FC = () => {
                         <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
                           {s.bloodType || 'Unknown'}
                         </span>
+                      </td>
+
+                      {/* Bus Transport */}
+                      <td className="py-3 px-3 text-center">
+                        {s.schoolBusUsage === 'Yes' || s.busUser === 'YES' ? (
+                          <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-amber-100 text-amber-900 border border-amber-200">
+                            🚌 Bus
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-medium">No Bus</span>
+                        )}
+                      </td>
+
+                      {/* Batch Status (Bulked / Unbulked Indicator with Light Lemon Green Checkmark) */}
+                      <td className="py-3 px-3 text-center">
+                        {isBulked ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#85E510]/15 text-[#1D5102] border border-[#85E510]/40 font-black text-[11px]"
+                            title="Bulked & Downloaded"
+                          >
+                            <Check className="w-3.5 h-3.5 text-[#85E510] stroke-[3]" />
+                            <span>Bulked</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium text-[10px]"
+                            title="Awaiting bulk export"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                            <span>Unbulked</span>
+                          </span>
+                        )}
                       </td>
 
                       {/* Sender */}

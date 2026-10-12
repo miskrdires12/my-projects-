@@ -42,6 +42,7 @@ export interface Student {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   schoolBusUsage?: string;
+  busUser?: string;
   dateOfBirth?: string;
   guardianFullName?: string;
   nationality?: string;

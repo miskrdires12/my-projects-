@@ -31,11 +31,12 @@ export const StudentRegistrationPage: React.FC = () => {
   const [isIdTaken, setIsIdTaken] = useState(false);
   const [fullName, setFullName] = useState('');
   const [sex, setSex] = useState<'Female' | 'Male'>('Female');
-  const [grade, setGrade] = useState('9C');
+  const [grade, setGrade] = useState('');
   const [phone, setPhone] = useState('');
   const [bloodType, setBloodType] = useState('Unknown');
   const [location, setLocation] = useState('Addis Ababa');
   const [school, setSchool] = useState('YMS');
+  const [schoolBusUsage, setSchoolBusUsage] = useState<'Yes' | 'No'>('No');
   const [correctionNotices, setCorrectionNotices] = useState<CorrectionLog[]>([]);
 
   // Extra Details (Expandable)
@@ -44,16 +45,15 @@ export const StudentRegistrationPage: React.FC = () => {
   const [address, setAddress] = useState('Addis Ababa');
   const [guardianName, setGuardianName] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
-  const [schoolBusUsage, setSchoolBusUsage] = useState<'Yes' | 'No'>('Yes');
   const [nationality, setNationality] = useState('Ethiopian');
 
-  // Camera & Photo States
+  // Camera & Photo States - Default to BACK camera ('environment')
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('environment');
   const [isStreamReady, setIsStreamReady] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -579,26 +579,64 @@ export const StudentRegistrationPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Resolved Mistake Feedback For Sender */}
-      {correctionNotices.length > 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-xs space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-emerald-900 font-heading font-black text-xs">
-              <Sparkles className="w-4 h-4 text-emerald-600" />
-              <span>Resolved Mistake Feedback ({correctionNotices.length} updates for your submissions)</span>
-            </div>
-            <span className="text-[10px] text-emerald-700 font-bold bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
-              Verified by Receiver Desk
+      {/* Target Task Quota on Top */}
+      <div className="bg-gradient-to-r from-slate-900 to-[#101F08] border border-[#85E510]/30 rounded-2xl p-4 text-white shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="space-y-1 w-full sm:w-auto">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse" />
+            <span className="text-[11px] font-black uppercase tracking-wider text-[#85E510]">
+              Assigned Field Work Quota
             </span>
           </div>
-          <div className="divide-y divide-emerald-100 max-h-36 overflow-y-auto custom-scrollbar">
-            {correctionNotices.slice(0, 5).map(notice => (
+          <div className="text-xl font-heading font-black tracking-tight">
+            Target Task: 275 Students
+          </div>
+          <p className="text-xs text-slate-300">
+            Real-time verification & transmission tracking for assigned campus
+          </p>
+        </div>
+
+        <div className="w-full sm:w-72 bg-black/40 border border-slate-700/60 rounded-xl p-3 flex flex-col gap-1.5 shrink-0">
+          <div className="flex items-center justify-between text-xs font-bold">
+            <span className="text-slate-300">Progress:</span>
+            <span className="text-[#85E510] font-mono font-black">
+              {senderMetrics.total} / 275 ({Math.min(100, Math.round((senderMetrics.total / 275) * 100))}%)
+            </span>
+          </div>
+          <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
+            <div
+              className="bg-[#85E510] h-full rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(133,229,16,0.5)]"
+              style={{ width: `${Math.min(100, (senderMetrics.total / 275) * 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
+            <span>{Math.max(0, 275 - senderMetrics.total)} remaining</span>
+            <span>Live Sync Active</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Resolved Mistake Reminder Notes (Always shown for sender whose data was corrected) */}
+      {correctionNotices.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 shadow-xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-900 font-heading font-black text-xs">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Reminder Notes: Mistake Data Corrected ({correctionNotices.length} updates for your submissions)</span>
+            </div>
+            <span className="text-[10px] text-amber-800 font-bold bg-white/80 px-2.5 py-0.5 rounded-full border border-amber-300">
+              Resolved by Receiver Desk
+            </span>
+          </div>
+          <div className="divide-y divide-amber-200/60 max-h-36 overflow-y-auto custom-scrollbar">
+            {correctionNotices.map(notice => (
               <div key={notice.id} className="py-2 flex items-start justify-between text-xs gap-3">
                 <div>
                   <span className="font-bold text-[#0B1118]">{notice.studentName} ({notice.studentId}):</span>{' '}
-                  <span className="text-slate-600 font-medium">{notice.description}</span>
+                  <span className="text-amber-950 font-medium">{notice.description}</span>
+                  <span className="block text-[10px] text-amber-800/80 mt-0.5">Please check and ensure future submissions follow this standard.</span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                <span className="text-[10px] text-slate-500 font-mono shrink-0">
                   {new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
@@ -888,7 +926,7 @@ export const StudentRegistrationPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Blood Group */}
+              {/* Blood Group (Professional nomenclature without 'Default' wording) */}
               <div>
                 <label className="block text-xs font-bold text-[#202833] mb-1.5">Blood Group</label>
                 <select
@@ -896,7 +934,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   onChange={(e) => setBloodType(e.target.value)}
                   className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#202833] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
                 >
-                  <option value="Unknown">Unknown (Default)</option>
+                  <option value="Unknown">Unknown / Not Tested</option>
                   <option value="A+">A+</option>
                   <option value="A-">A-</option>
                   <option value="B+">B+</option>
@@ -938,7 +976,7 @@ export const StudentRegistrationPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Grade / Section */}
+              {/* Grade / Section with 9C placeholder */}
               <div>
                 <label className="block text-xs font-bold text-[#0B1118] mb-1.5">Grade / Section</label>
                 <input
@@ -946,7 +984,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   required
                   value={grade}
                   onChange={(e) => setGrade(e.target.value.toUpperCase())}
-                  placeholder="e.g. 9C or 10A"
+                  placeholder="9C"
                   className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
                 />
               </div>
@@ -966,8 +1004,38 @@ export const StudentRegistrationPage: React.FC = () => {
                   className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-[#0B1118] focus:border-[#9EE617] focus:ring-1 focus:ring-[#9EE617]"
                 />
               </div>
-            </div>
 
+              {/* School Bus Identification (2 Radio Buttons in Main Form) */}
+              <div className="sm:col-span-2 bg-[#F8FAF9] border border-[#E2E8F0] p-3 rounded-xl">
+                <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
+                  School Bus User Identification
+                </label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                    <input
+                      type="radio"
+                      name="schoolBusUsage"
+                      value="Yes"
+                      checked={schoolBusUsage === 'Yes'}
+                      onChange={() => setSchoolBusUsage('Yes')}
+                      className="w-4 h-4 accent-[#85E510] cursor-pointer"
+                    />
+                    <span>Yes (Uses Bus)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                    <input
+                      type="radio"
+                      name="schoolBusUsage"
+                      value="No"
+                      checked={schoolBusUsage === 'No'}
+                      onChange={() => setSchoolBusUsage('No')}
+                      className="w-4 h-4 accent-[#85E510] cursor-pointer"
+                    />
+                    <span>No (Private Transport)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
 
             {/* Expandable Extra Details */}
             <div className="mt-4 pt-4 border-t border-[#E2E8F0]">
@@ -978,7 +1046,7 @@ export const StudentRegistrationPage: React.FC = () => {
               >
                 <span className="flex items-center gap-2">
                   <Sliders className="w-3.5 h-3.5 text-[#4D8A07]" />
-                  <span>Extra Details (Guardian, Bus, DOB, Address)</span>
+                  <span>Extra Details (Guardian, DOB, Address)</span>
                 </span>
                 {showExtraDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
@@ -1017,24 +1085,12 @@ export const StudentRegistrationPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-[#202833] mb-1">School Bus Usage</label>
-                    <select
-                      value={schoolBusUsage}
-                      onChange={(e) => setSchoolBusUsage(e.target.value as any)}
-                      className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs font-semibold"
-                    >
-                      <option value="Yes">Yes (Uses School Bus)</option>
-                      <option value="No">No (Private Transport)</option>
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-bold text-[#202833] mb-1">Home Address / Sub-City</label>
+                    <label className="block text-[11px] font-bold text-[#202833] mb-1">Residential Address</label>
                     <input
                       type="text"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
-                      placeholder="e.g. Bole Sub-City, Woreda 03"
+                      placeholder="e.g. Woreda 03, House 412"
                       className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs"
                     />
                   </div>
@@ -1043,12 +1099,21 @@ export const StudentRegistrationPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Submit Button */}
-          <div className="pt-4 border-t border-[#E2E8F0]">
+          {/* Action Buttons: Clear Form + Submit */}
+          <div className="pt-4 border-t border-[#E2E8F0] flex items-center gap-3">
+            <button
+              type="button"
+              onClick={resetFormForNext}
+              className="py-3.5 px-4 rounded-xl border border-[#CBD5E1] hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-700 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Clear Form</span>
+            </button>
+
             <button
               type="submit"
               disabled={isSubmitting || isIdTaken || !fullName.trim()}
-              className="w-full py-3.5 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] disabled:opacity-50 text-[#062404] font-heading font-black text-sm shadow-[0_4px_15px_rgba(133,229,16,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="flex-1 py-3.5 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] disabled:opacity-50 text-[#062404] font-heading font-black text-sm shadow-[0_4px_15px_rgba(133,229,16,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -1058,7 +1123,7 @@ export const StudentRegistrationPage: React.FC = () => {
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Submit Student Record</span>
+                  <span>Register & Transmit Student</span>
                 </>
               )}
             </button>
