@@ -462,15 +462,14 @@ export default {
     if (url.pathname === "/api/upload" && request.method === "POST") {
       try {
         const body = await request.json();
-        const { data, studentId, grade, fullName, fileName } = body;
+        const { data, studentId, grade, fullName, fileName, filename } = body;
         if (!data) {
           return new Response(JSON.stringify({ error: "Missing image data" }), { status: 400, headers: corsHeaders });
         }
 
-        const cleanGrade = (grade || "general").trim();
-        const cleanName = (fullName || "student").trim().replace(/\s+/g, "_");
-        const cleanId = (studentId || Date.now().toString()).trim();
-        const photoKey = `${cleanGrade}/${cleanId}_${cleanName}.jpg`;
+        const cleanGrade = (grade || "General").trim().replace(/[\/\\:*?"<>|\s]+/g, "_");
+        const cleanName = (fullName || studentId || "Student").trim().replace(/[\/\\:*?"<>|\s]+/g, "_");
+        const photoKey = filename || fileName || `${cleanGrade}/${cleanName}.jpg`;
 
         let base64Data = data;
         let contentType = "image/jpeg";
@@ -489,6 +488,13 @@ export default {
 
         const r2Url = await uploadToR2Bucket(photoKey, bytes, contentType);
         uploadedPhotos.set(photoKey, { contentType, bytes });
+
+        // Dual-upload clean root alias so searching strictly by name in Cloudflare dashboard finds it immediately
+        try {
+          const rootKey = `${cleanName}.jpg`;
+          await uploadToR2Bucket(rootKey, bytes, contentType);
+          uploadedPhotos.set(rootKey, { contentType, bytes });
+        } catch (e) {}
 
         return new Response(JSON.stringify({
           success: true,
@@ -551,9 +557,9 @@ export default {
 
         // Automatically store base64 biometric photo in Cloudflare R2 bucket 'siliconlabs'
         if (rawPhoto && typeof rawPhoto === "string" && rawPhoto.startsWith("data:image")) {
-          const cleanGrade = grade.trim();
-          const cleanName = fullName.trim().replace(/\s+/g, "_");
-          const photoKey = `${cleanGrade}/${studentId.trim()}_${cleanName}.jpg`;
+          const cleanGrade = (grade || "General").trim().replace(/[\/\\:*?"<>|\s]+/g, "_");
+          const cleanName = (fullName || "Student").trim().replace(/[\/\\:*?"<>|\s]+/g, "_");
+          const photoKey = `${cleanGrade}/${cleanName}.jpg`;
 
           try {
             let base64Data = rawPhoto;
@@ -571,11 +577,18 @@ export default {
               bytes[i] = binaryStr.charCodeAt(i);
             }
 
-            // Upload directly to Cloudflare R2 bucket 'siliconlabs'
+            // Upload directly to Cloudflare R2 bucket 'siliconlabs' strictly by name
             const r2Url = await uploadToR2Bucket(photoKey, bytes, contentType);
             photoPath = r2Url;
             previewPath = r2Url;
             uploadedPhotos.set(photoKey, { contentType, bytes });
+
+            // Also dual-upload root name alias
+            try {
+              const rootKey = `${cleanName}.jpg`;
+              await uploadToR2Bucket(rootKey, bytes, contentType);
+              uploadedPhotos.set(rootKey, { contentType, bytes });
+            } catch (e) {}
           } catch (r2Err) {
             console.warn("Direct R2 upload warning:", r2Err);
             photoPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
@@ -741,9 +754,9 @@ export default {
         // Automatically store base64 biometric photo in Cloudflare R2 bucket 'siliconlabs'
         let rawPhoto = updates.previewPath || updates.photoPath;
         if (rawPhoto && typeof rawPhoto === "string" && rawPhoto.startsWith("data:image")) {
-          const cleanGrade = (updates.grade || "General").trim();
-          const cleanName = (updates.fullName || studentId).trim().replace(/\s+/g, "_");
-          const photoKey = `${cleanGrade}/${studentId.trim()}_${cleanName}_edited.jpg`;
+          const cleanGrade = (updates.grade || "General").trim().replace(/[\/\\:*?"<>|\s]+/g, "_");
+          const cleanName = (updates.fullName || studentId || "Student").trim().replace(/[\/\\:*?"<>|\s]+/g, "_");
+          const photoKey = `${cleanGrade}/${cleanName}.jpg`;
 
           try {
             let base64Data = rawPhoto;
@@ -767,6 +780,13 @@ export default {
             updates.thumbnailPath = r2Url;
             updates.originalPhotoPath = r2Url;
             uploadedPhotos.set(photoKey, { contentType, bytes });
+
+            // Also dual-upload root name alias
+            try {
+              const rootKey = `${cleanName}.jpg`;
+              await uploadToR2Bucket(rootKey, bytes, contentType);
+              uploadedPhotos.set(rootKey, { contentType, bytes });
+            } catch (e) {}
           } catch (r2Err) {
             console.warn("R2 update error in PATCH:", r2Err);
             updates.photoPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
