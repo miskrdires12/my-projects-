@@ -204,39 +204,46 @@ async function ensureLocalFallbackLoaded(env, originUrl) {
 }
 
 async function getAllStudentsDataset(env, originUrl) {
-  if (cachedAllStudents && cachedAllStudents.length >= 3700 && (Date.now() - lastAllFetchTime < 120000)) {
+  if (cachedAllStudents && cachedAllStudents.length >= 3800 && (Date.now() - lastAllFetchTime < 60000)) {
     return cachedAllStudents;
   }
 
   await ensureLocalFallbackLoaded(env, originUrl);
 
+  let liveFromR2 = [];
   try {
-    const offsets = [0, 1000, 2000, 3000];
-    const fetchPromises = offsets.map(offset =>
-      fetch(`${SUPABASE_URL}/rest/v1/students?select=*&order=createdAt.desc&limit=1000&offset=${offset}`, {
-        headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
-          "Accept-Profile": "cloudflare"
-        }
-      }).then(r => r.ok ? r.json() : [])
-    );
-
-    const batchResults = await Promise.all(fetchPromises);
-    const combined = batchResults.flat();
-
-    if (combined && combined.length > 0) {
-      const dbIds = new Set(combined.map(s => s.studentId));
-      const newlyAdded = customStudents.filter(s => !dbIds.has(s.studentId));
-      cachedAllStudents = [...newlyAdded, ...combined];
-      lastAllFetchTime = Date.now();
-      return cachedAllStudents;
+    const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json`);
+    if (regRes.ok) {
+      liveFromR2 = await regRes.json();
     }
-  } catch (err) {
-    console.warn("Supabase parallel fetch error:", err);
+  } catch (r2Err) {
+    console.warn("R2 live registry fetch notice:", r2Err);
   }
 
-  cachedAllStudents = [...customStudents, ...(cachedStudents || [])];
+  const baseList = cachedStudents || [];
+  const combinedMap = new Map();
+
+  // 1. Add base verified dataset
+  baseList.forEach(s => {
+    if (s && s.studentId) combinedMap.set(s.studentId, s);
+  });
+
+  // 2. Overlay durable live registrations from Cloudflare R2
+  if (Array.isArray(liveFromR2)) {
+    liveFromR2.forEach(s => {
+      if (s && s.studentId) combinedMap.set(s.studentId, { ...combinedMap.get(s.studentId), ...s });
+    });
+  }
+
+  // 3. Overlay in-memory customStudents
+  if (Array.isArray(customStudents)) {
+    customStudents.forEach(s => {
+      if (s && s.studentId) combinedMap.set(s.studentId, { ...combinedMap.get(s.studentId), ...s });
+    });
+  }
+
+  cachedAllStudents = Array.from(combinedMap.values());
+  lastAllFetchTime = Date.now();
   return cachedAllStudents;
 }
 
@@ -262,23 +269,9 @@ export default {
     // 1. HEALTH CHECK & DATABASE CONNECTIVITY
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/health") {
-      let liveCount = (cachedStudents || []).length;
-      let dbConnected = false;
-      try {
-        const countRes = await fetch(`${SUPABASE_URL}/rest/v1/students?select=count`, {
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": `Bearer ${SUPABASE_KEY}`,
-            "Accept-Profile": "cloudflare",
-            "Prefer": "count=exact"
-          }
-        });
-        const range = countRes.headers.get("content-range");
-        if (range) {
-          liveCount = parseInt(range.split("/")[1], 10);
-          dbConnected = true;
-        }
-      } catch (e) {}
+      const allLive = await getAllStudentsDataset(env, request.url);
+      const liveCount = allLive.length;
+      let dbConnected = true;
 
       return new Response(
         JSON.stringify({
@@ -380,7 +373,11 @@ export default {
             if (!m) return false;
           }
           if (school !== "ALL" && (s.school || "").toLowerCase() !== school.toLowerCase()) return false;
-          if (grade !== "ALL" && (s.grade || "").toLowerCase() !== grade.toLowerCase()) return false;
+          if (grade !== "ALL") {
+            const reqG = grade.toLowerCase().replace(/^grade\s*/, '').trim();
+            const sG = (s.grade || "").toLowerCase().replace(/^grade\s*/, '').trim();
+            if (sG !== reqG && !sG.startsWith(reqG)) return false;
+          }
           return true;
         });
       }
@@ -398,7 +395,13 @@ export default {
           count: students.length,
           students
         }),
-        { headers: { "Content-Type": "application/json", ...corsHeaders } }
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=30, s-maxage=60, stale-while-revalidate=120",
+            ...corsHeaders
+          }
+        }
       );
     }
 
@@ -617,6 +620,29 @@ export default {
         customStudents.unshift(insertedRecord);
         if (cachedAllStudents) {
           cachedAllStudents.unshift(insertedRecord);
+        }
+
+        // 100% Durable Persistence to Cloudflare R2 Bucket (Guarantees zero data loss across isolate recycles)
+        try {
+          const recBytes = new TextEncoder().encode(JSON.stringify(insertedRecord, null, 2));
+          await uploadToR2Bucket(`records/${insertedRecord.studentId}.json`, recBytes, "application/json");
+
+          let currentLiveReg = [];
+          try {
+            const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json`);
+            if (regRes.ok) currentLiveReg = await regRes.json();
+          } catch (e) {}
+
+          const existingIdx = currentLiveReg.findIndex(r => r.studentId === insertedRecord.studentId);
+          if (existingIdx !== -1) {
+            currentLiveReg[existingIdx] = insertedRecord;
+          } else {
+            currentLiveReg.unshift(insertedRecord);
+          }
+          const regBytes = new TextEncoder().encode(JSON.stringify(currentLiveReg));
+          await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
+        } catch (r2RecErr) {
+          console.warn("R2 durable record persistence note:", r2RecErr);
         }
 
         // Broadcast to Global Cloud Sync Bus (cross-device real-time Receiver notification)

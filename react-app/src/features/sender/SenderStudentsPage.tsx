@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, Filter, Camera, CheckCircle2, UserPlus, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getStudents } from '@/lib/store';
 import { Student } from '@/types';
+import { getDistinctGradeOptions, matchesGradeFilter, getGradeDisplay } from '@/lib/gradeUtils';
 
 export const SenderStudentsPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -16,6 +17,10 @@ export const SenderStudentsPage: React.FC = () => {
     setStudents(getStudents());
   }, []);
 
+  const gradeOptions = useMemo(() => {
+    return getDistinctGradeOptions(students);
+  }, [students]);
+
   const filtered = useMemo(() => {
     return students.filter((s) => {
       const matchSearch =
@@ -24,7 +29,7 @@ export const SenderStudentsPage: React.FC = () => {
         s.studentId.toLowerCase().includes(search.toLowerCase()) ||
         (s.school && s.school.toLowerCase().includes(search.toLowerCase()));
 
-      const matchGrade = gradeFilter === 'ALL' || s.grade === gradeFilter;
+      const matchGrade = matchesGradeFilter(s, gradeFilter);
       const matchSex = sexFilter === 'ALL' || s.sex === sexFilter;
 
       return matchSearch && matchGrade && matchSex;
@@ -75,18 +80,9 @@ export const SenderStudentsPage: React.FC = () => {
             className="bg-[#070908] border border-[#1e2c22] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8fe617] transition-all"
           >
             <option value="ALL">All Grades</option>
-            <option value="Grade 1">Grade 1</option>
-            <option value="Grade 2">Grade 2</option>
-            <option value="Grade 3">Grade 3</option>
-            <option value="Grade 4">Grade 4</option>
-            <option value="Grade 5">Grade 5</option>
-            <option value="Grade 6">Grade 6</option>
-            <option value="Grade 7">Grade 7</option>
-            <option value="Grade 8">Grade 8</option>
-            <option value="Grade 9">Grade 9</option>
-            <option value="Grade 10">Grade 10</option>
-            <option value="Grade 11">Grade 11</option>
-            <option value="Grade 12">Grade 12</option>
+            {gradeOptions.map(g => (
+              <option key={g} value={g}>{g}</option>
+            ))}
           </select>
 
           {/* Sex Filter */}
@@ -150,7 +146,7 @@ export const SenderStudentsPage: React.FC = () => {
                     <td className="py-3 text-white font-medium">{s.school || 'YMS'}</td>
                     <td className="py-3">
                       <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-bold text-white text-[11px]">
-                        {s.grade || 'Grade 9'}
+                        {getGradeDisplay(s)}
                       </span>
                     </td>
                     <td className="py-3">

@@ -21,6 +21,15 @@ import {
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
 import { R2_PUBLIC_BASE_URL } from '@/lib/syncEngine';
+import {
+  getDistinctGradeOptions,
+  getDistinctSectionOptions,
+  matchesGradeFilter,
+  matchesSectionFilter,
+  getCleanGrade,
+  getCleanSection,
+  getGradeDisplay
+} from '@/lib/gradeUtils';
 
 export const ReceiverStudentsPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -224,35 +233,19 @@ export const ReceiverStudentsPage: React.FC = () => {
     }
   }, [detailStudent]);
 
-  // Normalize Section
+  // Normalize Section (compatibility wrapper using canonical gradeUtils)
   const getSection = (s: Student): string => {
-    if (s.department) return s.department;
-    const g = (s.grade || '10').trim();
-    if (g.length >= 2 && !g.includes('-')) {
-      const num = g.slice(0, -1);
-      const letter = g.slice(-1).toUpperCase();
-      if (/^\d+$/.test(num) && /^[A-Z]$/.test(letter)) {
-        return `${num}-${letter}`;
-      }
-    }
-    return s.grade || '10-A';
+    return getCleanSection(s) || s.department || 'A';
   };
 
   // Distinct Filter Values
   const distinctGrades = useMemo(() => {
-    const set = new Set<string>();
-    students.forEach(s => { if (s.grade) set.add(s.grade); });
-    return Array.from(set).sort();
+    return getDistinctGradeOptions(students);
   }, [students]);
 
   const distinctSections = useMemo(() => {
-    const set = new Set<string>();
-    students.forEach(s => {
-      const sec = getSection(s);
-      if (sec) set.add(sec);
-    });
-    return Array.from(set).sort();
-  }, [students]);
+    return getDistinctSectionOptions(students, gradeFilter);
+  }, [students, gradeFilter]);
 
   // Filtered dataset
   const filtered = useMemo(() => {
@@ -267,9 +260,8 @@ export const ReceiverStudentsPage: React.FC = () => {
         (s.school && s.school.toLowerCase().includes(q)) ||
         (s.senderName && s.senderName.toLowerCase().includes(q));
 
-      const matchGrade = gradeFilter === 'ALL' || s.grade === gradeFilter;
-      const sec = getSection(s);
-      const matchSection = sectionFilter === 'ALL' || sec === sectionFilter;
+      const matchGrade = matchesGradeFilter(s, gradeFilter);
+      const matchSection = matchesSectionFilter(s, sectionFilter);
       const matchBranch = branchFilter === 'ALL' || s.location === branchFilter;
       const matchSchool = schoolFilter === 'ALL' || s.school === schoolFilter;
 
@@ -1115,7 +1107,7 @@ export const ReceiverStudentsPage: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5">
           {/* Search Box */}
           <div className="lg:col-span-2 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -1178,7 +1170,21 @@ export const ReceiverStudentsPage: React.FC = () => {
             >
               <option value="ALL">All Grades</option>
               {distinctGrades.map(g => (
-                <option key={g} value={g}>Grade {g}</option>
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Section Filter */}
+          <div>
+            <select
+              value={sectionFilter}
+              onChange={(e) => { setSectionFilter(e.target.value); setPage(1); }}
+              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
+            >
+              <option value="ALL">All Sections</option>
+              {distinctSections.map(sec => (
+                <option key={sec} value={sec}>Section {sec}</option>
               ))}
             </select>
           </div>
@@ -1293,7 +1299,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                       {/* Grade & Section */}
                       <td className="py-3 px-3">
                         <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-[#0B1118] font-bold text-[11px]">
-                          {s.grade || '10'} ({getSection(s)})
+                          {getGradeDisplay(s)}
                         </span>
                       </td>
 
@@ -1555,13 +1561,13 @@ export const ReceiverStudentsPage: React.FC = () => {
                     <div className="flex items-center gap-1.5">
                       <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span>Grade:</span>
-                      <span className="font-bold text-[#0B1118]">{detailStudent.grade || '10'}</span>
+                      <span className="font-bold text-[#0B1118]">{getCleanGrade(detailStudent)}</span>
                     </div>
 
                     <div className="flex items-center gap-1.5">
                       <UsersIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span>Section:</span>
-                      <span className="font-bold text-[#0B1118]">{getSection(detailStudent)}</span>
+                      <span className="font-bold text-[#0B1118]">{getCleanSection(detailStudent) || 'A'}</span>
                     </div>
 
                     <div className="flex items-center gap-1.5">
@@ -1698,7 +1704,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">Grade & Section:</span>
-                    <span className="font-mono font-bold text-[#0B1118]">{detailStudent.grade || '10'} - {getSection(detailStudent)}</span>
+                    <span className="font-mono font-bold text-[#0B1118]">{getGradeDisplay(detailStudent)}</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">School Bus Transport:</span>
@@ -2280,7 +2286,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                           </div>
 
                           <div className="text-[10px] text-slate-400 flex items-center gap-2">
-                            <span>Grade {s.grade || 'N/A'} ({getSection(s)})</span>
+                            <span>{getGradeDisplay(s)}</span>
                             <span>&bull;</span>
                             <span>{s.school || 'YMS'}</span>
                             {s.phone && (

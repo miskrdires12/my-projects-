@@ -16,6 +16,7 @@ import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
 import { CloudflareStatusBadge } from '@/components/CloudflareLiveStatus';
 import { R2_PUBLIC_BASE_URL } from '@/lib/syncEngine';
+import { parseGradeAndSection } from '@/lib/gradeUtils';
 
 export const StudentRegistrationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -359,12 +360,15 @@ export const StudentRegistrationPage: React.FC = () => {
 
       const finalPhotoUrl = r2PhotoUrl || (capturedPhoto ? `${R2_PUBLIC_BASE_URL}/${photoKey}` : undefined);
 
+      const parsedGradeInfo = parseGradeAndSection(grade);
+
       const studentPayload: Student & { capturedPhoto?: string; photoBase64?: string } = {
         id: 'cmu-' + Date.now().toString(36),
         studentId: studentId.trim(),
         fullName: fullName.trim(),
         sex,
-        grade: grade.trim(),
+        grade: parsedGradeInfo.cleanGrade,
+        department: parsedGradeInfo.cleanSection || undefined,
         phone: phone.trim(),
         bloodType: bloodType || undefined,
         school: school.trim(),
@@ -388,7 +392,7 @@ export const StudentRegistrationPage: React.FC = () => {
           studentId: studentId.trim(),
           fullName: fullName.trim(),
           rollNumber: '',
-          grade: grade ? grade.trim() : ''
+          grade: parsedGradeInfo.cleanGrade
         }),
         senderName: user?.username || 'Field Operator',
         status: 'Accepted',
