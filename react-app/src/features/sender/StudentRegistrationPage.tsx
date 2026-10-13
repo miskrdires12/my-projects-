@@ -14,7 +14,6 @@ import {
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
-import { CloudflareStatusBadge } from '@/components/CloudflareLiveStatus';
 import { R2_PUBLIC_BASE_URL } from '@/lib/syncEngine';
 import { parseGradeAndSection } from '@/lib/gradeUtils';
 
@@ -328,12 +327,12 @@ export const StudentRegistrationPage: React.FC = () => {
     setSubmitStatusText('Saving biometric photograph to Cloudflare R2 storage...');
 
     try {
-      const cleanGrade = grade.trim() || 'General';
-      const cleanName = fullName.trim().replace(/\s+/g, '_');
-      const photoKey = `${cleanGrade}/${studentId.trim()}_${cleanName}.jpg`;
+      const cleanGrade = (grade.trim() || 'General').replace(/[\/\\:*?"<>|\s]+/g, '_');
+      const cleanName = fullName.trim().replace(/[\/\\:*?"<>|\s]+/g, '_') || 'Student';
+      const photoKey = `${cleanGrade}/${cleanName}.jpg`;
       let r2PhotoUrl: string | undefined = undefined;
 
-      // Direct Cloudflare R2 Bucket Upload
+      // Direct Cloudflare R2 Bucket Upload (Saved strictly by student name)
       if (capturedPhoto && capturedPhoto.startsWith('data:image')) {
         try {
           const upRes = await fetch('/api/upload', {
@@ -627,8 +626,8 @@ export const StudentRegistrationPage: React.FC = () => {
 
       {/* Main Grid: 2 White Cards */}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Card 1: Student Photograph Card (5 cols) */}
-        <div className="lg:col-span-5 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-5">
+        {/* Card 1: Student Photograph Card (6 cols) */}
+        <div className="lg:col-span-6 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-5">
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-black text-[#202833] uppercase tracking-wider flex items-center gap-2">
@@ -636,20 +635,24 @@ export const StudentRegistrationPage: React.FC = () => {
                 <span>Student Photograph</span>
               </h2>
               {capturedPhoto ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#85E510]/20 text-[#366804] border border-[#85E510]/40 flex items-center gap-1">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#85E510]/20 text-[#366804] border border-[#85E510]/40 flex items-center gap-1">
                   <Check className="w-3 h-3" /> Captured
                 </span>
+              ) : isCameraActive ? (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1 animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" /> Camera Live
+                </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                   Required
                 </span>
               )}
             </div>
 
-            {/* Photo Preview Container */}
-            <div className="relative aspect-[3/4] w-full max-w-[280px] mx-auto bg-[#F4F7F5] rounded-2xl border-2 border-dashed border-[#CBD5E1] overflow-hidden flex flex-col items-center justify-center shadow-inner group">
+            {/* Photo Preview & Live Camera Container */}
+            <div className="relative aspect-[3/4] w-full max-w-[340px] sm:max-w-[380px] mx-auto bg-[#F4F7F5] rounded-2xl border-2 border-dashed border-[#CBD5E1] overflow-hidden flex flex-col items-center justify-center shadow-inner group">
               {isCameraActive ? (
-                <div className="relative w-full h-full bg-slate-900 flex items-center justify-center overflow-hidden">
+                <div className="relative w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
                   <video
                     ref={setVideoRef}
                     autoPlay
@@ -665,10 +668,49 @@ export const StudentRegistrationPage: React.FC = () => {
                     onCanPlay={() => setIsStreamReady(true)}
                     className="w-full h-full object-cover"
                   />
+
+                  {/* Biometric Facial Guides HUD Overlay (Eye Line & Nose Guide - Silhouette Removed) */}
+                  <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center select-none">
+                    {/* Top Alignment Instruction (Reduced Opacity) */}
+                    <div className="absolute top-2.5 inset-x-4 text-center bg-black/35 backdrop-blur-xs py-1 px-3 rounded-full text-[10px] sm:text-[11px] font-semibold text-white/80 border border-white/10 shadow-xs max-w-[90%] mx-auto">
+                      Align student eyes on <span className="text-[#85E510] font-bold">Eye Line</span> & nose on <span className="text-[#85E510] font-bold">Nose Guide</span>
+                    </div>
+
+                    {/* Biometric Framing Guides (Clean Viewfinder - Oval Contour Removed) */}
+                    <div className="relative w-[85%] aspect-[3/4] flex items-center justify-center">
+                      {/* Horizontal Eye Level Line */}
+                      <div className="absolute top-[38%] inset-x-0 border-b-2 border-dashed border-[#85E510]/80 flex items-center justify-between px-2">
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
+                          Eye Line
+                        </span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
+                          Eye Line
+                        </span>
+                      </div>
+
+                      {/* Vertical Nose Alignment & Center Crosshair */}
+                      <div className="absolute top-[28%] bottom-[32%] left-1/2 -translate-x-1/2 border-l-2 border-dashed border-[#85E510]/70" />
+                      <div className="absolute top-[52%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+                        <div className="w-5 h-5 rounded-full border-2 border-[#85E510] bg-black/30 flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-ping" />
+                        </div>
+                        <span className="text-[8px] font-bold uppercase tracking-widest bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] mt-0.5">
+                          Nose
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Sensor Active Status */}
+                    <div className="absolute bottom-2.5 px-3 py-1 bg-black/40 backdrop-blur-xs rounded-full text-[10px] font-mono text-slate-200 border border-white/10 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse" />
+                      <span>Biometric Feed Active</span>
+                    </div>
+                  </div>
+
                   {!isStreamReady && (
-                    <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center text-white text-xs gap-2 z-10 transition-opacity">
+                    <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center text-white text-xs gap-2 z-20 transition-opacity">
                       <RefreshCw className="w-5 h-5 animate-spin text-[#85E510]" />
-                      <span className="font-semibold text-slate-200">Connecting camera sensor...</span>
+                      <span className="font-semibold text-slate-200">Starting camera feed...</span>
                     </div>
                   )}
                 </div>
@@ -684,7 +726,7 @@ export const StudentRegistrationPage: React.FC = () => {
                     }}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-lg text-[10px] font-mono text-white">
+                  <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/60 backdrop-blur-sm rounded-lg text-[10px] font-mono text-white">
                     {studentId}
                   </div>
                 </div>
@@ -694,8 +736,8 @@ export const StudentRegistrationPage: React.FC = () => {
                     <ImageIcon className="w-8 h-8" />
                   </div>
                   <div className="text-xs font-bold text-[#202833]">No Photograph Selected</div>
-                  <p className="text-[11px] text-[#94A3B8] mt-1 max-w-[200px]">
-                    Use live camera capture or select a portrait photo from device
+                  <p className="text-[11px] text-[#94A3B8] mt-1 max-w-[220px]">
+                    Activate live camera with Eye/Nose biometric guides, or upload an image
                   </p>
                 </div>
               )}
@@ -713,20 +755,21 @@ export const StudentRegistrationPage: React.FC = () => {
           <div className="space-y-2 pt-2">
             {isCameraActive ? (
               <div className="space-y-2">
+                {/* Take Photo Button (Only after camera is active!) */}
                 <button
                   type="button"
                   onClick={capturePhoto}
                   className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
                 >
                   <Camera className="w-4 h-4 text-[#062404]" />
-                  <span>Take Student Photo</span>
+                  <span>Capture Photo Now</span>
                 </button>
 
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={toggleCameraFacing}
-                    className="py-2 px-3 rounded-xl bg-white hover:bg-slate-50 border border-[#CBD5E1] text-[#202833] font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-[#CBD5E1] text-[#202833] font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
                   >
                     <SwitchCamera className="w-3.5 h-3.5 text-[#4D8A07]" />
                     <span>Flip Camera</span>
@@ -734,7 +777,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={stopCamera}
-                    className="py-2 px-3 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] text-[#202833] font-bold text-xs cursor-pointer"
+                    className="py-2.5 px-3 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] text-[#202833] font-bold text-xs cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -742,17 +785,17 @@ export const StudentRegistrationPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {/* Button 1: Solid Lime Green Button matching screenshot */}
+                {/* Activate Camera Button */}
                 <button
                   type="button"
                   onClick={() => startCamera()}
                   className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   <Camera className="w-4 h-4 text-[#062404]" />
-                  <span>Take Student Photo</span>
+                  <span>Activate Camera</span>
                 </button>
 
-                {/* Button 2: Bordered Edit & Crop Button matching screenshot */}
+                {/* Edit & Crop Button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -799,8 +842,8 @@ export const StudentRegistrationPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 2: Student Information Card (7 cols) */}
-        <div className="lg:col-span-7 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-6">
+        {/* Card 2: Student Information Card (6 cols) */}
+        <div className="lg:col-span-6 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-6">
           <div>
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#F1F5F9]">
               <h2 className="text-sm font-black text-[#0B1118] uppercase tracking-wider flex items-center gap-2">
@@ -862,21 +905,77 @@ export const StudentRegistrationPage: React.FC = () => {
                 />
               </div>
 
-              {/* Sex */}
+              {/* Sex Identification (Interactive Buttons - Not Dropdown!) */}
               <div>
                 <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
-                  Sex <span className="text-red-500">*</span>
+                  Sex Identification <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={sex}
-                    onChange={(e) => setSex(e.target.value as 'Female' | 'Male')}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] cursor-pointer appearance-none transition-all"
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSex('Male')}
+                    className={`py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                      sex === 'Male'
+                        ? 'bg-[#0B1118] text-white border-[#0B1118] shadow-sm ring-2 ring-[#85E510]/50'
+                        : 'bg-[#F8FAF9] text-[#64748B] border-[#CBD5E1] hover:bg-slate-100 hover:text-[#0B1118]'
+                    }`}
                   >
-                    <option value="Female">Female</option>
-                    <option value="Male">Male</option>
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <span className="text-sm">♂</span>
+                    <span>Male</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSex('Female')}
+                    className={`py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                      sex === 'Female'
+                        ? 'bg-[#0B1118] text-white border-[#0B1118] shadow-sm ring-2 ring-[#85E510]/50'
+                        : 'bg-[#F8FAF9] text-[#64748B] border-[#CBD5E1] hover:bg-slate-100 hover:text-[#0B1118]'
+                    }`}
+                  >
+                    <span className="text-sm">♀</span>
+                    <span>Female</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Form: Branch Location & Assigned School */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl">
+                {/* Branch Location */}
+                <div>
+                  <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
+                    Branch Location <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={location}
+                      onChange={(e) => handleLocationChange(e.target.value)}
+                      className="w-full bg-white border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] cursor-pointer appearance-none transition-all"
+                    >
+                      {DEFAULT_BRANCHES.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+
+                {/* Assigned School */}
+                <div>
+                  <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
+                    Assigned School ({location}) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={school}
+                      onChange={(e) => setSchool(e.target.value)}
+                      className="w-full bg-white border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] cursor-pointer appearance-none transition-all"
+                    >
+                      {availableSchools.map(schName => (
+                        <option key={schName} value={schName}>{schName}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 </div>
               </div>
 
@@ -906,7 +1005,7 @@ export const StudentRegistrationPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Grade / Class (with light lavender/blue tint matching screenshot) */}
+              {/* Grade / Class */}
               <div>
                 <label className="block text-xs font-bold text-[#0B1118] mb-1.5">
                   Grade / Class <span className="text-red-500">*</span>
@@ -980,40 +1079,12 @@ export const StudentRegistrationPage: React.FC = () => {
                   onClick={() => setShowExtraDetails(!showExtraDetails)}
                   className="w-full flex items-center justify-between text-xs font-bold text-slate-600 hover:text-slate-900 py-1.5 transition-all cursor-pointer"
                 >
-                  <span>{showExtraDetails ? 'Hide Extra Details' : 'Show Extra Details'}</span>
+                  <span>{showExtraDetails ? 'Hide Extra Details' : 'Show Extra Details (Parent, Birth, Address)'}</span>
                   <ChevronDown className={`w-4 h-4 text-[#85E510] transition-transform duration-200 ${showExtraDetails ? 'rotate-180' : ''}`} />
                 </button>
 
                 {showExtraDetails && (
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-[#F8FAF9] rounded-xl border border-[#E2E8F0]">
-                    {/* Branch Location */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#202833] mb-1">Branch Location</label>
-                      <select
-                        value={location}
-                        onChange={(e) => handleLocationChange(e.target.value)}
-                        className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
-                      >
-                        {DEFAULT_BRANCHES.map(b => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* School */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#202833] mb-1">Assigned School ({location})</label>
-                      <select
-                        value={school}
-                        onChange={(e) => setSchool(e.target.value)}
-                        className="w-full bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510]"
-                      >
-                        {availableSchools.map(schName => (
-                          <option key={schName} value={schName}>{schName}</option>
-                        ))}
-                      </select>
-                    </div>
-
                     {/* Guardian Full Name */}
                     <div>
                       <label className="block text-[11px] font-bold text-[#202833] mb-1">Guardian Full Name</label>
@@ -1096,12 +1167,15 @@ export const StudentRegistrationPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Cloudflare R2 Security & Sync Status Footer */}
-          <div className="pt-2 flex items-center justify-between border-t border-slate-100 flex-wrap gap-2">
-            <CloudflareStatusBadge />
+          {/* Storage Security & Biometric Status Footer */}
+          <div className="pt-2 flex items-center justify-between border-t border-slate-100 flex-wrap gap-2 text-xs">
+            <div className="flex items-center gap-1.5 text-slate-500 font-semibold text-[11px]">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>Biometric Enrollment Console Active</span>
+            </div>
             <div className="flex items-center gap-1.5 text-[11px] text-[#2E7D32] font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-pulse" />
-              <span>R2 Storage 100% JPEG Biometrics</span>
+              <span>Direct JPEG Photo Stream</span>
             </div>
           </div>
         </div>

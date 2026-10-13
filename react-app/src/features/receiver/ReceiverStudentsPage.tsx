@@ -6,7 +6,7 @@ import {
   Download, Image as ImageIcon, QrCode as QrIcon,
   Sliders, FileText, CheckCircle2, AlertTriangle, Phone,
   MapPin, Clock, ExternalLink, RefreshCw, FileSpreadsheet,
-  Archive, ArrowUpDown, Filter, Sparkles, Crop, Cloud
+  Archive, ArrowUpDown, ArrowUp, ArrowDown, Filter, Sparkles, Crop, Cloud
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
@@ -46,15 +46,34 @@ export const ReceiverStudentsPage: React.FC = () => {
   // Selected Students for Bulk Operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Sorting State for Student ID, Grade & Sec, Date Transmitted
+  type SortField = 'studentId' | 'grade' | 'createdAt';
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handleToggleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortOrder === 'asc') {
+        setSortOrder('desc');
+      } else {
+        setSortField(null);
+        setSortOrder('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
   // Pagination (Default: 500 students per page as required)
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(500);
 
-  // Active Student Detail Drawer (Opens ONLY when eye/view icon is clicked)
+  // Active Student Detail Drawer (Clean 3-tab layout without fake placeholder fields)
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [detailQrDataUrl, setDetailQrDataUrl] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<'Photo' | 'Academic' | 'Contact' | 'Activity'>('Photo');
+  const [detailTab, setDetailTab] = useState<'Photo' | 'Academic' | 'Activity'>('Photo');
 
   // Online Photo Editor State (Opens when student photo is clicked)
   const [isPhotoEditorOpen, setIsPhotoEditorOpen] = useState(false);
@@ -358,8 +377,27 @@ export const ReceiverStudentsPage: React.FC = () => {
     }
   };
 
-  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
-  const pagedStudents = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const sortedFiltered = useMemo(() => {
+    if (!sortField) return filtered;
+    return [...filtered].sort((a, b) => {
+      let comparison = 0;
+      if (sortField === 'studentId') {
+        comparison = (a.studentId || '').localeCompare(b.studentId || '', undefined, { numeric: true });
+      } else if (sortField === 'grade') {
+        const gradeA = `${a.grade || ''} ${a.department || ''}`.trim();
+        const gradeB = `${b.grade || ''} ${b.department || ''}`.trim();
+        comparison = gradeA.localeCompare(gradeB, undefined, { numeric: true });
+      } else if (sortField === 'createdAt') {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        comparison = timeA - timeB;
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [filtered, sortField, sortOrder]);
+
+  const totalPages = Math.ceil(sortedFiltered.length / pageSize) || 1;
+  const pagedStudents = sortedFiltered.slice((page - 1) * pageSize, page * pageSize);
 
   // Selection Checkboxes
   const toggleSelectRow = (studentId: string, e: React.MouseEvent) => {
@@ -397,9 +435,9 @@ export const ReceiverStudentsPage: React.FC = () => {
   const handleSaveEditedPhoto = async (croppedDataUrl: string) => {
     if (!editingPhotoStudent) return;
     const targetSid = editingPhotoStudent.studentId;
-    const cleanGrade = (editingPhotoStudent.grade || 'General').trim();
-    const cleanName = (editingPhotoStudent.fullName || 'Student').trim().replace(/\s+/g, '_');
-    const photoKey = `${cleanGrade}/${targetSid}_${cleanName}_edited.jpg`;
+    const cleanGrade = (editingPhotoStudent.grade || 'General').trim().replace(/[\/\\:*?"<>|\s]+/g, '_');
+    const cleanName = (editingPhotoStudent.fullName || 'Student').trim().replace(/[\/\\:*?"<>|\s]+/g, '_');
+    const photoKey = `${cleanGrade}/${cleanName}.jpg`;
 
     // 1. Update UI state immediately with local data URL for instant zero-lag preview
     setStudents(prev => prev.map(s => s.studentId === targetSid ? {
@@ -968,9 +1006,6 @@ export const ReceiverStudentsPage: React.FC = () => {
               {filtered.length.toLocaleString()} Records
             </span>
           </div>
-          <p className="text-xs text-[#64748B] mt-1">
-            Authoritative institutional registry &bull; Auto-generated QR codes &bull; Single & batch downloads
-          </p>
         </div>
 
         {/* Global Action Toolbar */}
@@ -1197,7 +1232,7 @@ export const ReceiverStudentsPage: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#F8FAF9] border-b border-[#E2E8F0] text-[11px] font-black text-[#0B1118] uppercase tracking-wider">
-                <th className="py-3 px-3 w-10 text-center">
+                <th className="py-4 px-4 w-12 text-center">
                   <input
                     type="checkbox"
                     checked={selectedIds.size === pagedStudents.length && pagedStudents.length > 0}
@@ -1205,18 +1240,60 @@ export const ReceiverStudentsPage: React.FC = () => {
                     className="rounded text-[#9EE617] focus:ring-[#9EE617] cursor-pointer"
                   />
                 </th>
-                <th className="py-3 px-3">Students</th>
-                <th className="py-3 px-3">Student ID</th>
-                <th className="py-3 px-3">Grade & Sec</th>
-                <th className="py-3 px-3">School & Branch</th>
-                <th className="py-3 px-3">Phone</th>
-                <th className="py-3 px-3 text-center">Blood Type</th>
-                <th className="py-3 px-3 text-center">Bus Transport</th>
-                <th className="py-3 px-3 text-center">Batch Status</th>
-                <th className="py-3 px-3">Sender Operator</th>
-                <th className="py-3 px-3">Date Transmitted</th>
-                <th className="py-3 px-3 text-center">QR Code</th>
-                <th className="py-3 px-3 text-right">Actions</th>
+                <th className="py-4 px-4 min-w-[220px] whitespace-nowrap">Students</th>
+                <th className="py-4 px-4 min-w-[130px] whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSort('studentId')}
+                    className="inline-flex items-center gap-1.5 hover:text-[#256002] transition-colors cursor-pointer group"
+                    title="Sort by Student ID"
+                  >
+                    <span>Student ID</span>
+                    {sortField === 'studentId' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#256002]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#256002]" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600" />
+                    )}
+                  </button>
+                </th>
+                <th className="py-4 px-4 min-w-[130px] whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSort('grade')}
+                    className="inline-flex items-center gap-1.5 hover:text-[#256002] transition-colors cursor-pointer group"
+                    title="Sort by Grade & Section"
+                  >
+                    <span>Grade & Sec</span>
+                    {sortField === 'grade' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#256002]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#256002]" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600" />
+                    )}
+                  </button>
+                </th>
+                <th className="py-4 px-4 min-w-[160px] whitespace-nowrap">School & Branch</th>
+                <th className="py-4 px-4 min-w-[130px] whitespace-nowrap">Phone</th>
+                <th className="py-4 px-4 text-center min-w-[95px] whitespace-nowrap">Blood Type</th>
+                <th className="py-4 px-4 text-center min-w-[115px] whitespace-nowrap">Bus Transport</th>
+                <th className="py-4 px-4 text-center min-w-[115px] whitespace-nowrap">Batch Status</th>
+                <th className="py-4 px-4 min-w-[145px] whitespace-nowrap">Sender Operator</th>
+                <th className="py-4 px-4 min-w-[155px] whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSort('createdAt')}
+                    className="inline-flex items-center gap-1.5 hover:text-[#256002] transition-colors cursor-pointer group"
+                    title="Sort by Date Transmitted"
+                  >
+                    <span>Date Transmitted</span>
+                    {sortField === 'createdAt' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#256002]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#256002]" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600" />
+                    )}
+                  </button>
+                </th>
+                <th className="py-4 px-4 text-center min-w-[95px] whitespace-nowrap">QR Code</th>
+                <th className="py-4 px-4 text-right min-w-[115px] whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F1F5F9]">
@@ -1244,7 +1321,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -1254,8 +1331,8 @@ export const ReceiverStudentsPage: React.FC = () => {
                       </td>
 
                       {/* Photo & Name (Click photo to edit online) */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2.5">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
                           <div
                             onClick={(e) => handleOpenPhotoEditor(s, e)}
                             className="relative w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-[#CBD5E1] shrink-0 cursor-pointer group shadow-2xs"
@@ -1277,12 +1354,12 @@ export const ReceiverStudentsPage: React.FC = () => {
                           <div className="min-w-0">
                             <div
                               onClick={() => handleOpenDetail(s)}
-                              className="font-bold text-[#0B1118] hover:text-[#256002] cursor-pointer truncate max-w-[170px]"
+                              className="font-bold text-[#0B1118] hover:text-[#256002] cursor-pointer truncate max-w-[190px]"
                               title={s.fullName}
                             >
                               {s.fullName}
                             </div>
-                            <div className="text-[10px] text-slate-500 flex items-center gap-1 font-medium">
+                            <div className="text-[10px] text-slate-500 flex items-center gap-1.5 font-medium mt-0.5">
                               <span>{s.sex || 'Male'}</span>
                               <span>&bull;</span>
                               <span className="text-[#366804] font-semibold">{s.status || 'Accepted'}</span>
@@ -1292,42 +1369,42 @@ export const ReceiverStudentsPage: React.FC = () => {
                       </td>
 
                       {/* Student ID */}
-                      <td className="py-3 px-3 font-mono font-bold text-[#0B1118] text-[11px]">
+                      <td className="py-3.5 px-4 font-mono font-bold text-[#0B1118] text-[11px] whitespace-nowrap">
                         {s.studentId}
                       </td>
 
                       {/* Grade & Section */}
-                      <td className="py-3 px-3">
-                        <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-[#0B1118] font-bold text-[11px]">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-[#0B1118] font-bold text-[11px]">
                           {getGradeDisplay(s)}
                         </span>
                       </td>
 
                       {/* School & Branch */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-[#0B1118] truncate max-w-[140px]">{s.school || 'YMS'}</div>
-                        <div className="text-[10px] text-slate-500 flex items-center gap-0.5">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="font-bold text-[#0B1118] truncate max-w-[160px]">{s.school || 'YMS'}</div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
                           <MapPin className="w-2.5 h-2.5 text-[#366804]" />
                           <span>{s.location || 'Addis Ababa'}</span>
                         </div>
                       </td>
 
                       {/* Phone */}
-                      <td className="py-3 px-3 font-mono text-[11px] text-slate-700">
+                      <td className="py-3.5 px-4 font-mono text-[11px] text-slate-700 whitespace-nowrap">
                         {s.phone || '-'}
                       </td>
 
                       {/* Blood Type */}
-                      <td className="py-3 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className="px-2.5 py-1 rounded-md font-mono text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
                           {s.bloodType || 'Unknown'}
                         </span>
                       </td>
 
                       {/* Bus Transport */}
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         {s.schoolBusUsage === 'Yes' || s.busUser === 'YES' ? (
-                          <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-amber-100 text-amber-900 border border-amber-200">
+                          <span className="px-2.5 py-1 rounded-md font-bold text-[10px] bg-amber-100 text-amber-900 border border-amber-200">
                             🚌 Bus
                           </span>
                         ) : (
@@ -1336,10 +1413,10 @@ export const ReceiverStudentsPage: React.FC = () => {
                       </td>
 
                       {/* Batch Status (Bulked / Unbulked Indicator with Light Lemon Green Checkmark) */}
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         {isBulked ? (
                           <span
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#85E510]/15 text-[#1D5102] border border-[#85E510]/40 font-black text-[11px]"
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#85E510]/15 text-[#1D5102] border border-[#85E510]/40 font-black text-[11px]"
                             title="Bulked & Downloaded"
                           >
                             <Check className="w-3.5 h-3.5 text-[#85E510] stroke-[3]" />
@@ -1347,7 +1424,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                           </span>
                         ) : (
                           <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium text-[10px]"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-medium text-[10px]"
                             title="Awaiting bulk export"
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
@@ -1357,14 +1434,14 @@ export const ReceiverStudentsPage: React.FC = () => {
                       </td>
 
                       {/* Sender */}
-                      <td className="py-3 px-3">
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
                           {s.senderName || 'Field Sender'}
                         </span>
                       </td>
 
                       {/* Date Transmitted */}
-                      <td className="py-3 px-3 font-mono text-[10px] text-slate-600">
+                      <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600 whitespace-nowrap">
                         {s.createdAt ? new Date(s.createdAt).toLocaleDateString([], {
                           month: 'short',
                           day: 'numeric',
@@ -1374,7 +1451,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                       </td>
 
                       {/* QR Code Action (Token strictly studentId) */}
-                      <td className="py-3 px-3 text-center">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <button
                           type="button"
                           onClick={(e) => downloadSingleQr(s, e)}
@@ -1386,7 +1463,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                       </td>
 
                       {/* Row Action Buttons */}
-                      <td className="py-3 px-3 text-right">
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
                           {/* View Dossier (Eye icon opens details drawer) */}
                           <button
@@ -1645,9 +1722,9 @@ export const ReceiverStudentsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Dossier Tabs */}
+              {/* Dossier Tabs (Photo, Academic, Activity) */}
               <div className="border-b border-[#E2E8F0] flex items-center gap-4 text-xs font-bold">
-                {(['Photo', 'Academic', 'Contact', 'Activity'] as const).map(tab => (
+                {(['Photo', 'Academic', 'Activity'] as const).map(tab => (
                   <button
                     key={tab}
                     type="button"
@@ -1674,12 +1751,12 @@ export const ReceiverStudentsPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Cloud Storage:</span>
-                    <span className="font-mono text-slate-800">Cloudflare R2 Bucket</span>
+                    <span className="text-slate-500">Storage Cluster:</span>
+                    <span className="font-mono text-slate-800">Enterprise High-Speed Storage</span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">Aspect Ratio:</span>
-                    <span className="font-bold text-[#0B1118]">3:4 ID Portrait</span>
+                    <span className="font-bold text-[#0B1118]">3:4 ID Portrait Standard</span>
                   </div>
                   <button
                     type="button"
@@ -1707,33 +1784,16 @@ export const ReceiverStudentsPage: React.FC = () => {
                     <span className="font-mono font-bold text-[#0B1118]">{getGradeDisplay(detailStudent)}</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500">Student Phone:</span>
+                    <span className="font-mono font-bold text-[#0B1118]">{detailStudent.phone || '-'}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">School Bus Transport:</span>
                     <span className="font-bold text-[#0B1118]">{detailStudent.schoolBusUsage || 'Yes'}</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">Blood Group:</span>
                     <span className="font-bold text-[#0B1118]">{detailStudent.bloodType || 'O+'}</span>
-                  </div>
-                </div>
-              )}
-
-              {detailTab === 'Contact' && (
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Student Phone:</span>
-                    <span className="font-mono font-bold text-[#0B1118]">{detailStudent.phone || 'None provided'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Guardian Name:</span>
-                    <span className="font-bold text-[#0B1118]">{detailStudent.guardianFullName || 'Parent / Guardian'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Emergency Phone:</span>
-                    <span className="font-mono font-bold text-[#0B1118]">{detailStudent.emergencyContactPhone || 'None provided'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Date of Birth:</span>
-                    <span className="font-mono text-slate-800">{detailStudent.dateOfBirth ? detailStudent.dateOfBirth.substring(0, 10) : '2010-01-01'}</span>
                   </div>
                 </div>
               )}
@@ -1750,7 +1810,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">Database Sync:</span>
-                    <span className="font-bold text-emerald-700">Supabase PostgreSQL (Live)</span>
+                    <span className="font-bold text-emerald-700">Authoritative Synchronized (Live)</span>
                   </div>
                 </div>
               )}
@@ -1832,15 +1892,33 @@ export const ReceiverStudentsPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="font-bold text-[#0B1118] block mb-1">Gender</label>
-                  <select
-                    value={editSex}
-                    onChange={(e) => setEditSex(e.target.value as any)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
-                  >
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
+                  <label className="font-bold text-[#0B1118] block mb-1">Sex Identification</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditSex('Male')}
+                      className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                        editSex === 'Male'
+                          ? 'bg-[#0B1118] text-white border-[#0B1118] shadow-sm ring-2 ring-[#85E510]/50'
+                          : 'bg-[#F8FAF9] text-[#64748B] border-[#CBD5E1] hover:bg-slate-100 hover:text-[#0B1118]'
+                      }`}
+                    >
+                      <span className="text-sm">♂</span>
+                      <span>Male</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditSex('Female')}
+                      className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                        editSex === 'Female'
+                          ? 'bg-[#0B1118] text-white border-[#0B1118] shadow-sm ring-2 ring-[#85E510]/50'
+                          : 'bg-[#F8FAF9] text-[#64748B] border-[#CBD5E1] hover:bg-slate-100 hover:text-[#0B1118]'
+                      }`}
+                    >
+                      <span className="text-sm">♀</span>
+                      <span>Female</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div>

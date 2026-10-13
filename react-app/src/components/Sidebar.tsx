@@ -6,9 +6,8 @@ import {
   Smartphone, HardDrive, Activity, AlertTriangle,
   LogOut, Database, X, Shield
 } from 'lucide-react';
-import { UserRole } from '@/types';
 import { getCurrentUser, setCurrentUser } from '@/lib/store';
-import { CloudflareStatusBadge } from '@/components/CloudflareLiveStatus';
+import { UserRole } from '@/types';
 
 interface SidebarProps {
   currentStation?: UserRole;
@@ -211,11 +210,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           ))}
         </nav>
-
-        {/* Live Cloudflare Status Bar in Sidebar */}
-        <div className="px-3 py-2 border-t border-[#E2E8F0] bg-slate-50/70 shrink-0">
-          <CloudflareStatusBadge compact className="w-full justify-between" />
-        </div>
 
         {/* Footer Profile & Sign Out Bar matching Reference Screenshot */}
         <div className="p-3 border-t border-[#E2E8F0] bg-white shrink-0 flex items-center justify-between">

@@ -14,7 +14,7 @@ interface PhoneCropModalProps {
   studentId?: string;
 }
 
-export type AspectRatioMode = 'FREE' | '3:4' | '1:1' | '4:3';
+export type AspectRatioMode = 'FREE' | '3:4' | '4:3';
 
 interface CropRect {
   x: number;
@@ -51,7 +51,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
   const [contrast, setContrast] = useState<number>(100);
   const [saturation, setSaturation] = useState<number>(100);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [activeTab, setActiveTab] = useState<'crop' | 'adjust'>('crop');
+  const [showFineTune, setShowFineTune] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number }>({ width: 600, height: 800 });
   const imageDimensionsRef = useRef<{ width: number; height: number }>({ width: 600, height: 800 });
@@ -213,8 +213,8 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
         newY = Math.round((cHeight - newH) / 2);
       }
     } else {
-      // ratio is '3:4', '1:1', or '4:3'
-      const targetAspect = ratio === '3:4' ? 3 / 4 : ratio === '1:1' ? 1 : 4 / 3;
+      // ratio is '3:4' or '4:3'
+      const targetAspect = ratio === '3:4' ? 3 / 4 : 4 / 3;
 
       if (hasValidPrev && prevCrop) {
         // User has framed/selected their crop!
@@ -361,7 +361,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
       if (aspectRatio === 'FREE') {
         newH = Math.max(minSize, Math.min(startCrop.height + dy, cH - startCrop.y));
       } else {
-        const ratioVal = aspectRatio === '3:4' ? 4 / 3 : aspectRatio === '1:1' ? 1 : 3 / 4;
+        const ratioVal = aspectRatio === '3:4' ? 4 / 3 : 3 / 4;
         newH = newW * ratioVal;
         if (newY + newH > cH) {
           newH = cH - newY;
@@ -378,7 +378,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
         newY = Math.min(maxY, Math.max(0, startCrop.y + dy));
         newH = startCrop.height - (newY - startCrop.y);
       } else {
-        const ratioVal = aspectRatio === '3:4' ? 4 / 3 : aspectRatio === '1:1' ? 1 : 3 / 4;
+        const ratioVal = aspectRatio === '3:4' ? 4 / 3 : 3 / 4;
         newH = newW * ratioVal;
         newY = startCrop.y + startCrop.height - newH;
         if (newY < 0) {
@@ -395,7 +395,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
         newY = Math.min(maxY, Math.max(0, startCrop.y + dy));
         newH = startCrop.height - (newY - startCrop.y);
       } else {
-        const ratioVal = aspectRatio === '3:4' ? 4 / 3 : aspectRatio === '1:1' ? 1 : 3 / 4;
+        const ratioVal = aspectRatio === '3:4' ? 4 / 3 : 3 / 4;
         newH = newW * ratioVal;
         newY = startCrop.y + startCrop.height - newH;
         if (newY < 0) {
@@ -412,7 +412,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
       if (aspectRatio === 'FREE') {
         newH = Math.max(minSize, Math.min(startCrop.height + dy, cH - startCrop.y));
       } else {
-        const ratioVal = aspectRatio === '3:4' ? 4 / 3 : aspectRatio === '1:1' ? 1 : 3 / 4;
+        const ratioVal = aspectRatio === '3:4' ? 4 / 3 : 3 / 4;
         newH = newW * ratioVal;
         if (startCrop.y + newH > cH) {
           newH = cH - startCrop.y;
@@ -420,20 +420,61 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
           newX = startCrop.x + startCrop.width - newW;
         }
       }
-    } else if (aspectRatio === 'FREE') {
-      // Direct Edge Handles for Free Mode
+    } else {
+      // Direct Edge Handles (Active in FREE and Fixed Modes, Phone-Style)
+      const isFixed = aspectRatio !== 'FREE';
+      const ratioVal = aspectRatio === '3:4' ? 4 / 3 : 3 / 4;
+
       if (dragAction === 'HANDLE_R') {
         newW = Math.max(minSize, Math.min(startCrop.width + dx, cW - startCrop.x));
+        if (isFixed) {
+          newH = Math.max(minSize, newW * ratioVal);
+          if (newH > cH) {
+            newH = cH;
+            newW = newH / ratioVal;
+          }
+          const centerY = startCrop.y + startCrop.height / 2;
+          newY = Math.max(0, Math.min(centerY - newH / 2, cH - newH));
+        }
       } else if (dragAction === 'HANDLE_L') {
         const maxX = startCrop.x + startCrop.width - minSize;
         newX = Math.min(maxX, Math.max(0, startCrop.x + dx));
         newW = startCrop.width - (newX - startCrop.x);
+        if (isFixed) {
+          newH = Math.max(minSize, newW * ratioVal);
+          if (newH > cH) {
+            newH = cH;
+            newW = newH / ratioVal;
+            newX = startCrop.x + startCrop.width - newW;
+          }
+          const centerY = startCrop.y + startCrop.height / 2;
+          newY = Math.max(0, Math.min(centerY - newH / 2, cH - newH));
+        }
       } else if (dragAction === 'HANDLE_B') {
         newH = Math.max(minSize, Math.min(startCrop.height + dy, cH - startCrop.y));
+        if (isFixed) {
+          newW = Math.max(minSize, newH / ratioVal);
+          if (newW > cW) {
+            newW = cW;
+            newH = newW * ratioVal;
+          }
+          const centerX = startCrop.x + startCrop.width / 2;
+          newX = Math.max(0, Math.min(centerX - newW / 2, cW - newW));
+        }
       } else if (dragAction === 'HANDLE_T') {
         const maxY = startCrop.y + startCrop.height - minSize;
         newY = Math.min(maxY, Math.max(0, startCrop.y + dy));
         newH = startCrop.height - (newY - startCrop.y);
+        if (isFixed) {
+          newW = Math.max(minSize, newH / ratioVal);
+          if (newW > cW) {
+            newW = cW;
+            newH = newW * ratioVal;
+            newY = startCrop.y + startCrop.height - newH;
+          }
+          const centerX = startCrop.x + startCrop.width / 2;
+          newX = Math.max(0, Math.min(centerX - newW / 2, cW - newW));
+        }
       }
     }
 
@@ -462,6 +503,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
 
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length === 1) {
+        if (e.cancelable) e.preventDefault();
         handleDragMove(e.touches[0].clientX, e.touches[0].clientY);
       }
     };
@@ -523,10 +565,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
       let targetW = 600;
       let targetH = 800;
 
-      if (aspectRatio === '1:1') {
-        targetW = 600;
-        targetH = 600;
-      } else if (aspectRatio === '4:3') {
+      if (aspectRatio === '4:3') {
         targetW = 800;
         targetH = 600;
       } else if (aspectRatio === 'FREE') {
@@ -611,8 +650,8 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 select-none">
-      <div className="bg-[#0B1118] border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden text-slate-100 max-h-[96vh]">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 select-none overflow-x-hidden overflow-y-auto">
+      <div className="bg-[#0B1118] border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-x-hidden text-slate-100 max-h-[96vh]">
         {/* Header Bar */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-[#0F1722]">
           <div className="flex items-center gap-3">
@@ -623,29 +662,42 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
               <h3 className="font-heading font-black text-sm text-white tracking-tight flex items-center gap-2">
                 <span>{title}</span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#85E510]/20 text-[#85E510] border border-[#85E510]/40">
-                  {aspectRatio === 'FREE' ? 'Full Photo (Free)' : aspectRatio === '3:4' ? '3:4 ID Standard' : aspectRatio === '1:1' ? '1:1 Square' : '4:3 Landscape'}
+                  {aspectRatio === 'FREE' ? 'Full Photo (Free)' : aspectRatio === '3:4' ? '3:4 ID Standard' : '4:3 Landscape'}
                 </span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                {studentId ? `Student ID: ${studentId}` : 'Interactive crop, rotation & lighting calibration'}
+                {studentId ? `Student ID: ${studentId}` : 'Interactive crop & rotation studio'}
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-xl border border-slate-700 hover:border-slate-500 bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {/* Top Controls: Auto-Enhance & Close */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleAutoEnhance}
+              className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="Auto-Enhance Lighting & Contrast"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Enhance</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-xl border border-slate-700 hover:border-slate-500 bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-all cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Aspect Ratio Selector Pills */}
-        <div className="px-5 py-2.5 bg-slate-900/70 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto">
+        {/* Aspect Ratio Selector Pills (1:1 and Lighting tab removed from top) */}
+        <div className="px-5 py-2.5 bg-slate-900/70 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-hidden flex-wrap sm:flex-nowrap">
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Aspect Ratio:</span>
-            {(['FREE', '3:4', '1:1', '4:3'] as AspectRatioMode[]).map((mode) => (
+            {(['FREE', '3:4', '4:3'] as AspectRatioMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
@@ -656,31 +708,14 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                     : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
                 }`}
               >
-                {mode === 'FREE' ? 'Full Photo (Free)' : mode === '3:4' ? '3:4 (ID)' : mode === '1:1' ? '1:1 (Square)' : '4:3'}
+                {mode === 'FREE' ? 'Full Photo (Free)' : mode === '3:4' ? '3:4 (ID)' : '4:3'}
               </button>
             ))}
           </div>
 
-          {/* Tab Selector */}
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setActiveTab('crop')}
-              className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition-all ${
-                activeTab === 'crop' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Crop
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('adjust')}
-              className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition-all ${
-                activeTab === 'adjust' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Lighting
-            </button>
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-pulse" />
+            <span>Biometric Framing Active</span>
           </div>
         </div>
 
@@ -748,9 +783,9 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                   <div />
                 </div>
 
-                {/* 4 Corner Drag Handles */}
+                {/* 4 Corner Drag Handles with phone-style touch targets */}
                 <div
-                  className="absolute -top-2 -left-2 w-4 h-4 bg-white border-2 border-[#85E510] rounded-sm cursor-nwse-resize shadow-md"
+                  className="absolute -top-3 -left-3 w-7 h-7 flex items-center justify-center cursor-nwse-resize z-20 group"
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     startDrag('HANDLE_TL', e.clientX, e.clientY);
@@ -759,9 +794,12 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                     e.stopPropagation();
                     if (e.touches.length === 1) startDrag('HANDLE_TL', e.touches[0].clientX, e.touches[0].clientY);
                   }}
-                />
+                  title="Drag top-left corner"
+                >
+                  <div className="w-4 h-4 bg-white border-2 border-[#85E510] rounded-sm shadow-md group-hover:scale-115 transition-transform" />
+                </div>
                 <div
-                  className="absolute -top-2 -right-2 w-4 h-4 bg-white border-2 border-[#85E510] rounded-sm cursor-nesw-resize shadow-md"
+                  className="absolute -top-3 -right-3 w-7 h-7 flex items-center justify-center cursor-nesw-resize z-20 group"
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     startDrag('HANDLE_TR', e.clientX, e.clientY);
@@ -770,9 +808,12 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                     e.stopPropagation();
                     if (e.touches.length === 1) startDrag('HANDLE_TR', e.touches[0].clientX, e.touches[0].clientY);
                   }}
-                />
+                  title="Drag top-right corner"
+                >
+                  <div className="w-4 h-4 bg-white border-2 border-[#85E510] rounded-sm shadow-md group-hover:scale-115 transition-transform" />
+                </div>
                 <div
-                  className="absolute -bottom-2 -left-2 w-4 h-4 bg-white border-2 border-[#85E510] rounded-sm cursor-nesw-resize shadow-md"
+                  className="absolute -bottom-3 -left-3 w-7 h-7 flex items-center justify-center cursor-nesw-resize z-20 group"
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     startDrag('HANDLE_BL', e.clientX, e.clientY);
@@ -781,9 +822,12 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                     e.stopPropagation();
                     if (e.touches.length === 1) startDrag('HANDLE_BL', e.touches[0].clientX, e.touches[0].clientY);
                   }}
-                />
+                  title="Drag bottom-left corner"
+                >
+                  <div className="w-4 h-4 bg-white border-2 border-[#85E510] rounded-sm shadow-md group-hover:scale-115 transition-transform" />
+                </div>
                 <div
-                  className="absolute -bottom-2 -right-2 w-4 h-4 bg-white border-2 border-[#85E510] rounded-sm cursor-nwse-resize shadow-md"
+                  className="absolute -bottom-3 -right-3 w-7 h-7 flex items-center justify-center cursor-nwse-resize z-20 group"
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     startDrag('HANDLE_BR', e.clientX, e.clientY);
@@ -792,57 +836,75 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                     e.stopPropagation();
                     if (e.touches.length === 1) startDrag('HANDLE_BR', e.touches[0].clientX, e.touches[0].clientY);
                   }}
-                />
+                  title="Drag bottom-right corner"
+                >
+                  <div className="w-4 h-4 bg-white border-2 border-[#85E510] rounded-sm shadow-md group-hover:scale-115 transition-transform" />
+                </div>
 
-                {/* Edge Handles for Free Crop Mode */}
-                {aspectRatio === 'FREE' && (
-                  <>
-                    <div
-                      className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-2 bg-white/80 border border-[#85E510] rounded-xs cursor-ns-resize"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        startDrag('HANDLE_T', e.clientX, e.clientY);
-                      }}
-                      onTouchStart={(e) => {
-                        e.stopPropagation();
-                        if (e.touches.length === 1) startDrag('HANDLE_T', e.touches[0].clientX, e.touches[0].clientY);
-                      }}
-                    />
-                    <div
-                      className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-5 h-2 bg-white/80 border border-[#85E510] rounded-xs cursor-ns-resize"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        startDrag('HANDLE_B', e.clientX, e.clientY);
-                      }}
-                      onTouchStart={(e) => {
-                        e.stopPropagation();
-                        if (e.touches.length === 1) startDrag('HANDLE_B', e.touches[0].clientX, e.touches[0].clientY);
-                      }}
-                    />
-                    <div
-                      className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-2 h-5 bg-white/80 border border-[#85E510] rounded-xs cursor-ew-resize"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        startDrag('HANDLE_L', e.clientX, e.clientY);
-                      }}
-                      onTouchStart={(e) => {
-                        e.stopPropagation();
-                        if (e.touches.length === 1) startDrag('HANDLE_L', e.touches[0].clientX, e.touches[0].clientY);
-                      }}
-                    />
-                    <div
-                      className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-2 h-5 bg-white/80 border border-[#85E510] rounded-xs cursor-ew-resize"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        startDrag('HANDLE_R', e.clientX, e.clientY);
-                      }}
-                      onTouchStart={(e) => {
-                        e.stopPropagation();
-                        if (e.touches.length === 1) startDrag('HANDLE_R', e.touches[0].clientX, e.touches[0].clientY);
-                      }}
-                    />
-                  </>
-                )}
+                {/* Smartphone-Style Side Grab Bars on All 4 Sides (Always Visible & Active) */}
+                {/* Top Side Bar */}
+                <div
+                  className="absolute -top-3.5 left-1/2 -translate-x-1/2 w-16 h-7 flex items-center justify-center cursor-ns-resize group z-20"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    startDrag('HANDLE_T', e.clientX, e.clientY);
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    if (e.touches.length === 1) startDrag('HANDLE_T', e.touches[0].clientX, e.touches[0].clientY);
+                  }}
+                  title="Drag top edge"
+                >
+                  <div className="w-9 h-2 bg-white border border-[#85E510] rounded-full shadow-lg group-hover:scale-110 group-hover:bg-[#85E510] transition-transform" />
+                </div>
+
+                {/* Bottom Side Bar */}
+                <div
+                  className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 w-16 h-7 flex items-center justify-center cursor-ns-resize group z-20"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    startDrag('HANDLE_B', e.clientX, e.clientY);
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    if (e.touches.length === 1) startDrag('HANDLE_B', e.touches[0].clientX, e.touches[0].clientY);
+                  }}
+                  title="Drag bottom edge"
+                >
+                  <div className="w-9 h-2 bg-white border border-[#85E510] rounded-full shadow-lg group-hover:scale-110 group-hover:bg-[#85E510] transition-transform" />
+                </div>
+
+                {/* Left Side Bar */}
+                <div
+                  className="absolute -left-3.5 top-1/2 -translate-y-1/2 w-7 h-16 flex items-center justify-center cursor-ew-resize group z-20"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    startDrag('HANDLE_L', e.clientX, e.clientY);
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    if (e.touches.length === 1) startDrag('HANDLE_L', e.touches[0].clientX, e.touches[0].clientY);
+                  }}
+                  title="Drag left edge"
+                >
+                  <div className="w-2 h-9 bg-white border border-[#85E510] rounded-full shadow-lg group-hover:scale-110 group-hover:bg-[#85E510] transition-transform" />
+                </div>
+
+                {/* Right Side Bar */}
+                <div
+                  className="absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-16 flex items-center justify-center cursor-ew-resize group z-20"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    startDrag('HANDLE_R', e.clientX, e.clientY);
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    if (e.touches.length === 1) startDrag('HANDLE_R', e.touches[0].clientX, e.touches[0].clientY);
+                  }}
+                  title="Drag right edge"
+                >
+                  <div className="w-2 h-9 bg-white border border-[#85E510] rounded-full shadow-lg group-hover:scale-110 group-hover:bg-[#85E510] transition-transform" />
+                </div>
 
                 {/* Dimension Tooltip Badge */}
                 <div className="absolute bottom-1 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[9px] font-mono text-white/90 border border-slate-700 pointer-events-none">
@@ -889,12 +951,16 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
 
               <button
                 type="button"
-                onClick={handleAutoEnhance}
-                className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
-                title="Auto-Enhance Lighting"
+                onClick={() => setShowFineTune(prev => !prev)}
+                className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold ${
+                  showFineTune
+                    ? 'bg-[#85E510] text-[#062404] border-[#85E510]'
+                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+                title="Toggle fine-tune sliders"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Enhance</span>
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Fine-Tune</span>
               </button>
 
               <button
@@ -908,8 +974,8 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
             </div>
           </div>
 
-          {/* Tab 2: Lighting & Calibration Sliders */}
-          {activeTab === 'adjust' && (
+          {/* Fine-Tune Calibration Sliders */}
+          {showFineTune && (
             <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3.5 space-y-2.5 text-xs">
               <div className="flex items-center justify-between text-slate-300">
                 <span className="flex items-center gap-1.5 font-bold">

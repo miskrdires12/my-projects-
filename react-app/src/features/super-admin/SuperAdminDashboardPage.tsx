@@ -29,7 +29,7 @@ export const SuperAdminDashboardPage: React.FC = () => {
     return () => window.removeEventListener('studentbridge_datachange', handleDataChange);
   }, []);
 
-  const totalCount = students.length || 3723;
+  const totalCount = students.length || 3904;
   const acceptedCount = students.filter(s => !s.status || s.status === 'Accepted').length;
   const rejectedCount = students.filter(s => s.status === 'Rejected').length;
   const pendingCount = students.filter(s => s.status === 'Pending' || s.status === 'Needs Review').length;

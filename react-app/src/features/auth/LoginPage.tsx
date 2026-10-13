@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  User, KeyRound, ArrowRight, AlertCircle, ShieldCheck
+  User, KeyRound, AlertCircle, ShieldCheck, ArrowRight
 } from 'lucide-react';
 import {
   getUsers, setCurrentUser, getOrCreateDeviceId,
@@ -17,8 +17,6 @@ export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('miskrdires11@gmail.com');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [deviceLockedWarning, setDeviceLockedWarning] = useState<string | null>(null);
-  const [lockedUser, setLockedUser] = useState<UserType | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const deviceId = getOrCreateDeviceId();
@@ -27,7 +25,6 @@ export const LoginPage: React.FC = () => {
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError(null);
-    setDeviceLockedWarning(null);
     setIsSubmitting(true);
 
     try {
@@ -101,9 +98,8 @@ export const LoginPage: React.FC = () => {
         if (edgeRes.status === 403 && !isSuperAdminMaster) {
           const errData = await edgeRes.json().catch(() => ({}));
           const bound = errData.boundDeviceId || 'Registered Terminal';
-          setLockedUser(user);
           setError(
-            `Access Denied: Account "${user.email}" is strictly locked to another physical device (${bound}). Click below to unbind and authorize this station.`
+            `Access Denied: Account "${user.email}" is strictly hardware-locked to terminal (${bound}). Only Super Administrators have authority to disconnect or reassign terminals.`
           );
           setIsSubmitting(false);
           return;
@@ -123,10 +119,8 @@ export const LoginPage: React.FC = () => {
       if (!isSuperAdminMaster) {
         const lockCheck = checkDeviceLock(user, deviceId);
         if (!lockCheck.allowed) {
-          setLockedUser(user);
           setError(
-            lockCheck.reason ||
-            `Access Denied: Account "${user.email}" is strictly locked to another authorized physical device. Click below to unbind and authorize this station.`
+            `Access Denied: Account "${user.email}" is strictly hardware-locked to another workstation. Only Super Administrators have permission to disconnect or reassign devices.`
           );
           setIsSubmitting(false);
           return;
@@ -139,38 +133,9 @@ export const LoginPage: React.FC = () => {
         user.boundDeviceId = deviceId;
       }
 
-      setLockedUser(null);
       finishLogin(user);
     } catch (err: any) {
       setError(err?.message || 'Authentication failed. Please retry.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUnbindAndConnect = async () => {
-    if (!lockedUser) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      await fetch('/api/auth/unbind', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: lockedUser.email,
-          userId: lockedUser.id,
-          deviceId,
-          password: password.trim()
-        })
-      }).catch(() => {});
-
-      resetUserHardwareLock(lockedUser.id);
-      setUserHardwareLock(lockedUser.id, deviceId);
-      lockedUser.boundDeviceId = deviceId;
-      setLockedUser(null);
-      finishLogin(lockedUser);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to unbind hardware lock.');
     } finally {
       setIsSubmitting(false);
     }
@@ -242,22 +207,9 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex flex-col gap-2">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
-              <span className="leading-relaxed font-medium">{error}</span>
-            </div>
-            {lockedUser && (
-              <button
-                type="button"
-                onClick={handleUnbindAndConnect}
-                disabled={isSubmitting}
-                className="mt-1 w-full py-2 px-3 rounded-lg bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
-              >
-                <span>Authorize & Bind to This PC</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+            <span className="leading-relaxed font-medium">{error}</span>
           </div>
         )}
 

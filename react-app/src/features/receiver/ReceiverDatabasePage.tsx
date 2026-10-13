@@ -3,13 +3,22 @@ import { Database, HardDrive, Cpu, CheckCircle2, RefreshCw, Server, ShieldCheck,
 import { getStudents } from '@/lib/store';
 
 export const ReceiverDatabasePage: React.FC = () => {
-  const [studentsCount, setStudentsCount] = useState(3723);
+  const [studentsCount, setStudentsCount] = useState(3904);
   const [latency, setLatency] = useState('18ms');
   const [healthStatus, setHealthStatus] = useState<'Healthy' | 'Degraded'>('Healthy');
 
   useEffect(() => {
     const s = getStudents();
     if (s.length > 0) setStudentsCount(s.length);
+
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.database?.liveRecordCount) {
+          setStudentsCount(data.database.liveRecordCount);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   return (

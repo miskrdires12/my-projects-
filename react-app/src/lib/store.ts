@@ -5,24 +5,44 @@ export { getPhotoUrl, getPhotoEncodeClass, publishStudentSync, subscribeToStuden
 
 // Branch to School Mapping
 export const BRANCH_SCHOOL_MAP: Record<string, string[]> = {
-  'Addis Ababa': ['YMS', 'Adika Youth', 'Warka', 'Ferway', 'School of America'],
+  'Addis Ababa': [
+    'YMS 1', 'YMS 2', 'YMS 3', 'YMS 4',
+    'School of America 1', 'School of America 2', 'School of America 3', 'School of America 4',
+    'Adika Youth', 'Warka', 'Ferway',
+    'YMS', 'School of America'
+  ],
   'Adama': ['Yacine', 'Debebech'],
   'Mojo': ['Mojo'],
-  'Harar': ['High Tech']
+  'Harar': [
+    'High Tech 1', 'High Tech 2', 'High Tech 3', 'High Tech 4',
+    'High Tech'
+  ]
 };
 
 export const DEFAULT_BRANCHES = Object.keys(BRANCH_SCHOOL_MAP);
 
 // Initial fallback schools strictly mapped to authorized branches
 const DEFAULT_SCHOOLS: School[] = [
+  { id: "sch_yms1", name: "YMS 1", location: "Addis Ababa", status: "Active", studentsCount: 420 },
+  { id: "sch_yms2", name: "YMS 2", location: "Addis Ababa", status: "Active", studentsCount: 380 },
+  { id: "sch_yms3", name: "YMS 3", location: "Addis Ababa", status: "Active", studentsCount: 310 },
+  { id: "sch_yms4", name: "YMS 4", location: "Addis Ababa", status: "Active", studentsCount: 285 },
   { id: "sch_yms", name: "YMS", location: "Addis Ababa", status: "Active", studentsCount: 1245 },
+  { id: "sch_soa1", name: "School of America 1", location: "Addis Ababa", status: "Active", studentsCount: 260 },
+  { id: "sch_soa2", name: "School of America 2", location: "Addis Ababa", status: "Active", studentsCount: 240 },
+  { id: "sch_soa3", name: "School of America 3", location: "Addis Ababa", status: "Active", studentsCount: 220 },
+  { id: "sch_soa4", name: "School of America 4", location: "Addis Ababa", status: "Active", studentsCount: 190 },
+  { id: "sch_soa", name: "School of America", location: "Addis Ababa", status: "Active", studentsCount: 756 },
   { id: "sch_adika", name: "Adika Youth", location: "Addis Ababa", status: "Active", studentsCount: 982 },
   { id: "sch_warka", name: "Warka", location: "Addis Ababa", status: "Active", studentsCount: 398 },
   { id: "sch_ferway", name: "Ferway", location: "Addis Ababa", status: "Active", studentsCount: 542 },
-  { id: "sch_soa", name: "School of America", location: "Addis Ababa", status: "Active", studentsCount: 756 },
   { id: "sch_yacine", name: "Yacine", location: "Adama", status: "Active", studentsCount: 420 },
   { id: "sch_debebech", name: "Debebech", location: "Adama", status: "Active", studentsCount: 510 },
   { id: "sch_mojo", name: "Mojo", location: "Mojo", status: "Active", studentsCount: 360 },
+  { id: "sch_hightech1", name: "High Tech 1", location: "Harar", status: "Active", studentsCount: 120 },
+  { id: "sch_hightech2", name: "High Tech 2", location: "Harar", status: "Active", studentsCount: 110 },
+  { id: "sch_hightech3", name: "High Tech 3", location: "Harar", status: "Active", studentsCount: 95 },
+  { id: "sch_hightech4", name: "High Tech 4", location: "Harar", status: "Active", studentsCount: 85 },
   { id: "sch_hightech", name: "High Tech", location: "Harar", status: "Active", studentsCount: 380 }
 ];
 
@@ -1199,6 +1219,7 @@ export interface SenderMetrics {
   username: string;
   email: string;
   role: string;
+  school?: string;
   boundDeviceId: string | null;
   status: 'Active' | 'Idle' | 'Locked';
   efficiency: number; // Percentage e.g. 98.4%
@@ -1260,6 +1281,7 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
     username: user?.username || senderIdentifier,
     email: user?.email || `${norm}@gmail.com`,
     role: user?.role || 'SENDER',
+    school: user?.school || user?.branch,
     boundDeviceId: user?.boundDeviceId || null,
     status,
     efficiency,
