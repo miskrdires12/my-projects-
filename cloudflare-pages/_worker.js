@@ -179,6 +179,33 @@ async function deleteFromR2Bucket(key) {
   return res.ok || res.status === 204 || res.status === 404;
 }
 
+function parseGradeAndSection(rawGrade) {
+  if (!rawGrade) return { grade: "Unknown", section: "" };
+  const str = String(rawGrade).trim();
+  const lower = str.toLowerCase();
+
+  if (lower.startsWith("nur") || lower === "nursery") return { grade: "Nursery", section: "" };
+  if (lower.startsWith("pre-kg") || lower.startsWith("prekg")) return { grade: "Pre-KG", section: "" };
+  if (lower.startsWith("lkg")) return { grade: "LKG", section: "" };
+  if (lower.startsWith("ukg")) return { grade: "UKG", section: "" };
+
+  const kgMatch = str.match(/^(?:grade\s*)?kg\s*([1-3])?\s*[-_ ]*([a-z])?$/i);
+  if (kgMatch) {
+    const num = kgMatch[1] || "";
+    const sec = (kgMatch[2] || "").toUpperCase();
+    return { grade: num ? `KG ${num}` : "KG", section: sec };
+  }
+
+  const numMatch = str.match(/^(?:grade\s*)?(\d{1,2})\s*[-_ ]*([a-z])?$/i);
+  if (numMatch) {
+    const num = parseInt(numMatch[1], 10);
+    const sec = (numMatch[2] || "").toUpperCase();
+    return { grade: `Grade ${num}`, section: sec };
+  }
+
+  return { grade: str, section: "" };
+}
+
 let cachedAllStudents = null;
 let lastAllFetchTime = 0;
 
@@ -204,7 +231,7 @@ async function ensureLocalFallbackLoaded(env, originUrl) {
 }
 
 async function getAllStudentsDataset(env, originUrl) {
-  if (cachedAllStudents && cachedAllStudents.length >= 3800 && (Date.now() - lastAllFetchTime < 60000)) {
+  if (cachedAllStudents && cachedAllStudents.length >= 3900 && (Date.now() - lastAllFetchTime < 60000)) {
     return cachedAllStudents;
   }
 
@@ -353,6 +380,7 @@ export default {
       const search = (url.searchParams.get("search") || "").trim().toLowerCase();
       const school = (url.searchParams.get("school") || "ALL").trim();
       const grade = (url.searchParams.get("grade") || "ALL").trim();
+      const sectionParam = (url.searchParams.get("section") || "ALL").trim();
       const hiddenParam = url.searchParams.get("hidden"); // "true" or "false" or null
 
       const allData = await getAllStudentsDataset(env, request.url);
@@ -364,7 +392,11 @@ export default {
         filtered = filtered.filter(s => s.receiverHidden !== true);
       }
 
-      if (search || school !== "ALL" || grade !== "ALL") {
+      if (search || school !== "ALL" || grade !== "ALL" || sectionParam !== "ALL") {
+        const reqParsed = grade !== "ALL" ? parseGradeAndSection(grade) : null;
+        const reqGradeBase = reqParsed ? reqParsed.grade.toLowerCase() : null;
+        const reqSection = sectionParam !== "ALL" ? sectionParam.toUpperCase() : null;
+
         filtered = filtered.filter(s => {
           if (search) {
             const m = (s.fullName || "").toLowerCase().includes(search) ||
@@ -373,10 +405,11 @@ export default {
             if (!m) return false;
           }
           if (school !== "ALL" && (s.school || "").toLowerCase() !== school.toLowerCase()) return false;
-          if (grade !== "ALL") {
-            const reqG = grade.toLowerCase().replace(/^grade\s*/, '').trim();
-            const sG = (s.grade || "").toLowerCase().replace(/^grade\s*/, '').trim();
-            if (sG !== reqG && !sG.startsWith(reqG)) return false;
+
+          if (reqGradeBase || reqSection) {
+            const studentParsed = parseGradeAndSection(s.grade);
+            if (reqGradeBase && studentParsed.grade.toLowerCase() !== reqGradeBase) return false;
+            if (reqSection && studentParsed.section !== reqSection) return false;
           }
           return true;
         });
@@ -738,11 +771,37 @@ export default {
           body: JSON.stringify(updates)
         });
 
+        let mergedStudent = updates;
         if (cachedAllStudents) {
           const sIdx = cachedAllStudents.findIndex(s => s.studentId === studentId || s.id === studentId);
           if (sIdx !== -1) {
             cachedAllStudents[sIdx] = { ...cachedAllStudents[sIdx], ...updates };
+            mergedStudent = cachedAllStudents[sIdx];
           }
+        }
+
+        // Durable Cloudflare R2 persistence for updates
+        try {
+          const finalSid = mergedStudent.studentId || studentId;
+          const recBytes = new TextEncoder().encode(JSON.stringify(mergedStudent, null, 2));
+          await uploadToR2Bucket(`records/${finalSid}.json`, recBytes, "application/json");
+
+          let currentLiveReg = [];
+          try {
+            const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json`);
+            if (regRes.ok) currentLiveReg = await regRes.json();
+          } catch (e) {}
+
+          const existingIdx = currentLiveReg.findIndex(r => r.studentId === finalSid);
+          if (existingIdx !== -1) {
+            currentLiveReg[existingIdx] = { ...currentLiveReg[existingIdx], ...mergedStudent };
+          } else {
+            currentLiveReg.unshift(mergedStudent);
+          }
+          const regBytes = new TextEncoder().encode(JSON.stringify(currentLiveReg));
+          await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
+        } catch (r2Err) {
+          console.warn("R2 update in PATCH notice:", r2Err);
         }
 
         if (updateRes.ok) {
