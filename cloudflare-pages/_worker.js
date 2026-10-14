@@ -38,6 +38,8 @@ let cachedUsers = null;
 let customStudents = [];
 let uploadedPhotos = new Map();
 let edgeDeviceLocks = new Map();
+let edgeDeletedUsers = new Set();
+let edgeDeviceOccupants = new Map(); // deviceId -> user email
 
 let edgeTasks = [];
 
@@ -47,6 +49,7 @@ let edgeSchools = [
   { id: "sch_soa", name: "School of America", location: "Addis Ababa", status: "Active", studentsCount: 756 },
   { id: "sch_ferway", name: "Ferway", location: "Addis Ababa", status: "Active", studentsCount: 542 },
   { id: "sch_warka", name: "Warka", location: "Addis Ababa", status: "Active", studentsCount: 398 },
+  { id: "sch_senayerosen", name: "Sena Yerosen", location: "Addis Ababa", status: "Active", studentsCount: 940 },
   { id: "sch_yacine", name: "Yacine", location: "Adama", status: "Active", studentsCount: 420 },
   { id: "sch_debebech", name: "Debebech", location: "Adama", status: "Active", studentsCount: 510 },
   { id: "sch_hightech", name: "High Tech", location: "Harar", status: "Active", studentsCount: 380 }
@@ -1106,57 +1109,54 @@ export default {
       }
 
       if (request.method === "DELETE") {
-        const userId = url.searchParams.get("id");
-        if (cachedUsers && userId) {
-          cachedUsers = cachedUsers.filter(u => u.id !== userId && u.email?.toLowerCase() !== userId.toLowerCase());
-        }
-        return new Response(JSON.stringify({ success: true, deleted: userId }), {
-          headers: { "Content-Type": "application/json", ...corsHeaders }
-        });
-      }
-    }
+        try {
+          const delId = (url.searchParams.get("id") || "").toLowerCase();
+          const delEmail = (url.searchParams.get("email") || "").toLowerCase();
+          const delUsername = (url.searchParams.get("username") || "").toLowerCase();
+          const delDeviceId = url.searchParams.get("deviceId") || "";
 
-    if (url.pathname === "/api/qr") {
-      const studentId = url.searchParams.get("studentId");
-      if (!studentId) {
-        return new Response(JSON.stringify({ error: "Missing studentId parameter" }), { status: 400, headers: corsHeaders });
-      }
+          const targets = [delId, delEmail, delUsername].filter(Boolean);
+          targets.forEach(t => {
+            edgeDeletedUsers.add(t);
+            edgeDeviceLocks.delete(t);
+          });
 
-      let student = null;
-      try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/students?studentId=eq.${encodeURIComponent(studentId)}&select=*`, {
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": `Bearer ${SUPABASE_KEY}`,
-            "Accept-Profile": "cloudflare"
+          if (delDeviceId) {
+            edgeDeviceOccupants.delete(delDeviceId);
+            for (const [k, v] of edgeDeviceLocks.entries()) {
+              if (v === delDeviceId) edgeDeviceLocks.delete(k);
+            }
           }
-        });
-        if (res.ok) {
-          const list = await res.json();
-          if (list && list.length > 0) student = list[0];
+
+          if (cachedUsers) {
+            const dIdx = cachedUsers.findIndex(u =>
+              (u.id && targets.includes(u.id.toLowerCase())) ||
+              (u.email && targets.includes(u.email.toLowerCase())) ||
+              (u.username && targets.includes(u.username.toLowerCase()))
+            );
+            if (dIdx !== -1) {
+              const u = cachedUsers[dIdx];
+              if (u.boundDeviceId) {
+                edgeDeviceOccupants.delete(u.boundDeviceId);
+                for (const [k, v] of edgeDeviceLocks.entries()) {
+                  if (v === u.boundDeviceId) edgeDeviceLocks.delete(k);
+                }
+              }
+              cachedUsers.splice(dIdx, 1);
+            }
+          }
+
+          for (const [devId, occEmail] of edgeDeviceOccupants.entries()) {
+            if (targets.includes(occEmail.toLowerCase())) {
+              edgeDeviceOccupants.delete(devId);
+            }
+          }
+
+          return new Response(JSON.stringify({ success: true, message: "User deleted and physical workstation freed successfully." }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+        } catch (e) {
+          return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
         }
-      } catch (e) {}
-
-      if (!student) {
-        const all = [...customStudents, ...(cachedStudents || [])];
-        student = all.find(s => s.studentId === studentId);
       }
-
-      const qrPayload = student ? {
-        id: student.studentId,
-        name: student.fullName,
-        school: student.school || "YMS",
-        grade: student.grade,
-        roll: student.rollNumber || "",
-        verified: true,
-        issuedBy: "Silicon Labs StudentBridge"
-      } : {
-        id: studentId,
-        verified: false,
-        issuedBy: "Silicon Labs StudentBridge"
-      };
-
-      return new Response(JSON.stringify(qrPayload), { headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
     // -------------------------------------------------------------------------
@@ -1353,8 +1353,8 @@ export default {
           );
         }
 
-        if (!user) {
-          return new Response(JSON.stringify({ error: "INVALID_CREDENTIALS", message: "User account not found." }), {
+        if (!user || edgeDeletedUsers.has(email) || (user && edgeDeletedUsers.has(user.id))) {
+          return new Response(JSON.stringify({ error: "INVALID_CREDENTIALS", message: "User account not found or has been deleted." }), {
             status: 401,
             headers: { "Content-Type": "application/json", ...corsHeaders }
           });
@@ -1362,11 +1362,11 @@ export default {
 
         // 1-Device Lock Enforcement & Master Key Auto-Rebind
         const isSuperAdminOwner = (email === "miskrdires11@gmail.com" || email === "miskrdires11") && (body.password === "sukuna24th" || body.password === "12345678");
-        const effectiveLock = edgeDeviceLocks.get(email) || user.boundDeviceId;
+        const effectiveLock = edgeDeviceLocks.get(email) || edgeDeviceLocks.get(user?.id) || user.boundDeviceId;
         if (!isSuperAdminOwner && effectiveLock && effectiveLock !== clientHwId) {
           return new Response(JSON.stringify({
             error: "DEVICE_LOCKED",
-            message: "1-Device lock enforced: This account is strictly bound to another hardware terminal.",
+            message: `Account "${email}" is strictly hardware-locked to terminal (${effectiveLock}). Access from unauthorized workstation (${clientHwId}) is rejected.`,
             boundDeviceId: effectiveLock
           }), {
             status: 403,
@@ -1374,26 +1374,37 @@ export default {
           });
         }
 
-        // Bind device if not currently bound OR if Super Admin master re-bind
-        if (!effectiveLock || isSuperAdminOwner) {
-          user.boundDeviceId = clientHwId;
-          edgeDeviceLocks.set(email, clientHwId);
-          edgeDeviceLocks.set(user.id, clientHwId);
-          try {
-            await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${user.id}`, {
-              method: "PATCH",
-              headers: {
-                "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${SUPABASE_KEY}`,
-                "Content-Type": "application/json",
-                "Content-Profile": "cloudflare",
-                "Accept-Profile": "cloudflare"
-              },
-              body: JSON.stringify({ boundDeviceId: clientHwId, updatedAt: new Date().toISOString() })
+        // Check if this physical workstation is occupied by another operator
+        const occupant = edgeDeviceOccupants.get(clientHwId);
+        if (!isSuperAdminOwner && occupant && occupant.toLowerCase() !== email && !edgeDeletedUsers.has(occupant.toLowerCase())) {
+          const occLock = edgeDeviceLocks.get(occupant.toLowerCase());
+          if (occLock === clientHwId) {
+            return new Response(JSON.stringify({
+              error: "TERMINAL_OCCUPIED",
+              message: `This physical workstation (${clientHwId}) is currently locked to operator "${occupant}". Disconnect that device in Admin or delete the previous operator to assign a new operator.`,
+              boundDeviceId: clientHwId
+            }), {
+              status: 403,
+              headers: { "Content-Type": "application/json", ...corsHeaders }
             });
-          } catch (e) {}
-        } else {
-          user.boundDeviceId = effectiveLock;
+          } else {
+            edgeDeviceOccupants.delete(clientHwId);
+          }
+        }
+
+        // Bind device: ensure clientHwId is actively bound
+        user.boundDeviceId = clientHwId;
+        edgeDeviceLocks.set(email, clientHwId);
+        if (user.id) edgeDeviceLocks.set(user.id, clientHwId);
+        if (user.username) edgeDeviceLocks.set(user.username.toLowerCase(), clientHwId);
+        if (!isSuperAdminOwner) {
+          edgeDeviceOccupants.set(clientHwId, email);
+        }
+
+        // Update in cachedUsers
+        if (cachedUsers) {
+          const cu = cachedUsers.find(x => x.id === user.id || x.email?.toLowerCase() === email);
+          if (cu) cu.boundDeviceId = clientHwId;
         }
 
         // Strict role resolution
@@ -1404,7 +1415,8 @@ export default {
           "mebratadony@gmail.com", "yohannes@gmail.com", "etsubmolla@gmail.com", "etsubmola@gmail.com",
           "adoni@gmail.com", "biruk@gmail.com", "zemichael@gmail.com",
           "nebiyu@gmail.com", "beki@gmail.com", "colldwater340@gmail.com",
-          "simon@gmail.com", "danaytesayas4@gmail.com", "miskrdires12@gmail.com"
+          "simon@gmail.com", "danaytesayas4@gmail.com", "miskrdires12@gmail.com",
+          "biruk1@gmail.com", "siliconlabstech@gmail.com"
         ].includes(email)) {
           resolvedRole = "SENDER";
         }
@@ -1471,44 +1483,42 @@ export default {
     if ((url.pathname === "/api/auth/unbind" || url.pathname === "/api/auth/reset-lock") && request.method === "POST") {
       try {
         const body = await request.json();
-        const { userId, email, username } = body;
+        const { userId, email, username, deviceId } = body;
         const target = userId || email || username;
+        const targets = [userId, email, username, target].filter(Boolean).map(x => x.toLowerCase());
 
-        if (email) edgeDeviceLocks.delete(email.toLowerCase());
-        if (userId) edgeDeviceLocks.delete(userId);
-        if (username) edgeDeviceLocks.delete(username.toLowerCase());
-        if (target) {
-          edgeDeviceLocks.delete(target.toLowerCase());
-          edgeDeviceLocks.delete(target);
+        targets.forEach(t => edgeDeviceLocks.delete(t));
+
+        if (deviceId) {
+          edgeDeviceOccupants.delete(deviceId);
+          for (const [k, v] of edgeDeviceLocks.entries()) {
+            if (v === deviceId) edgeDeviceLocks.delete(k);
+          }
+        }
+
+        // Clean up device occupations tied to target user
+        for (const [devId, occEmail] of edgeDeviceOccupants.entries()) {
+          if (targets.includes(occEmail.toLowerCase())) {
+            edgeDeviceOccupants.delete(devId);
+          }
         }
 
         if (cachedUsers) {
           cachedUsers.forEach(u => {
             if (
-              (u.id && (u.id === userId || u.id === target)) ||
-              (u.email && u.email.toLowerCase() === (email || target || "").toLowerCase()) ||
-              (u.username && u.username.toLowerCase() === (username || target || "").toLowerCase())
+              (u.id && targets.includes(u.id.toLowerCase())) ||
+              (u.email && targets.includes(u.email.toLowerCase())) ||
+              (u.username && targets.includes(u.username.toLowerCase()))
             ) {
+              if (u.boundDeviceId) {
+                edgeDeviceOccupants.delete(u.boundDeviceId);
+              }
               u.boundDeviceId = null;
             }
           });
         }
 
-        if (target) {
-          await fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(target)},email.ilike.${encodeURIComponent(target)},username.ilike.${encodeURIComponent(target)})`, {
-            method: "PATCH",
-            headers: {
-              "apikey": SUPABASE_KEY,
-              "Authorization": `Bearer ${SUPABASE_KEY}`,
-              "Content-Type": "application/json",
-              "Content-Profile": "cloudflare",
-              "Accept-Profile": "cloudflare"
-            },
-            body: JSON.stringify({ boundDeviceId: null, updatedAt: new Date().toISOString() })
-          }).catch(() => {});
-        }
-
-        return new Response(JSON.stringify({ success: true, message: "Hardware device lock reset successfully." }), {
+        return new Response(JSON.stringify({ success: true, message: "Hardware device lock reset and terminal unbound successfully." }), {
           headers: { "Content-Type": "application/json", ...corsHeaders }
         });
       } catch (e) {
@@ -1537,6 +1547,14 @@ export default {
           users = cachedUsers || [];
         }
 
+        // Exclude deleted users
+        users = users.filter(u => {
+          const em = (u.email || "").toLowerCase();
+          const un = (u.username || "").toLowerCase();
+          const uid = (u.id || "").toLowerCase();
+          return !edgeDeletedUsers.has(em) && !edgeDeletedUsers.has(un) && !edgeDeletedUsers.has(uid);
+        });
+
         // Overlay edge device locks and role specifications
         users.forEach(u => {
           const em = (u.email || "").toLowerCase();
@@ -1555,7 +1573,8 @@ export default {
             "mebratadony@gmail.com", "yohannes@gmail.com", "etsubmolla@gmail.com", "etsubmola@gmail.com",
             "adoni@gmail.com", "biruk@gmail.com", "zemichael@gmail.com",
             "nebiyu@gmail.com", "beki@gmail.com", "colldwater340@gmail.com",
-            "simon@gmail.com", "danaytesayas4@gmail.com", "miskrdires12@gmail.com"
+            "simon@gmail.com", "danaytesayas4@gmail.com", "miskrdires12@gmail.com",
+            "biruk1@gmail.com", "siliconlabstech@gmail.com"
           ].includes(em)) {
             u.role = "SENDER";
           }
@@ -1655,15 +1674,57 @@ export default {
 
       if (request.method === "DELETE") {
         try {
-          const delId = url.searchParams.get("id");
-          if (delId) {
-            const target = delId.toLowerCase();
-            if (cachedUsers) {
-              const dIdx = cachedUsers.findIndex(u => (u.id && u.id.toLowerCase() === target) || (u.email && u.email.toLowerCase() === target) || (u.username && u.username.toLowerCase() === target));
-              if (dIdx !== -1) cachedUsers.splice(dIdx, 1);
+          const delId = url.searchParams.get("id") || "";
+          const delEmail = url.searchParams.get("email") || "";
+          const delUsername = url.searchParams.get("username") || "";
+          const delDevId = url.searchParams.get("deviceId") || "";
+
+          const targets = [delId, delEmail, delUsername].filter(Boolean).map(x => x.toLowerCase());
+
+          // 1. Add all identifiers to edgeDeletedUsers
+          targets.forEach(t => edgeDeletedUsers.add(t));
+
+          // 2. Clear from edgeDeviceLocks
+          targets.forEach(t => edgeDeviceLocks.delete(t));
+
+          // 3. Find and remove from cachedUsers, tracking any boundDeviceId
+          let boundDev = delDevId || null;
+          if (cachedUsers) {
+            const idx = cachedUsers.findIndex(u =>
+              (u.id && targets.includes(u.id.toLowerCase())) ||
+              (u.email && targets.includes(u.email.toLowerCase())) ||
+              (u.username && targets.includes(u.username.toLowerCase()))
+            );
+            if (idx !== -1) {
+              const u = cachedUsers[idx];
+              if (u.boundDeviceId) boundDev = u.boundDeviceId;
+              if (u.id) edgeDeletedUsers.add(u.id.toLowerCase());
+              if (u.email) edgeDeletedUsers.add(u.email.toLowerCase());
+              if (u.username) edgeDeletedUsers.add(u.username.toLowerCase());
+              cachedUsers.splice(idx, 1);
             }
-            edgeDeviceLocks.delete(target);
-            await fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(delId)},email.ilike.${encodeURIComponent(delId)},username.ilike.${encodeURIComponent(delId)})`, {
+          }
+
+          // 4. Free the physical workstation in edgeDeviceOccupants so other users can use it immediately!
+          if (boundDev) {
+            edgeDeviceOccupants.delete(boundDev);
+            edgeDeviceLocks.delete(boundDev);
+            for (const [k, v] of edgeDeviceLocks.entries()) {
+              if (v === boundDev) edgeDeviceLocks.delete(k);
+            }
+          }
+
+          // Sweep any device where occupant matches target or deleted users
+          for (const [devId, occEmail] of edgeDeviceOccupants.entries()) {
+            if (targets.includes(occEmail.toLowerCase()) || edgeDeletedUsers.has(occEmail.toLowerCase())) {
+              edgeDeviceOccupants.delete(devId);
+            }
+          }
+
+          // 5. Delete from Supabase cloudflare.users
+          if (delId || delEmail) {
+            const queryTarget = delId || delEmail;
+            fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(queryTarget)},email.ilike.${encodeURIComponent(queryTarget)},username.ilike.${encodeURIComponent(queryTarget)})`, {
               method: "DELETE",
               headers: {
                 "apikey": SUPABASE_KEY,
@@ -1672,7 +1733,11 @@ export default {
               }
             }).catch(() => {});
           }
-          return new Response(JSON.stringify({ success: true, message: "User deleted" }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+
+          return new Response(JSON.stringify({
+            success: true,
+            message: "User permanently deleted and workstation terminal freed for other users."
+          }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
         } catch (e) {
           return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
         }

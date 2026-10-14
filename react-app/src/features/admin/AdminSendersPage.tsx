@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import {
   getUsers, resetUserHardwareLock, getAllSendersMetrics,
-  SenderMetrics, addUser, deleteUser, BRANCH_SCHOOL_MAP
+  SenderMetrics, addUser, deleteUser, BRANCH_SCHOOL_MAP, initStore
 } from '@/lib/store';
 
 // Default campus mapping
@@ -23,6 +23,8 @@ const OPERATOR_CAMPUS_MAP: Record<string, string> = {
   kal: 'Adika Youth',
   rob: 'School of America 2',
   beki: 'Ferway',
+  biruk1: 'Sena Yerosen',
+  siliconlabstech: 'Sena Yerosen',
   aman: 'Warka',
   henok: 'Yacine',
   yonas: 'Debebech',
@@ -51,6 +53,7 @@ export const AdminSendersPage: React.FC = () => {
 
   useEffect(() => {
     loadSenders();
+    initStore().then(() => loadSenders()).catch(() => {});
     const handleSync = () => loadSenders();
     window.addEventListener('studentbridge_datachange', handleSync);
     window.addEventListener('studentbridge_userchange', handleSync);
@@ -65,7 +68,7 @@ export const AdminSendersPage: React.FC = () => {
     resetUserHardwareLock(sender.id);
     resetUserHardwareLock(sender.username);
     resetUserHardwareLock(sender.email);
-    setToastMessage(`Hardware device disconnected for operator "${sender.username}". Terminal is now unbound.`);
+    setToastMessage(`Hardware terminal disconnected for operator "${sender.username}". Workstation is now unbound and freed.`);
     loadSenders();
     setTimeout(() => setToastMessage(null), 4000);
   };
@@ -76,7 +79,7 @@ export const AdminSendersPage: React.FC = () => {
     deleteUser(deleteTarget.id);
     deleteUser(deleteTarget.username);
     deleteUser(deleteTarget.email);
-    setToastMessage(`Operator "${deleteTarget.username}" permanently removed from the system.`);
+    setToastMessage(`Operator "${deleteTarget.username}" permanently removed. Workstation is now fully unlocked for other users.`);
     setDeleteTarget(null);
     loadSenders();
     setTimeout(() => setToastMessage(null), 4000);
@@ -87,10 +90,11 @@ export const AdminSendersPage: React.FC = () => {
     e.preventDefault();
     if (!inviteName.trim() || !inviteEmail.trim()) return;
     const cleanUsername = inviteName.trim().toLowerCase().replace(/\s+/g, '');
+    const cleanEmail = inviteEmail.trim().toLowerCase();
     addUser({
-      id: `usr-${Date.now()}`,
+      id: `usr-${cleanUsername}-${Date.now().toString(36)}`,
       username: cleanUsername,
-      email: inviteEmail.trim(),
+      email: cleanEmail,
       password: invitePassword.trim() || '12345678',
       role: 'SENDER',
       boundDeviceId: null,
@@ -233,16 +237,15 @@ export const AdminSendersPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleDisconnectDevice(s)}
-                          disabled={!s.boundDeviceId}
-                          className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 ${
+                          className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs active:scale-95 ${
                             s.boundDeviceId
-                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 cursor-pointer shadow-xs'
-                              : 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                              : 'bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-900 border-slate-300 hover:border-amber-300'
                           }`}
                           title="Disconnect locked device to allow pairing on new terminal"
                         >
-                          <Unlink className="w-3.5 h-3.5" />
-                          <span>Disconnect Device</span>
+                          <Unlink className="w-3.5 h-3.5 text-amber-700" />
+                          <span>{s.boundDeviceId ? 'Disconnect Device' : 'Reset Lock'}</span>
                         </button>
 
                         {/* 2. Delete Operator Button */}

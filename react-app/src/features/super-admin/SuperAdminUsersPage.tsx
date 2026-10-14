@@ -57,10 +57,11 @@ export const SuperAdminUsersPage: React.FC = () => {
   };
 
   const handleDeleteUser = (userId: string, email: string) => {
-    if (window.confirm(`Are you sure you want to remove account "${email}" from the system?`)) {
+    if (window.confirm(`Are you sure you want to remove account "${email}" from the system? This will also unbind and free any linked workstation.`)) {
       deleteUser(userId);
+      deleteUser(email);
       loadData();
-      setToastMessage(`Account "${email}" removed from directory.`);
+      setToastMessage(`Account "${email}" permanently removed and workstation unlocked.`);
       setTimeout(() => setToastMessage(null), 4000);
     }
   };

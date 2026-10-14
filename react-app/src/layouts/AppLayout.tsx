@@ -62,7 +62,7 @@ export const AppLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0B1118] flex font-sans selection:bg-[#9EE617] selection:text-[#062404]">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0B1118] flex font-sans selection:bg-[#9EE617] selection:text-[#062404] w-full max-w-full overflow-x-hidden">
       {/* Role-Specific Persistent Sidebar */}
       <Sidebar
         currentStation={currentStation}
@@ -76,7 +76,7 @@ export const AppLayout: React.FC = () => {
       />
 
       {/* Main Content Area with Header */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen w-full max-w-full overflow-x-hidden">
         <Header
           currentStation={currentStation}
           onStationChange={handleStationChange}
@@ -84,8 +84,8 @@ export const AppLayout: React.FC = () => {
           isSidebarOpen={typeof window !== 'undefined' && window.innerWidth < 1024 ? mobileSidebarOpen : desktopSidebarOpen}
         />
 
-        <main className="flex-1 min-w-0 bg-[#F8FAFC] p-3 sm:p-5 lg:p-6 overflow-y-auto">
-          <div className="max-w-[1780px] mx-auto w-full">
+        <main className="flex-1 min-w-0 bg-[#F8FAFC] p-3 sm:p-5 lg:p-6 overflow-y-auto overflow-x-hidden w-full max-w-full">
+          <div className="max-w-[1780px] mx-auto w-full overflow-x-hidden">
             <Outlet />
           </div>
         </main>

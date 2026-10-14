@@ -993,6 +993,39 @@ export const ReceiverStudentsPage: React.FC = () => {
     }
   };
 
+  // Bulk Selected Deletion Handler
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  const executeBulkDelete = async (permanent: boolean) => {
+    if (selectedIds.size === 0) return;
+    setIsBulkDeleting(true);
+    const targetIds = Array.from(selectedIds);
+    try {
+      if (permanent) {
+        setStudents(prev => prev.filter(s => !selectedIds.has(s.studentId) && !selectedIds.has(s.id)));
+      } else {
+        setStudents(prev => prev.map(s => {
+          if (selectedIds.has(s.studentId) || selectedIds.has(s.id)) {
+            return { ...s, receiverHidden: true, hiddenAt: new Date().toISOString() };
+          }
+          return s;
+        }));
+      }
+
+      for (const sid of targetIds) {
+        await deleteStudent(sid, permanent);
+      }
+      setSelectedIds(new Set());
+      setIsBulkDeleteModalOpen(false);
+      await loadData();
+    } catch (err) {
+      console.error('Bulk delete error:', err);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-5 pb-16 animate-in fade-in duration-200">
       {/* Page Header */}
@@ -1101,6 +1134,16 @@ export const ReceiverStudentsPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsBulkDeleteModalOpen(true)}
+              className="py-1.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              title="Delete or hide selected student records"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Selected ({selectedIds.size})</span>
+            </button>
+
             <button
               type="button"
               onClick={() => downloadSelectedPhotosZip()}
@@ -2188,6 +2231,86 @@ export const ReceiverStudentsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* =========================================================================
+          BULK DELETE MODAL (Selected Students Deletion)
+         ========================================================================= */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-[#CBD5E1] rounded-2xl max-w-md w-full overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-[#E2E8F0] flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2 text-rose-600">
+                <Trash2 className="w-5 h-5" />
+                <h3 className="font-heading font-black text-base text-[#0B1118]">
+                  Delete {selectedIds.size} Selected Students
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-black cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3 bg-slate-100 rounded-xl">
+                <div className="font-bold text-[#0B1118] text-sm">
+                  {selectedIds.size} student record{selectedIds.size === 1 ? '' : 's'} selected
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Choose whether to temporarily hide these records or permanently erase them from both the active station and the master server.
+                </p>
+              </div>
+
+              {/* Temporary Hide Selected */}
+              <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50 space-y-2">
+                <div className="font-bold text-amber-900">Temporary Hide Selected</div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Removes selected students from active view. Records remain safe in the repository and can be restored anytime.
+                </p>
+                <button
+                  type="button"
+                  disabled={isBulkDeleting}
+                  onClick={() => executeBulkDelete(false)}
+                  className="w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs cursor-pointer shadow-xs transition-colors"
+                >
+                  {isBulkDeleting ? 'Updating records...' : `Hide ${selectedIds.size} Records from Directory`}
+                </button>
+              </div>
+
+              {/* Permanent Purge Selected */}
+              <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50 space-y-2">
+                <div className="font-bold text-rose-900">Permanent Purge Selected</div>
+                <p className="text-[11px] text-rose-800 leading-relaxed">
+                  Irreversibly deletes selected students from database and purges photos from storage bucket.
+                </p>
+                <button
+                  type="button"
+                  disabled={isBulkDeleting}
+                  onClick={() => executeBulkDelete(true)}
+                  className="w-full py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-colors"
+                >
+                  {isBulkDeleting ? 'Erasing records...' : `Permanently Delete ${selectedIds.size} Records`}
+                </button>
+              </div>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  disabled={isBulkDeleting}
+                  onClick={() => setIsBulkDeleteModalOpen(false)}
+                  className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* =========================================================================
           MISTAKE ANALYZER POP-UP MODAL (Screen Overlay in Student Directory)
          ========================================================================= */}

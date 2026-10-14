@@ -50,6 +50,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
   const [brightness, setBrightness] = useState<number>(100);
   const [contrast, setContrast] = useState<number>(100);
   const [saturation, setSaturation] = useState<number>(100);
+  const [isAutoEnhanced, setIsAutoEnhanced] = useState<boolean>(false);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [showFineTune, setShowFineTune] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -124,6 +125,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     setBrightness(100);
     setContrast(100);
     setSaturation(100);
+    setIsAutoEnhanced(false);
     setPan({ x: 0, y: 0 });
     setIsSaving(false);
     setAspectRatio('FREE');
@@ -525,11 +527,19 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     };
   }, [dragAction, handleDragMove]);
 
-  // Auto-Enhance Preset
+  // Auto-Enhance Preset (Toggleable with clear visual feedback)
   const handleAutoEnhance = () => {
-    setBrightness(106);
-    setContrast(112);
-    setSaturation(108);
+    if (!isAutoEnhanced) {
+      setBrightness(115);
+      setContrast(118);
+      setSaturation(110);
+      setIsAutoEnhanced(true);
+    } else {
+      setBrightness(100);
+      setContrast(100);
+      setSaturation(100);
+      setIsAutoEnhanced(false);
+    }
   };
 
   // Reset to default calibration
@@ -539,6 +549,7 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
     setBrightness(100);
     setContrast(100);
     setSaturation(100);
+    setIsAutoEnhanced(false);
     setAspectRatio('FREE');
     aspectRatioRef.current = 'FREE';
     userHasInteractedRef.current = false;
@@ -676,11 +687,15 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
             <button
               type="button"
               onClick={handleAutoEnhance}
-              className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-              title="Auto-Enhance Lighting & Contrast"
+              className={`px-3 py-1.5 rounded-xl border text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                isAutoEnhanced
+                  ? 'bg-[#85E510] text-[#062404] border-[#85E510] shadow-[0_0_12px_rgba(133,229,16,0.4)]'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/40 text-amber-300'
+              }`}
+              title={isAutoEnhanced ? "Auto-Enhance Active (Click to Reset)" : "Auto-Enhance Lighting & Contrast"}
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Enhance</span>
+              <Sparkles className={`w-3.5 h-3.5 ${isAutoEnhanced ? 'text-[#062404]' : 'text-amber-400'}`} />
+              <span>{isAutoEnhanced ? 'Enhanced ✓' : 'Auto-Enhance'}</span>
             </button>
 
             <button
@@ -987,7 +1002,10 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                   min="50"
                   max="150"
                   value={brightness}
-                  onChange={(e) => setBrightness(Number(e.target.value))}
+                  onChange={(e) => {
+                    setBrightness(Number(e.target.value));
+                    setIsAutoEnhanced(false);
+                  }}
                   className="w-40 accent-[#85E510] cursor-pointer"
                 />
               </div>
@@ -1002,7 +1020,10 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                   min="50"
                   max="150"
                   value={contrast}
-                  onChange={(e) => setContrast(Number(e.target.value))}
+                  onChange={(e) => {
+                    setContrast(Number(e.target.value));
+                    setIsAutoEnhanced(false);
+                  }}
                   className="w-40 accent-[#85E510] cursor-pointer"
                 />
               </div>
@@ -1017,7 +1038,10 @@ export const PhoneCropModal: React.FC<PhoneCropModalProps> = ({
                   min="50"
                   max="150"
                   value={saturation}
-                  onChange={(e) => setSaturation(Number(e.target.value))}
+                  onChange={(e) => {
+                    setSaturation(Number(e.target.value));
+                    setIsAutoEnhanced(false);
+                  }}
                   className="w-40 accent-[#85E510] cursor-pointer"
                 />
               </div>
