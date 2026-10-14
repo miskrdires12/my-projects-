@@ -46,10 +46,10 @@ export const ReceiverStudentsPage: React.FC = () => {
   // Selected Students for Bulk Operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Sorting State for Student ID, Grade & Sec, Date Transmitted
+  // Sorting State for Student ID, Grade & Sec, Date Transmitted (Default: Date Transmitted from new to old)
   type SortField = 'studentId' | 'grade' | 'createdAt';
-  const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortField, setSortField] = useState<SortField | null>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const handleToggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -378,21 +378,24 @@ export const ReceiverStudentsPage: React.FC = () => {
   };
 
   const sortedFiltered = useMemo(() => {
-    if (!sortField) return filtered;
     return [...filtered].sort((a, b) => {
       let comparison = 0;
       if (sortField === 'studentId') {
         comparison = (a.studentId || '').localeCompare(b.studentId || '', undefined, { numeric: true });
+        return sortOrder === 'asc' ? comparison : -comparison;
       } else if (sortField === 'grade') {
         const gradeA = `${a.grade || ''} ${a.department || ''}`.trim();
         const gradeB = `${b.grade || ''} ${b.department || ''}`.trim();
         comparison = gradeA.localeCompare(gradeB, undefined, { numeric: true });
-      } else if (sortField === 'createdAt') {
+        return sortOrder === 'asc' ? comparison : -comparison;
+      } else {
+        // Default sort by Date Transmitted (createdAt) from newest to oldest
         const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         comparison = timeA - timeB;
+        const effectiveOrder = sortField === 'createdAt' ? sortOrder : 'desc';
+        return effectiveOrder === 'asc' ? comparison : -comparison;
       }
-      return sortOrder === 'asc' ? comparison : -comparison;
     });
   }, [filtered, sortField, sortOrder]);
 

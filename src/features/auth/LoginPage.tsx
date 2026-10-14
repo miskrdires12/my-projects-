@@ -98,9 +98,13 @@ export const LoginPage: React.FC = () => {
         if (edgeRes.status === 403 && !isSuperAdminMaster) {
           const errData = await edgeRes.json().catch(() => ({}));
           const bound = errData.boundDeviceId || 'Registered Terminal';
-          setError(
-            `Access Denied: Account "${user.email}" is strictly hardware-locked to terminal (${bound}). Only Super Administrators have authority to disconnect or reassign terminals.`
-          );
+          const msg = errData.message || `Account "${user.email}" is strictly hardware-locked to terminal (${bound}). Only Super Administrators have authority to disconnect or reassign terminals.`;
+          setError(msg.startsWith('Access Denied:') ? msg : `Access Denied: ${msg}`);
+          setIsSubmitting(false);
+          return;
+        } else if (edgeRes.status === 401) {
+          const errData = await edgeRes.json().catch(() => ({}));
+          setError(errData.message || 'Authentication failed: Invalid credentials or account has been removed.');
           setIsSubmitting(false);
           return;
         } else if (edgeRes.ok) {
@@ -120,6 +124,7 @@ export const LoginPage: React.FC = () => {
         const lockCheck = checkDeviceLock(user, deviceId);
         if (!lockCheck.allowed) {
           setError(
+            lockCheck.reason ||
             `Access Denied: Account "${user.email}" is strictly hardware-locked to another workstation. Only Super Administrators have permission to disconnect or reassign devices.`
           );
           setIsSubmitting(false);
@@ -127,8 +132,8 @@ export const LoginPage: React.FC = () => {
         }
       }
 
-      // First-time hardware binding:
-      if (!user.boundDeviceId || isSuperAdminMaster) {
+      // Hardware binding: if unbound, or if already bound to this same device, ensure locks and occupations are registered
+      if (!user.boundDeviceId || user.boundDeviceId === deviceId || isSuperAdminMaster) {
         setUserHardwareLock(user.id, deviceId);
         user.boundDeviceId = deviceId;
       }
