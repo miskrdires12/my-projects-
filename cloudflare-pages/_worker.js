@@ -1471,31 +1471,42 @@ export default {
     if ((url.pathname === "/api/auth/unbind" || url.pathname === "/api/auth/reset-lock") && request.method === "POST") {
       try {
         const body = await request.json();
-        const { userId, email } = body;
-        const target = userId || email;
+        const { userId, email, username } = body;
+        const target = userId || email || username;
 
         if (email) edgeDeviceLocks.delete(email.toLowerCase());
         if (userId) edgeDeviceLocks.delete(userId);
+        if (username) edgeDeviceLocks.delete(username.toLowerCase());
+        if (target) {
+          edgeDeviceLocks.delete(target.toLowerCase());
+          edgeDeviceLocks.delete(target);
+        }
 
         if (cachedUsers) {
           cachedUsers.forEach(u => {
-            if ((u.id && u.id === userId) || (u.email && u.email.toLowerCase() === (email || "").toLowerCase())) {
+            if (
+              (u.id && (u.id === userId || u.id === target)) ||
+              (u.email && u.email.toLowerCase() === (email || target || "").toLowerCase()) ||
+              (u.username && u.username.toLowerCase() === (username || target || "").toLowerCase())
+            ) {
               u.boundDeviceId = null;
             }
           });
         }
 
-        await fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(target)},email.eq.${encodeURIComponent(target)})`, {
-          method: "PATCH",
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": `Bearer ${SUPABASE_KEY}`,
-            "Content-Type": "application/json",
-            "Content-Profile": "cloudflare",
-            "Accept-Profile": "cloudflare"
-          },
-          body: JSON.stringify({ boundDeviceId: null, updatedAt: new Date().toISOString() })
-        });
+        if (target) {
+          await fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(target)},email.ilike.${encodeURIComponent(target)},username.ilike.${encodeURIComponent(target)})`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              "Content-Profile": "cloudflare",
+              "Accept-Profile": "cloudflare"
+            },
+            body: JSON.stringify({ boundDeviceId: null, updatedAt: new Date().toISOString() })
+          }).catch(() => {});
+        }
 
         return new Response(JSON.stringify({ success: true, message: "Hardware device lock reset successfully." }), {
           headers: { "Content-Type": "application/json", ...corsHeaders }
@@ -1529,8 +1540,14 @@ export default {
         // Overlay edge device locks and role specifications
         users.forEach(u => {
           const em = (u.email || "").toLowerCase();
+          const un = (u.username || "").toLowerCase();
+          const uid = u.id;
           if (edgeDeviceLocks.has(em)) {
             u.boundDeviceId = edgeDeviceLocks.get(em);
+          } else if (edgeDeviceLocks.has(un)) {
+            u.boundDeviceId = edgeDeviceLocks.get(un);
+          } else if (uid && edgeDeviceLocks.has(uid)) {
+            u.boundDeviceId = edgeDeviceLocks.get(uid);
           }
           if (em === "miskrdires11@gmail.com" || em === "abeni1@gmail.com") {
             u.role = "SUPER_ADMIN";
@@ -1555,14 +1572,44 @@ export default {
           if (body.boundDeviceId) {
             if (body.email) edgeDeviceLocks.set(body.email.toLowerCase(), body.boundDeviceId);
             if (body.id) edgeDeviceLocks.set(body.id, body.boundDeviceId);
+            if (body.username) edgeDeviceLocks.set(body.username.toLowerCase(), body.boundDeviceId);
+          } else if (body.boundDeviceId === null) {
+            if (body.email) edgeDeviceLocks.delete(body.email.toLowerCase());
+            if (body.id) edgeDeviceLocks.delete(body.id);
+            if (body.username) edgeDeviceLocks.delete(body.username.toLowerCase());
           }
 
           // If user already exists in cachedUsers, update it
           if (cachedUsers) {
-            const existing = cachedUsers.find(u => (body.id && u.id === body.id) || (body.email && u.email?.toLowerCase() === body.email?.toLowerCase()));
+            const existing = cachedUsers.find(u =>
+              (body.id && u.id === body.id) ||
+              (body.email && u.email?.toLowerCase() === body.email?.toLowerCase()) ||
+              (body.username && u.username?.toLowerCase() === body.username?.toLowerCase())
+            );
             if (existing) {
-              if (body.boundDeviceId) existing.boundDeviceId = body.boundDeviceId;
+              if (body.boundDeviceId !== undefined) existing.boundDeviceId = body.boundDeviceId;
               if (body.role) existing.role = body.role;
+              if (body.school) existing.school = body.school;
+
+              // Also sync update to Supabase
+              const patchTarget = body.id || body.email || body.username;
+              if (patchTarget) {
+                fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(patchTarget)},email.ilike.${encodeURIComponent(patchTarget)},username.ilike.${encodeURIComponent(patchTarget)})`, {
+                  method: "PATCH",
+                  headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "Content-Type": "application/json",
+                    "Content-Profile": "cloudflare",
+                    "Accept-Profile": "cloudflare"
+                  },
+                  body: JSON.stringify({
+                    boundDeviceId: body.boundDeviceId !== undefined ? body.boundDeviceId : existing.boundDeviceId,
+                    role: body.role || existing.role,
+                    updatedAt: new Date().toISOString()
+                  })
+                }).catch(() => {});
+              }
               return new Response(JSON.stringify(existing), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } });
             }
           }
@@ -1575,6 +1622,7 @@ export default {
             role: body.role || "SENDER",
             boundDeviceId: body.boundDeviceId || null,
             boundDeviceInfo: body.boundDeviceInfo || null,
+            school: body.school || null,
             workSessionCount: 0,
             totalWorkMinutes: 0,
             recordsSentSingle: body.recordsSentSingle || 0,
@@ -1582,6 +1630,10 @@ export default {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
+
+          if (cachedUsers) {
+            cachedUsers.unshift(newUser);
+          }
 
           await fetch(`${SUPABASE_URL}/rest/v1/users`, {
             method: "POST",
@@ -1596,6 +1648,31 @@ export default {
           }).catch(() => {});
 
           return new Response(JSON.stringify(newUser), { status: 201, headers: { "Content-Type": "application/json", ...corsHeaders } });
+        } catch (e) {
+          return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
+        }
+      }
+
+      if (request.method === "DELETE") {
+        try {
+          const delId = url.searchParams.get("id");
+          if (delId) {
+            const target = delId.toLowerCase();
+            if (cachedUsers) {
+              const dIdx = cachedUsers.findIndex(u => (u.id && u.id.toLowerCase() === target) || (u.email && u.email.toLowerCase() === target) || (u.username && u.username.toLowerCase() === target));
+              if (dIdx !== -1) cachedUsers.splice(dIdx, 1);
+            }
+            edgeDeviceLocks.delete(target);
+            await fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(delId)},email.ilike.${encodeURIComponent(delId)},username.ilike.${encodeURIComponent(delId)})`, {
+              method: "DELETE",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Accept-Profile": "cloudflare"
+              }
+            }).catch(() => {});
+          }
+          return new Response(JSON.stringify({ success: true, message: "User deleted" }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
         } catch (e) {
           return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
         }
