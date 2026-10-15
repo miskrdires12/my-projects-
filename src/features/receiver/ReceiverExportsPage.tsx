@@ -70,7 +70,7 @@ export const ReceiverExportsPage: React.FC = () => {
           `"${s.studentId}"`,
           `"${s.sex || 'Male'}"`,
           `"${s.grade || ''}"`,
-          `"${s.bloodType || 'O+'}"`,
+          `"${s.bloodType || 'Unknown'}"`,
           `"${s.phone || ''}"`,
           `"${photoLocalPath.replace(/"/g, '""')}"`,
           `"${qrName}"`
@@ -103,7 +103,7 @@ export const ReceiverExportsPage: React.FC = () => {
           'StudentId': s.studentId,
           'Sex': s.sex || 'Male',
           'Grade': s.grade || '',
-          'BloodType': s.bloodType || 'O+',
+          'BloodType': s.bloodType || 'Unknown',
           'Phone': s.phone || '',
           '@photo': photoLocalPath,
           '@qr': qrName,

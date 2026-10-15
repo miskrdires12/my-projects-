@@ -527,7 +527,7 @@ export const ReceiverIdProductionPage: React.FC = () => {
 
                           <div className="flex items-center gap-1.5">
                             <span className="text-[#64748B] font-semibold text-[10px]">Blood Type:</span>
-                            <span className="font-bold text-red-600 font-mono">{selectedStudent.bloodType || 'O+'}</span>
+                            <span className="font-bold text-red-600 font-mono">{selectedStudent.bloodType || 'Unknown'}</span>
                             <span className="text-[#94A3B8]">&bull;</span>
                             <span className="text-[#64748B] font-semibold text-[10px]">Sex:</span>
                             <span className="font-bold text-[#202833]">{selectedStudent.sex || 'M'}</span>

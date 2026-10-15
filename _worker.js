@@ -691,7 +691,7 @@ export default {
           school: school.trim(),
           address: body.address || body.location || "Addis Ababa",
           phone: cleanPhone,
-          bloodType: body.bloodType || "O+",
+          bloodType: body.bloodType || "Unknown",
           nationality: body.nationality || "Ethiopian",
           academicYear: "2026-2027",
           photoPath: photoPath,

@@ -192,6 +192,7 @@ export const StudentRegistrationPage: React.FC = () => {
     }
     setIsStreamReady(false);
     setIsCameraActive(false);
+    setIsCameraModalOpen(false);
   };
 
   useEffect(() => {
@@ -200,11 +201,29 @@ export const StudentRegistrationPage: React.FC = () => {
     };
   }, []);
 
+  // Ensure video element plays stream as soon as modal opens or stream is ready
+  useEffect(() => {
+    if (isCameraModalOpen && cameraStream && videoRef.current) {
+      const v = videoRef.current;
+      if (v.srcObject !== cameraStream) {
+        v.srcObject = cameraStream;
+      }
+      v.muted = true;
+      v.playsInline = true;
+      v.play().then(() => {
+        setIsStreamReady(true);
+      }).catch((err) => {
+        console.warn('Camera play warning in effect:', err);
+        setIsStreamReady(true);
+      });
+    }
+  }, [cameraStream, isCameraModalOpen]);
+
   // Start Webcam with multi-tier fallback & camera facing support
   const startCamera = async (facing: 'user' | 'environment' = cameraFacing) => {
     setCameraError(null);
     setIsStreamReady(false);
-    stopCamera();
+    setIsCameraModalOpen(true);
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -239,10 +258,21 @@ export const StudentRegistrationPage: React.FC = () => {
       setIsCameraActive(true);
       setCameraFacing(facing);
 
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
+        videoRef.current.play().then(() => {
+          setIsStreamReady(true);
+        }).catch(() => {
+          setIsStreamReady(true);
+        });
+      }
+
       // Timeout safety: never let user remain permanently blocked behind loading spinner
       setTimeout(() => {
         setIsStreamReady(true);
-      }, 900);
+      }, 700);
     } catch (err: any) {
       console.warn('Camera access issue:', err);
       let msg = 'Camera access unavailable. Please check camera permissions or upload a portrait photo.';
@@ -259,20 +289,25 @@ export const StudentRegistrationPage: React.FC = () => {
   // Flip Camera (Front <-> Back)
   const toggleCameraFacing = () => {
     const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
+    setCameraFacing(nextFacing);
     startCamera(nextFacing);
   };
 
   // Take Snapshot from video
   const capturePhoto = () => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) {
+    if (!video) {
       alert('Camera feed is still initializing. Please wait a moment.');
       return;
     }
 
-    const vw = video.videoWidth || 640;
-    const vh = video.videoHeight || 480;
+    let canvas = canvasRef.current;
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+    }
+
+    const vw = video.videoWidth || video.clientWidth || 640;
+    const vh = video.videoHeight || video.clientHeight || 480;
 
     canvas.width = vw;
     canvas.height = vh;
@@ -370,7 +405,7 @@ export const StudentRegistrationPage: React.FC = () => {
         grade: parsedGradeInfo.cleanGrade,
         department: parsedGradeInfo.cleanSection || undefined,
         phone: phone.trim(),
-        bloodType: bloodType || undefined,
+        bloodType: bloodType && bloodType.trim() ? bloodType.trim() : 'Unknown',
         school: school.trim(),
         location,
         country: 'Ethiopia',
@@ -893,11 +928,11 @@ export const StudentRegistrationPage: React.FC = () => {
                 </div>
                 <div className="relative">
                   <select
-                    value={bloodType}
+                    value={bloodType || 'Unknown'}
                     onChange={(e) => setBloodType(e.target.value)}
                     className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] cursor-pointer appearance-none transition-all"
                   >
-                    <option value="">-- No Blood Group Selected --</option>
+                    <option value="Unknown">Unknown (Not Specified)</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
                     <option value="B+">B+</option>
@@ -1172,12 +1207,41 @@ export const StudentRegistrationPage: React.FC = () => {
                 </div>
               </div>
 
-              {!isStreamReady && (
+              {cameraError ? (
+                <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-white text-xs p-6 text-center gap-3 z-30">
+                  <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-white mb-1">Camera Notice</h4>
+                    <p className="text-slate-300 text-xs max-w-xs">{cameraError}</p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => startCamera(cameraFacing)}
+                      className="px-4 py-2 rounded-xl bg-[#85E510] text-[#062404] font-bold text-xs cursor-pointer"
+                    >
+                      Try Again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopCamera();
+                        fileInputRef.current?.click();
+                      }}
+                      className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 font-bold text-xs hover:bg-slate-700 cursor-pointer"
+                    >
+                      Upload File Instead
+                    </button>
+                  </div>
+                </div>
+              ) : !isStreamReady ? (
                 <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center text-white text-xs gap-2 z-20 transition-opacity">
                   <RefreshCw className="w-6 h-6 animate-spin text-[#85E510]" />
                   <span className="font-semibold text-slate-200">Initializing live optical feed...</span>
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Modal Footer Controls */}

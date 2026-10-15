@@ -89,7 +89,7 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [editSchool, setEditSchool] = useState('YMS');
   const [editPhone, setEditPhone] = useState('');
   const [editDob, setEditDob] = useState('');
-  const [editBloodType, setEditBloodType] = useState('O+');
+  const [editBloodType, setEditBloodType] = useState('Unknown');
   const [editGuardianName, setEditGuardianName] = useState('');
   const [editEmergencyPhone, setEditEmergencyPhone] = useState('');
   const [editBusUsage, setEditBusUsage] = useState<'Yes' | 'No'>('Yes');
@@ -540,7 +540,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     setEditSchool(validSchools.includes(s.school || '') ? s.school! : validSchools[0]);
     setEditPhone(s.phone || '');
     setEditDob(s.dateOfBirth ? s.dateOfBirth.substring(0, 10) : '2010-01-01');
-    setEditBloodType(s.bloodType || 'O+');
+    setEditBloodType(s.bloodType || 'Unknown');
     setEditGuardianName(s.guardianFullName || '');
     setEditEmergencyPhone(s.emergencyContactPhone || '');
     setEditBusUsage(s.schoolBusUsage === 'No' ? 'No' : 'Yes');
@@ -870,7 +870,7 @@ export const ReceiverStudentsPage: React.FC = () => {
           'StudentId': s.studentId,
           'Sex': s.sex || 'Male',
           'Grade': s.grade || '',
-          'BloodType': s.bloodType || 'O+',
+          'BloodType': s.bloodType || 'Unknown',
           'Phone': s.phone || '',
           '@photo': photoLocalPath,
           '@qr': qrName,
@@ -1838,7 +1838,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">Blood Group:</span>
-                    <span className="font-bold text-[#0B1118]">{detailStudent.bloodType || 'O+'}</span>
+                    <span className="font-bold text-[#0B1118]">{detailStudent.bloodType || 'Unknown'}</span>
                   </div>
                 </div>
               )}
@@ -1995,6 +1995,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                     onChange={(e) => setEditBloodType(e.target.value)}
                     className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
                   >
+                    <option value="Unknown">Unknown</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
                     <option value="B+">B+</option>
