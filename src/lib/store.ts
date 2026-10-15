@@ -11,7 +11,7 @@ export const BRANCH_SCHOOL_MAP: Record<string, string[]> = {
     'Adika Youth', 'Warka', 'Ferway',
     'YMS', 'School of America'
   ],
-  'Adama': ['Yacine', 'Debebech', 'Sena Yerosen'],
+  'Adama': ['Sena Yerosen', 'Yacine', 'Debebech'],
   'Mojo': ['Mojo'],
   'Harar': [
     'High Tech 1', 'High Tech 2', 'High Tech 3', 'High Tech 4',
@@ -547,7 +547,30 @@ export async function initStore(): Promise<void> {
     }
   } catch (e) {}
 
-  // 5. Sync bound devices from localStorage if previously updated
+  // 5. Sync bound devices and custom provisioned users from localStorage
+  try {
+    const customUsers = localStorage.getItem('sb_custom_users');
+    if (customUsers) {
+      const parsed: (User & { password?: string })[] = JSON.parse(customUsers);
+      if (Array.isArray(parsed)) {
+        parsed.forEach(cu => {
+          const em = (cu.email || '').toLowerCase().trim();
+          const un = (cu.username || '').toLowerCase().trim();
+          const existing = memoryUsers.find(mu =>
+            (em && mu.email && mu.email.toLowerCase() === em) ||
+            (un && mu.username && mu.username.toLowerCase() === un) ||
+            mu.id === cu.id
+          );
+          if (existing) {
+            Object.assign(existing, cu);
+          } else {
+            memoryUsers.push(cu);
+          }
+        });
+      }
+    }
+  } catch (e) {}
+
   try {
     const savedLocks = localStorage.getItem('sb_device_locks');
     if (savedLocks) {
@@ -910,7 +933,6 @@ export function addUser(newUser: User & { password?: string; branch?: string; sc
   // Broadcast event
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('studentbridge_userchange', { detail: newUser }));
-    window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
   }
 }
 
@@ -1501,7 +1523,6 @@ export interface SenderMetrics {
   email: string;
   role: string;
   school?: string;
-  branch?: string;
   boundDeviceId: string | null;
   status: 'Active' | 'Idle' | 'Locked';
   efficiency: number; // Percentage e.g. 98.4%
@@ -1511,10 +1532,6 @@ export interface SenderMetrics {
   month: number;
   total: number;
   lastActive: string;
-  lastTransmissionTime: string;
-  transmissionDelayMs: number;
-  transmissionDelayDisplay: string;
-  paceDisplay: string;
 }
 
 export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
@@ -1562,43 +1579,12 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
     ? (today > 0 ? 'Active' : 'Idle')
     : 'Active';
 
-  // Find exact last transmission timestamp
-  let lastTransTime = 'Today ' + new Date(now.getTime() - ((norm.length * 7) % 45 + 2) * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  if (matchingStudents.length > 0) {
-    const sortedTimes = matchingStudents
-      .map(s => s.createdAt ? new Date(s.createdAt).getTime() : 0)
-      .filter(t => t > 0)
-      .sort((a, b) => b - a);
-    if (sortedTimes.length > 0) {
-      const d = new Date(sortedTimes[0]);
-      lastTransTime = d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    }
-  }
-
-  // Realistic edge network delay telemetry (25ms - 95ms)
-  const hashVal = (norm.charCodeAt(0) * 13 + (norm.charCodeAt(norm.length - 1) || 0)) % 70;
-  const delayMs = 28 + hashVal;
-  const delayDisplay = `${delayMs}ms (${delayMs < 50 ? 'Ultra-Fast' : 'Optimal'})`;
-  const paceSeconds = 25 + (hashVal % 35);
-  const paceDisplay = `~${paceSeconds}s / record`;
-
-  // Resolve assigned school & branch
-  const assignedSchool = user?.school || (norm.includes('biruk') ? 'Sena Yerosen' : (norm.includes('silicon') ? 'Sena Yerosen' : (norm === 'beki' ? 'Ferway' : 'YMS 1')));
-  let assignedBranch = 'Addis Ababa';
-  for (const [br, schools] of Object.entries(BRANCH_SCHOOL_MAP)) {
-    if (schools.includes(assignedSchool)) {
-      assignedBranch = br;
-      break;
-    }
-  }
-
   return {
     id: user?.id || `usr-${norm}`,
     username: user?.username || senderIdentifier,
     email: user?.email || `${norm}@gmail.com`,
     role: user?.role || 'SENDER',
-    school: assignedSchool,
-    branch: assignedBranch,
+    school: user?.school || user?.branch,
     boundDeviceId: user?.boundDeviceId || null,
     status,
     efficiency,
@@ -1607,11 +1593,7 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
     week,
     month,
     total,
-    lastActive: (user as any)?.lastActiveAt || (user as any)?.lastLoginAt || new Date().toISOString(),
-    lastTransmissionTime: lastTransTime,
-    transmissionDelayMs: delayMs,
-    transmissionDelayDisplay: delayDisplay,
-    paceDisplay: paceDisplay
+    lastActive: (user as any)?.lastActiveAt || (user as any)?.lastLoginAt || new Date().toISOString()
   };
 }
 

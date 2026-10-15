@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users, Plus, Shield, Smartphone, Lock, Unlock, Search, X, CheckCircle2,
-  UserPlus, RefreshCw, KeyRound, Trash2, Download, Sparkles, Building2, MapPin,
-  Edit3, AlertTriangle
+  UserPlus, RefreshCw, KeyRound, Trash2, Download, Sparkles, Building2, MapPin, Edit3
 } from 'lucide-react';
 import {
   getUsers, resetUserHardwareLock, setUserHardwareLock, addUser, updateUser, deleteUser,
-  BRANCH_SCHOOL_MAP, DEFAULT_BRANCHES
+  BRANCH_SCHOOL_MAP, DEFAULT_BRANCHES, getOrCreateDeviceId
 } from '@/lib/store';
 import { User, UserRole } from '@/types';
 
@@ -26,18 +25,15 @@ export const SuperAdminUsersPage: React.FC = () => {
   const [newSchool, setNewSchool] = useState('YMS');
   const [newPassword, setNewPassword] = useState('12345678');
 
-  // Edit user modal states
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  // Edit user form states
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editUser, setEditUser] = useState<User | null>(null);
   const [editUsername, setEditUsername] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('SENDER');
   const [editBranch, setEditBranch] = useState('Addis Ababa');
   const [editSchool, setEditSchool] = useState('YMS');
   const [editPassword, setEditPassword] = useState('12345678');
-  const [editBoundDeviceId, setEditBoundDeviceId] = useState('');
-
-  // Delete modal state
-  const [deleteTargetUser, setDeleteTargetUser] = useState<User | null>(null);
 
   const loadData = () => {
     setUsers([...getUsers()]);
@@ -59,93 +55,55 @@ export const SuperAdminUsersPage: React.FC = () => {
   const handleEditBranchChange = (b: string) => {
     setEditBranch(b);
     const schools = BRANCH_SCHOOL_MAP[b] || [];
-    if (!schools.includes(editSchool)) {
-      setEditSchool(schools[0] || 'YMS');
-    }
+    setEditSchool(schools[0] || 'YMS');
   };
 
-  // 1. Lock Device
   const handleLockUser = (u: User) => {
-    const termId = u.boundDeviceId || `TERM-${u.username.toUpperCase()}-01`;
-    setUserHardwareLock(u.id, termId);
-    setUserHardwareLock(u.username, termId);
-    setUserHardwareLock(u.email, termId);
+    const devId = u.boundDeviceId || getOrCreateDeviceId();
+    setUserHardwareLock(u.id, devId);
     loadData();
-    setToastMessage(`Workstation locked to (${termId}) for ${u.username}.`);
+    setToastMessage(`Workstation locked for "${u.username}" (${devId.substring(0, 14)}...).`);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // 2. Unlock Device (Reset Hardware Lock)
-  const handleResetLock = (userId: string, username: string) => {
-    resetUserHardwareLock(userId);
+  const handleUnlockUser = (u: User) => {
+    resetUserHardwareLock(u.id);
     loadData();
-    setToastMessage(`Hardware terminal successfully unlocked and freed for ${username}.`);
+    setToastMessage(`Workstation unlocked for "${u.username}". Terminal is unbound.`);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // 3. Open Edit Modal
   const handleOpenEditUser = (u: User) => {
-    setEditingUser(u);
+    setEditUser(u);
     setEditUsername(u.username);
     setEditEmail(u.email);
     setEditRole(u.role);
-    const uBranch = (u as any).branch || 'Addis Ababa';
-    setEditBranch(uBranch);
-    setEditSchool((u as any).school || (BRANCH_SCHOOL_MAP[uBranch] ? BRANCH_SCHOOL_MAP[uBranch][0] : 'YMS'));
+    setEditBranch((u as any).branch || 'Addis Ababa');
+    setEditSchool((u as any).school || 'YMS');
     setEditPassword((u as any).password || '12345678');
-    setEditBoundDeviceId(u.boundDeviceId || '');
+    setEditModalOpen(true);
   };
 
-  // 4. Save Edited User
   const handleSaveEditUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editUser || !editEmail.trim()) return;
 
-    const cleanUsername = editUsername.trim().toLowerCase().replace(/\s+/g, '');
-    let cleanEmail = editEmail.trim().toLowerCase();
-    if (!cleanEmail.includes('@')) {
-      cleanEmail = `${cleanEmail}@gmail.com`;
-    }
+    const cleanUsername = editUsername.trim() || editEmail.split('@')[0];
+    const cleanEmail = editEmail.trim().toLowerCase();
 
-    const updates = {
+    updateUser(editUser.id, {
       username: cleanUsername,
       email: cleanEmail,
       role: editRole,
       branch: editBranch,
       school: editSchool,
-      password: editPassword.trim() || '12345678',
-      boundDeviceId: editBoundDeviceId.trim() || null
-    };
-
-    updateUser(editingUser.id, updates);
-    updateUser(editingUser.username, updates);
-    updateUser(editingUser.email, updates);
-
-    if (editBoundDeviceId.trim()) {
-      setUserHardwareLock(editingUser.id, editBoundDeviceId.trim());
-      setUserHardwareLock(cleanUsername, editBoundDeviceId.trim());
-      setUserHardwareLock(cleanEmail, editBoundDeviceId.trim());
-    } else if (editingUser.boundDeviceId) {
-      resetUserHardwareLock(editingUser.id);
-      resetUserHardwareLock(cleanUsername);
-      resetUserHardwareLock(cleanEmail);
-    }
+      password: editPassword.trim() || '12345678'
+    });
 
     loadData();
-    setEditingUser(null);
-    setToastMessage(`User profile for "${cleanUsername}" successfully updated.`);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
-  // 5. Delete User Confirmation
-  const confirmDeleteUser = () => {
-    if (!deleteTargetUser) return;
-    deleteUser(deleteTargetUser.id);
-    deleteUser(deleteTargetUser.email);
-    deleteUser(deleteTargetUser.username);
-    loadData();
-    setToastMessage(`Account "${deleteTargetUser.email}" permanently removed and workstation unlocked.`);
-    setDeleteTargetUser(null);
+    setEditModalOpen(false);
+    setEditUser(null);
+    setToastMessage(`Account for "${cleanUsername}" (${cleanEmail}) successfully updated.`);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
@@ -154,6 +112,16 @@ export const SuperAdminUsersPage: React.FC = () => {
     loadData();
     setToastMessage(`Updated role of account to ${targetRole}`);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleDeleteUser = (userId: string, email: string) => {
+    if (window.confirm(`Are you sure you want to remove account "${email}" from the system? This will also unbind and free any linked workstation.`)) {
+      deleteUser(userId);
+      deleteUser(email);
+      loadData();
+      setToastMessage(`Account "${email}" permanently removed and workstation unlocked.`);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
   };
 
   const handleCreateUser = (e: React.FormEvent) => {
@@ -180,10 +148,6 @@ export const SuperAdminUsersPage: React.FC = () => {
     };
 
     addUser(newUser);
-    // Clear residual hardware lock for seamless immediate login
-    resetUserHardwareLock(cleanUsername);
-    resetUserHardwareLock(cleanEmail);
-
     loadData();
 
     setModalOpen(false);
@@ -265,7 +229,7 @@ export const SuperAdminUsersPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-1">
-            Centralized operator account provisioning, instant email pass-through, universal password (12345678), and individual workstation lock controls
+            Centralized operator account provisioning, instant email pass-through, universal password (12345678), and workstation lock controls
           </p>
         </div>
 
@@ -351,7 +315,7 @@ export const SuperAdminUsersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Accounts Table with Edit, Lock, Unlock, Delete Icon Buttons */}
+      {/* Accounts Table */}
       <div className="bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -363,7 +327,7 @@ export const SuperAdminUsersPage: React.FC = () => {
                 <th className="py-3.5">Branch / School</th>
                 <th className="py-3.5">Workstation Terminal</th>
                 <th className="py-3.5">Role Assignment</th>
-                <th className="py-3.5 text-right pr-6">Account Actions</th>
+                <th className="py-3.5 text-right pr-6">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
@@ -399,9 +363,7 @@ export const SuperAdminUsersPage: React.FC = () => {
                     {/* Branch / School */}
                     <td className="py-3.5 text-slate-700">
                       <div className="font-semibold">{(u as any).branch || 'Addis Ababa'}</div>
-                      <div className="text-[10px] text-slate-400">
-                        {(u as any).school || 'YMS'} {(u as any).school === 'Sena Yerosen' ? '(Adama)' : ''}
-                      </div>
+                      <div className="text-[10px] text-slate-400">{(u as any).school || 'YMS'}</div>
                     </td>
 
                     {/* Terminal ID */}
@@ -429,51 +391,59 @@ export const SuperAdminUsersPage: React.FC = () => {
                       </select>
                     </td>
 
-                    {/* Actions: Edit, Lock, Unlock, Delete Icon Buttons */}
+                    {/* Actions: Edit, Lock, Unlock, Delete for ALL & EACH operator */}
                     <td className="py-3.5 text-right pr-6">
                       <div className="flex items-center justify-end gap-1.5">
-                        {/* 1. EDIT ICON BUTTON */}
+                        {/* 1. Edit */}
                         <button
                           type="button"
                           onClick={() => handleOpenEditUser(u)}
-                          title={`Edit account profile for ${u.username}`}
-                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-all cursor-pointer shadow-xs active:scale-95"
+                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1 text-[11px] font-bold"
+                          title="Edit user details & role"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
+                          <span className="hidden lg:inline">Edit</span>
                         </button>
 
-                        {/* 2. LOCK ICON BUTTON */}
+                        {/* 2. Lock */}
                         <button
                           type="button"
                           onClick={() => handleLockUser(u)}
-                          title={hasDevice ? `Locked to terminal: ${u.boundDeviceId}` : `Lock ${u.username} to hardware terminal`}
-                          className={`p-1.5 rounded-lg border transition-all cursor-pointer shadow-xs active:scale-95 ${
+                          className={`p-1.5 rounded-lg border transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1 text-[11px] font-bold ${
                             hasDevice
                               ? 'bg-amber-100 text-amber-900 border-amber-300'
-                              : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
                           }`}
+                          title="Lock workstation terminal"
                         >
-                          <Lock className="w-3.5 h-3.5" />
+                          <Lock className="w-3.5 h-3.5 text-amber-700" />
+                          <span className="hidden lg:inline">Lock</span>
                         </button>
 
-                        {/* 3. UNLOCK ICON BUTTON */}
+                        {/* 3. Unlock */}
                         <button
                           type="button"
-                          onClick={() => handleResetLock(u.id, u.username)}
-                          title={`Unlock and unbind workstation for ${u.username}`}
-                          className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-all cursor-pointer shadow-xs active:scale-95"
+                          onClick={() => handleUnlockUser(u)}
+                          className={`p-1.5 rounded-lg border transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1 text-[11px] font-bold ${
+                            !hasDevice
+                              ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                          }`}
+                          title="Unlock & unbind workstation terminal"
                         >
-                          <Unlock className="w-3.5 h-3.5" />
+                          <Unlock className="w-3.5 h-3.5 text-emerald-700" />
+                          <span className="hidden lg:inline">Unlock</span>
                         </button>
 
-                        {/* 4. DELETE ICON BUTTON */}
+                        {/* 4. Delete */}
                         <button
                           type="button"
-                          onClick={() => setDeleteTargetUser(u)}
-                          title={`Delete account for ${u.username}`}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-all cursor-pointer shadow-xs active:scale-95"
+                          onClick={() => handleDeleteUser(u.id, u.email)}
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs active:scale-95"
+                          title="Delete account"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
+                          <span className="hidden lg:inline">Delete</span>
                         </button>
                       </div>
                     </td>
@@ -484,144 +454,6 @@ export const SuperAdminUsersPage: React.FC = () => {
           </table>
         </div>
       </div>
-
-      {/* EDIT USER MODAL */}
-      {editingUser && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E2E8F0] rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <h3 className="font-heading font-black text-base text-[#202833] flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-blue-600" />
-                <span>Edit Account Details</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setEditingUser(null)}
-                className="p-1 rounded-lg hover:bg-[#F4F7F5] text-[#64748B] cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEditUser} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-[#202833] font-bold mb-1">Username</label>
-                <input
-                  type="text"
-                  required
-                  value={editUsername}
-                  onChange={(e) => setEditUsername(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs text-[#202833] font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[#202833] font-bold mb-1">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs text-[#202833] font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[#202833] font-bold mb-1">Station Role</label>
-                  <select
-                    value={editRole}
-                    onChange={(e) => setEditRole(e.target.value as UserRole)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#202833]"
-                  >
-                    <option value="SENDER">Sender Station</option>
-                    <option value="RECEIVER">Receiver Station</option>
-                    <option value="ADMIN">Admin Station</option>
-                    <option value="SUPER_ADMIN">Super Admin Station</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[#202833] font-bold mb-1">Branch</label>
-                  <select
-                    value={editBranch}
-                    onChange={(e) => handleEditBranchChange(e.target.value)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#202833]"
-                  >
-                    {DEFAULT_BRANCHES.map(b => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[#202833] font-bold mb-1">Assigned School</label>
-                <select
-                  value={editSchool}
-                  onChange={(e) => setEditSchool(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-semibold text-[#202833]"
-                >
-                  {(BRANCH_SCHOOL_MAP[editBranch] || ['YMS']).map(s => (
-                    <option key={s} value={s}>
-                      {s} {s === 'Sena Yerosen' ? '(Adama Branch)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[#202833] font-bold mb-1">Universal Password</label>
-                <input
-                  type="text"
-                  value={editPassword}
-                  onChange={(e) => setEditPassword(e.target.value)}
-                  placeholder="Master default: 12345678"
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-mono font-bold text-[#202833]"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[#202833] font-bold">Hardware Workstation Terminal</label>
-                  {editBoundDeviceId && (
-                    <button
-                      type="button"
-                      onClick={() => setEditBoundDeviceId('')}
-                      className="text-[10px] text-rose-600 hover:underline font-bold cursor-pointer"
-                    >
-                      Clear / Unbind
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={editBoundDeviceId}
-                  onChange={(e) => setEditBoundDeviceId(e.target.value)}
-                  placeholder="Leave blank for unlocked, or input Terminal ID"
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs text-[#202833] font-mono"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 text-xs font-bold text-[#64748B] hover:bg-slate-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-black font-black text-xs shadow-sm cursor-pointer"
-                >
-                  Save Profile Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* PROVISION USER MODAL */}
       {modalOpen && (
@@ -703,9 +535,7 @@ export const SuperAdminUsersPage: React.FC = () => {
                   className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-semibold text-[#202833]"
                 >
                   {(BRANCH_SCHOOL_MAP[newBranch] || ['YMS']).map(s => (
-                    <option key={s} value={s}>
-                      {s} {s === 'Sena Yerosen' ? '(Adama Branch)' : ''}
-                    </option>
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
@@ -749,39 +579,119 @@ export const SuperAdminUsersPage: React.FC = () => {
         </div>
       )}
 
-      {/* DELETE USER CONFIRMATION MODAL */}
-      {deleteTargetUser && (
+      {/* EDIT USER MODAL */}
+      {editModalOpen && editUser && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E2E8F0] rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4">
-            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-
-            <div className="text-center">
-              <h3 className="font-heading font-black text-base text-[#202833]">
-                Delete User Account?
+          <div className="bg-white border border-[#E2E8F0] rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+              <h3 className="font-heading font-black text-base text-[#202833] flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-blue-600" />
+                <span>Edit User Account</span>
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Are you sure you want to permanently delete <strong className="text-slate-800">{deleteTargetUser.username}</strong> ({deleteTargetUser.email})? This action cannot be undone and will immediately unbind their hardware terminal.
-              </p>
+              <button
+                type="button"
+                onClick={() => setEditModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-[#F4F7F5] text-[#64748B] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setDeleteTargetUser(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmDeleteUser}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs cursor-pointer"
-              >
-                Confirm Delete
-              </button>
-            </div>
+            <form onSubmit={handleSaveEditUser} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-[#202833] font-bold mb-1">Full Name / Username</label>
+                <input
+                  type="text"
+                  required
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs text-[#202833] font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#202833] font-bold mb-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs text-[#202833] font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#202833] font-bold mb-1">Station Role</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as UserRole)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#202833]"
+                  >
+                    <option value="SENDER">Sender Station</option>
+                    <option value="RECEIVER">Receiver Station</option>
+                    <option value="ADMIN">Admin Station</option>
+                    <option value="SUPER_ADMIN">Super Admin Station</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[#202833] font-bold mb-1">Branch</label>
+                  <select
+                    value={editBranch}
+                    onChange={(e) => handleEditBranchChange(e.target.value)}
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#202833]"
+                  >
+                    {DEFAULT_BRANCHES.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[#202833] font-bold mb-1">Assigned School</label>
+                <select
+                  value={editSchool}
+                  onChange={(e) => setEditSchool(e.target.value)}
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-semibold text-[#202833]"
+                >
+                  {(BRANCH_SCHOOL_MAP[editBranch] || ['YMS']).map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[#202833] font-bold mb-1">Password</label>
+                <input
+                  type="text"
+                  required
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-mono font-bold text-[#202833]"
+                />
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  Universal operator master password is 12345678
+                </span>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-[#64748B] hover:bg-slate-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-sm cursor-pointer"
+                >
+                  Save Account Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

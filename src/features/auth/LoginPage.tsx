@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   User, KeyRound, AlertCircle, ShieldCheck, ArrowRight
 } from 'lucide-react';
 import {
   getUsers, setCurrentUser, getOrCreateDeviceId,
-  setUserHardwareLock, resetUserHardwareLock, checkDeviceLock
+  setUserHardwareLock, resetUserHardwareLock, checkDeviceLock,
+  initStore, addUser
 } from '@/lib/store';
 import { User as UserType } from '@/types';
 
@@ -21,6 +22,10 @@ export const LoginPage: React.FC = () => {
 
   const deviceId = getOrCreateDeviceId();
   const allUsers = getUsers();
+
+  useEffect(() => {
+    initStore().catch(() => {});
+  }, []);
 
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -56,7 +61,48 @@ export const LoginPage: React.FC = () => {
         } catch {}
       }
 
-      // If user is not yet registered in directory
+      // If user is not yet cached locally, check the authoritative edge server (R2 provisioned users)
+      if (!user) {
+        try {
+          const edgeRes = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+            body: JSON.stringify({ email: term, deviceId, password: pwd })
+          });
+          if (edgeRes.ok) {
+            const edgeData = await edgeRes.json();
+            if (edgeData.user) {
+              user = edgeData.user;
+              addUser(user);
+              try {
+                const custom = JSON.parse(localStorage.getItem('sb_custom_users') || '[]');
+                if (!custom.some((cu: any) => cu.email.toLowerCase() === user.email.toLowerCase())) {
+                  custom.unshift(user);
+                  localStorage.setItem('sb_custom_users', JSON.stringify(custom));
+                }
+              } catch {}
+              finishLogin(user);
+              return;
+            }
+          } else if (edgeRes.status === 403) {
+            const errData = await edgeRes.json().catch(() => ({}));
+            const bound = errData.boundDeviceId || 'Registered Terminal';
+            const msg = errData.message || `Account "${term}" is strictly hardware-locked to terminal (${bound}). Only Super Administrators have authority to disconnect or reassign terminals.`;
+            setError(msg.startsWith('Access Denied:') ? msg : `Access Denied: ${msg}`);
+            setIsSubmitting(false);
+            return;
+          } else if (edgeRes.status === 401) {
+            const errData = await edgeRes.json().catch(() => ({}));
+            setError(errData.message || 'Invalid password. Please check your credentials and try again.');
+            setIsSubmitting(false);
+            return;
+          }
+        } catch (edgeErr) {
+          console.warn('Direct edge authentication check failed', edgeErr);
+        }
+      }
+
+      // If still not recognized anywhere
       if (!user) {
         setError(`Account "${term}" is not recognized. Please check your email or username.`);
         setIsSubmitting(false);

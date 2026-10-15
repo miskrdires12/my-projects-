@@ -53,6 +53,7 @@ export const StudentRegistrationPage: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('environment');
   const [isStreamReady, setIsStreamReady] = useState(false);
@@ -649,7 +650,7 @@ export const StudentRegistrationPage: React.FC = () => {
               )}
             </div>
 
-            {/* Photo Preview Container (Always clean preview card) */}
+            {/* Photo Preview Container (Clean 3:4 ID Portrait) */}
             <div className="relative aspect-[3/4] w-full max-w-[340px] sm:max-w-[380px] mx-auto bg-[#F4F7F5] rounded-2xl border-2 border-dashed border-[#CBD5E1] overflow-hidden flex flex-col items-center justify-center shadow-inner group">
               {capturedPhoto ? (
                 <div className="relative w-full h-full bg-slate-900 flex items-center justify-center overflow-hidden">
@@ -674,7 +675,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   </div>
                   <div className="text-xs font-bold text-[#202833]">No Photograph Selected</div>
                   <p className="text-[11px] text-[#94A3B8] mt-1 max-w-[220px]">
-                    Click "Activate Camera" below to open the live biometric capture pop-up, or upload an image
+                    Click Activate Camera to launch the biometric camera pop-up, or upload an image
                   </p>
                 </div>
               )}
@@ -690,60 +691,62 @@ export const StudentRegistrationPage: React.FC = () => {
 
           {/* Photo Actions */}
           <div className="space-y-2 pt-2">
-            {/* Activate Camera Button (Opens Pop-up) */}
-            <button
-              type="button"
-              onClick={() => startCamera()}
-              className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98"
-            >
-              <Camera className="w-4 h-4 text-[#062404]" />
-              <span>{capturedPhoto ? 'Retake Photo (Open Camera Pop-up)' : 'Activate Camera'}</span>
-            </button>
+            <div className="space-y-2">
+              {/* Activate Camera Button (Opens Pop-up Modal) */}
+              <button
+                type="button"
+                onClick={() => startCamera()}
+                className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Camera className="w-4 h-4 text-[#062404]" />
+                <span>{capturedPhoto ? 'Retake Photo (Camera Pop-up)' : 'Activate Camera (Pop-up)'}</span>
+              </button>
 
-                {/* Edit & Crop Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (capturedPhoto) {
-                      setIsEditorOpen(true);
-                    } else {
-                      fileInputRef.current?.click();
-                    }
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-[#85E510] text-[#202833] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
-                >
-                  <Scissors className="w-4 h-4 text-[#4D8A07]" />
-                  <span>{capturedPhoto ? 'Edit & Crop Photo' : 'Upload & Crop Photo'}</span>
-                </button>
+              {/* Edit & Crop Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (capturedPhoto) {
+                    setIsEditorOpen(true);
+                  } else {
+                    fileInputRef.current?.click();
+                  }
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-[#85E510] text-[#202833] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+              >
+                <Scissors className="w-4 h-4 text-[#4D8A07]" />
+                <span>{capturedPhoto ? 'Edit & Crop Photo' : 'Upload & Crop Photo'}</span>
+              </button>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
 
-                {capturedPhoto && (
-                  <div className="flex justify-end pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCapturedPhoto(null);
-                        setBrightness(100);
-                        setContrast(100);
-                        setSaturation(100);
-                        setRotation(0);
-                        setZoom(1);
-                      }}
-                      className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3" /> Retake Photo
-                    </button>
-                  </div>
-                )}
-              </div>
+              {capturedPhoto && (
+                <div className="flex justify-end pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCapturedPhoto(null);
+                      setBrightness(100);
+                      setContrast(100);
+                      setSaturation(100);
+                      setRotation(0);
+                      setZoom(1);
+                    }}
+                    className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Clear Photo
+                  </button>
+                </div>
+              )}
             </div>
+          </div>
+        </div>
 
         {/* Card 2: Student Information Card (6 cols) */}
         <div className="lg:col-span-6 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-6">
@@ -1084,6 +1087,132 @@ export const StudentRegistrationPage: React.FC = () => {
         </div>
       </form>
 
+      {/* ------------------------------------------------------------- */}
+      {/* CAMERA POP-UP MODAL (Fullscreen Biometric Viewfinder Overlay) */}
+      {/* ------------------------------------------------------------- */}
+      {isCameraModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg bg-[#0E1520] border border-slate-700/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#85E510]/20 flex items-center justify-center text-[#85E510]">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-sm text-white tracking-wide">
+                    Live Biometric Camera Capture
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    3:4 ID Portrait Standard &bull; Center eyes on Eye Line
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="Close camera"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Camera Viewfinder Area */}
+            <div className="relative w-full aspect-[3/4] max-h-[62vh] bg-slate-950 flex items-center justify-center overflow-hidden">
+              <video
+                ref={setVideoRef}
+                autoPlay
+                playsInline
+                muted
+                onPlaying={() => setIsStreamReady(true)}
+                onLoadedMetadata={(e) => {
+                  const v = e.target as HTMLVideoElement;
+                  v.muted = true;
+                  v.play().catch(() => {});
+                  setIsStreamReady(true);
+                }}
+                onCanPlay={() => setIsStreamReady(true)}
+                className="w-full h-full object-cover"
+              />
+
+              {/* Biometric Guide Overlay */}
+              <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center select-none">
+                <div className="absolute top-3 inset-x-4 text-center bg-black/50 backdrop-blur-xs py-1.5 px-3 rounded-full text-xs font-semibold text-white/90 border border-white/10 shadow-xs max-w-[90%] mx-auto">
+                  Align eyes on <span className="text-[#85E510] font-bold">Eye Line</span> & nose on <span className="text-[#85E510] font-bold">Crosshair</span>
+                </div>
+
+                <div className="relative w-[85%] aspect-[3/4] flex items-center justify-center">
+                  {/* Eye Level Line */}
+                  <div className="absolute top-[38%] inset-x-0 border-b-2 border-dashed border-[#85E510]/80 flex items-center justify-between px-2">
+                    <span className="text-[9px] font-bold uppercase tracking-wider bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
+                      Eye Line
+                    </span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
+                      Eye Line
+                    </span>
+                  </div>
+
+                  {/* Nose Crosshair */}
+                  <div className="absolute top-[28%] bottom-[32%] left-1/2 -translate-x-1/2 border-l-2 border-dashed border-[#85E510]/70" />
+                  <div className="absolute top-[52%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+                    <div className="w-6 h-6 rounded-full border-2 border-[#85E510] bg-black/40 flex items-center justify-center shadow-lg">
+                      <div className="w-2 h-2 rounded-full bg-[#85E510] animate-ping" />
+                    </div>
+                    <span className="text-[8px] font-bold uppercase tracking-widest bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] mt-0.5">
+                      Nose
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sensor Active Status */}
+                <div className="absolute bottom-3 px-3.5 py-1 bg-black/60 backdrop-blur-sm rounded-full text-[11px] font-mono text-slate-200 border border-white/10 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#85E510] animate-pulse" />
+                  <span>Biometric Sensor Active</span>
+                </div>
+              </div>
+
+              {!isStreamReady && (
+                <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center text-white text-xs gap-2 z-20 transition-opacity">
+                  <RefreshCw className="w-6 h-6 animate-spin text-[#85E510]" />
+                  <span className="font-semibold text-slate-200">Initializing live optical feed...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div className="p-4 bg-slate-900 border-t border-slate-800 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={capturePhoto}
+                className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99]"
+              >
+                <Camera className="w-5 h-5 text-[#062404]" />
+                <span>Capture Photo Now</span>
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={toggleCameraFacing}
+                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-700"
+                >
+                  <SwitchCamera className="w-4 h-4 text-[#85E510]" />
+                  <span>Flip Camera</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-400 font-bold text-xs cursor-pointer border border-slate-700 transition-colors"
+                >
+                  Cancel / Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Smartphone-Style Photo Editor & Crop Modal */}
       <PhoneCropModal
         isOpen={isEditorOpen}
@@ -1150,132 +1279,6 @@ export const StudentRegistrationPage: React.FC = () => {
               >
                 <span>Register Next</span>
                 <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Live Biometric Camera Pop-Up Modal */}
-      {isCameraActive && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 select-none animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[96vh]">
-            {/* Modal Header */}
-            <div className="px-5 py-3.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#85E510]/20 flex items-center justify-center border border-[#85E510]/40">
-                  <Camera className="w-4 h-4 text-[#85E510]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white flex items-center gap-2">
-                    <span>Biometric Camera Feed</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  </h3>
-                  <p className="text-[10px] text-slate-400">Live HD Viewfinder &bull; ISO/ICAO 3:4 Biometric Alignment</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={stopCamera}
-                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer"
-                title="Close Camera"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Viewfinder Viewport */}
-            <div className="p-3 bg-slate-950 flex flex-col items-center justify-center">
-              <div className="relative aspect-[3/4] w-full max-w-[340px] sm:max-w-[360px] mx-auto bg-black rounded-2xl border-2 border-slate-700 overflow-hidden shadow-2xl flex items-center justify-center">
-                <video
-                  ref={setVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  onPlaying={() => setIsStreamReady(true)}
-                  onLoadedMetadata={(e) => {
-                    const v = e.target as HTMLVideoElement;
-                    v.muted = true;
-                    v.play().catch(() => {});
-                    setIsStreamReady(true);
-                  }}
-                  onCanPlay={() => setIsStreamReady(true)}
-                  className="w-full h-full object-cover"
-                />
-
-                {/* Biometric Facial Guides HUD Overlay */}
-                <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center select-none">
-                  {/* Top Alignment Instruction */}
-                  <div className="absolute top-2.5 inset-x-4 text-center bg-black/45 backdrop-blur-xs py-1 px-3 rounded-full text-[10px] sm:text-[11px] font-semibold text-white/90 border border-white/10 shadow-xs max-w-[90%] mx-auto">
-                    Align student eyes on <span className="text-[#85E510] font-bold">Eye Line</span> & nose on <span className="text-[#85E510] font-bold">Nose Guide</span>
-                  </div>
-
-                  {/* Biometric Viewfinder */}
-                  <div className="relative w-[85%] aspect-[3/4] flex items-center justify-center">
-                    {/* Horizontal Eye Level Line */}
-                    <div className="absolute top-[38%] inset-x-0 border-b-2 border-dashed border-[#85E510]/80 flex items-center justify-between px-2">
-                      <span className="text-[9px] font-bold uppercase tracking-wider bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
-                        Eye Line
-                      </span>
-                      <span className="text-[9px] font-bold uppercase tracking-wider bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
-                        Eye Line
-                      </span>
-                    </div>
-
-                    {/* Vertical Nose Alignment & Center Crosshair */}
-                    <div className="absolute top-[28%] bottom-[32%] left-1/2 -translate-x-1/2 border-l-2 border-dashed border-[#85E510]/70" />
-                    <div className="absolute top-[52%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                      <div className="w-5 h-5 rounded-full border-2 border-[#85E510] bg-black/40 flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-ping" />
-                      </div>
-                      <span className="text-[8px] font-bold uppercase tracking-widest bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] mt-0.5">
-                        Nose
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Sensor Active Status */}
-                  <div className="absolute bottom-2.5 px-3 py-1 bg-black/50 backdrop-blur-xs rounded-full text-[10px] font-mono text-slate-200 border border-white/15 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse" />
-                    <span>Biometric Optical Sensor Active</span>
-                  </div>
-                </div>
-
-                {!isStreamReady && (
-                  <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center text-white text-xs gap-2 z-20 transition-opacity">
-                    <RefreshCw className="w-6 h-6 animate-spin text-[#85E510]" />
-                    <span className="font-semibold text-slate-200">Starting camera sensor...</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Bottom Controls */}
-            <div className="p-4 bg-slate-950/90 border-t border-slate-800 flex flex-col sm:flex-row items-center gap-2.5">
-              <button
-                type="button"
-                onClick={toggleCameraFacing}
-                className="w-full sm:w-auto px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-700"
-              >
-                <SwitchCamera className="w-4 h-4 text-[#85E510]" />
-                <span>Flip Camera</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={capturePhoto}
-                className="flex-1 w-full py-3.5 px-6 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-sm shadow-lg shadow-[#85E510]/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
-              >
-                <Camera className="w-5 h-5 text-[#062404]" />
-                <span>Capture Photo Now</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={stopCamera}
-                className="w-full sm:w-auto px-4 py-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer border border-slate-700/60"
-              >
-                Cancel
               </button>
             </div>
           </div>
