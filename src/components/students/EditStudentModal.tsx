@@ -12,7 +12,6 @@ import {
   AlertCircle,
   Loader2,
   School,
-  MapPin,
   User,
   MessageSquare,
 } from "lucide-react";
@@ -99,18 +98,10 @@ export default function EditStudentModal({
 
   if (!isOpen || !student) return null;
 
-  const availableSchools = section ? branchSchools[section] || [] : [];
+  const allBranchSchoolsList = Object.values(branchSchools).flat();
+  const availableSchools = section ? branchSchools[section] || [] : allBranchSchoolsList;
   const schoolOptions = Array.from(new Set([...availableSchools, ...(school ? [school] : [])]));
 
-  const handleSectionChange = (newSec: string) => {
-    setSection(newSec);
-    const schools = branchSchools[newSec] || [];
-    if (!newSec) {
-      setSchool("");
-    } else if (schools.length > 0 && (!school || !schools.includes(school))) {
-      setSchool(schools[0]);
-    }
-  };
 
   const handlePhoneChange = (val: string) => {
     let p = val;
@@ -309,27 +300,7 @@ export default function EditStudentModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            {/* Section / Branch */}
-            <div>
-              <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 text-sky-400" />
-                <span>Section / Location</span>
-              </label>
-              <select
-                value={section}
-                onChange={(e) => handleSectionChange(e.target.value)}
-                className="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-[#161e19] px-3.5 py-2.5 font-bold focus:border-[#8fe617] focus:outline-none cursor-pointer"
-              >
-                <option value="">(Unassigned / Not Specified)</option>
-                {Object.keys(branchSchools).map((b) => (
-                  <option key={b} value={b}>
-                    {b} Section
-                  </option>
-                ))}
-              </select>
-            </div>
-
+          <div className="pt-1">
             {/* School */}
             <div>
               <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 flex items-center gap-1">

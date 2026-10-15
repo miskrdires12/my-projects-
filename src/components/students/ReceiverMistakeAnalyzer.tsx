@@ -63,29 +63,33 @@ export default function ReceiverMistakeAnalyzer({
       const phone = s.phone || "";
       const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
 
-      // 1. Slash Mark in Name or ID (High Severity)
+      // 1. Slash Mark in Name or ID (Critical Defect)
       if (name.includes("/") || name.includes("\\") || sId.includes("/") || sId.includes("\\")) {
         list.push({
           student: s,
           type: "SLASH_IN_NAME",
           severity: "high",
-          description: `Illegal slash mark '/' detected in ${name.includes("/") ? "student name" : "student ID"}.`,
+          description: `Illegal slash mark '/' detected in ${name.includes("/") ? "student name" : "student ID"}. This will break barcode/folder export systems.`,
           suggestedFix: name.replace(/[/\\]/g, " ").replace(/\s+/g, " ").trim(),
         });
       }
 
-      // 2. Missing Photo (Medium Severity)
+      // 2. Missing Photo (High Severity)
       if (!hasPhoto) {
         list.push({
           student: s,
           type: "MISSING_PHOTO",
-          severity: "medium",
-          description: "Student has no portrait photo attached.",
+          severity: "high",
+          description: "Missing photo portrait. Card generation cannot proceed without portrait photo.",
         });
       }
 
-      // 3. Uncapitalized Name (Low Severity)
-      if (name && name !== capitalizeWords(name) && !name.includes("/")) {
+      // 3. Uncapitalized Name (Realistic check: flag if entirely lowercase or words starting lowercase)
+      const words = name.trim().split(/\s+/);
+      const hasUncapitalizedWord = words.some(
+        (w) => w.length > 1 && w[0] === w[0].toLowerCase() && /[a-zA-Z]/.test(w[0])
+      );
+      if (hasUncapitalizedWord && !name.includes("/")) {
         list.push({
           student: s,
           type: "UNCAPITALIZED_NAME",
@@ -95,23 +99,29 @@ export default function ReceiverMistakeAnalyzer({
         });
       }
 
-      // 4. Invalid Phone Number
-      if (!phone || phone.replace(/[^\d]/g, "").length < 9) {
+      // 4. Invalid Phone Number (Realistic Ethiopian mobile validation: +2519..., +2517..., 09..., 07...)
+      const digitsOnly = phone.replace(/[^\d]/g, "");
+      const isEthValid =
+        (digitsOnly.length === 10 && (digitsOnly.startsWith("09") || digitsOnly.startsWith("07"))) ||
+        (digitsOnly.length === 12 && (digitsOnly.startsWith("2519") || digitsOnly.startsWith("2517"))) ||
+        (digitsOnly.length === 9 && (digitsOnly.startsWith("9") || digitsOnly.startsWith("7")));
+
+      if (!phone || !isEthValid) {
         list.push({
           student: s,
           type: "INVALID_PHONE",
           severity: "medium",
-          description: `Phone number is incomplete or invalid: "${phone || "EMPTY"}".`,
+          description: `Invalid Ethiopian phone number: "${phone || "EMPTY"}". Expected 09... / 07... or +251...`,
         });
       }
 
-      // 5. Missing School or Location
-      if (!s.school || !s.school.trim()) {
+      // 5. Missing School or Location (Unassigned)
+      if (!s.school || !s.school.trim() || s.school.toLowerCase().includes("unassigned")) {
         list.push({
           student: s,
           type: "MISSING_SCHOOL",
           severity: "low",
-          description: "School name is missing.",
+          description: "School name is missing or unassigned.",
         });
       }
 

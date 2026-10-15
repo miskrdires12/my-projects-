@@ -115,7 +115,8 @@ export async function createStudentAction(input: StudentFormInput): Promise<Stud
     const emergencyContactPhone = data.emergencyContactPhone?.trim() || "";
     const guardianFullName = data.guardianFullName?.trim() || "";
     const nationality = data.nationality?.trim() || "";
-    const bloodType = data.bloodType?.trim() || "Unknown";
+    const rawBloodType = data.bloodType?.trim() || "Unknown";
+    const bloodType = (rawBloodType === "O+" || rawBloodType === "o+" || rawBloodType === "O +" || rawBloodType === "o +") ? "Unknown" : rawBloodType;
     const emailAddress = data.emailAddress?.trim() || null;
     const address = data.address?.trim() || null;
     const school = data.school?.trim() || null;
@@ -377,7 +378,10 @@ export async function updateStudentAction(
   if (input.rollNumber !== undefined) updatePayload.rollNumber = input.rollNumber;
   if (input.nationality !== undefined) updatePayload.nationality = input.nationality;
   if (input.nationalId !== undefined) updatePayload.nationalId = input.nationalId;
-  if (input.bloodType !== undefined) updatePayload.bloodType = input.bloodType?.trim() || "Unknown";
+  if (input.bloodType !== undefined) {
+    const rawBt = input.bloodType?.trim() || "Unknown";
+    updatePayload.bloodType = (rawBt === "O+" || rawBt === "o+" || rawBt === "O +" || rawBt === "o +") ? "Unknown" : rawBt;
+  }
   if (input.emailAddress !== undefined) updatePayload.emailAddress = input.emailAddress;
   if (input.photoPath !== undefined) {
     let finalPath = input.photoPath;

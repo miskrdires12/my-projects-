@@ -84,6 +84,8 @@ export default async function StudentsPage({
   let batches: any[] = [];
   let gradeGroups: any[] = [];
 
+  let sendersList: any[] = [];
+
   try {
     const results = await Promise.all([
       prisma.student.count({ where }),
@@ -115,6 +117,11 @@ export default async function StudentsPage({
         by: ["grade"],
         _count: { id: true },
       }),
+      prisma.student.findMany({
+        select: { senderName: true },
+        distinct: ["senderName"],
+        where: { senderName: { not: null } },
+      }),
     ]);
 
     totalCount = results[0];
@@ -123,12 +130,16 @@ export default async function StudentsPage({
     departments = results[3];
     batches = results[4];
     gradeGroups = results[5];
+    sendersList = results[6] || [];
   } catch (err) {
     console.warn("[StudentsPage] Resilient database fallback:", err);
   }
 
   const uniqueGrades = (grades || []).map((g) => g?.grade).filter(Boolean);
   const uniqueDepartments = (departments || []).map((d) => d?.department).filter(Boolean);
+  const uniqueSenders = (sendersList || [])
+    .map((s: any) => s?.senderName)
+    .filter(Boolean);
   const gradeCountMap: Record<string, number> = {};
   (gradeGroups || []).forEach((g) => {
     if (g?.grade) {
@@ -136,7 +147,6 @@ export default async function StudentsPage({
       gradeCountMap[g.grade] = count;
     }
   });
-
 
   // Sender Attribution visible in student directory for all authenticated users
   const sanitizedStudents = students || [];
@@ -162,6 +172,7 @@ export default async function StudentsPage({
         pageSize={pageSize}
         grades={uniqueGrades}
         departments={uniqueDepartments}
+        senders={uniqueSenders}
         batches={batches}
         userRole={session.role as any}
         gradeCounts={gradeCountMap}

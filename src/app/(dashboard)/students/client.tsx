@@ -37,6 +37,9 @@ import {
   CheckCheck,
   XCircle,
   Smartphone,
+  Calendar,
+  Pause,
+  Play,
 } from "lucide-react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -76,6 +79,7 @@ interface StudentDirectoryClientProps {
   pageSize: number;
   grades: string[];
   departments: string[];
+  senders?: string[];
   batches: { id: string; batchNumber: string; title: string }[];
   userRole: UserRole;
   gradeCounts?: Record<string, number>;
@@ -111,6 +115,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   pageSize,
   grades,
   departments,
+  senders = [],
   batches: _batches,
   userRole,
   gradeCounts,
@@ -285,9 +290,39 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [selectedGrade, setSelectedGrade] = useState(searchParams.get("grade") || "ALL");
   const [selectedDept, setSelectedDept] = useState(searchParams.get("department") || "ALL");
+  const [selectedSender, setSelectedSender] = useState(searchParams.get("sender") || "ALL");
+  const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedPhotoStatus, setSelectedPhotoStatus] = useState(searchParams.get("photoStatus") || "ALL");
   const [selectedBranch, setSelectedBranch] = useState(searchParams.get("branch") || "ALL");
   const [selectedSchool, setSelectedSchool] = useState(searchParams.get("school") || "ALL");
+
+  // Calender Note & Pause Bulked Modal State
+  const [calendarNoteModalOpen, setCalendarNoteModalOpen] = useState(false);
+  const [calendarPauseNote, setCalendarPauseNote] = useState("");
+  const [bulkedStudentIds, setBulkedStudentIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("sb_bulked_student_ids");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [pausedStudentIds, setPausedStudentIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("sb_paused_student_ids");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [pausedStudentNotes, setPausedStudentNotes] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem("sb_paused_student_notes");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // Regional Branch & School Directory Catalog
   const [branchSchools, setBranchSchools] = useState<Record<string, string[]>>(DEFAULT_BRANCH_SCHOOLS);
@@ -1078,9 +1113,50 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     }
   };
 
+  // Bulk / Unbulk Action for Selected Students
+  const handleToggleBulk = (forceBulk?: boolean) => {
+    if (selectedIds.size === 0) return;
+    const nextBulked = new Set(bulkedStudentIds);
+    const ids = Array.from(selectedIds);
+    const shouldBulk = forceBulk !== undefined ? forceBulk : !ids.every((id) => nextBulked.has(id));
+
+    ids.forEach((id) => {
+      if (shouldBulk) nextBulked.add(id);
+      else nextBulked.delete(id);
+    });
+
+    setBulkedStudentIds(nextBulked);
+    try {
+      localStorage.setItem("sb_bulked_student_ids", JSON.stringify(Array.from(nextBulked)));
+    } catch {}
+  };
+
+  // Toggle Pause on Bulked Student
+  const handleTogglePause = (studentId: string, pauseNote?: string) => {
+    const nextPaused = new Set(pausedStudentIds);
+    const nextNotes = { ...pausedStudentNotes };
+
+    if (nextPaused.has(studentId)) {
+      nextPaused.delete(studentId);
+      delete nextNotes[studentId];
+    } else {
+      nextPaused.add(studentId);
+      if (pauseNote) nextNotes[studentId] = pauseNote;
+    }
+
+    setPausedStudentIds(nextPaused);
+    setPausedStudentNotes(nextNotes);
+    try {
+      localStorage.setItem("sb_paused_student_ids", JSON.stringify(Array.from(nextPaused)));
+      localStorage.setItem("sb_paused_student_notes", JSON.stringify(nextNotes));
+    } catch {}
+  };
+
   // Bulk Print
   const handleBulkPrint = () => {
     if (selectedIds.size === 0) return;
+    // Mark as bulked when sent to print engine
+    handleToggleBulk(true);
     router.push(`/print-engine?ids=${Array.from(selectedIds).join(",")}`);
   };
 
@@ -1604,15 +1680,27 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       );
     }
 
-    // Filter by Photo Status
-    if (selectedPhotoStatus === "HAS_PHOTO") {
-      list = list.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0));
-    } else if (selectedPhotoStatus === "MISSING_PHOTO") {
-      list = list.filter((s) => !s.photoPath || s.photoPath.trim().length === 0);
+    // Filter by Sender Operator
+    if (selectedSender && selectedSender !== "ALL") {
+      const targetSender = selectedSender.toLowerCase().trim();
+      list = list.filter((s) => (s.senderName || "").toLowerCase().trim() === targetSender);
+    }
+
+    // Filter by Selected Calendar Day (YYYY-MM-DD)
+    if (selectedDate && selectedDate.trim()) {
+      list = list.filter((s) => {
+        if (!s.createdAt) return false;
+        try {
+          const recDate = new Date(s.createdAt).toISOString().split("T")[0];
+          return recDate === selectedDate.trim();
+        } catch {
+          return false;
+        }
+      });
     }
 
     return list;
-  }, [displayStudents, searchQuery, selectedGrade, selectedDept, selectedPhotoStatus, selectedBranch, selectedSchool]);
+  }, [displayStudents, searchQuery, selectedGrade, selectedDept, selectedSender, selectedDate, selectedPhotoStatus, selectedBranch, selectedSchool]);
 
   const totalEffective = filteredStudents.length;
   const totalPages = Math.ceil(totalEffective / activePageSize) || 1;
@@ -1666,6 +1754,54 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       onContextMenu={userRole === "RECEIVER" ? (e) => e.preventDefault() : undefined}
       onCopy={userRole === "RECEIVER" ? (e) => e.preventDefault() : undefined}
     >
+      {/* Calendar Date Navigator & Notes at Top of Student Directory */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] shadow-xs">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#8fe617]/15 text-[#062404] dark:text-[#8fe617] border border-[#8fe617]/30 font-mono text-xs font-bold">
+            <Calendar className="h-4 w-4" />
+            <span>Date Filter</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="h-9 px-3 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] text-xs font-mono text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
+              title="Select day to filter students created on that date"
+            />
+            {selectedDate && (
+              <button
+                type="button"
+                onClick={() => setSelectedDate("")}
+                className="h-9 px-2.5 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] text-xs font-mono text-foreground-muted hover:text-foreground cursor-pointer"
+              >
+                Clear Date
+              </button>
+            )}
+          </div>
+
+          {selectedDate && (
+            <span className="text-xs font-mono font-semibold text-[#8fe617]">
+              Showing records for: <strong>{selectedDate}</strong> ({filteredStudents.length} students)
+            </span>
+          )}
+        </div>
+
+        {/* Note-Taking for Pausing Bulked Students */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCalendarNoteModalOpen(true)}
+            className="h-9 px-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-xs font-mono font-bold transition-colors flex items-center gap-2 cursor-pointer shadow-xs"
+            title="Open note-taking dialog to pause bulked students"
+          >
+            <Pause className="h-3.5 w-3.5" />
+            <span>Pause Bulked Note ({pausedStudentIds.size})</span>
+          </button>
+        </div>
+      </div>
+
       {/* Grade Cohort Tabs (Clean, Sleek, Instant Filtering) */}
       {allAvailableGrades.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
@@ -1891,8 +2027,25 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
           </div>
         </div>
 
-        {/* 5-Column Multi-Filters Grid (Grade, Branch, School, Dept, Photo) */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+        {/* 6-Column Multi-Filters Grid (Sender, Grade, Branch, School, Dept, Photo) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1">
+          {/* Sender Classification Filter */}
+          <select
+            value={selectedSender}
+            onChange={(e) => {
+              setSelectedSender(e.target.value);
+              applyFilters({ sender: e.target.value });
+            }}
+            className="h-10 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] px-3 text-xs font-semibold text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none transition-colors cursor-pointer"
+          >
+            <option value="ALL">Sender: All Senders</option>
+            {Array.from(new Set([...senders, ...displayStudents.map((s) => s.senderName)].filter((s): s is string => Boolean(s)))).map((sender) => (
+              <option key={sender} value={sender}>
+                Sender: {sender}
+              </option>
+            ))}
+          </select>
+
           {/* Grade Filter */}
           <select
             value={selectedGrade}
@@ -2218,6 +2371,19 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                                 🏫 {student.school}
                               </span>
                             )}
+                            {bulkedStudentIds.has(student.id) && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-sky-500/20 text-sky-600 dark:text-sky-300 border border-sky-500/30">
+                                📦 Bulked
+                              </span>
+                            )}
+                            {pausedStudentIds.has(student.id) && (
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 cursor-pointer"
+                                title={`Paused: ${pausedStudentNotes[student.id] || "No pause note recorded"}`}
+                              >
+                                ⏸️ Paused {pausedStudentNotes[student.id] ? `(${pausedStudentNotes[student.id]})` : ""}
+                              </span>
+                            )}
                             {student.address && student.address.trim() !== "" && student.address !== "General" && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-foreground-muted dark:text-[#8a9e93] bg-surface-secondary dark:bg-[#161e19] border border-border dark:border-[#223126]">
                                 📍 {student.address}
@@ -2463,6 +2629,37 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                             </>
                           )}
 
+                          {/* Pause / Resume Bulked Student with Note */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (pausedStudentIds.has(student.id)) {
+                                handleTogglePause(student.id);
+                              } else {
+                                const note = prompt(`Enter reason to pause student ${student.fullName}:`, "Awaiting credential correction / photo retake");
+                                if (note !== null) {
+                                  handleTogglePause(student.id, note.trim() || "Paused");
+                                }
+                              }
+                            }}
+                            className={`rounded-lg p-2 transition-colors cursor-pointer border ${
+                              pausedStudentIds.has(student.id)
+                                ? "text-amber-500 bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30"
+                                : "text-foreground-muted dark:text-[#8a9e93] hover:text-amber-400 hover:bg-amber-500/10 border-transparent"
+                            }`}
+                            title={
+                              pausedStudentIds.has(student.id)
+                                ? `Resume student (Currently paused: ${pausedStudentNotes[student.id] || "No note"})`
+                                : `Pause student from bulk printing`
+                            }
+                          >
+                            {pausedStudentIds.has(student.id) ? (
+                              <Play className="h-4 w-4" />
+                            ) : (
+                              <Pause className="h-4 w-4" />
+                            )}
+                          </button>
+
                           {/* 1-Click Edit Student Record */}
                           <button
                             type="button"
@@ -2673,6 +2870,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   <QrCode className="h-3.5 w-3.5 text-sky-400" />
                 )}
                 <span>QRs ZIP {selectedIds.size > 1 ? `(${selectedIds.size})` : "(1)"}</span>
+              </button>
+
+              {/* Bulk / Unbulk Toggle */}
+              <button
+                type="button"
+                onClick={() => handleToggleBulk()}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  Array.from(selectedIds).every((id) => bulkedStudentIds.has(id))
+                    ? "border-amber-500/50 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
+                    : "border-emerald-500/50 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                }`}
+                title="Mark selected students as Bulked (processed) or Unbulk them back to active queue"
+              >
+                <span>
+                  {Array.from(selectedIds).every((id) => bulkedStudentIds.has(id))
+                    ? "Unbulk Selected"
+                    : "Bulk Selected"}
+                </span>
               </button>
 
               {/* Batch Print 8-Up Engine */}
@@ -3365,6 +3580,127 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         onClose={() => setIsApkControlOpen(false)}
         userRole={userRole}
       />
+
+      {/* Calendar Note Taking Modal for Pausing Bulked Students */}
+      {calendarNoteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-lg rounded-3xl border border-neutral-800 bg-[#0d120f] shadow-2xl p-6 text-white space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                  <Calendar className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold font-mono text-sm">Calendar Notes &amp; Pause Bulked Students</h3>
+                  <p className="text-xs text-neutral-400 font-mono">
+                    Record operational notes for paused or queued student records
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCalendarNoteModalOpen(false)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 font-mono text-xs">
+              <div>
+                <label className="block text-neutral-300 font-bold mb-1">
+                  Pause Reason / Daily Operational Note:
+                </label>
+                <textarea
+                  rows={3}
+                  value={calendarPauseNote}
+                  onChange={(e) => setCalendarPauseNote(e.target.value)}
+                  placeholder="e.g. Paused bulk processing due to missing ID photos or section reassignments..."
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-white placeholder:text-neutral-500 focus:border-[#8fe617] focus:outline-none"
+                />
+              </div>
+
+              {selectedIds.size > 0 && (
+                <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-center justify-between">
+                  <span className="text-amber-300">
+                    Apply this note to pause <strong>{selectedIds.size}</strong> currently selected student(s)?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextPaused = new Set(pausedStudentIds);
+                      const nextNotes = { ...pausedStudentNotes };
+                      selectedIds.forEach((id) => {
+                        nextPaused.add(id);
+                        if (calendarPauseNote.trim()) {
+                          nextNotes[id] = calendarPauseNote.trim();
+                        }
+                      });
+                      setPausedStudentIds(nextPaused);
+                      setPausedStudentNotes(nextNotes);
+                      try {
+                        localStorage.setItem("sb_paused_student_ids", JSON.stringify(Array.from(nextPaused)));
+                        localStorage.setItem("sb_paused_student_notes", JSON.stringify(nextNotes));
+                      } catch {}
+                      setCalendarNoteModalOpen(false);
+                      setCalendarPauseNote("");
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold text-xs hover:brightness-105"
+                  >
+                    Pause Selected
+                  </button>
+                </div>
+              )}
+
+              {/* List of currently paused students */}
+              <div className="space-y-1.5 pt-2">
+                <span className="text-neutral-400 font-bold">
+                  Currently Paused Records ({pausedStudentIds.size}):
+                </span>
+                {pausedStudentIds.size === 0 ? (
+                  <p className="text-neutral-500 italic">No paused students on file.</p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                    {Array.from(pausedStudentIds).map((id) => {
+                      const st = displayStudents.find((s) => s.id === id || s.studentId === id);
+                      return (
+                        <div
+                          key={id}
+                          className="flex items-center justify-between p-2 rounded-lg bg-neutral-900 border border-neutral-800"
+                        >
+                          <div>
+                            <span className="font-bold text-white">{st?.fullName || id}</span>
+                            {pausedStudentNotes[id] && (
+                              <p className="text-[11px] text-amber-400">Note: {pausedStudentNotes[id]}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePause(id)}
+                            className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-xs text-white"
+                          >
+                            Resume
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setCalendarNoteModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-neutral-800 text-white font-mono text-xs hover:bg-neutral-700 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
