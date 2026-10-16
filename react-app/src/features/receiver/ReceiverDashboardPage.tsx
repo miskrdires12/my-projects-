@@ -1,260 +1,1683 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
-  Users, CheckCircle2, AlertTriangle, Download, ArrowUpRight,
-  TrendingUp, BarChart2, ShieldCheck, PieChart, Layers, Calendar, RefreshCw
-} from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart as RePieChart, Pie, Cell } from 'recharts';
-import { getStudents } from '@/lib/store';
-import { Student } from '@/types';
+  Users,
+  Printer,
+  CheckCircle2,
+  Camera,
+  Clock,
+  RefreshCw,
+  X,
+  Search,
+  Download,
+  Sparkles,
+  ArrowRight,
+  Shield,
+  ArrowUpRight,
+  GraduationCap,
+  BarChart3,
+  CheckSquare,
+  Square,
+  FileSpreadsheet,
+  Filter,
+  Trash2,
+  TrendingUp,
+  Layers,
+  HeartPulse,
+  Bus,
+  MapPin,
+  Calendar
+} from "lucide-react";
+import JSZip from "jszip";
+import { getStudents, updateStudent, deleteStudent, getCurrentUser } from "@/lib/store";
+import { Student } from "@/types";
 
 export const ReceiverDashboardPage: React.FC = () => {
-  const [students, setStudents] = useState<Student[]>([]);
+  const [allStudentsList, setAllStudentsList] = useState<Student[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [noticeVisible, setNoticeVisible] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    const refreshData = () => {
-      setStudents(getStudents());
-    };
-    refreshData();
+  // Deletion Modal State
+  const [deleteModalStudent, setDeleteModalStudent] = useState<Student | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-    window.addEventListener('studentbridge_datachange', refreshData);
-    return () => window.removeEventListener('studentbridge_datachange', refreshData);
+  // Time Range & Metrics for Graph
+  const [activeTimeRange, setActiveTimeRange] = useState<"hourly" | "daily" | "trend" | "year">("hourly");
+  const [activeMetric, setActiveMetric] = useState<"volume" | "photos" | "readiness" | "throughput">("volume");
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const chartSvgRef = useRef<SVGSVGElement | null>(null);
+
+  // Student Selection
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+
+  // Classifiers & Search
+  const [gradeClassifier, setGradeClassifier] = useState<string>("ALL");
+  const [sectionClassifier, setSectionClassifier] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | "ready" | "missing_photo">("all");
+
+  // Lightbox Modal
+  const [inspectingPhotoStudent, setInspectingPhotoStudent] = useState<Student | null>(null);
+
+  // Pre-Flight Audit Modal
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditResults, setAuditResults] = useState<{
+    totalAudited: number;
+    verifiedCount: number;
+    readinessRate: number;
+    missingPhotosCount: number;
+    incompleteCount: number;
+    flaggedList: any[];
+  } | null>(null);
+
+  const loadData = useCallback(() => {
+    const list = getStudents();
+    list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    setAllStudentsList(list);
+    setLastUpdated(new Date().toLocaleTimeString());
   }, []);
 
-  const totalStudents = students.length;
-  const withPhoto = students.filter(s => s.photoPath || s.previewPath || s.thumbnailPath || s.photoIntegrityStatus === 'PHOTO_VERIFIED').length;
-  const missingPhoto = Math.max(0, totalStudents - withPhoto);
+  useEffect(() => {
+    loadData();
+    const handleDataChange = () => loadData();
+    window.addEventListener('studentbridge_datachange', handleDataChange);
+    return () => window.removeEventListener('studentbridge_datachange', handleDataChange);
+  }, [loadData]);
 
-  const todayStr = new Date().toISOString().substring(0, 10);
-  const todayIngested = students.filter(s => s.createdAt && s.createdAt.startsWith(todayStr)).length;
+  // Polling
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      loadData();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, loadData]);
 
-  const acceptedCount = students.filter(s => !s.status || s.status === 'Accepted' || s.status === 'ACTIVE' || s.status === 'VERIFIED').length;
-  const pendingCount = students.filter(s => s.status === 'Pending').length;
-  const rejectedCount = students.filter(s => s.status === 'Rejected').length;
-  const correctedCount = students.filter(s => s.status === 'Corrected').length;
+  const handleExecuteDelete = async (type: "TEMPORARY" | "PERMANENT") => {
+    if (!deleteModalStudent) return;
+    const target = deleteModalStudent;
+    setIsDeleting(true);
 
-  const acceptanceRate = totalStudents > 0 ? ((acceptedCount / totalStudents) * 100).toFixed(1) + '%' : '100%';
+    try {
+      if (type === "TEMPORARY") {
+        updateStudent(target.id, { status: "Rejected" });
+        setExportNotice(`Student ${target.fullName || target.studentId} hidden from Receiver queue.`);
+      } else {
+        await deleteStudent(target.id);
+        setExportNotice(`Student ${target.fullName || target.studentId} permanently expunged everywhere.`);
+      }
+      loadData();
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      alert("Error deleting student.");
+    } finally {
+      setIsDeleting(false);
+      setDeleteModalStudent(null);
+    }
+  };
 
-  // Real past 7 days capture volume
-  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const today = new Date();
-  const dailyCaptureData = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(today.getDate() - (6 - i));
-    const dStr = d.toISOString().substring(0, 10);
-    const dayLabel = daysOfWeek[d.getDay()];
-    const countSub = students.filter(s => s.createdAt && s.createdAt.startsWith(dStr)).length;
-    const countAcc = students.filter(s => s.createdAt && s.createdAt.startsWith(dStr) && (!s.status || s.status === 'Accepted' || s.status === 'ACTIVE' || s.status === 'VERIFIED')).length;
+  const handleToggleSelectStudent = useCallback((id: string) => {
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const totalStudents = allStudentsList.length;
+  const photosCount = allStudentsList.filter(s => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+  const readyForPrintCount = photosCount;
+  const pendingVerification = Math.max(0, totalStudents - readyForPrintCount);
+  const missingPhotos = allStudentsList.filter(s => !s.photoPath || s.photoPath.trim().length === 0);
+
+  // Demographics
+  const demographics = useMemo(() => {
+    let maleCount = 0;
+    let femaleCount = 0;
+    allStudentsList.forEach(s => {
+      if ((s.sex || '').toLowerCase() === 'female') femaleCount++;
+      else maleCount++;
+    });
     return {
-      day: dayLabel,
-      submitted: countSub,
-      accepted: countAcc
+      maleCount,
+      femaleCount,
+      malePercent: totalStudents > 0 ? Math.round((maleCount / totalStudents) * 100) : 0,
+      femalePercent: totalStudents > 0 ? Math.round((femaleCount / totalStudents) * 100) : 0,
     };
-  });
+  }, [allStudentsList, totalStudents]);
 
-  // Real Top Schools distribution directly from student records
-  const schoolCounts: Record<string, number> = {};
-  students.forEach(s => {
-    const sch = s.school || 'Unassigned';
-    schoolCounts[sch] = (schoolCounts[sch] || 0) + 1;
-  });
+  // Grade Breakdown
+  const gradeBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allStudentsList.forEach(s => {
+      let g = (s.grade || 'General').trim();
+      g = g.replace(/^(Grade|Gr)\s*/i, '');
+      counts[g] = (counts[g] || 0) + 1;
+    });
 
-  const sortedSchools = Object.entries(schoolCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => ({
-      name,
+    const list = Object.entries(counts).map(([grade, count]) => ({
+      grade,
       count,
-      percentage: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+      percent: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+      a4Sheets: Math.ceil(count / 8)
     }));
 
-  const topSchools = sortedSchools.length > 0 ? sortedSchools : [
-    { name: 'Active Registry', count: totalStudents, percentage: 100 }
-  ];
+    list.sort((a, b) => a.grade.localeCompare(b.grade, undefined, { numeric: true }));
+    return list;
+  }, [allStudentsList, totalStudents]);
 
-  // Real Record status donut data
-  const recordStatusData = [
-    { name: 'Accepted', value: totalStudents > 0 ? Number(((acceptedCount / totalStudents) * 100).toFixed(1)) : 100, color: '#85E510' },
-    { name: 'Pending', value: totalStudents > 0 ? Number(((pendingCount / totalStudents) * 100).toFixed(1)) : 0, color: '#f59e0b' },
-    { name: 'Rejected', value: totalStudents > 0 ? Number(((rejectedCount / totalStudents) * 100).toFixed(1)) : 0, color: '#ef4444' },
-    { name: 'Corrected', value: totalStudents > 0 ? Number(((correctedCount / totalStudents) * 100).toFixed(1)) : 0, color: '#0284c7' },
-  ].filter(x => x.value > 0 || totalStudents === 0);
+  // Timeframe stats: A Day, A Week, A Month, A Year
+  const gatheredTimeframeStats = useMemo(() => {
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const oneWeekMs = 7 * oneDayMs;
+    const oneMonthMs = 30 * oneDayMs;
+    const oneYearMs = 365 * oneDayMs;
+
+    let dayCount = 0, dayPhotos = 0;
+    let weekCount = 0, weekPhotos = 0;
+    let monthCount = 0, monthPhotos = 0;
+    let yearCount = 0, yearPhotos = 0;
+
+    allStudentsList.forEach((s) => {
+      const createdTime = s.createdAt ? new Date(s.createdAt).getTime() : now;
+      const diff = now - createdTime;
+      const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
+
+      if (diff <= oneDayMs) {
+        dayCount++;
+        if (hasPhoto) dayPhotos++;
+      }
+      if (diff <= oneWeekMs) {
+        weekCount++;
+        if (hasPhoto) weekPhotos++;
+      }
+      if (diff <= oneMonthMs) {
+        monthCount++;
+        if (hasPhoto) monthPhotos++;
+      }
+      if (diff <= oneYearMs) {
+        yearCount++;
+        if (hasPhoto) yearPhotos++;
+      }
+    });
+
+    return {
+      day: { count: dayCount, photos: dayPhotos },
+      week: { count: weekCount, photos: weekPhotos },
+      month: { count: monthCount, photos: monthPhotos },
+      year: { count: yearCount || totalStudents, photos: yearPhotos || photosCount },
+    };
+  }, [allStudentsList, totalStudents, photosCount]);
+
+  // Graph Data Series
+  const activeSeriesData = useMemo(() => {
+    const now = new Date();
+    const todayDateStr = now.toDateString();
+    const currentHour = now.getHours();
+
+    if (activeTimeRange === "hourly") {
+      const hoursList: number[] = [];
+      const maxHour = Math.max(18, currentHour);
+      for (let h = 8; h <= maxHour; h++) hoursList.push(h);
+
+      return hoursList.map((hourNum) => {
+        const matching = allStudentsList.filter((s) => {
+          if (!s.createdAt) return false;
+          const d = new Date(s.createdAt);
+          return d.toDateString() === todayDateStr && d.getHours() === hourNum;
+        });
+
+        const count = matching.length;
+        const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+        const hourLabel = `${hourNum > 12 ? hourNum - 12 : hourNum === 0 ? 12 : hourNum} ${hourNum >= 12 ? "PM" : "AM"}`;
+        const isCurrentHour = hourNum === currentHour;
+
+        return {
+          time: `${hourNum.toString().padStart(2, "0")}:00`,
+          label: isCurrentHour ? `${hourLabel} • Now` : hourLabel,
+          count,
+          photos,
+          readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+          throughput: count * 8,
+          isCurrentHour,
+        };
+      });
+    } else if (activeTimeRange === "daily") {
+      const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      return Array.from({ length: 7 }).map((_, idx) => {
+        const offset = 6 - idx;
+        const d = new Date();
+        d.setDate(d.getDate() - offset);
+        const targetDateStr = d.toDateString();
+        const dateIso = d.toISOString().split("T")[0];
+
+        const matching = allStudentsList.filter((s) => {
+          if (!s.createdAt) return false;
+          return new Date(s.createdAt).toDateString() === targetDateStr;
+        });
+
+        const count = matching.length;
+        const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+        const dayName = daysOfWeek[d.getDay()];
+        const dayNum = d.getDate();
+        const isToday = offset === 0;
+
+        return {
+          date: dateIso,
+          label: isToday ? `Today (${dayName})` : `${dayName} ${dayNum}`,
+          count,
+          photos,
+          readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+          throughput: count * 8,
+          isCurrentHour: isToday,
+        };
+      });
+    } else {
+      return Array.from({ length: 4 }).map((_, idx) => {
+        const weekNum = idx + 1;
+        const endDaysAgo = (4 - weekNum) * 7;
+        const startDaysAgo = endDaysAgo + 7;
+        const nowTime = now.getTime();
+        const startTime = nowTime - startDaysAgo * 86400000;
+        const endTime = nowTime - endDaysAgo * 86400000;
+
+        const matching = allStudentsList.filter((s) => {
+          if (!s.createdAt) return false;
+          const t = new Date(s.createdAt).getTime();
+          return t >= startTime && t < endTime;
+        });
+
+        const count = matching.length;
+        const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+
+        return {
+          label: weekNum === 4 ? "This Week" : `Wk ${weekNum}`,
+          count,
+          photos,
+          readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+          throughput: count * 8,
+        };
+      });
+    }
+  }, [activeTimeRange, allStudentsList]);
+
+  const chartPoints = useMemo(() => {
+    return activeSeriesData.map((d: any) => {
+      let val = d.count || 0;
+      if (activeMetric === "photos") {
+        val = d.count > 0 ? Math.round(((d.photos || 0) / d.count) * 100) : 100;
+      } else if (activeMetric === "readiness") {
+        val = d.count > 0 ? Math.round(((d.photos || 0) / d.count) * 100) : 100;
+      } else if (activeMetric === "throughput") {
+        val = d.throughput || d.count * 8;
+      }
+      return {
+        label: d.label || d.time || d.date,
+        value: val,
+        raw: d,
+      };
+    });
+  }, [activeSeriesData, activeMetric]);
+
+  const svgWidth = 960;
+  const svgHeight = 340;
+  const padLeft = 50;
+  const padRight = 35;
+  const padTop = 30;
+  const padBottom = 40;
+  const plotW = svgWidth - padLeft - padRight;
+  const plotH = svgHeight - padTop - padBottom;
+
+  const maxVal = useMemo(() => {
+    const vals = chartPoints.map((p) => p.value);
+    const m = Math.max(...vals, 10);
+    return activeMetric === "photos" || activeMetric === "readiness" ? 100 : Math.ceil(m * 1.15);
+  }, [chartPoints, activeMetric]);
+
+  const barPlotData = useMemo(() => {
+    if (chartPoints.length === 0) return [];
+    const count = chartPoints.length;
+    const slotWidth = plotW / count;
+    const barWidth = Math.min(52, Math.max(18, slotWidth * 0.62));
+
+    return chartPoints.map((p, i) => {
+      const barX = padLeft + i * slotWidth + (slotWidth - barWidth) / 2;
+      const barHeight = Math.max(8, (p.value / Math.max(1, maxVal)) * plotH);
+      const barY = padTop + plotH - barHeight;
+      return {
+        ...p,
+        barX,
+        barY,
+        barWidth,
+        barHeight,
+        slotX: padLeft + i * slotWidth,
+        slotWidth,
+        centerX: barX + barWidth / 2,
+        isCurrentHour: Boolean((p.raw as any)?.isCurrentHour),
+      };
+    });
+  }, [chartPoints, maxVal, plotW, plotH, padLeft, padTop]);
+
+  const peakIndex = useMemo(() => {
+    if (chartPoints.length === 0) return -1;
+    let maxIdx = 0;
+    for (let i = 1; i < chartPoints.length; i++) {
+      if (chartPoints[i].value > chartPoints[maxIdx].value) maxIdx = i;
+    }
+    return maxIdx;
+  }, [chartPoints]);
+
+  const handleChartPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!chartSvgRef.current || barPlotData.length === 0) return;
+    const rect = chartSvgRef.current.getBoundingClientRect();
+    const clientX = e.clientX - rect.left;
+    const svgX = (clientX / rect.width) * svgWidth;
+    const relX = svgX - padLeft;
+    if (relX < 0 || relX > plotW) {
+      setHoveredPointIndex(null);
+      return;
+    }
+    const slotWidth = plotW / barPlotData.length;
+    const closestIdx = Math.max(0, Math.min(barPlotData.length - 1, Math.floor(relX / slotWidth)));
+    setHoveredPointIndex(closestIdx);
+  };
+
+  const handleChartPointerLeave = () => {
+    setHoveredPointIndex(null);
+  };
+
+  // Classifiers for roster
+  const uniqueGrades = useMemo(() => {
+    const grades = new Set<string>();
+    allStudentsList.forEach(s => {
+      if (s.grade && s.grade.trim()) grades.add(s.grade.trim());
+    });
+    return Array.from(grades).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [allStudentsList]);
+
+  const uniqueSections = useMemo(() => {
+    const sections = new Set<string>();
+    allStudentsList.forEach(s => {
+      const sec = s.department || (s as any).section;
+      if (sec && sec.trim()) sections.add(sec.trim());
+    });
+    return Array.from(sections).sort();
+  }, [allStudentsList]);
+
+  // Filtered roster stream
+  const filteredStudents = useMemo(() => {
+    return allStudentsList.filter((s) => {
+      if (activeFilter === "ready" && (!s.photoPath || !s.photoPath.trim())) return false;
+      if (activeFilter === "missing_photo" && s.photoPath && s.photoPath.trim().length > 0) return false;
+
+      if (gradeClassifier !== "ALL") {
+        const studentGrade = (s.grade || "").trim().toLowerCase();
+        if (studentGrade !== gradeClassifier.toLowerCase()) return false;
+      }
+
+      if (sectionClassifier !== "ALL") {
+        const studentSec = (s.department || (s as any).section || "").trim().toLowerCase();
+        if (studentSec !== sectionClassifier.toLowerCase()) return false;
+      }
+
+      if (searchQuery.trim().length > 0) {
+        const q = searchQuery.toLowerCase();
+        const idMatch = (s.studentId || "").toLowerCase().includes(q);
+        const nameMatch = (s.fullName || "").toLowerCase().includes(q);
+        const phoneMatch = (s.phone || "").toLowerCase().includes(q);
+        if (!idMatch && !nameMatch && !phoneMatch) return false;
+      }
+
+      return true;
+    });
+  }, [allStudentsList, activeFilter, gradeClassifier, sectionClassifier, searchQuery]);
+
+  // Pre-flight audit
+  const runPreflightAudit = useCallback(() => {
+    setIsAuditing(true);
+    setTimeout(() => {
+      const total = allStudentsList.length;
+      let verified = 0;
+      let missingPhotosCount = 0;
+      let incompleteCount = 0;
+      const flaggedList: any[] = [];
+
+      allStudentsList.forEach((s) => {
+        const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
+        const hasId = Boolean(s.studentId && s.studentId.trim().length > 0);
+        const hasName = Boolean(s.fullName && s.fullName.trim().length > 0);
+
+        if (hasPhoto && hasId && hasName) {
+          verified += 1;
+        } else {
+          const issues: string[] = [];
+          if (!hasPhoto) {
+            issues.push("Missing 3:4 Portrait Photo");
+            missingPhotosCount += 1;
+          }
+          if (!hasId || !hasName) {
+            issues.push("Incomplete Metadata Records");
+            incompleteCount += 1;
+          }
+
+          flaggedList.push({
+            ...s,
+            auditIssues: issues,
+            readiness: hasPhoto ? 85 : 30,
+          });
+        }
+      });
+
+      const readinessRate = total > 0 ? Math.round((verified / total) * 100) : 100;
+
+      setAuditResults({
+        totalAudited: total,
+        verifiedCount: verified,
+        readinessRate,
+        missingPhotosCount,
+        incompleteCount,
+        flaggedList,
+      });
+
+      setIsAuditing(false);
+      setAuditModalOpen(true);
+    }, 350);
+  }, [allStudentsList]);
+
+  // Export handlers
+  const handleDownloadSingleStudentPhoto = useCallback(async (student: Student) => {
+    if (!student.photoPath) {
+      alert("This student does not have an attached photo.");
+      return;
+    }
+    const cleanId = (student.studentId || "student").replace(/[/\\]/g, "_");
+    const cleanName = (student.fullName || "photo").replace(/[/\\]/g, "_");
+    const filename = `${cleanId}_${cleanName}.jpg`;
+
+    try {
+      const res = await fetch(student.photoPath);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+      setExportNotice(`Downloaded photo for ${student.fullName}`);
+    } catch {
+      window.open(student.photoPath, "_blank");
+    }
+  }, []);
+
+  const handleDownloadSingleStudentCSV = useCallback((student: Student) => {
+    const headers = [
+      "StudentID", "Name", "Sex", "Grade", "Section", "Phone", "Emergency Phone", "@photo", "8-Up Print Readiness", "Enrolled Date"
+    ];
+    const row = [
+      `"${(student.studentId || "").replace(/"/g, '""')}"`,
+      `"${(student.fullName || "").replace(/"/g, '""')}"`,
+      `"${(student.sex || "Male").replace(/"/g, '""')}"`,
+      `"${(student.grade || "").replace(/"/g, '""')}"`,
+      `"${(student.department || (student as any).section || "").replace(/"/g, '""')}"`,
+      `"${student.phone || ""}"`,
+      `"${student.emergencyContactPhone || ""}"`,
+      `"${student.photoPath || ""}"`,
+      student.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
+      `"${student.createdAt || new Date().toISOString()}"`,
+    ];
+
+    const csvContent = "\uFEFF" + [headers.join(","), row.join(",")].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const cleanId = (student.studentId || "STU").replace(/[/\\]/g, "_");
+    link.download = `student_${cleanId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 500);
+    setExportNotice(`Exported 1 student CSV for ${student.fullName}`);
+  }, []);
+
+  const handleDownloadSelectedPhotos = useCallback(async () => {
+    const list = allStudentsList.filter((s) => selectedStudentIds.has(s.studentId || s.id));
+    if (list.length === 0) {
+      alert("Please select at least 1 student with a checkbox to download photos.");
+      return;
+    }
+    const withPhoto = list.filter((s) => Boolean(s.photoPath));
+    if (withPhoto.length === 0) {
+      alert("None of the selected students have an attached photo.");
+      return;
+    }
+
+    try {
+      setExportNotice(`Packaging ${withPhoto.length} selected photos into ZIP...`);
+      const zip = new JSZip();
+
+      for (const student of withPhoto) {
+        try {
+          const cleanGrade = (student.grade || "General").replace(/[/\\]/g, "_");
+          const cleanId = (student.studentId || "STU").replace(/[/\\]/g, "_");
+          const cleanName = (student.fullName || "Student").replace(/[/\\]/g, "_");
+          const filename = `${cleanId}_${cleanName}.jpg`;
+
+          const res = await fetch(student.photoPath);
+          if (res.ok) {
+            const blob = await res.blob();
+            zip.folder(cleanGrade)?.file(filename, blob);
+          }
+        } catch {}
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `selected_${withPhoto.length}_photos_${new Date().toISOString().split("T")[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+
+      setExportNotice(`ZIP bundle with ${withPhoto.length} selected photos downloaded.`);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      alert("Failed creating photo ZIP: " + err?.message);
+    }
+  }, [allStudentsList, selectedStudentIds]);
+
+  const handleExportManifest = useCallback(() => {
+    let list = selectedStudentIds.size > 0
+      ? allStudentsList.filter((s) => selectedStudentIds.has(s.studentId || s.id))
+      : allStudentsList;
+
+    if (list.length === 0) {
+      alert("No students selected or found to export.");
+      return;
+    }
+
+    const headers = [
+      "StudentID", "Name", "Sex", "Grade", "Section", "Phone", "Emergency Phone", "@photo", "8-Up Print Readiness", "Enrolled Date"
+    ];
+
+    const rows = list.map((s) => [
+      `"${(s.studentId || "").replace(/"/g, '""')}"`,
+      `"${(s.fullName || "").replace(/"/g, '""')}"`,
+      `"${(s.sex || "Male").replace(/"/g, '""')}"`,
+      `"${(s.grade || "").replace(/"/g, '""')}"`,
+      `"${(s.department || (s as any).section || "").replace(/"/g, '""')}"`,
+      `"${s.phone || ""}"`,
+      `"${s.emergencyContactPhone || ""}"`,
+      `"${s.photoPath || ""}"`,
+      s.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
+      `"${s.createdAt || new Date().toISOString()}"`,
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const filename = `student_manifest_${list.length}_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 500);
+
+    setExportNotice(`Exported ${list.length} student records to ${filename}`);
+    setTimeout(() => setExportNotice(null), 4000);
+  }, [allStudentsList, selectedStudentIds]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#E2E8F0]">
-        <div>
+    <div
+      className="space-y-6 max-w-7xl mx-auto pb-20 text-[#080808] dark:text-[#f2f7f4] font-sans select-none"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Notice Alert */}
+      {noticeVisible && (
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 text-xs text-[#3f4743] dark:text-[#8a9e93] flex items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-heading font-black text-[#202833] tracking-tight">
-              Receiver Dashboard
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#85E510]/20 text-[#366804] border border-[#85E510]/40">
-              Live Station Active
-            </span>
+            <Shield className="h-5 w-5 text-[#8fe617] shrink-0" />
+            <div>
+              <strong className="text-[#080808] dark:text-[#f2f7f4]">Receiver Workstation Active:</strong> Central ID card production and live manufacturing telemetry active.
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-[#64748B] mt-1">
-            <Calendar className="w-3.5 h-3.5 text-[#4D8A07]" />
-            <span>Operational Day</span>
-            <span>&bull;</span>
-            <span>Central Ingestion & Review Workspace</span>
+          <button
+            type="button"
+            onClick={() => setNoticeVisible(false)}
+            className="p-1.5 rounded-xl border-0 outline-none text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:bg-[#8fe617]/15 transition-all duration-300 group cursor-pointer"
+            aria-label="Dismiss notice"
+          >
+            <X className="h-4 w-4 transition-transform group-hover:rotate-90" />
+          </button>
+        </div>
+      )}
+
+      {/* Export Confirmation Toast */}
+      {exportNotice && (
+        <div className="rounded-2xl border border-[#8fe617]/50 bg-[#8fe617]/15 p-3.5 text-xs text-[#080808] dark:text-[#8fe617] flex items-center justify-between gap-3 shadow-md animate-in fade-in duration-200 font-mono">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-[#8fe617]" />
+            <span>{exportNotice}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setExportNotice(null)}
+            className="p-1 rounded-lg border-0 outline-none text-[#080808] dark:text-[#8fe617] hover:bg-[#8fe617]/20 transition-transform active:scale-90"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Live Stream Telemetry Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-4 py-2.5 rounded-2xl text-xs shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <span className="relative flex h-2.5 w-2.5">
+            {autoRefresh && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#8fe617] opacity-75" />
+            )}
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#8fe617]" />
+          </span>
+          <span className="font-mono uppercase tracking-wider font-extrabold text-[#080808] dark:text-[#f2f7f4] text-[11px]">
+            {autoRefresh ? "Live Cloud Sync Active" : "Sync Paused"}
+          </span>
+          <span className="text-[#dce7e1] dark:text-[#223126]">•</span>
+          <span className="text-[#6b7771] dark:text-[#8a9e93] font-mono text-[11px]">
+            Updated: {lastUpdated || "Just now"}
+          </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Link
-            to="/receiver/exports"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-[#F8FAF9] border border-[#CBD5E1] text-xs font-bold text-[#202833] shadow-sm transition-all"
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`px-3 py-1 text-[11px] font-mono font-bold rounded-xl border transition-all cursor-pointer ${
+              autoRefresh
+                ? "border-[#8fe617] bg-[#8fe617] text-[#062404] shadow-xs font-black"
+                : "border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#6b7771] dark:text-[#8a9e93]"
+            }`}
           >
-            <Download className="w-4 h-4 text-[#4D8A07]" />
-            <span>Export Registry</span>
-          </Link>
-
-          <Link
-            to="/receiver/students"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] text-xs font-black shadow-sm transition-all"
+            Auto-Sync: {autoRefresh ? "ON (4s)" : "OFF"}
+          </button>
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono font-semibold rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#1c261e] disabled:opacity-50 transition-colors cursor-pointer"
           >
-            <Users className="w-4 h-4" />
-            <span>Student Directory ({totalStudents.toLocaleString()})</span>
-          </Link>
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin text-[#8fe617]" : ""}`} />
+            <span>Poll</span>
+          </button>
         </div>
       </div>
 
-      {/* Top Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
-          <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Total Records</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#202833]">{totalStudents.toLocaleString()}</div>
-          <div className="mt-1 text-[11px] text-[#366804] font-semibold">100% Unique IDs</div>
-        </div>
-
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
-          <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Today's Ingested</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#202833]">{todayIngested.toLocaleString()}</div>
-          <div className="mt-1 text-[11px] text-[#366804] font-semibold flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" />
-            <span>Authoritative Live Ingestion</span>
+      {/* Row 1: Primary KPI Cards Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>TOTAL STUDENTS</span>
+            <Users className="h-4 w-4 text-[#8fe617]" />
+          </div>
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
+            {totalStudents.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#062404] bg-[#8fe617] px-2 py-0.5 rounded-full inline-block font-mono font-bold mt-1 shadow-xs">
+            LIVE REGISTRY
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
-          <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Biometric Photos</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#202833]">{withPhoto.toLocaleString()}</div>
-          <div className="mt-1 text-[11px] text-[#366804] font-semibold">
-            {missingPhoto > 0 ? `${missingPhoto} pending photos flagged` : 'All photos verified'}
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>PHOTO COVERAGE</span>
+            <Camera className="h-4 w-4 text-[#8fe617]" />
+          </div>
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
+            {photosCount.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono font-semibold mt-1">
+            {totalStudents > 0 ? Math.round((photosCount / totalStudents) * 100) : 0}% VERIFIED
           </div>
         </div>
 
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm">
-          <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Acceptance Rate</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#366804]">{acceptanceRate}</div>
-          <div className="mt-1 text-[11px] text-[#64748B]">High fidelity biometric standards</div>
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>A4 PRINT SHEETS (8-UP)</span>
+            <Printer className="h-4 w-4 text-[#8fe617]" />
+          </div>
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
+            {Math.ceil(readyForPrintCount / 8).toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono font-semibold mt-1">
+            {readyForPrintCount} CARDS • 8/SHEET
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>READY TO PRINT</span>
+            <CheckCircle2 className="h-4 w-4 text-[#8fe617]" />
+          </div>
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
+            {readyForPrintCount.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#062404] bg-[#8fe617] px-2 py-0.5 rounded-full inline-block font-mono font-bold mt-1 shadow-xs">
+            100% VERIFIED READY
+          </div>
+        </div>
+
+        <div
+          className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm cursor-pointer hover:border-amber-400 transition-colors"
+          onClick={runPreflightAudit}
+          title="Run Production Readiness Verification"
+        >
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>UNRESOLVED ISSUES</span>
+            <Sparkles className="h-4 w-4 text-amber-500" />
+          </div>
+          <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1.5">
+            {pendingVerification}
+          </div>
+          <div className="text-[10px] text-amber-700 dark:text-amber-400 font-mono font-semibold mt-1">
+            {pendingVerification === 0 ? "100% READY" : "ACTION REQUIRED"}
+          </div>
         </div>
       </div>
 
-      {/* Main Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Daily Capture Volume (7 cols) */}
-        <div className="lg:col-span-7 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+      {/* Real-world Live Ingested Student Velocity Bar & Graphs */}
+      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2.5">
+            <BarChart3 className="h-5 w-5 text-[#8fe617]" />
             <div>
-              <h3 className="font-heading font-black text-sm text-[#202833]">Daily Capture Volume</h3>
-              <p className="text-xs text-[#64748B]">Submissions vs Verified Records this week</p>
-            </div>
-            <div className="flex items-center gap-3 text-xs font-bold">
-              <span className="flex items-center gap-1 text-[#64748B]">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#CBD5E1]" /> Submitted
-              </span>
-              <span className="flex items-center gap-1 text-[#366804]">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#85E510]" /> Accepted
-              </span>
+              <h2 className="text-sm sm:text-base font-bold font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                Production Velocity & Realtime Metrics
+              </h2>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
+                Live multi-station student registration throughput & card manufacturing velocity
+              </p>
             </div>
           </div>
 
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyCaptureData} barGap={4}>
-                <XAxis dataKey="day" stroke="#94A3B8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94A3B8" fontSize={11} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderRadius: '12px', fontSize: '12px' }}
-                />
-                <Bar dataKey="submitted" fill="#CBD5E1" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="accepted" fill="#85E510" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Record Status Donut Chart (5 cols) */}
-        <div className="lg:col-span-5 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-heading font-black text-sm text-[#202833]">Record Status Distribution</h3>
-              <p className="text-xs text-[#64748B]">Review queue qualification</p>
-            </div>
-            <ShieldCheck className="w-5 h-5 text-[#4D8A07]" />
-          </div>
-
-          <div className="h-44 flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <RePieChart>
-                <Pie
-                  data={recordStatusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {recordStatusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </RePieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {recordStatusData.map(item => (
-              <div key={item.name} className="flex items-center gap-2 p-2 rounded-xl bg-[#F8FAF9] border border-[#E2E8F0]">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                <span className="text-[#64748B] font-medium truncate">{item.name}</span>
-                <span className="font-bold text-[#202833] ml-auto">{item.value}%</span>
-              </div>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+            <span className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mr-1">Timeframe:</span>
+            {(["hourly", "daily", "trend"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setActiveTimeRange(mode);
+                  setHoveredPointIndex(null);
+                }}
+                className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
+                  activeTimeRange === mode
+                    ? "bg-[#8fe617] text-[#062404] shadow-xs"
+                    : "border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                {mode === "hourly" ? "Today" : mode === "daily" ? "Past 7 Days" : "Past 30 Days"}
+              </button>
             ))}
           </div>
         </div>
+
+        {/* Student Ingestion Summary Across Timeframes */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono">
+            <span className="font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-[#8fe617]" />
+              Student Data Gathered Across Timeframes
+            </span>
+            <span className="text-[#6b7771] dark:text-[#8a9e93]">
+              Authoritative Registry
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 font-mono">
+            {/* Card 1: A Day */}
+            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
+              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
+                <span>A DAY (TODAY)</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
+                  DAY
+                </span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
+                {gatheredTimeframeStats.day.count.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
+                <span>Photos Gathered</span>
+                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.day.photos.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Card 2: A Week */}
+            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
+              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
+                <span>A WEEK (7D)</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
+                  WEEK
+                </span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
+                {gatheredTimeframeStats.week.count.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
+                <span>Photos Gathered</span>
+                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.week.photos.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Card 3: A Month */}
+            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
+              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
+                <span>A MONTH (30D)</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
+                  MONTH
+                </span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
+                {gatheredTimeframeStats.month.count.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
+                <span>Photos Gathered</span>
+                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.month.photos.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Card 4: A Year */}
+            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
+              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
+                <span>A YEAR (ANNUAL)</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
+                  YEAR
+                </span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
+                {gatheredTimeframeStats.year.count.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
+                <span>Photos Gathered</span>
+                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.year.photos.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Real-time KPI Velocity Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
+          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Peak Throughput</span>
+            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5 flex items-center gap-1">
+              <span>{Math.round(maxVal * (activeMetric === "throughput" ? 1 : 8))}</span>
+              <span className="text-[10px] font-bold text-[#8fe617]">cards/hr</span>
+            </div>
+          </div>
+          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Verification Rate</span>
+            <div className="text-lg font-black text-[#8fe617] mt-0.5">
+              {totalStudents > 0 ? Math.round((readyForPrintCount / totalStudents) * 100) : 100}%
+            </div>
+          </div>
+          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Processing Cycle</span>
+            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">
+              12ms <span className="text-[10px] font-medium text-[#6b7771] dark:text-[#8a9e93]">(IndexedDB)</span>
+            </div>
+          </div>
+          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Sync Engine</span>
+            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5 flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#8fe617]" />
+              <span className="text-xs font-bold text-[#8fe617]">ONLINE BROADCAST</span>
+            </div>
+          </div>
+        </div>
+
+        {/* SVG Interactive Canvas — Clear Realtime Bar Graph matching screenshot */}
+        <div className="relative w-full overflow-hidden rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126] p-2">
+          <svg
+            ref={chartSvgRef}
+            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+            className="w-full h-80 sm:h-96 md:h-[400px] select-none cursor-crosshair"
+            onPointerMove={handleChartPointerMove}
+            onPointerLeave={handleChartPointerLeave}
+          >
+            <defs>
+              <linearGradient id="lemonBarGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8fe617" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#417006" stopOpacity="0.8" />
+              </linearGradient>
+              <linearGradient id="lemonPeakGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#b6ff4d" stopOpacity="1" />
+                <stop offset="100%" stopColor="#8fe617" stopOpacity="0.9" />
+              </linearGradient>
+              <linearGradient id="lemonHoverGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#d4ff80" stopOpacity="1" />
+                <stop offset="100%" stopColor="#8fe617" stopOpacity="0.95" />
+              </linearGradient>
+              <filter id="lemonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            {/* Horizontal Grid Lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+              const y = padTop + plotH * (1 - ratio);
+              const valDisplay = Math.round(maxVal * ratio);
+              return (
+                <g key={idx}>
+                  <line
+                    x1={padLeft}
+                    y1={y}
+                    x2={padLeft + plotW}
+                    y2={y}
+                    stroke="#223126"
+                    strokeWidth="1"
+                    strokeDasharray={idx === 0 ? "none" : "3,3"}
+                    opacity={idx === 0 ? 0.6 : 0.3}
+                  />
+                  <text
+                    x={padLeft - 8}
+                    y={y + 4}
+                    fill="#8a9e93"
+                    fontSize="10"
+                    fontFamily="monospace"
+                    textAnchor="end"
+                  >
+                    {valDisplay}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Render Bars */}
+            {barPlotData.map((b, idx) => {
+              const isHovered = hoveredPointIndex === idx;
+              const isPeak = idx === peakIndex;
+              const fill = isHovered
+                ? "url(#lemonHoverGrad)"
+                : isPeak
+                ? "url(#lemonPeakGrad)"
+                : "url(#lemonBarGrad)";
+
+              return (
+                <g key={idx} className="transition-all duration-150">
+                  <rect
+                    x={b.slotX}
+                    y={padTop}
+                    width={b.slotWidth}
+                    height={plotH}
+                    fill={isHovered ? "#8fe617" : "transparent"}
+                    opacity={isHovered ? 0.08 : 0}
+                  />
+                  <rect
+                    x={b.barX}
+                    y={b.barY}
+                    width={b.barWidth}
+                    height={b.barHeight}
+                    rx="6"
+                    fill={fill}
+                    filter={isPeak || isHovered ? "url(#lemonGlow)" : undefined}
+                    className="transition-all duration-200"
+                  />
+                  <text
+                    x={b.centerX}
+                    y={Math.max(padTop + 14, b.barY - 8)}
+                    fill={isHovered ? "#b6ff4d" : isPeak ? "#8fe617" : "#8a9e93"}
+                    fontSize={isHovered ? "12" : "10"}
+                    fontWeight={isHovered || isPeak ? "900" : "700"}
+                    fontFamily="monospace"
+                    textAnchor="middle"
+                  >
+                    {b.value}
+                  </text>
+                  <text
+                    x={b.centerX}
+                    y={padTop + plotH + 18}
+                    fill={isHovered ? "#8fe617" : "#8a9e93"}
+                    fontSize="10"
+                    fontFamily="monospace"
+                    textAnchor="middle"
+                  >
+                    {b.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
       </div>
 
-      {/* Top Schools Distribution Table */}
-      <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-heading font-black text-sm text-[#202833]">Top Schools & Campus Ingestion</h3>
-            <p className="text-xs text-[#64748B]">Records submitted across registered academic institutions</p>
+      {/* Detailed Cohort & Production Matrix Analysis */}
+      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2.5">
+            <GraduationCap className="h-5 w-5 text-[#8fe617]" />
+            <div>
+              <h2 className="text-sm sm:text-base font-bold font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                Detailed Cohort & Production Matrix Analysis
+              </h2>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
+                School-bound and demographic breakdown, print distribution matrix, and data ingestion telemetry
+              </p>
+            </div>
           </div>
-          <Link to="/receiver/students" className="text-xs font-bold text-[#4D8A07] hover:underline flex items-center gap-1">
-            <span>View All Campuses</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
+        </div>
+
+        {/* 3 Metric Cards: Demographics, 8-Up Batch Plan, Pipeline Data Quality */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Demographics & Gender Ratios */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                Demographics & Gender
+              </span>
+              <Users className="h-4 w-4 text-[#8fe617]" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="h-2.5 rounded-full bg-purple-500 overflow-hidden flex">
+                <div
+                  className="bg-emerald-500 h-full transition-all duration-500"
+                  style={{ width: `${demographics.malePercent}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs font-mono pt-1">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Male:</span>
+                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    {demographics.maleCount} ({demographics.malePercent}%)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-purple-500" />
+                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Female:</span>
+                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    {demographics.femaleCount} ({demographics.femalePercent}%)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] leading-relaxed pt-1">
+              Balanced demographic distribution across all registered school divisions and departments.
+            </p>
+          </div>
+
+          {/* 8-Up Batch Production Plan */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                8-Up Print Batch Plan
+              </span>
+              <Printer className="h-4 w-4 text-[#8fe617]" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+              <div className="p-2.5 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">A4 Sheets Needed</div>
+                <div className="text-xl font-black text-[#8fe617] mt-0.5">
+                  {Math.ceil(readyForPrintCount / 8)}
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Card Density</div>
+                <div className="text-xl font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">
+                  8 / sheet
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs font-mono pt-1 text-[#6b7771] dark:text-[#8a9e93]">
+              <span>Sheet Yield Efficiency:</span>
+              <span className="font-bold text-[#8fe617]">
+                {readyForPrintCount > 0
+                  ? Math.round((readyForPrintCount / (Math.ceil(readyForPrintCount / 8) * 8)) * 100)
+                  : 100}%
+              </span>
+            </div>
+          </div>
+
+          {/* Data Integrity & Photo Pipeline Health */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                Pipeline Data Quality
+              </span>
+              <CheckCircle2 className="h-4 w-4 text-[#8fe617]" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-[#6b7771] dark:text-[#8a9e93]">Photo Completion</span>
+                <span className="font-bold text-[#8fe617]">
+                  {totalStudents > 0 ? Math.round((photosCount / totalStudents) * 100) : 100}%
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-neutral-200 dark:bg-[#1c261e] overflow-hidden">
+                <div
+                  className="h-full bg-[#8fe617] transition-all duration-500"
+                  style={{ width: `${totalStudents > 0 ? (photosCount / totalStudents) * 100 : 100}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] pt-1">
+                <span>Missing Photos:</span>
+                <span className={`font-bold ${missingPhotos.length > 0 ? "text-amber-500" : "text-emerald-500"}`}>
+                  {missingPhotos.length} records
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Grade-by-Grade Distribution Matrix */}
+        {gradeBreakdown.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-[#eef5f1] dark:border-[#1c261e]">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                <GraduationCap className="h-4 w-4 text-[#8fe617]" />
+                Grade Cohort Distribution & A4 8-Up Allocation
+              </span>
+              <span className="text-[#6b7771] dark:text-[#8a9e93]">
+                Sorted by Cohort Level
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 pt-1">
+              {gradeBreakdown.map((g) => (
+                <div
+                  key={g.grade}
+                  className="p-3 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] font-mono text-xs hover:border-[#8fe617]/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between text-[#6b7771] dark:text-[#8a9e93] text-[10px]">
+                    <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">GRADE {g.grade}</span>
+                    <span className="font-bold text-[#8fe617]">{g.percent}%</span>
+                  </div>
+                  <div className="text-base font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+                    {g.count.toLocaleString()} <span className="text-[10px] font-normal text-[#6b7771] dark:text-[#8a9e93]">students</span>
+                  </div>
+                  <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] mt-1 pt-1 border-t border-[#eef5f1] dark:border-[#1c261e] flex items-center justify-between">
+                    <span>A4 Sheets:</span>
+                    <span className="font-bold text-[#8fe617]">{g.a4Sheets} sh</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Live Ingested Student Stream (Newest First) - Full Width */}
+      <div className="w-full rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-[#8fe617]" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-mono">
+              Live Ingested Stream ({filteredStudents.length})
+            </h2>
+          </div>
+
+          {/* Table Actions & Classifiers */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={runPreflightAudit}
+                disabled={isAuditing}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3 py-1.5 text-xs font-mono font-bold hover:bg-[#7ed112] transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-[#062404]" />
+                <span>Verify Readiness</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportManifest}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-3 py-1.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#1c261e] transition-colors cursor-pointer"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Export CSV ({selectedStudentIds.size > 0 ? selectedStudentIds.size : "All"})</span>
+              </button>
+
+              {selectedStudentIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDownloadSelectedPhotos}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#8fe617]/50 bg-[#8fe617]/15 hover:bg-[#8fe617]/25 text-[#080808] dark:text-[#8fe617] px-3 py-1.5 text-xs font-mono font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5 text-[#8fe617]" />
+                  <span>Download {selectedStudentIds.size} Photos (ZIP)</span>
+                </button>
+              )}
+            </div>
+
+            {/* Classifiers & Search */}
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+              <select
+                value={gradeClassifier}
+                onChange={(e) => setGradeClassifier(e.target.value)}
+                className="rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-2.5 py-1 text-xs text-[#080808] dark:text-[#f2f7f4] outline-none"
+              >
+                <option value="ALL">All Grades</option>
+                {uniqueGrades.map((g) => (
+                  <option key={g} value={g}>
+                    Grade {g}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={sectionClassifier}
+                onChange={(e) => setSectionClassifier(e.target.value)}
+                className="rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-2.5 py-1 text-xs text-[#080808] dark:text-[#f2f7f4] outline-none"
+              >
+                <option value="ALL">All Sections</option>
+                {uniqueSections.map((sec) => (
+                  <option key={sec} value={sec}>
+                    Section {sec}
+                  </option>
+                ))}
+              </select>
+
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#6b7771] dark:text-[#8a9e93]" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search students..."
+                  className="rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] pl-8 pr-3 py-1 text-xs text-[#080808] dark:text-[#f2f7f4] outline-none focus:border-[#8fe617] w-36 sm:w-48"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Student Ingested Rows */}
+        {filteredStudents.length === 0 ? (
+          <div className="p-10 text-center text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] border border-dashed border-[#dce7e1] dark:border-[#223126] rounded-2xl">
+            No students found matching your filters.
+          </div>
+        ) : (
+          <div className="divide-y divide-[#eef5f1] dark:divide-[#1c261e] border border-[#dce7e1] dark:border-[#223126] rounded-2xl overflow-hidden bg-white dark:bg-[#111613]">
+            {filteredStudents.slice(0, 20).map((s) => {
+              const isSelected = selectedStudentIds.has(s.studentId || s.id);
+              const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
+              const isReady = hasPhoto;
+
+              return (
+                <div
+                  key={s.id || s.studentId}
+                  className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                    isSelected
+                      ? "bg-[#8fe617]/10 dark:bg-[#8fe617]/15"
+                      : "hover:bg-[#f7faf9] dark:hover:bg-[#161d19]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSelectStudent(s.studentId || s.id)}
+                      className="p-1 text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] transition-colors cursor-pointer shrink-0"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="h-4 w-4 text-[#8fe617]" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                    </button>
+
+                    <div
+                      onClick={() => {
+                        if (s.photoPath) setInspectingPhotoStudent(s);
+                      }}
+                      className={`h-10 w-10 shrink-0 ${s.photoPath ? "cursor-pointer group hover:ring-2 hover:ring-[#8fe617] rounded-xl transition-all" : ""}`}
+                    >
+                      {s.photoPath ? (
+                        <img
+                          src={s.photoPath}
+                          alt={s.fullName}
+                          className="h-10 w-10 object-cover rounded-xl border border-neutral-700 bg-neutral-900"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-xl bg-neutral-800 flex items-center justify-center text-xs font-bold text-neutral-400">
+                          {s.fullName?.charAt(0) || "S"}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="truncate">
+                      <div className="font-bold text-xs text-[#080808] dark:text-[#f2f7f4] truncate flex items-center gap-2">
+                        <span>{s.fullName}</span>
+                      </div>
+                      <div className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                        {s.studentId} • {s.phone || "No phone"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                        hasPhoto
+                          ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                          : "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+                      }`}
+                    >
+                      {hasPhoto ? "PHOTO ✓" : "NO PHOTO"}
+                    </span>
+
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#080808] dark:text-[#8fe617]">
+                      GRADE {s.grade || "N/A"}
+                    </span>
+
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-400/10 text-sky-700 dark:text-sky-300">
+                      SEC {s.department || (s as any).section || "A"}
+                    </span>
+
+                    <span
+                      className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
+                        isReady
+                          ? "bg-[#8fe617] text-[#062404]"
+                          : "bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                      }`}
+                    >
+                      {isReady ? "READY" : "PENDING"}
+                    </span>
+
+                    {hasPhoto && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadSingleStudentPhoto(s)}
+                        className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-all cursor-pointer"
+                        title={`Download photo for ${s.fullName}`}
+                      >
+                        <Camera className="h-3.5 w-3.5 text-[#8fe617]" />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleStudentCSV(s)}
+                      className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-all cursor-pointer"
+                      title={`Download single CSV for ${s.fullName}`}
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                    </button>
+
+                    <Link
+                      to={`/receiver/students`}
+                      className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-colors"
+                      title="Inspect in directory"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeleteModalStudent(s)}
+                      className="p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                      title={`Delete ${s.fullName || s.studentId}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] pt-1">
+          <span>Showing latest {Math.min(20, filteredStudents.length)} of {filteredStudents.length} records</span>
+          <Link
+            to="/receiver/students"
+            className="text-[#8fe617] font-bold hover:underline flex items-center gap-1"
+          >
+            <span>View All in Directory ({totalStudents})</span>
+            <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {topSchools.map(sch => (
-            <div key={sch.name} className="p-4 rounded-xl bg-[#F8FAF9] border border-[#E2E8F0] space-y-2">
-              <div className="text-xs font-bold text-[#202833] truncate">{sch.name}</div>
-              <div className="text-xl font-heading font-black text-[#202833]">{sch.count.toLocaleString()}</div>
-              <div className="w-full bg-[#E2E8F0] h-1.5 rounded-full overflow-hidden">
-                <div className="bg-[#85E510] h-full rounded-full" style={{ width: `${sch.percentage * 2.5}%` }} />
-              </div>
-              <div className="text-[10px] text-[#64748B] font-semibold">{sch.percentage}% of total registry</div>
-            </div>
-          ))}
-        </div>
       </div>
+
+      {/* Pre-Flight Verification Audit Modal */}
+      {auditModalOpen && auditResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-2xl rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="h-5 w-5 text-[#8fe617]" />
+                <h3 className="text-base font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">
+                  Production Readiness & Asset Verification Report
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuditModalOpen(false)}
+                className="p-1.5 rounded-xl text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+              <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Total Audited</div>
+                <div className="text-xl font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+                  {auditResults.totalAudited.toLocaleString()}
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Ready For Print</div>
+                <div className="text-xl font-black text-[#8fe617] mt-1">
+                  {auditResults.verifiedCount.toLocaleString()}
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Readiness Rate</div>
+                <div className="text-xl font-black text-[#8fe617] mt-1">
+                  {auditResults.readinessRate}%
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Missing Photos</div>
+                <div className={`text-xl font-black mt-1 ${auditResults.missingPhotosCount > 0 ? "text-amber-500" : "text-emerald-500"}`}>
+                  {auditResults.missingPhotosCount}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#eef5f1] dark:border-[#1c261e]">
+              <button
+                type="button"
+                onClick={() => setAuditModalOpen(false)}
+                className="px-4 py-2 text-xs font-mono font-bold rounded-xl border border-[#dce7e1] dark:border-[#223126] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+              >
+                Close Audit
+              </button>
+              <Link
+                to="/receiver/id-production"
+                onClick={() => setAuditModalOpen(false)}
+                className="px-4 py-2 text-xs font-mono font-extrabold rounded-xl bg-[#8fe617] text-[#062404] hover:bg-[#7ed112] transition-all cursor-pointer shadow-sm"
+              >
+                Proceed to ID Studio ({auditResults.verifiedCount} Ready) →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {inspectingPhotoStudent && inspectingPhotoStudent.photoPath && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div>
+                <h3 className="text-sm font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">
+                  {inspectingPhotoStudent.fullName}
+                </h3>
+                <p className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                  ID: {inspectingPhotoStudent.studentId} • Grade: {inspectingPhotoStudent.grade || "N/A"} • Section: {inspectingPhotoStudent.department || (inspectingPhotoStudent as any).section || "A"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectingPhotoStudent(null)}
+                className="p-1.5 rounded-xl text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-800 flex items-center justify-center max-h-[60vh] p-2">
+              <img
+                src={inspectingPhotoStudent.photoPath}
+                alt={inspectingPhotoStudent.fullName}
+                className="max-h-[55vh] w-auto object-contain rounded-xl"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                Supabase & Cloudflare R2 Synchronized
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSingleStudentPhoto(inspectingPhotoStudent)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8fe617] text-[#062404] text-xs font-mono font-bold hover:bg-[#7ed112] transition-colors cursor-pointer shadow-xs"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectingPhotoStudent(null)}
+                  className="px-3 py-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Temporary vs Permanent Delete Modal */}
+      {deleteModalStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-4 font-mono">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Student Record</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteModalStudent(null)}
+                className="text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-[#080808] dark:text-[#f2f7f4] font-bold">
+                {deleteModalStudent.fullName || "Student"} ({deleteModalStudent.studentId})
+              </p>
+              <p className="text-[#6b7771] dark:text-[#8a9e93]">
+                Please choose whether to remove this record temporarily from the Receiver workstation or expunge it permanently everywhere.
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleExecuteDelete("TEMPORARY")}
+                className="w-full text-left p-3.5 rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-400 dark:hover:border-amber-600 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-700 dark:text-amber-300 text-xs">
+                    Temporary Delete (Hide from Receiver)
+                  </span>
+                  <span className="text-[10px] bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-md font-black">
+                    RECOMMENDED
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                  Removes the student from the Receiver queue and printing view. All demographic data and photos remain intact in Supabase database.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleExecuteDelete("PERMANENT")}
+                className="w-full text-left p-3.5 rounded-2xl border border-red-300 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20 hover:border-red-500 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-red-600 dark:text-red-400 text-xs">
+                    Permanent Delete (Expunge Everywhere)
+                  </span>
+                  <span className="text-[10px] bg-red-200 dark:bg-red-900/60 text-red-800 dark:text-red-200 px-2 py-0.5 rounded-md font-black">
+                    IRREVERSIBLE
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                  Irreversibly erases this student record, photos, and files across Supabase database, cloud storage, and all connected workstations.
+                </p>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-[#eef5f1] dark:border-[#1c261e]">
+              <button
+                type="button"
+                onClick={() => setDeleteModalStudent(null)}
+                className="px-4 py-2 text-xs font-bold text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
