@@ -42,26 +42,47 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [branchFilter, setBranchFilter] = useState('ALL');
   const [schoolFilter, setSchoolFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [senderFilter, setSenderFilter] = useState('ALL');
+  const [selectedDate, setSelectedDate] = useState('');
+
+  // Bulked Pause Note Modal
+  const [calendarNoteModalOpen, setCalendarNoteModalOpen] = useState(false);
+  const [calendarPauseNote, setCalendarPauseNote] = useState('');
+  const [pausedIds, setPausedIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('sb_paused_student_ids');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [pausedNotes, setPausedNotes] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem('sb_paused_student_notes');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // Selected Students for Bulk Operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Sorting State for Student ID, Grade & Sec, Date Transmitted
+  // Sorting State for Student ID, Grade & Sec, Date Transmitted (Default: Date Transmitted from new to old)
   type SortField = 'studentId' | 'grade' | 'createdAt';
-  const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortField, setSortField] = useState<SortField | null>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const handleToggleSort = (field: SortField) => {
     if (sortField === field) {
-      if (sortOrder === 'asc') {
-        setSortOrder('desc');
-      } else {
-        setSortField(null);
+      if (sortOrder === 'desc') {
         setSortOrder('asc');
+      } else {
+        setSortOrder('desc');
       }
     } else {
       setSortField(field);
-      setSortOrder('asc');
+      setSortOrder(field === 'createdAt' ? 'desc' : 'asc');
     }
   };
 
@@ -90,7 +111,7 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [editSchool, setEditSchool] = useState('YMS');
   const [editPhone, setEditPhone] = useState('');
   const [editDob, setEditDob] = useState('');
-  const [editBloodType, setEditBloodType] = useState('O+');
+  const [editBloodType, setEditBloodType] = useState('Unknown');
   const [editGuardianName, setEditGuardianName] = useState('');
   const [editEmergencyPhone, setEditEmergencyPhone] = useState('');
   const [editBusUsage, setEditBusUsage] = useState<'Yes' | 'No'>('Yes');
@@ -283,6 +304,8 @@ export const ReceiverStudentsPage: React.FC = () => {
       const matchSection = matchesSectionFilter(s, sectionFilter);
       const matchBranch = branchFilter === 'ALL' || s.location === branchFilter;
       const matchSchool = schoolFilter === 'ALL' || s.school === schoolFilter;
+      const matchSender = senderFilter === 'ALL' || (s.senderName || s.senderId) === senderFilter;
+      const matchDate = !selectedDate || (s.createdAt && s.createdAt.substring(0, 10) === selectedDate);
 
       const st = (s.status || 'Active').toUpperCase();
       const isAccepted = st === 'ACCEPTED' || st === 'ACTIVE' || st === 'VERIFIED';
@@ -291,9 +314,18 @@ export const ReceiverStudentsPage: React.FC = () => {
         (statusFilter === 'Active' && isAccepted && !s.receiverHidden) ||
         (statusFilter === 'Hidden' && s.receiverHidden === true);
 
-      return matchSearch && matchGrade && matchSection && matchBranch && matchSchool && matchStatus;
+      return matchSearch && matchGrade && matchSection && matchBranch && matchSchool && matchSender && matchDate && matchStatus;
     });
-  }, [students, search, gradeFilter, sectionFilter, branchFilter, schoolFilter, statusFilter]);
+  }, [students, search, gradeFilter, sectionFilter, branchFilter, schoolFilter, statusFilter, senderFilter, selectedDate]);
+
+  const distinctSenders = useMemo(() => {
+    const set = new Set<string>();
+    students.forEach(s => {
+      if (s.senderName) set.add(s.senderName);
+      else if (s.senderId) set.add(s.senderId);
+    });
+    return Array.from(set).sort();
+  }, [students]);
 
   // Dynamically computed registry anomalies for the Mistake Analyzer pop-up
   const mistakeItems = useMemo(() => {
@@ -391,6 +423,9 @@ export const ReceiverStudentsPage: React.FC = () => {
         const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         comparison = timeA - timeB;
+        if (comparison === 0) {
+          comparison = (a.studentId || '').localeCompare(b.studentId || '', undefined, { numeric: true });
+        }
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
@@ -538,7 +573,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     setEditSchool(validSchools.includes(s.school || '') ? s.school! : validSchools[0]);
     setEditPhone(s.phone || '');
     setEditDob(s.dateOfBirth ? s.dateOfBirth.substring(0, 10) : '2010-01-01');
-    setEditBloodType(s.bloodType || 'O+');
+    setEditBloodType(s.bloodType || 'Unknown');
     setEditGuardianName(s.guardianFullName || '');
     setEditEmergencyPhone(s.emergencyContactPhone || '');
     setEditBusUsage(s.schoolBusUsage === 'No' ? 'No' : 'Yes');
@@ -868,7 +903,7 @@ export const ReceiverStudentsPage: React.FC = () => {
           'StudentId': s.studentId,
           'Sex': s.sex || 'Male',
           'Grade': s.grade || '',
-          'BloodType': s.bloodType || 'O+',
+          'BloodType': s.bloodType || 'Unknown',
           'Phone': s.phone || '',
           '@photo': photoLocalPath,
           '@qr': qrName,
@@ -941,7 +976,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       setProgressModal(prev => ({ ...prev, current: targets.length, statusText: 'Downloading CSV file...' }));
       await new Promise(r => setTimeout(r, 80));
 
-      const blob = new Blob([csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -1164,6 +1199,28 @@ export const ReceiverStudentsPage: React.FC = () => {
 
             <button
               type="button"
+              onClick={() => {
+                const targetIds = Array.from(selectedIds);
+                const allBulked = targetIds.every(id => bulkedIds.has(id));
+                setBulkedIds(prev => {
+                  const next = new Set(prev);
+                  if (allBulked) {
+                    targetIds.forEach(id => next.delete(id));
+                  } else {
+                    targetIds.forEach(id => next.add(id));
+                  }
+                  localStorage.setItem('sb_bulked_student_ids', JSON.stringify(Array.from(next)));
+                  return next;
+                });
+              }}
+              className="py-1.5 px-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-[#9EE617] text-xs font-black flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>{Array.from(selectedIds).every(id => bulkedIds.has(id)) ? 'Unbulk Selected' : 'Bulk Selected'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => exportExcel(true)}
               className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
             >
@@ -1182,6 +1239,50 @@ export const ReceiverStudentsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Top Calendar Date Filter */}
+      <div className="bg-white p-3 rounded-2xl border border-[#E2E8F0] shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-[#9EE617]/20 border border-[#9EE617]/40 flex items-center justify-center">
+            <Calendar className="w-4 h-4 text-[#256002]" />
+          </div>
+          <div>
+            <span className="text-xs font-black text-[#0B1118]">Transmit Date Filter</span>
+            <p className="text-[10px] text-slate-500 font-medium">Filter directory records by day transmitted</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => { setSelectedDate(e.target.value); setPage(1); }}
+            className="h-9 rounded-xl border border-[#CBD5E1] bg-[#F8FAF9] px-3 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] focus:outline-none cursor-pointer"
+          />
+          {selectedDate && (
+            <button
+              type="button"
+              onClick={() => setSelectedDate('')}
+              className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors cursor-pointer"
+            >
+              Clear Date
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCalendarNoteModalOpen(true)}
+            className="h-9 px-3 rounded-xl bg-[#0B1118] hover:bg-slate-800 text-xs font-bold text-[#9EE617] flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Note taking for pausing bulked students"
+          >
+            <span>Pause Bulked Note</span>
+            {pausedIds.size > 0 && (
+              <span className="px-1.5 py-0.2 bg-amber-500 text-black text-[10px] font-black rounded-full">
+                {pausedIds.size}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs space-y-3">
@@ -1205,6 +1306,20 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
+          </div>
+
+          {/* Sender Filter */}
+          <div>
+            <select
+              value={senderFilter}
+              onChange={(e) => { setSenderFilter(e.target.value); setPage(1); }}
+              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
+            >
+              <option value="ALL">Sender: All Senders</option>
+              {distinctSenders.map(s => (
+                <option key={s} value={s}>Sender: {s}</option>
+              ))}
+            </select>
           </div>
 
           {/* Branch Filter */}
@@ -1249,20 +1364,6 @@ export const ReceiverStudentsPage: React.FC = () => {
               <option value="ALL">All Grades</option>
               {distinctGrades.map(g => (
                 <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Section Filter */}
-          <div>
-            <select
-              value={sectionFilter}
-              onChange={(e) => { setSectionFilter(e.target.value); setPage(1); }}
-              className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
-            >
-              <option value="ALL">All Sections</option>
-              {distinctSections.map(sec => (
-                <option key={sec} value={sec}>Section {sec}</option>
               ))}
             </select>
           </div>
@@ -1455,20 +1556,45 @@ export const ReceiverStudentsPage: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Batch Status (Bulked / Unbulked Indicator with Light Lemon Green Checkmark) */}
+                      {/* Batch Status (Bulked / Unbulked / Paused Indicator) */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        {isBulked ? (
+                        {pausedIds.has(s.studentId) ? (
                           <span
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#85E510]/15 text-[#1D5102] border border-[#85E510]/40 font-black text-[11px]"
-                            title="Bulked & Downloaded"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px]"
+                            title={`Paused: ${pausedNotes[s.studentId] || 'No note'}`}
+                          >
+                            <span>⏸️ Paused</span>
+                          </span>
+                        ) : isBulked ? (
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBulkedIds(prev => {
+                                const next = new Set(prev);
+                                next.delete(s.studentId);
+                                localStorage.setItem('sb_bulked_student_ids', JSON.stringify(Array.from(next)));
+                                return next;
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#85E510]/15 text-[#1D5102] border border-[#85E510]/40 font-black text-[11px] cursor-pointer hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200"
+                            title="Bulked (Click to unbulk)"
                           >
                             <Check className="w-3.5 h-3.5 text-[#85E510] stroke-[3]" />
                             <span>Bulked</span>
                           </span>
                         ) : (
                           <span
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-medium text-[10px]"
-                            title="Awaiting bulk export"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBulkedIds(prev => {
+                                const next = new Set(prev);
+                                next.add(s.studentId);
+                                localStorage.setItem('sb_bulked_student_ids', JSON.stringify(Array.from(next)));
+                                return next;
+                              });
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-[#85E510]/20 text-slate-500 hover:text-[#1D5102] font-medium text-[10px] cursor-pointer"
+                            title="Unbulked (Click to bulk)"
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                             <span>Unbulked</span>
@@ -1836,7 +1962,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">Blood Group:</span>
-                    <span className="font-bold text-[#0B1118]">{detailStudent.bloodType || 'O+'}</span>
+                    <span className="font-bold text-[#0B1118]">{detailStudent.bloodType || 'Unknown'}</span>
                   </div>
                 </div>
               )}
@@ -1965,23 +2091,13 @@ export const ReceiverStudentsPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="font-bold text-[#0B1118] block mb-1">Grade</label>
+                  <label className="font-bold text-[#0B1118] block mb-1">Grade (with Section)</label>
                   <input
                     type="text"
                     required
                     value={editGrade}
                     onChange={(e) => setEditGrade(e.target.value)}
-                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-[#0B1118] block mb-1">Section</label>
-                  <input
-                    type="text"
-                    required
-                    value={editSection}
-                    onChange={(e) => setEditSection(e.target.value)}
+                    placeholder="e.g. 10A or Grade 9B"
                     className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
                   />
                 </div>
@@ -1989,17 +2105,20 @@ export const ReceiverStudentsPage: React.FC = () => {
                 <div>
                   <label className="font-bold text-[#0B1118] block mb-1">Blood Group</label>
                   <select
-                    value={editBloodType}
-                    onChange={(e) => setEditBloodType(e.target.value)}
+                    value={editBloodType === 'O+' ? 'Unknown' : editBloodType}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditBloodType(val === 'O+' ? 'Unknown' : val);
+                    }}
                     className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
                   >
+                    <option value="Unknown">Unknown</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
                     <option value="B+">B+</option>
                     <option value="B-">B-</option>
                     <option value="AB+">AB+</option>
                     <option value="AB-">AB-</option>
-                    <option value="O+">O+</option>
                     <option value="O-">O-</option>
                   </select>
                 </div>
@@ -2564,6 +2683,73 @@ export const ReceiverStudentsPage: React.FC = () => {
                 className="py-2 px-4 rounded-xl bg-black text-white font-bold text-xs hover:bg-slate-800 transition-all cursor-pointer"
               >
                 Close Analyzer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Pause Bulked Note Modal */}
+      {calendarNoteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-[#256002]" />
+                <h3 className="font-heading font-black text-sm text-[#0B1118]">Pause Bulked Students Note</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCalendarNoteModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-black cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Enter pause reason or notes for selected bulked students:
+            </p>
+
+            <textarea
+              value={calendarPauseNote}
+              onChange={(e) => setCalendarPauseNote(e.target.value)}
+              placeholder="e.g. Card printer maintenance, pending ID badge validation, student reshoot needed..."
+              rows={3}
+              className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-800 focus:outline-none focus:border-[#9EE617]"
+            />
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCalendarNoteModalOpen(false)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetIds = selectedIds.size > 0 ? Array.from(selectedIds) : filtered.map(f => f.studentId);
+                  const note = calendarPauseNote.trim() || 'Paused by operator';
+                  setPausedIds(prev => {
+                    const next = new Set(prev);
+                    targetIds.forEach(id => next.add(id));
+                    localStorage.setItem('sb_paused_student_ids', JSON.stringify(Array.from(next)));
+                    return next;
+                  });
+                  setPausedNotes(prev => {
+                    const next = { ...prev };
+                    targetIds.forEach(id => { next[id] = note; });
+                    localStorage.setItem('sb_paused_student_notes', JSON.stringify(next));
+                    return next;
+                  });
+                  setCalendarNoteModalOpen(false);
+                  setCalendarPauseNote('');
+                  alert(`Successfully paused ${targetIds.length} students with note: "${note}"`);
+                }}
+                className="px-4 py-1.5 rounded-xl bg-[#0B1118] text-[#9EE617] text-xs font-bold hover:bg-slate-800 cursor-pointer"
+              >
+                Save Pause Note
               </button>
             </div>
           </div>

@@ -5,14 +5,15 @@ import {
 } from 'lucide-react';
 import {
   getUsers, resetUserHardwareLock, addUser, updateUser, deleteUser,
-  BRANCH_SCHOOL_MAP, DEFAULT_BRANCHES
+  BRANCH_SCHOOL_MAP, DEFAULT_BRANCHES, getStudents
 } from '@/lib/store';
-import { User, UserRole } from '@/types';
+import { User, UserRole, Student } from '@/types';
 
 export const SuperAdminUsersPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'All' | 'Senders' | 'Receivers' | 'Admins' | 'Super Admin'>('All');
   const [branchFilter, setBranchFilter] = useState<string>('All');
   const [users, setUsers] = useState<User[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -27,13 +28,18 @@ export const SuperAdminUsersPage: React.FC = () => {
 
   const loadData = () => {
     setUsers([...getUsers()]);
+    setStudents([...getStudents()]);
   };
 
   useEffect(() => {
     loadData();
     const handleUserChange = () => loadData();
     window.addEventListener('studentbridge_userchange', handleUserChange);
-    return () => window.removeEventListener('studentbridge_userchange', handleUserChange);
+    window.addEventListener('studentbridge_datachange', handleUserChange);
+    return () => {
+      window.removeEventListener('studentbridge_userchange', handleUserChange);
+      window.removeEventListener('studentbridge_datachange', handleUserChange);
+    };
   }, []);
 
   const handleBranchChange = (b: string) => {
@@ -267,6 +273,7 @@ export const SuperAdminUsersPage: React.FC = () => {
                 <th className="py-3.5">Email Address</th>
                 <th className="py-3.5">Assigned Station</th>
                 <th className="py-3.5">Branch / School</th>
+                <th className="py-3.5">Work Status / Activity</th>
                 <th className="py-3.5">Workstation Terminal</th>
                 <th className="py-3.5">Role Assignment</th>
                 <th className="py-3.5 text-right pr-6">Actions</th>
@@ -306,6 +313,30 @@ export const SuperAdminUsersPage: React.FC = () => {
                     <td className="py-3.5 text-slate-700">
                       <div className="font-semibold">{(u as any).branch || 'Addis Ababa'}</div>
                       <div className="text-[10px] text-slate-400">{(u as any).school || 'YMS'}</div>
+                    </td>
+
+                    {/* Work Status / Activity */}
+                    <td className="py-3.5">
+                      {(() => {
+                        const count = students.filter(s => (s.senderName === u.username || s.senderId === u.id || s.senderName === u.email)).length;
+                        return (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full ${hasDevice ? 'bg-[#9EE617] animate-pulse' : 'bg-slate-300'}`} />
+                              <span className="font-bold text-[11px] text-[#202833]">
+                                {hasDevice ? 'Active On-Duty' : 'Offline / Standby'}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-medium">
+                              {count > 0 ? (
+                                <span className="text-[#256002] font-bold">{count} records transmitted</span>
+                              ) : (
+                                <span>No transmissions yet</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Terminal ID */}
