@@ -58,6 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       showShield: true,
       items: [
         { to: '/admin/dashboard', label: 'Live Dashboard & Metrics', icon: LayoutGrid, iconColor: 'text-slate-500' },
+        { to: '/super-admin/telemetric-velocity', label: 'Telemetric Velocity & Fleet', icon: Activity, iconColor: 'text-[#85E510]' },
         { to: '/receiver/students', label: 'Student Directory & Records', icon: Users, iconColor: 'text-slate-500' },
         { to: '/receiver/review', label: '8-Up Print Engine', icon: Printer, iconColor: 'text-slate-500' },
         { to: '/receiver/id-production', label: 'Badge Designer Studio', icon: CreditCard, iconColor: 'text-slate-500' },
@@ -94,6 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       showShield: false,
       items: [
         { to: '/receiver/students', label: 'Student Directory & Records', icon: Users, iconColor: 'text-slate-500' },
+        { to: '/receiver/telemetric-velocity', label: 'Telemetric Velocity & Fleet', icon: Activity, iconColor: 'text-[#85E510]' },
         { to: '/receiver/review', label: '8-Up Print Engine', icon: Printer, iconColor: 'text-slate-500' },
         { to: '/receiver/id-production', label: 'Badge Designer Studio', icon: CreditCard, iconColor: 'text-slate-500' },
       ]
@@ -111,12 +113,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       showShield: true,
       items: [
         { to: '/admin/dashboard', label: 'Live Dashboard & Metrics', icon: LayoutGrid, iconColor: 'text-slate-500' },
+        { to: '/admin/telemetric-velocity', label: 'Telemetric Velocity & Fleet', icon: Activity, iconColor: 'text-[#85E510]' },
         { to: '/admin/senders', label: 'Provision Operators & RBAC', icon: Shield, iconColor: 'text-amber-500' },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare, iconColor: 'text-slate-500' },
         { to: '/admin/settings', label: 'Admin System Settings', icon: Settings, iconColor: 'text-emerald-500' },
       ]
     }
   ];
+
 
   return (
     <>

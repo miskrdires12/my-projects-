@@ -955,6 +955,12 @@ export const ReceiverDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Timing & Velocity Telemetry */}
+                <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-mono px-2 py-1 bg-white dark:bg-[#111613] rounded-lg border border-[#dce7e1] dark:border-[#223126]">
+                  <span>Pace: <strong className="text-amber-600 dark:text-amber-400">{s.avgTimeTakenSecondsPerRecord || 45}s / rec</strong></span>
+                  <span>Rate: <strong className="text-blue-600 dark:text-blue-400">{s.recordsPerMinute > 0 ? s.recordsPerMinute : 1.33} / min</strong></span>
+                </div>
+
                 {/* Device Lock & Quality Strip */}
                 <div className="pt-2 border-t border-[#eef5f1] dark:border-[#1a251c] flex items-center justify-between text-[11px] font-mono">
                   <div className="flex items-center gap-1.5 text-[#6b7771] dark:text-[#8a9e93]">
@@ -967,7 +973,18 @@ export const ReceiverDashboardPage: React.FC = () => {
             );
           })}
         </div>
+
+        <div className="pt-2 flex justify-end">
+          <Link
+            to="/receiver/telemetric-velocity"
+            className="text-xs font-bold text-[#256002] dark:text-[#8fe617] hover:underline flex items-center gap-1 font-mono"
+          >
+            <span>Open Dedicated Telemetric Velocity & Field Senders Fleet Station</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </div>
+
 
       {/* Detailed Cohort & Production Matrix Analysis */}
       <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-5">

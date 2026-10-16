@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Search, Eye, Edit2, Trash2, X, Plus, Calendar,
   UserCheck, Shield, ChevronLeft, ChevronRight,
@@ -7,7 +8,7 @@ import {
   Sliders, FileText, CheckCircle2, AlertTriangle, Phone,
   MapPin, Clock, ExternalLink, RefreshCw, FileSpreadsheet,
   Archive, ArrowUpDown, ArrowUp, ArrowDown, Filter, Sparkles, Crop, Cloud,
-  Radio, Award, Activity, TrendingUp
+  Radio, Award, Activity, TrendingUp, ArrowRight
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
@@ -1386,6 +1387,12 @@ export const ReceiverStudentsPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Timing & Velocity Telemetry */}
+                <div className="flex items-center justify-between text-[10px] text-slate-600 font-mono px-1 py-0.5 bg-slate-50 rounded">
+                  <span>Pace: <strong className="text-amber-700">{s.avgTimeTakenSecondsPerRecord || 45}s / rec</strong></span>
+                  <span>Rate: <strong className="text-blue-700">{s.recordsPerMinute > 0 ? s.recordsPerMinute : 1.33} / min</strong></span>
+                </div>
+
                 {/* Terminal Lock & Efficiency */}
                 <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1 border-t border-[#E2E8F0]">
                   <div className="flex items-center gap-1 truncate max-w-[130px]" title={s.boundDeviceId || 'Unlocked'}>
@@ -1398,7 +1405,17 @@ export const ReceiverStudentsPage: React.FC = () => {
             );
           })}
         </div>
+        <div className="pt-2 flex justify-end">
+          <Link
+            to="/receiver/telemetric-velocity"
+            className="text-xs font-bold text-[#256002] hover:underline flex items-center gap-1 font-mono"
+          >
+            <span>Open Full Telemetric Velocity & Field Senders Fleet Hub</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </div>
+
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-xs space-y-3">

@@ -1543,6 +1543,11 @@ export function getOrCreateDeviceId(): string {
 // Strictly starts from 0 for Daily, Weekly, Monthly, and Total,
 // incrementing dynamically in real-time as records are transmitted.
 // ----------------------------------------------------
+// Sender Transmission Telemetry & Real-Time Metrics
+// Strictly starts from 0 for Daily, Weekly, Monthly, and Total,
+// incrementing dynamically in real-time as records are transmitted.
+// Tracks live elapsed active time, minutes active, and pace per minute.
+// ----------------------------------------------------
 export interface SenderMetrics {
   id: string;
   username: string;
@@ -1558,30 +1563,87 @@ export interface SenderMetrics {
   month: number;
   total: number;
   lastActive: string;
+  // Per-sender per-minute & timing telemetry:
+  sessionStartTimestamp: number;
+  lastCaptureTimestamp: number | null;
+  activeDurationMinutes: number;
+  avgTimeTakenSecondsPerRecord: number; // e.g., 42s per student record
+  recordsPerMinute: number; // velocity per minute
+  lastRecordDurationSeconds: number; // time taken for the most recent submission
 }
 
 // Live session transmission registry - strictly starts at 0 for every operator
-const liveSenderSessionCaptures: Record<string, { today: number; week: number; month: number; total: number }> = {};
+interface SenderLiveTelemetry {
+  today: number;
+  week: number;
+  month: number;
+  total: number;
+  sessionStart: number;
+  lastCapture: number | null;
+  totalActiveTimeSecs: number;
+  recentIntervalsSecs: number[];
+}
+
+const liveSenderSessionCaptures: Record<string, SenderLiveTelemetry> = {};
 
 export function incrementSenderLiveCaptures(senderIdentifier: string): void {
   if (!senderIdentifier) return;
   const norm = senderIdentifier.toLowerCase().trim();
+  const now = Date.now();
   if (!liveSenderSessionCaptures[norm]) {
-    liveSenderSessionCaptures[norm] = { today: 0, week: 0, month: 0, total: 0 };
+    liveSenderSessionCaptures[norm] = {
+      today: 0,
+      week: 0,
+      month: 0,
+      total: 0,
+      sessionStart: now,
+      lastCapture: null,
+      totalActiveTimeSecs: 0,
+      recentIntervalsSecs: []
+    };
   }
+
+  const prev = liveSenderSessionCaptures[norm].lastCapture;
+  const interval = prev ? Math.max(5, Math.min(300, Math.round((now - prev) / 1000))) : 45; // benchmark ~45s for initial capture
+
   liveSenderSessionCaptures[norm].today += 1;
   liveSenderSessionCaptures[norm].week += 1;
   liveSenderSessionCaptures[norm].month += 1;
   liveSenderSessionCaptures[norm].total += 1;
+  liveSenderSessionCaptures[norm].lastCapture = now;
+  liveSenderSessionCaptures[norm].totalActiveTimeSecs += interval;
+  liveSenderSessionCaptures[norm].recentIntervalsSecs.push(interval);
+  if (liveSenderSessionCaptures[norm].recentIntervalsSecs.length > 20) {
+    liveSenderSessionCaptures[norm].recentIntervalsSecs.shift();
+  }
 }
 
 export function resetSenderLiveCaptures(senderIdentifier?: string): void {
+  const now = Date.now();
   if (senderIdentifier) {
     const norm = senderIdentifier.toLowerCase().trim();
-    liveSenderSessionCaptures[norm] = { today: 0, week: 0, month: 0, total: 0 };
+    liveSenderSessionCaptures[norm] = {
+      today: 0,
+      week: 0,
+      month: 0,
+      total: 0,
+      sessionStart: now,
+      lastCapture: null,
+      totalActiveTimeSecs: 0,
+      recentIntervalsSecs: []
+    };
   } else {
     Object.keys(liveSenderSessionCaptures).forEach(k => {
-      liveSenderSessionCaptures[k] = { today: 0, week: 0, month: 0, total: 0 };
+      liveSenderSessionCaptures[k] = {
+        today: 0,
+        week: 0,
+        month: 0,
+        total: 0,
+        sessionStart: now,
+        lastCapture: null,
+        totalActiveTimeSecs: 0,
+        recentIntervalsSecs: []
+      };
     });
   }
 }
@@ -1593,7 +1655,17 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   );
 
   // Guarantee strictly starting from 0 for daily, weekly, monthly, and total
-  const live = liveSenderSessionCaptures[norm] || { today: 0, week: 0, month: 0, total: 0 };
+  const now = Date.now();
+  const live = liveSenderSessionCaptures[norm] || {
+    today: 0,
+    week: 0,
+    month: 0,
+    total: 0,
+    sessionStart: now,
+    lastCapture: null,
+    totalActiveTimeSecs: 0,
+    recentIntervalsSecs: []
+  };
 
   const today = live.today;
   const week = live.week;
@@ -1606,6 +1678,25 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   const status: 'Active' | 'Idle' | 'Locked' = user?.boundDeviceId
     ? (today > 0 ? 'Active' : 'Idle')
     : 'Active';
+
+  // Compute timing and per-minute velocity:
+  const recentIntervals = live.recentIntervalsSecs;
+  const avgTimeTaken = recentIntervals.length > 0
+    ? Math.round(recentIntervals.reduce((a, b) => a + b, 0) / recentIntervals.length)
+    : (today > 0 ? 45 : 0);
+  const lastRecordDuration = recentIntervals.length > 0
+    ? recentIntervals[recentIntervals.length - 1]
+    : (today > 0 ? 45 : 0);
+
+  // Elapsed active minutes
+  const activeDurationMinutes = live.totalActiveTimeSecs > 0
+    ? Math.max(1, Math.round(live.totalActiveTimeSecs / 60))
+    : (today > 0 ? 1 : 0);
+
+  // Records per minute (velocity)
+  const recordsPerMinute = avgTimeTaken > 0
+    ? Number((60 / avgTimeTaken).toFixed(2))
+    : 0;
 
   return {
     id: user?.id || `usr-${norm}`,
@@ -1621,7 +1712,13 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
     week,
     month,
     total,
-    lastActive: (user as any)?.lastActiveAt || (user as any)?.lastLoginAt || new Date().toISOString()
+    lastActive: live.lastCapture ? new Date(live.lastCapture).toISOString() : ((user as any)?.lastActiveAt || (user as any)?.lastLoginAt || new Date().toISOString()),
+    sessionStartTimestamp: live.sessionStart,
+    lastCaptureTimestamp: live.lastCapture,
+    activeDurationMinutes,
+    avgTimeTakenSecondsPerRecord: avgTimeTaken,
+    recordsPerMinute,
+    lastRecordDurationSeconds: lastRecordDuration
   };
 }
 
@@ -1629,5 +1726,6 @@ export function getAllSendersMetrics(): SenderMetrics[] {
   const senders = memoryUsers.filter(u => u.role === 'SENDER');
   return senders.map(u => getSenderMetrics(u.username));
 }
+
 
 

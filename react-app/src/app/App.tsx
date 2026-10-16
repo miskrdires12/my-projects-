@@ -24,6 +24,7 @@ import { ReceiverExportsPage } from '@/features/receiver/ReceiverExportsPage';
 import { ReceiverDatabasePage } from '@/features/receiver/ReceiverDatabasePage';
 import { ReceiverSettingsPage } from '@/features/receiver/ReceiverSettingsPage';
 import { ReceiverActivityPage } from '@/features/receiver/ReceiverActivityPage';
+import { TelemetricVelocityPage } from '@/features/receiver/TelemetricVelocityPage';
 
 // Admin Pages
 import { AdminDashboardPage } from '@/features/admin/AdminDashboardPage';
@@ -90,6 +91,7 @@ export const App: React.FC = () => {
 
             {/* 2. Receiver Workspace */}
             <Route path="/receiver/dashboard" element={<ReceiverDashboardPage />} />
+            <Route path="/receiver/telemetric-velocity" element={<TelemetricVelocityPage />} />
             <Route path="/receiver/students" element={<ReceiverStudentsPage />} />
             <Route path="/receiver/review" element={<ReceiverReviewPage />} />
             <Route path="/receiver/id-production" element={<ReceiverIdProductionPage />} />
@@ -102,6 +104,7 @@ export const App: React.FC = () => {
 
             {/* 3. Admin Workspace */}
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+            <Route path="/admin/telemetric-velocity" element={<TelemetricVelocityPage />} />
             <Route path="/admin/senders" element={<AdminSendersPage />} />
             <Route path="/admin/tasks" element={<AdminTasksPage />} />
             <Route path="/admin/reviews" element={<AdminReviewsPage />} />
@@ -113,6 +116,7 @@ export const App: React.FC = () => {
 
             {/* 4. Super Admin Workspace */}
             <Route path="/super-admin/dashboard" element={<SuperAdminDashboardPage />} />
+            <Route path="/super-admin/telemetric-velocity" element={<TelemetricVelocityPage />} />
             <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
             <Route path="/super-admin/devices" element={<SuperAdminDevicesPage />} />
             <Route path="/super-admin/schools" element={<SuperAdminSchoolsPage />} />
