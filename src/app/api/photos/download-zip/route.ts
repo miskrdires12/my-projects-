@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
               phone: true,
               department: true,
               photoPath: true,
+              photoIntegrityStatus: true,
               batch: { select: { batchNumber: true } },
             },
             take: CHUNK_SIZE,
@@ -188,29 +189,36 @@ export async function POST(request: NextRequest) {
                   getStudentPhotoFileName(s) ||
                   generateSafePhotoFilename(s.fullName, s.studentId, isDup, "jpg");
 
+                // Photo-verified portraits land in "Encoded/", all others in "Unencoded/"
+                const encodeClass =
+                  (s as { photoIntegrityStatus?: string | null }).photoIntegrityStatus ===
+                  "PHOTO_VERIFIED"
+                    ? "Encoded"
+                    : "Unencoded";
+
                 // Determine folder prefix based on chosen structure with section classification
-                let folderPrefix = "";
+                let folderPrefix = `${encodeClass}/`;
                 switch (folderStructure) {
                   case "by-grade":
                   default: {
                     const { gradeFolder, sectionFolder } = resolveGradeAndSection(s);
-                    folderPrefix = `${gradeFolder}/${sectionFolder}/`;
+                    folderPrefix += `${gradeFolder}/${sectionFolder}/`;
                     break;
                   }
                   case "by-batch":
-                    folderPrefix = `Batch_${sanitizeDir(
+                    folderPrefix += `Batch_${sanitizeDir(
                       s.batch?.batchNumber || "Unassigned"
                     )}/`;
                     break;
                   case "by-department": {
                     const { sectionFolder } = resolveGradeAndSection(s);
-                    folderPrefix = `Dept_${sanitizeDir(s.department || "General")}/${sectionFolder}/`;
+                    folderPrefix += `Dept_${sanitizeDir(s.department || "General")}/${sectionFolder}/`;
                     break;
                   }
                   case "custom":
                     if (customPattern) {
                       const { sectionFolder } = resolveGradeAndSection(s);
-                      folderPrefix =
+                      folderPrefix +=
                         customPattern
                           .replace("{grade}", sanitizeDir(s.grade))
                           .replace("{section}", sanitizeDir(sectionFolder.replace(/^Section_/, "")))
@@ -220,7 +228,7 @@ export async function POST(request: NextRequest) {
                     }
                     break;
                   case "flat":
-                    folderPrefix = "";
+                    folderPrefix = `${encodeClass}/`;
                     break;
                 }
 
@@ -287,7 +295,7 @@ export async function POST(request: NextRequest) {
         ? "Batch"
         : "All";
 
-    const zipFilename = `Student_Photos_${scopeLabel}_Grade_Section_${timestamp}.zip`;
+    const zipFilename = `Student_Photos_Encoded_Unencoded_${scopeLabel}_${timestamp}.zip`;
 
     // Audit log and update Receiver operator encoded metrics
     try {

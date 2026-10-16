@@ -974,14 +974,19 @@ export async function deleteCustomFieldAction(id: string) {
 /**
  * Purges all student data and batches so user can feed fresh data without constraint failures.
  */
-export async function clearAllStudentsAction(): Promise<{ success: boolean; count?: number; error?: string }> {
+export async function clearAllStudentsAction(confirmationCode?: string): Promise<{ success: boolean; count?: number; error?: string }> {
   try {
     const session = await getSession();
     if (!session) {
       return { success: false, error: "Session expired. Please log in again." };
     }
-    if (!hasPermission(session.role, "student:delete")) {
-      return { success: false, error: "Unauthorized: Missing delete permission." };
+    // Strict Security Guard: Only Super Admin can authorize a global purge
+    if (session.role !== "SUPER_ADMIN") {
+      return { success: false, error: "Security Guard: Global purge strictly requires verified SUPER_ADMIN authority." };
+    }
+    // Strict Safety Guard: Require exact confirmation phrase
+    if (confirmationCode !== "AUTHORIZE-SUPER-ADMIN-DATA-PURGE") {
+      return { success: false, error: "Safety Guard: Operation aborted. Missing exact authorization token 'AUTHORIZE-SUPER-ADMIN-DATA-PURGE'." };
     }
 
     const count = await prisma.student.count();
@@ -1412,60 +1417,19 @@ export async function deletePermanentlyFromSupabaseAction(params: {
     }
 
     if (params.mode === "ALL_PHOTOS") {
-      const r2Purge = await purgeAllR2StorageObjects();
-      const totalPurged = r2Purge.count || 0;
-
-      await createSafeAuditLog({
-        action: "STORAGE_PURGED",
-        entityType: "STORAGE",
-        metadata: { r2Purged: totalPurged, totalPurged },
-        userId: session.userId,
-      });
-
-      invalidateR2StorageCache();
-      revalidatePath("/admin/database");
       return {
-        success: true,
-        message: `Successfully purged ${totalPurged} objects from Cloudflare R2 bucket 'siliconlabs'.`,
-        deletedCount: totalPurged,
+        success: false,
+        message: "SAFETY ENFORCEMENT: Whole-bucket R2 photo purge is permanently disabled on StudentBridge production.",
       };
     }
 
     if (params.mode === "FULL_WIPE") {
-      if (params.confirmationCode !== "DELETE-SUPABASE") {
-        return { success: false, message: "Invalid confirmation code. Please type 'DELETE-SUPABASE'." };
-      }
-
-      const r2Purge = await purgeAllR2StorageObjects();
-      const totalPurged = r2Purge.count || 0;
-
-      await prisma.customFieldValue.deleteMany({});
-      await prisma.studentPhoto.deleteMany({});
-      const deletedStudents = await prisma.student.deleteMany({});
-
-      await createSafeAuditLog({
-        action: "FULL_WIPE",
-        entityType: "SYSTEM",
-        metadata: {
-          deletedStudents: deletedStudents.count,
-          purgedStorageFiles: totalPurged,
-        },
-        userId: session.userId,
-      });
-
-      await publishStudentSync("DELETE" as any, { fullWipe: true });
-
-      invalidateR2StorageCache();
-      revalidatePath("/dashboard");
-      revalidatePath("/students");
-      revalidatePath("/admin/database");
-
       return {
-        success: true,
-        message: `Full system wipe complete: permanently removed ${deletedStudents.count} students and ${totalPurged} storage photos from Cloudflare R2 & Database.`,
-        deletedCount: deletedStudents.count,
+        success: false,
+        message: "SAFETY ENFORCEMENT: Full system database and R2 wipe is permanently disabled on StudentBridge production.",
       };
     }
+
 
     return { success: false, message: "Unknown purge mode requested." };
   } catch (err: any) {

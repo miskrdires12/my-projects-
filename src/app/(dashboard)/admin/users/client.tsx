@@ -898,6 +898,7 @@ export const UsersClient: React.FC<UsersClientProps> = ({ initialUsers, currentU
                   onChange={(e) => setRole(e.target.value as UserRole)}
                   className="w-full rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] px-3.5 py-2.5 text-xs font-mono text-[#080808] dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none cursor-pointer"
                 >
+                  <option value="SUPER_ADMIN">SUPER ADMIN (Unrestricted Master Access — Full System Control)</option>
                   <option value="SENDER">SENDER (Student Intake, Fast 300 DPI Camera, Send Note)</option>
                   <option value="RECEIVER">RECEIVER (8-Up Print Engine, Directory Review, Importer)</option>
                   <option value="ADMIN">ADMIN (Full Systemic Access, User Provisioning &amp; Database)</option>

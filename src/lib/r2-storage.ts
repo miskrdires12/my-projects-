@@ -41,15 +41,20 @@ export interface R2StorageStats {
 }
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || "siliconlabs";
-const ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "a5b6150294de0fedb8e0cd789114b939";
-const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "027a4326e81560169769fa980c0e8f1f";
-const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "7c70dd1d4a42bcb96da463e2ae5756713b4d1fceefe00241393182d8bf926ed6";
-const ENDPOINT = process.env.R2_ENDPOINT || `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
+const ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const ENDPOINT = process.env.R2_ENDPOINT || (ACCOUNT_ID ? `https://${ACCOUNT_ID}.r2.cloudflarestorage.com` : undefined);
 const PUBLIC_BASE_URL = (process.env.R2_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev").replace(/\/+$/, "");
 
 let s3ClientInstance: S3Client | null = null;
 
 export function getR2Client(): S3Client {
+  if (!ACCESS_KEY_ID || !SECRET_ACCESS_KEY || !ENDPOINT) {
+    throw new Error(
+      "[Security Guard] Cloudflare R2 credentials not configured. Server environment variables R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_ENDPOINT are mandatory."
+    );
+  }
   if (!s3ClientInstance) {
     s3ClientInstance = new S3Client({
       region: "auto",
@@ -318,30 +323,15 @@ export async function listAllR2StorageFileKeys(prefix = ""): Promise<Array<{ key
 }
 
 /**
- * Permanently purges all objects inside the Cloudflare R2 'siliconlabs' bucket
+ * Permanently disabled: whole-bucket R2 purge operations are prohibited on StudentBridge production.
  */
 export async function purgeAllR2StorageObjects(): Promise<{ success: boolean; count: number; error?: string }> {
-  try {
-    const allFiles = await listAllR2StorageFileKeys("");
-    if (allFiles.length === 0) {
-      return { success: true, count: 0 };
-    }
-
-    const keys = allFiles.map((f) => f.key);
-    const result = await deleteMultipleFromR2Bucket(keys);
-    return {
-      success: result.success,
-      count: result.deletedCount,
-      error: result.error,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      count: 0,
-      error: err?.message,
-    };
-  }
+  console.error("[CRITICAL SAFETY GUARD] Attempted call to purgeAllR2StorageObjects blocked.");
+  throw new Error(
+    "CRITICAL SAFETY GUARD: Whole-bucket R2 purge operations are permanently prohibited on StudentBridge production."
+  );
 }
+
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

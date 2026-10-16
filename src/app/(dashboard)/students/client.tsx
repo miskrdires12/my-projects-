@@ -107,6 +107,21 @@ function parseSecureLocalList(raw: string | null): any[] {
   }
 }
 
+function generatePageNumbers(current: number, total: number): (number | string)[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const pages: (number | string)[] = [1];
+  if (current > 3) pages.push("...");
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+  if (current < total - 2) pages.push("...");
+  pages.push(total);
+  return pages;
+}
 
 export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   students,
@@ -129,7 +144,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [displayStudents, setDisplayStudents] = useState<StudentExtended[]>(students);
   const [editingStudent, setEditingStudent] = useState<StudentExtended | null>(null);
   const [activePage, setActivePage] = useState<number>(currentPage || 1);
-  const [activePageSize, setActivePageSize] = useState<number>(pageSize || 25);
+  const [activePageSize, setActivePageSize] = useState<number>(pageSize || 500);
+  const didBackgroundSyncRef = useRef(false);
 
   useEffect(() => {
     if (currentPage) setActivePage(currentPage);
@@ -190,34 +206,20 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       setDisplayStudents(authoritativeList);
 
-      // Non-blocking background sync from cloud
+      // Non-blocking background sync from cloud — runs ONCE per mount.
+      // It only reconciles the local encrypted cache; it must NEVER replace the
+      // paginated display state with the full list (that would break server-side
+      // paging and force a re-render of every stored student on each page view).
+      if (didBackgroundSyncRef.current) return;
+      didBackgroundSyncRef.current = true;
+
       fetch("/api/students/sync")
         .then(async (res) => {
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data.students)) {
-              // Reconcile again with fresh cloud state
+              // Reconcile local vault only — display state stays server-paginated
               await reconcileLocalCacheWithServer(data.students, activeOutboxIds);
-
-              const freshMap = new Map<string, StudentExtended>();
-              data.students.forEach((s: any) => {
-                freshMap.set(s.studentId, s);
-              });
-              // Overlay only pending outbox items
-              activeOutboxItems.forEach((s) => {
-                if (!freshMap.has(s.studentId)) {
-                  freshMap.set(s.studentId, s as StudentExtended);
-                }
-              });
-
-              const next = Array.from(freshMap.values());
-              next.sort((a, b) => {
-                const tA = new Date(a.createdAt || 0).getTime();
-                const tB = new Date(b.createdAt || 0).getTime();
-                return tB - tA;
-              });
-
-              setDisplayStudents(next);
             }
           }
         })
@@ -295,6 +297,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   const [selectedPhotoStatus, setSelectedPhotoStatus] = useState(searchParams.get("photoStatus") || "ALL");
   const [selectedBranch, setSelectedBranch] = useState(searchParams.get("branch") || "ALL");
   const [selectedSchool, setSelectedSchool] = useState(searchParams.get("school") || "ALL");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync search input whenever the URL q param changes
+  useEffect(() => {
+    const q = searchParams.get("q") || "";
+    setSearchQuery(q);
+  }, [searchParams]);
 
   // Calender Note & Pause Bulked Modal State
   const [calendarNoteModalOpen, setCalendarNoteModalOpen] = useState(false);
@@ -541,9 +550,24 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     });
   };
 
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      applyFilters({ q: val.trim(), page: 1 });
+    }, 380);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    applyFilters({ q: "", page: 1 });
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    applyFilters({ q: searchQuery });
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    applyFilters({ q: searchQuery.trim(), page: 1 });
   };
 
   const handlePageChange = (newPage: number) => {
@@ -559,10 +583,10 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
   // Bulk Selection
   const handleToggleSelectAll = () => {
-    if (selectedIds.size === filteredStudents.length && filteredStudents.length > 0) {
+    if (selectedIds.size === paginatedStudents.length && paginatedStudents.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredStudents.map((s) => s.id)));
+      setSelectedIds(new Set(paginatedStudents.map((s) => s.id)));
     }
   };
 
@@ -572,6 +596,11 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     else next.add(id);
     setSelectedIds(next);
   };
+
+  // Photo-verified students are "Encoded" (approved for ID encoding/printing);
+  // pending, missing, repair-required, or intentionally-absent photos are "Unencoded".
+  const getPhotoEncodeClass = (student: StudentExtended): "Encoded" | "Unencoded" =>
+    student.photoIntegrityStatus === "PHOTO_VERIFIED" ? "Encoded" : "Unencoded";
 
   // Bulk Photo Download with Real-Time MB Size, Metrics, Speed & Progress Modal
   const handleBulkDownloadPhotos = async () => {
@@ -629,10 +658,13 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             cleanName = cleanName.replace(/^[.\-_ ]+|[.\-_ ]+$/g, "") || "student";
             const photoFileName = `${cleanName}.jpg`;
 
-            // Organize strictly into Grade and Section Folders (e.g. Grade_9/Section_A/)
+            // Organize into Encoded / Unencoded class folders, then Grade and Section
+            // (e.g. Encoded/Grade_9/Section_A/ or Unencoded/Grade_9/Section_A/)
+            const encodeClass = getPhotoEncodeClass(student);
             const { gradeFolder, sectionFolder } = resolveGradeAndSection(student);
-            const targetFolder = zip.folder(gradeFolder)?.folder(sectionFolder) || zip;
-            const fullPathLabel = `${gradeFolder}/${sectionFolder}/${photoFileName}`;
+            const targetFolder =
+              zip.folder(encodeClass)?.folder(gradeFolder)?.folder(sectionFolder) || zip;
+            const fullPathLabel = `${encodeClass}/${gradeFolder}/${sectionFolder}/${photoFileName}`;
 
             const rawPhoto = student.originalPhotoPath || student.photoPath;
             if (!rawPhoto) {
@@ -697,7 +729,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       setZipProgress((prev) => ({
         ...prev,
         status: "compressing",
-        currentFileName: "Compressing into Grade & Section ZIP archive...",
+        currentFileName: "Compressing into Encoded / Unencoded ZIP archive...",
       }));
 
       const zipBlob = await zip.generateAsync(
@@ -721,7 +753,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         selectedIds.size > 0
           ? `Selected_${withPhotos.length}`
           : `All_${withPhotos.length}`;
-      const zipFileName = `Student_Photos_Grade_Section_${scopeLabel}_${dateTag}.zip`;
+      const zipFileName = `Student_Photos_Encoded_Unencoded_${scopeLabel}_${dateTag}.zip`;
 
       const url = window.URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
@@ -925,16 +957,19 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
   };
 
   // Single Photo Direct Download by Real Student Name with Live MB Metrics
+  // encodeClass prefixes the filename so single downloads still classify as Encoded/Unencoded.
   const handleDownloadSinglePhoto = async (
     photoUrl: string,
     studentName: string,
-    studentId?: string
+    studentId?: string,
+    encodeClass?: "Encoded" | "Unencoded"
   ) => {
     const cleanName =
       studentName
         .trim()
         .replace(/[\\/:*?"<>|]/g, "_")
         .replace(/\s+/g, " ") || "Student_Portrait";
+    const classifiedName = encodeClass ? `${encodeClass}_${cleanName}` : cleanName;
 
     if (studentId) setDownloadingSingleStudentId(studentId);
 
@@ -985,7 +1020,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${cleanName}.jpg`;
+      a.download = `${classifiedName}.jpg`;
       document.body.appendChild(a);
       a.click();
 
@@ -1009,7 +1044,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         studentName: cleanName,
         status: "success",
         sizeFormatted,
-        message: `✓ Downloaded ${cleanName}.jpg (${sizeFormatted})`,
+        message: `✓ Downloaded ${classifiedName}.jpg (${sizeFormatted})`,
       });
 
       // Auto dismiss success toast after 4.5s
@@ -1702,10 +1737,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
     return list;
   }, [displayStudents, searchQuery, selectedGrade, selectedDept, selectedSender, selectedDate, selectedPhotoStatus, selectedBranch, selectedSchool]);
 
-  const totalEffective = filteredStudents.length;
-  const totalPages = Math.ceil(totalEffective / activePageSize) || 1;
-  const startItem = totalEffective === 0 ? 0 : (activePage - 1) * activePageSize + 1;
-  const endItem = Math.min(activePage * activePageSize, totalEffective);
+  // Server-authoritative totals: the server returns exactly one page slice (max 500 rows),
+  // so all paging math must come from the server-provided totalCount — never from the local slice.
+  const totalEffective = totalCount;
+  const totalPages = Math.max(1, Math.ceil(totalCount / activePageSize));
+  const startItem = totalCount === 0 ? 0 : (activePage - 1) * activePageSize + 1;
+  const endItem = Math.min(activePage * activePageSize, totalCount);
 
   // Sorted students based on active column sort or default newest first
   const sortedStudents = React.useMemo(() => {
@@ -1742,11 +1779,104 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
   const activeTotalStudentsCount = Math.max(totalCount, displayStudents.length);
 
-  // Client-side pagination slice ensuring Per page (25, 50, 100) functions instantaneously
-  const paginatedStudents = React.useMemo(() => {
-    const start = (activePage - 1) * activePageSize;
-    return sortedStudents.slice(start, start + activePageSize);
-  }, [sortedStudents, activePage, activePageSize]);
+  // The server already returns exactly one page slice — no client-side re-slicing.
+  const paginatedStudents = sortedStudents;
+
+  const renderPaginationBar = (position: "top" | "bottom") => (
+    <div
+      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+        position === "top" ? "border-b" : "border-t"
+      } border-border dark:border-[#223126] bg-surface-secondary/60 dark:bg-[#161e19]/60 px-4 sm:px-6 py-2.5 text-xs text-foreground-muted dark:text-[#8a9e93]`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span>
+          Showing <strong className="text-foreground dark:text-[#f2f7f4]">{startItem}</strong> to{" "}
+          <strong className="text-foreground dark:text-[#f2f7f4]">{endItem}</strong> of{" "}
+          <strong className="text-foreground dark:text-[#f2f7f4] font-mono">
+            {totalEffective.toLocaleString()}
+          </strong>{" "}
+          students
+        </span>
+
+        <div className="flex items-center gap-1.5">
+          <span>Per page:</span>
+          <select
+            value={activePageSize}
+            onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
+            className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#070908] px-2 py-1 text-xs font-semibold text-foreground dark:text-[#f2f7f4] focus:border-[#8fe617] focus:outline-none cursor-pointer"
+          >
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={250}>250</option>
+            <option value={500}>500</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="font-mono font-semibold mr-1 hidden md:inline">
+          Page {activePage} of {totalPages}
+        </span>
+
+        <button
+          onClick={() => handlePageChange(1)}
+          disabled={activePage <= 1}
+          className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] px-2 py-1 text-[11px] font-mono text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
+          title="First Page"
+        >
+          « First
+        </button>
+
+        <button
+          onClick={() => handlePageChange(activePage - 1)}
+          disabled={activePage <= 1}
+          className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
+          title="Previous Page"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+
+        {generatePageNumbers(activePage, totalPages).map((p, idx) =>
+          p === "..." ? (
+            <span key={`dots-${position}-${idx}`} className="px-1 text-neutral-500 font-mono">
+              ...
+            </span>
+          ) : (
+            <button
+              key={`page-${position}-${p}`}
+              onClick={() => handlePageChange(Number(p))}
+              className={`rounded-lg px-2.5 py-1 text-xs font-mono font-bold transition-all cursor-pointer ${
+                activePage === p
+                  ? "bg-[#8fe617] text-[#070908] shadow-xs"
+                  : "border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23]"
+              }`}
+            >
+              {p}
+            </button>
+          )
+        )}
+
+        <button
+          onClick={() => handlePageChange(activePage + 1)}
+          disabled={activePage >= totalPages}
+          className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
+          title="Next Page"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+
+        <button
+          onClick={() => handlePageChange(totalPages)}
+          disabled={activePage >= totalPages}
+          className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] px-2 py-1 text-[11px] font-mono text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
+          title="Last Page"
+        >
+          Last »
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -1820,7 +1950,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             All Students ({activeTotalStudentsCount.toLocaleString()})
           </button>
           {allAvailableGrades.map((g) => {
-            const count = dynamicGradeCounts[g] ?? gradeCounts?.[g];
+            const count = gradeCounts?.[g] ?? dynamicGradeCounts[g];
             const isSelected = selectedGrade === g;
             return (
               <button
@@ -1854,20 +1984,17 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Name, Student ID, Phone, Department, School..."
-                className="w-full h-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] pl-10 pr-4 text-xs sm:text-sm text-foreground dark:text-[#f2f7f4] placeholder:text-foreground-subtle dark:placeholder:text-[#6c8074] focus:border-[#8fe617] focus:outline-none transition-colors"
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search all 3,723 students by Name, Student ID, Phone, Department, School..."
+                className="w-full h-11 rounded-xl border border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#070908] pl-10 pr-16 text-xs sm:text-sm text-foreground dark:text-[#f2f7f4] placeholder:text-foreground-subtle dark:placeholder:text-[#6c8074] focus:border-[#8fe617] focus:outline-none transition-colors"
               />
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    applyFilters({ query: "" });
-                  }}
-                  className="absolute right-3 top-3 text-xs text-foreground-muted hover:text-foreground cursor-pointer"
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-3 text-xs font-semibold text-[#8fe617] hover:underline cursor-pointer"
                 >
-                  Clear
+                  Clear ✕
                 </button>
               )}
             </div>
@@ -1911,7 +2038,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
               disabled={isDownloadingPhotos}
               onClick={handleBulkDownloadPhotos}
               className="h-11 px-4 rounded-xl bg-black text-white hover:bg-neutral-800 dark:bg-neutral-900 dark:border dark:border-[#223126] text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
-              title="Download student portraits organized into Grade & Section folders (ZIP archive)"
+              title="Download student portraits classified into Encoded (photo verified) / Unencoded folders, then Grade & Section (ZIP archive)"
             >
               {isDownloadingPhotos ? (
                 <Loader2 className="h-4 w-4 text-[#8fe617] animate-spin" />
@@ -2139,6 +2266,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
 
       {/* Main Student Data Table */}
       <div className="rounded-2xl border border-border dark:border-[#223126] bg-surface dark:bg-[#111613] overflow-hidden shadow-xs">
+        {renderPaginationBar("top")}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border dark:border-[#223126] bg-surface-secondary dark:bg-[#161e19] text-xs uppercase tracking-wider text-foreground-muted dark:text-[#8a9e93] font-mono select-none">
@@ -2146,7 +2274,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                 <th className="w-12 px-4 py-3.5 text-center">
                   <input
                     type="checkbox"
-                    checked={selectedIds.size === displayStudents.length && displayStudents.length > 0}
+                    checked={selectedIds.size === paginatedStudents.length && paginatedStudents.length > 0}
                     onChange={handleToggleSelectAll}
                     className="accent-[#8fe617] rounded h-4 w-4 cursor-pointer"
                   />
@@ -2248,6 +2376,25 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                   </button>
                 </th>
                 <th className="px-4 py-3.5">Sent By</th>
+                <th className="px-4 py-3.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSort("createdAt")}
+                    className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors font-mono cursor-pointer"
+                    title="Click to sort by Sent Date & Time"
+                  >
+                    <span>Sent At</span>
+                    {sortField === "createdAt" ? (
+                      sortDirection === "asc" ? (
+                        <ArrowUp className="h-3.5 w-3.5 text-[#8fe617]" />
+                      ) : (
+                        <ArrowDown className="h-3.5 w-3.5 text-[#8fe617]" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 opacity-40 hover:opacity-100" />
+                    )}
+                  </button>
+                </th>
                 <th className="px-4 py-3.5">Photo Status</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
@@ -2255,7 +2402,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
             <tbody className="divide-y divide-border dark:divide-[#223126]">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
+                  <td colSpan={11} className="py-20 px-6 text-center bg-surface dark:bg-[#111613]">
                     <div className="max-w-md mx-auto flex flex-col items-center justify-center space-y-4">
                       <div className="w-16 h-16 rounded-2xl bg-surface-secondary dark:bg-[#161e19] border border-border dark:border-[#223126] flex items-center justify-center text-accent">
                         <Users className="w-8 h-8 text-[#8fe617]" />
@@ -2467,6 +2614,31 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                         </span>
                       </td>
 
+                      {/* Exact Date & Time the student's data was sent into the system */}
+                      <td className="px-4 py-3.5">
+                        {student.createdAt ? (
+                          <div className="flex flex-col leading-tight">
+                            <span className="text-xs font-mono font-semibold text-foreground dark:text-[#f2f7f4]">
+                              {new Date(student.createdAt).toLocaleDateString(undefined, {
+                                year: "numeric",
+                                month: "short",
+                                day: "2-digit",
+                              })}
+                            </span>
+                            <span className="text-[10px] font-mono text-foreground-muted dark:text-[#8a9e93]">
+                              {new Date(student.createdAt).toLocaleTimeString(undefined, {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                                hour12: false,
+                              })}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-foreground-muted dark:text-[#8a9e93]">—</span>
+                        )}
+                      </td>
+
                       {/* Photo Status */}
                       <td className="px-4 py-3.5">
                         {hasPhoto ? (
@@ -2526,11 +2698,12 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                                   handleDownloadSinglePhoto(
                                     student.originalPhotoPath || student.photoPath!,
                                     student.fullName,
-                                    student.id
+                                    student.id,
+                                    getPhotoEncodeClass(student)
                                   )
                                 }
                                 className="rounded-lg p-2 text-foreground-muted dark:text-[#8a9e93] hover:bg-surface-secondary dark:hover:bg-[#161e19] hover:text-foreground dark:hover:text-[#f2f7f4] transition-colors cursor-pointer disabled:opacity-50"
-                                title={`Download Original Photo (${student.fullName}.jpg)`}
+                                title={`Download Original Photo (${getPhotoEncodeClass(student)}_${student.fullName}.jpg)`}
                               >
                                 {downloadingSingleStudentId === student.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin text-[#8fe617]" />
@@ -2700,54 +2873,7 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
         </div>
 
         {/* Server-Side Pagination Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-border dark:border-[#223126] bg-surface-secondary/50 dark:bg-[#161e19]/50 px-6 py-3 text-xs text-foreground-muted dark:text-[#8a9e93]">
-          <div className="flex items-center gap-3">
-            <span>
-              Showing <strong className="text-foreground dark:text-[#f2f7f4]">{startItem}</strong> to{" "}
-              <strong className="text-foreground dark:text-[#f2f7f4]">{endItem}</strong> of{" "}
-              <strong className="text-foreground dark:text-[#f2f7f4] font-mono">{totalEffective.toLocaleString()}</strong> students
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              <span>Per page:</span>
-              <select
-                value={activePageSize}
-                onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
-                className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#070908] px-2.5 py-1 text-xs font-semibold text-foreground dark:text-[#f2f7f4] focus:border-accent focus:outline-none cursor-pointer"
-              >
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={250}>250</option>
-                <option value={500}>500</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-semibold">
-              Page {activePage} of {totalPages}
-            </span>
-
-            <button
-              onClick={() => handlePageChange(activePage - 1)}
-              disabled={activePage <= 1}
-              className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1.5 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
-              title="Previous Page"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-
-            <button
-              onClick={() => handlePageChange(activePage + 1)}
-              disabled={activePage >= totalPages}
-              className="rounded-lg border border-border dark:border-[#223126] bg-surface dark:bg-[#161e19] p-1.5 text-foreground dark:text-[#f2f7f4] hover:bg-surface-secondary dark:hover:bg-[#202b23] disabled:opacity-30 transition-colors cursor-pointer"
-              title="Next Page"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        {renderPaginationBar("bottom")}
       </div>
 
       {/* Sleek Floating Bulk Action Dock (Linear / Vercel Style) */}
@@ -2808,7 +2934,8 @@ export const StudentDirectoryClient: React.FC<StudentDirectoryClientProps> = ({
                           handleDownloadSinglePhoto(
                             singleSel.originalPhotoPath || singleSel.photoPath!,
                             singleSel.fullName,
-                            singleSel.id
+                            singleSel.id,
+                            getPhotoEncodeClass(singleSel)
                           )
                         }
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#8fe617]/50 bg-[#8fe617]/15 hover:bg-[#8fe617]/25 text-xs font-semibold text-[#8fe617] transition-colors cursor-pointer disabled:opacity-50"

@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-muted: #F1F5F9;
+  --charcoal: #0B1118;
+  --charcoal-dark: #05080C;
+  --accent: #9EE617;
+  --accent-light: #BEF264;
+  --accent-hover: #8FE617;
+  --accent-glow: rgba(158, 230, 23, 0.35);
+  --foreground: #0B1118;
+  --foreground-muted: #64748B;
+  --border: #E2E8F0;
+  --border-subtle: #EDF2F7;
+}
+
+html,
+body,
+#root {
+  max-width: 100vw;
+  width: 100%;
+  overflow-x: hidden !important;
+  position: relative;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Rounded Cards */
+.card-enterprise {
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
+}
+
+.card-enterprise:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Custom Badges Matching Brand Guidelines - Light Lemon Green Accent */
+.badge-accepted {
+  background: rgba(158, 230, 23, 0.18);
+  color: #366804;
+  border: 1px solid rgba(158, 230, 23, 0.45);
+}
+
+.badge-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-rejected {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-female {
+  background: rgba(168, 85, 247, 0.12);
+  color: #7e22ce;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.badge-male {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(11, 17, 24, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(158, 230, 23, 0.8);
+}
+
