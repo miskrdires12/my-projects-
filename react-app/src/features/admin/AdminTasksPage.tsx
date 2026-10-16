@@ -58,15 +58,12 @@ export const AdminTasksPage: React.FC = () => {
            s.senderId === user.id
     );
 
-    const totalCaptures = userStudents.length > 0
-      ? userStudents.length
-      : (user.recordsSentSingle || (idx === 0 ? 638 : idx === 1 ? 379 : idx === 2 ? 351 : 267));
-
+    const totalCaptures = userStudents.length;
     const todayCaptures = userStudents.filter(
       s => s.createdAt && s.createdAt.startsWith(todayStr)
     ).length;
 
-    const dailyCalculated = todayCaptures > 0 ? todayCaptures : Math.max(12, Math.round(totalCaptures * 0.12));
+    const dailyCalculated = todayCaptures;
 
     // Shift metrics
     const shiftTimes = ['08:00 AM', '08:15 AM', '08:30 AM', '08:45 AM', '09:00 AM'];

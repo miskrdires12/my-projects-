@@ -60,7 +60,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SUPER_ADMIN",
     password: "sukuna24th",
     boundDeviceId: null,
-    recordsEncoded: 709,
+    recordsEncoded: 0,
   },
   {
     id: "cmuvl71ji0000941kfotbx6om",
@@ -78,7 +78,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 351,
+    recordsSentSingle: 0,
   },
   {
     id: "cmuc9t7id0000101wsibwr8vi",
@@ -87,7 +87,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "211219",
     boundDeviceId: null,
-    recordsSentSingle: 638,
+    recordsSentSingle: 0,
   },
   {
     id: "usr_etsubmola_alias",
@@ -105,7 +105,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 379,
+    recordsSentSingle: 0,
   },
   {
     id: "cmuwbah7r00032v1ksdelhqag",
@@ -114,7 +114,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 267,
+    recordsSentSingle: 0,
   },
   {
     id: "cmumbjn480003g2k6ycd2mzp3",
@@ -123,7 +123,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 483,
+    recordsSentSingle: 0,
   },
   {
     id: "cmumd6g4y00043vo7wf1afj62",
@@ -132,7 +132,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SUPER_ADMIN",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 471,
+    recordsSentSingle: 0,
   },
   {
     id: "cmumbid6b0000g2k6tub66ug0",
@@ -141,7 +141,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 61,
+    recordsSentSingle: 0,
   },
   {
     id: "cmu80ooz8000611r3aum80oax",
@@ -159,7 +159,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 3,
+    recordsSentSingle: 0,
   },
   {
     id: "cmudqu6ue0004rrcc4ktw46n1",
@@ -168,7 +168,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 118,
+    recordsSentSingle: 0,
   },
   {
     id: "cmumbkjf60006g2k6lvl8gba9",
@@ -177,7 +177,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 165,
+    recordsSentSingle: 0,
   },
   {
     id: "cmuasu1mo0000dxwgl8i69x3j",
@@ -186,7 +186,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 2,
+    recordsSentSingle: 0,
   },
   {
     id: "cmuq26kz90001q5dgcb3lu519",
@@ -203,7 +203,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "RECEIVER",
     password: "12345678",
     boundDeviceId: null,
-    recordsEncoded: 335,
+    recordsEncoded: 0,
   },
   {
     id: "cmua5dk5n00041tc43u1v7em9",
@@ -212,7 +212,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "SENDER",
     password: "12345678",
     boundDeviceId: null,
-    recordsSentSingle: 677,
+    recordsSentSingle: 0,
   },
   {
     id: "cmuxuut8t001s90y8x5t88jqt",
@@ -229,7 +229,7 @@ export const PRESET_OPERATORS: OperatorAccount[] = [
     role: "RECEIVER",
     password: "12345678",
     boundDeviceId: null,
-    recordsEncoded: 7061,
+    recordsEncoded: 0,
   },
   {
     id: "usr_biruk1",
@@ -1578,12 +1578,13 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   const liveMonth = matchingStudents.filter(s => s.createdAt && new Date(s.createdAt) >= thirtyDaysAgo).length;
 
   const baseRecorded = user?.recordsSentSingle || 0;
-  const total = Math.max(baseRecorded, matchingStudents.length);
+  // All sender counts derive strictly from actual recorded students in memory / live sync
+  const total = matchingStudents.length > 0 ? matchingStudents.length : baseRecorded;
 
-  // Strict live daily count: when a new day starts (e.g. tomorrow), today strictly starts at 0!
+  // Strict live daily count: starts from 0 and increments dynamically in real-time as records arrive
   const today = liveToday;
-  const week = liveWeek > 0 ? liveWeek : (total > 0 ? Math.min(total, Math.max(today, Math.round(total * 0.15))) : 0);
-  const month = liveMonth > 0 ? liveMonth : total;
+  const week = liveWeek;
+  const month = liveMonth;
 
   // Mistakes count & quality efficiency calculation
   const mistakesCount = matchingStudents.filter(s => {

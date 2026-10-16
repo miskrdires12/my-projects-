@@ -22,13 +22,11 @@ export const AdminPerformancePage: React.FC = () => {
         st => (st.senderName && st.senderName.toLowerCase() === sName) ||
               (st.senderId && st.senderId.toLowerCase() === sender.id.toLowerCase())
       );
-      const registeredCount = registeredStudents.length > 0
-        ? registeredStudents.length
-        : (sender.recordsSentSingle || 0);
+      const registeredCount = registeredStudents.length;
 
       // Estimated velocity (records per hour based on sessions)
-      const sessions = sender.workSessionCount || Math.max(1, Math.round(registeredCount / 38));
-      const speedPerHour = registeredCount > 0 ? (registeredCount / (sessions * 1.5)).toFixed(1) : '24.5';
+      const sessions = sender.workSessionCount || (registeredCount > 0 ? Math.max(1, Math.round(registeredCount / 38)) : 0);
+      const speedPerHour = registeredCount > 0 && sessions > 0 ? (registeredCount / (sessions * 1.5)).toFixed(1) : '0.0';
 
       return {
         ...sender,
