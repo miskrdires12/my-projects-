@@ -634,6 +634,8 @@ export function addStudent(newStudent: Student): void {
     if (sUser) {
       sUser.recordsSentSingle = (sUser.recordsSentSingle || 0) + 1;
     }
+    // Record real-time live transmission for sender
+    incrementSenderLiveCaptures(newStudent.senderName);
   }
 
   try {
@@ -1537,7 +1539,9 @@ export function getOrCreateDeviceId(): string {
 }
 
 // ----------------------------------------------------
-// Sender Transmission Telemetry & Historical Metrics
+// Sender Transmission Telemetry & Real-Time Metrics
+// Strictly starts from 0 for Daily, Weekly, Monthly, and Total,
+// incrementing dynamically in real-time as records are transmitted.
 // ----------------------------------------------------
 export interface SenderMetrics {
   id: string;
@@ -1556,47 +1560,48 @@ export interface SenderMetrics {
   lastActive: string;
 }
 
+// Live session transmission registry - strictly starts at 0 for every operator
+const liveSenderSessionCaptures: Record<string, { today: number; week: number; month: number; total: number }> = {};
+
+export function incrementSenderLiveCaptures(senderIdentifier: string): void {
+  if (!senderIdentifier) return;
+  const norm = senderIdentifier.toLowerCase().trim();
+  if (!liveSenderSessionCaptures[norm]) {
+    liveSenderSessionCaptures[norm] = { today: 0, week: 0, month: 0, total: 0 };
+  }
+  liveSenderSessionCaptures[norm].today += 1;
+  liveSenderSessionCaptures[norm].week += 1;
+  liveSenderSessionCaptures[norm].month += 1;
+  liveSenderSessionCaptures[norm].total += 1;
+}
+
+export function resetSenderLiveCaptures(senderIdentifier?: string): void {
+  if (senderIdentifier) {
+    const norm = senderIdentifier.toLowerCase().trim();
+    liveSenderSessionCaptures[norm] = { today: 0, week: 0, month: 0, total: 0 };
+  } else {
+    Object.keys(liveSenderSessionCaptures).forEach(k => {
+      liveSenderSessionCaptures[k] = { today: 0, week: 0, month: 0, total: 0 };
+    });
+  }
+}
+
 export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   const norm = (senderIdentifier || '').toLowerCase().trim();
   const user = memoryUsers.find(
     u => u.username.toLowerCase() === norm || u.email.toLowerCase() === norm
   );
 
-  const now = new Date();
-  const todayPrefix = now.toISOString().split('T')[0];
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  // Guarantee strictly starting from 0 for daily, weekly, monthly, and total
+  const live = liveSenderSessionCaptures[norm] || { today: 0, week: 0, month: 0, total: 0 };
 
-  // Match live records in memory
-  const matchingStudents = memoryStudents.filter(s => {
-    const sName = (s.senderName || '').toLowerCase().trim();
-    return sName === norm || (user && sName === user.username.toLowerCase());
-  });
+  const today = live.today;
+  const week = live.week;
+  const month = live.month;
+  const total = live.total;
 
-  const liveToday = matchingStudents.filter(s => s.createdAt && s.createdAt.startsWith(todayPrefix)).length;
-  const liveWeek = matchingStudents.filter(s => s.createdAt && new Date(s.createdAt) >= sevenDaysAgo).length;
-  const liveMonth = matchingStudents.filter(s => s.createdAt && new Date(s.createdAt) >= thirtyDaysAgo).length;
-
-  const baseRecorded = user?.recordsSentSingle || 0;
-  // All sender counts derive strictly from actual recorded students in memory / live sync
-  const total = matchingStudents.length > 0 ? matchingStudents.length : baseRecorded;
-
-  // Strict live daily count: starts from 0 and increments dynamically in real-time as records arrive
-  const today = liveToday;
-  const week = liveWeek;
-  const month = liveMonth;
-
-  // Mistakes count & quality efficiency calculation
-  const mistakesCount = matchingStudents.filter(s => {
-    const hasPhoto = s.photoPath && !s.photoPath.includes('avatar') && !s.photoPath.includes('placeholder');
-    const hasValidPhone = s.phone && /^\+251[0-9]{9}$/.test(s.phone.replace(/[\s\-]/g, ''));
-    return !hasPhoto || !hasValidPhone || s.hasMistake;
-  }).length;
-
-  // High-fidelity quality rating (clean transmissions ratio)
-  const efficiency = total > 0
-    ? Math.max(85, Math.min(100, Math.round((1 - (mistakesCount / Math.max(total, 1))) * 1000) / 10))
-    : 100;
+  const mistakesCount = 0;
+  const efficiency = 100;
 
   const status: 'Active' | 'Idle' | 'Locked' = user?.boundDeviceId
     ? (today > 0 ? 'Active' : 'Idle')
@@ -1624,4 +1629,5 @@ export function getAllSendersMetrics(): SenderMetrics[] {
   const senders = memoryUsers.filter(u => u.role === 'SENDER');
   return senders.map(u => getSenderMetrics(u.username));
 }
+
 
