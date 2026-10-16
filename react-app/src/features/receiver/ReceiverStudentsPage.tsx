@@ -337,6 +337,20 @@ export const ReceiverStudentsPage: React.FC = () => {
     return Array.from(set).sort();
   }, [students]);
 
+  // Calendar dates with student count for everyday viewer
+  const calendarDateCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    students.forEach(s => {
+      const d = (s.createdAt || '').substring(0, 10);
+      if (d) counts[d] = (counts[d] || 0) + 1;
+    });
+    return counts;
+  }, [students]);
+
+  const distinctDates = useMemo(() => {
+    return Object.keys(calendarDateCounts).sort().reverse();
+  }, [calendarDateCounts]);
+
   // Dynamically computed registry anomalies for the Mistake Analyzer pop-up
   const mistakeItems = useMemo(() => {
     const list: Array<{
@@ -1377,6 +1391,73 @@ export const ReceiverStudentsPage: React.FC = () => {
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Everyday Calendar Data Viewer */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#E2E8F0]">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-black text-[#0B1118]">
+              <Calendar className="w-4 h-4 text-[#256002]" />
+              <span>Everyday Calendar Viewer:</span>
+            </div>
+
+            {/* Native Date Picker */}
+            <div className="relative flex items-center">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => { setSelectedDate(e.target.value); setPage(1); }}
+                className="bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-1.5 text-xs font-bold text-[#0B1118] focus:border-[#9EE617] cursor-pointer"
+              />
+              {selectedDate && (
+                <button
+                  type="button"
+                  onClick={() => { setSelectedDate(''); setPage(1); }}
+                  className="ml-1 p-1 text-slate-400 hover:text-black rounded-lg hover:bg-slate-100"
+                  title="Clear calendar date filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Quick Calendar Date Chips */}
+            <div className="flex flex-wrap items-center gap-1.5 ml-1">
+              <button
+                type="button"
+                onClick={() => { setSelectedDate(''); setPage(1); }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  !selectedDate
+                    ? 'bg-[#0B1118] text-[#9EE617] shadow-xs'
+                    : 'bg-[#F1F5F9] text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                All Days ({students.length})
+              </button>
+              {distinctDates.slice(0, 6).map(dt => (
+                <button
+                  key={dt}
+                  type="button"
+                  onClick={() => { setSelectedDate(dt); setPage(1); }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    selectedDate === dt
+                      ? 'bg-[#9EE617] text-[#0B1118] shadow-xs'
+                      : 'bg-[#F1F5F9] text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{dt}</span>
+                  <span className="text-[10px] font-black opacity-80">({calendarDateCounts[dt]})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {selectedDate && (
+            <div className="text-xs font-bold text-[#256002] bg-[#9EE617]/20 px-3 py-1 rounded-xl flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#256002] animate-pulse" />
+              <span>Viewing {filtered.length} student(s) registered on {selectedDate}</span>
+            </div>
+          )}
         </div>
       </div>
 

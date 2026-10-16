@@ -718,6 +718,9 @@ export function updateStudent(id: string, updates: Partial<Student>): void {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
     }
+
+    // Broadcast across all connected stations and open tabs in real-time
+    publishStudentSync('UPSERT', memoryStudents[index]);
   }
 }
 

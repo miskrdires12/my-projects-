@@ -107,6 +107,7 @@ export const App: React.FC = () => {
             <Route path="/admin/reviews" element={<AdminReviewsPage />} />
             <Route path="/admin/performance" element={<AdminPerformancePage />} />
             <Route path="/admin/reports" element={<AdminReportsPage />} />
+            <Route path="/admin/database" element={<DatabaseControlPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/*" element={<Navigate to="/admin/dashboard" replace />} />
 
