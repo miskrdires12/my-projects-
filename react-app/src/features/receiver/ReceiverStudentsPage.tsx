@@ -205,7 +205,17 @@ export const ReceiverStudentsPage: React.FC = () => {
           const memory = getStudents();
           const serverIds = new Set(json.students.map((s: Student) => s.studentId));
           const localOnly = memory.filter(m => !serverIds.has(m.studentId));
-          const combined = [...localOnly, ...json.students];
+          const normalizedServer = json.students.map((s: Student) => {
+            const d = (s.createdAt || (s as any).registrationDate || (s as any).date || '').substring(0, 10);
+            let school = s.school;
+            let bloodType = s.bloodType;
+            if (d >= '2026-10-14') {
+              if ((school || '').toLowerCase() === 'yms') school = 'YMS 1';
+              if (bloodType === 'O+') bloodType = 'Unknown';
+            }
+            return { ...s, school, bloodType };
+          });
+          const combined = [...localOnly, ...normalizedServer];
           setStudents(combined);
           return;
         }

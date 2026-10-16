@@ -578,8 +578,24 @@ export async function initStore(): Promise<void> {
   }
 }
 
+export function normalizeStudentData(s: Student): Student {
+  if (!s) return s;
+  const d = (s.createdAt || (s as any).registrationDate || (s as any).date || '').substring(0, 10);
+  let school = s.school;
+  let bloodType = s.bloodType;
+  if (d >= '2026-10-14') {
+    if ((school || '').toLowerCase() === 'yms') {
+      school = 'YMS 1';
+    }
+    if (bloodType === 'O+') {
+      bloodType = 'Unknown';
+    }
+  }
+  return { ...s, school, bloodType };
+}
+
 export function getStudents(): Student[] {
-  return memoryStudents;
+  return memoryStudents.map(normalizeStudentData);
 }
 
 export function addStudent(newStudent: Student): void {

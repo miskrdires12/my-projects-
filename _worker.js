@@ -272,7 +272,21 @@ async function getAllStudentsDataset(env, originUrl) {
     });
   }
 
-  cachedAllStudents = Array.from(combinedMap.values());
+  cachedAllStudents = Array.from(combinedMap.values()).map(s => {
+    if (!s) return s;
+    const d = (s.createdAt || s.registrationDate || "").substring(0, 10);
+    let school = s.school;
+    let bloodType = s.bloodType;
+    if (d >= "2026-10-14") {
+      if ((school || "").toLowerCase() === "yms") {
+        school = "YMS 1";
+      }
+      if (bloodType === "O+") {
+        bloodType = "Unknown";
+      }
+    }
+    return { ...s, school, bloodType };
+  });
   lastAllFetchTime = Date.now();
   return cachedAllStudents;
 }
