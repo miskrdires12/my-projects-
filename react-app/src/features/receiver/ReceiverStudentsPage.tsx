@@ -6,7 +6,8 @@ import {
   Download, Image as ImageIcon, QrCode as QrIcon,
   Sliders, FileText, CheckCircle2, AlertTriangle, Phone,
   MapPin, Clock, ExternalLink, RefreshCw, FileSpreadsheet,
-  Archive, ArrowUpDown, ArrowUp, ArrowDown, Filter, Sparkles, Crop, Cloud
+  Archive, ArrowUpDown, ArrowUp, ArrowDown, Filter, Sparkles, Crop, Cloud,
+  Radio, Award, Activity, TrendingUp
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
@@ -16,7 +17,7 @@ import {
   getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP,
   generateStudentQrToken, getStudentPhotoFileName, getStudentQrFileName,
-  addCorrectionLog
+  addCorrectionLog, getAllSendersMetrics, SenderMetrics
 } from '@/lib/store';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
@@ -214,11 +215,14 @@ export const ReceiverStudentsPage: React.FC = () => {
     setStudents(getStudents());
   };
 
+  const [sendersList, setSendersList] = useState<SenderMetrics[]>(() => getAllSendersMetrics());
+
   useEffect(() => {
     const initial = getStudents();
     if (initial.length > 0) {
       setStudents(initial);
     }
+    setSendersList(getAllSendersMetrics());
     loadData();
 
     const handleDataChange = () => {
@@ -226,8 +230,10 @@ export const ReceiverStudentsPage: React.FC = () => {
       if (current.length > 0) {
         setStudents([...current]);
       }
+      setSendersList(getAllSendersMetrics());
     };
     window.addEventListener('studentbridge_datachange', handleDataChange);
+    window.addEventListener('studentbridge_userchange', handleDataChange);
 
     const unsubscribe = subscribeToStudentSync(
       (incoming) => {
@@ -248,6 +254,7 @@ export const ReceiverStudentsPage: React.FC = () => {
 
     return () => {
       window.removeEventListener('studentbridge_datachange', handleDataChange);
+      window.removeEventListener('studentbridge_userchange', handleDataChange);
       unsubscribe();
     };
   }, []);
@@ -1290,6 +1297,106 @@ export const ReceiverStudentsPage: React.FC = () => {
               </span>
             )}
           </button>
+        </div>
+      </div>
+
+      {/* Telemetric Velocity Section — Dedicated Exclusively to Field Senders Status & Real-time Telemetry */}
+      <div className="bg-white p-5 rounded-2xl border border-[#E2E8F0] shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#9EE617]/20 border border-[#9EE617]/40 flex items-center justify-center">
+              <Radio className="w-4 h-4 text-[#256002] animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-heading font-black text-[#0B1118] tracking-tight">
+                  Telemetric Velocity & Senders Live Status
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/40 font-mono">
+                  {sendersList.length} Field Senders
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Live capture telemetry, device locking, transmission speeds, and active station status
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-500 font-mono">Realtime Stream:</span>
+            <span className="px-2.5 py-1 rounded-xl bg-[#0B1118] text-[#9EE617] text-[10px] font-mono font-bold flex items-center gap-1.5 shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#9EE617] animate-ping" />
+              <span>LIVE CAPTURE MONITOR</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Sender Fleet Status Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {sendersList.map((s) => {
+            const isOnline = s.status === 'Active' || s.today > 0;
+            return (
+              <div
+                key={s.id || s.username}
+                className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAF9] hover:bg-white hover:border-[#9EE617]/60 hover:shadow-xs transition-all space-y-2.5"
+              >
+                {/* Operator Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-[#9EE617]/20 border border-[#9EE617]/40 text-[#256002] flex items-center justify-center font-black font-mono text-xs">
+                      {s.username.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-[#0B1118] flex items-center gap-1">
+                        <span>{s.username}</span>
+                        {isOnline && <span className="w-1.5 h-1.5 rounded-full bg-[#9EE617]" />}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-semibold">
+                        {s.school || 'YMS 1'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold font-mono border ${
+                    isOnline
+                      ? 'bg-[#9EE617]/20 text-[#256002] border-[#9EE617]/40'
+                      : 'bg-slate-200 text-slate-600 border-slate-300'
+                  }`}>
+                    {isOnline ? 'ACTIVE' : 'IDLE'}
+                  </span>
+                </div>
+
+                {/* 4 Telemetry Metrics — strictly starting from 0 and incrementing in realtime */}
+                <div className="grid grid-cols-4 gap-1 text-center font-mono bg-white p-1.5 rounded-lg border border-[#E2E8F0]">
+                  <div>
+                    <div className="text-[8px] font-bold text-slate-400 uppercase">Today</div>
+                    <div className="text-xs font-black text-[#0B1118]">{s.today}</div>
+                  </div>
+                  <div>
+                    <div className="text-[8px] font-bold text-slate-400 uppercase">Week</div>
+                    <div className="text-xs font-black text-[#0B1118]">{s.week}</div>
+                  </div>
+                  <div>
+                    <div className="text-[8px] font-bold text-slate-400 uppercase">Month</div>
+                    <div className="text-xs font-black text-[#0B1118]">{s.month}</div>
+                  </div>
+                  <div>
+                    <div className="text-[8px] font-bold text-slate-400 uppercase">Total</div>
+                    <div className="text-xs font-black text-[#256002]">{s.total}</div>
+                  </div>
+                </div>
+
+                {/* Terminal Lock & Efficiency */}
+                <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1 border-t border-[#E2E8F0]">
+                  <div className="flex items-center gap-1 truncate max-w-[130px]" title={s.boundDeviceId || 'Unlocked'}>
+                    <Shield className="w-3 h-3 text-[#256002] shrink-0" />
+                    <span className="truncate">{s.boundDeviceId ? '1-Device Locked' : 'Unlocked'}</span>
+                  </div>
+                  <span className="font-bold text-[#256002]">{s.efficiency}% Rate</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

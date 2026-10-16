@@ -26,10 +26,14 @@ import {
   HeartPulse,
   Bus,
   MapPin,
-  Calendar
+  Calendar,
+  Radio,
+  UserCheck,
+  Activity,
+  Award
 } from "lucide-react";
 import JSZip from "jszip";
-import { getStudents, updateStudent, deleteStudent, getCurrentUser } from "@/lib/store";
+import { getStudents, updateStudent, deleteStudent, getCurrentUser, getAllSendersMetrics, SenderMetrics } from "@/lib/store";
 import { Student } from "@/types";
 
 export const AdminDashboardPage: React.FC = () => {
@@ -74,10 +78,13 @@ export const AdminDashboardPage: React.FC = () => {
     flaggedList: any[];
   } | null>(null);
 
+  const [sendersList, setSendersList] = useState<SenderMetrics[]>([]);
+
   const loadData = useCallback(() => {
     const list = getStudents();
     list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     setAllStudentsList(list);
+    setSendersList(getAllSendersMetrics());
     setLastUpdated(new Date().toLocaleTimeString());
   }, []);
 
@@ -85,7 +92,11 @@ export const AdminDashboardPage: React.FC = () => {
     loadData();
     const handleDataChange = () => loadData();
     window.addEventListener('studentbridge_datachange', handleDataChange);
-    return () => window.removeEventListener('studentbridge_datachange', handleDataChange);
+    window.addEventListener('studentbridge_userchange', handleDataChange);
+    return () => {
+      window.removeEventListener('studentbridge_datachange', handleDataChange);
+      window.removeEventListener('studentbridge_userchange', handleDataChange);
+    };
   }, [loadData]);
 
   // Polling
@@ -811,272 +822,150 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Real-world Live Ingested Student Velocity Bar & Graphs */}
+      {/* Telemetric Velocity Section — Dedicated Exclusively to Field Senders Status & Telemetry */}
       <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
           <div className="flex items-center gap-2.5">
-            <BarChart3 className="h-5 w-5 text-[#8fe617]" />
+            <Radio className="h-5 w-5 text-[#8fe617] animate-pulse" />
             <div>
-              <h2 className="text-sm sm:text-base font-bold font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
-                Production Velocity & Realtime Metrics
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-bold font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                  Telemetric Velocity & Field Senders Fleet
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#8fe617]/15 text-[#256002] dark:text-[#8fe617] border border-[#8fe617]/30 font-mono">
+                  {sendersList.length} Active Terminals
+                </span>
+              </div>
               <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
-                Live multi-station student registration throughput & card manufacturing velocity
+                Real-time telemetry, 1-device workstation lock status, transmission velocity, and operator quotas
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
-            <span className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mr-1">Timeframe:</span>
-            {(["hourly", "daily", "trend"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => {
-                  setActiveTimeRange(mode);
-                  setHoveredPointIndex(null);
-                }}
-                className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
-                  activeTimeRange === mode
-                    ? "bg-[#8fe617] text-[#062404] shadow-xs"
-                    : "border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
-                }`}
-              >
-                {mode === "hourly" ? "Today" : mode === "daily" ? "Past 7 Days" : "Past 30 Days"}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+            <span className="text-[11px] text-[#6b7771] dark:text-[#8a9e93]">Terminal Mode:</span>
+            <span className="px-2.5 py-1 rounded-xl font-bold bg-[#8fe617] text-[#062404] shadow-xs flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#062404] animate-ping" />
+              <span>LIVE BROADCAST (ZERO-START)</span>
+            </span>
           </div>
         </div>
 
-        {/* Student Ingestion Summary Across Timeframes */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs font-mono">
-            <span className="font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-[#8fe617]" />
-              Student Data Gathered Across Timeframes
-            </span>
-            <span className="text-[#6b7771] dark:text-[#8a9e93]">
-              Authoritative Registry
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 font-mono">
-            {/* Card 1: A Day */}
-            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
-              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
-                <span>A DAY (TODAY)</span>
-                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
-                  DAY
-                </span>
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
-                {gatheredTimeframeStats.day.count.toLocaleString()}
-              </div>
-              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
-                <span>Photos Gathered</span>
-                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.day.photos.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {/* Card 2: A Week */}
-            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
-              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
-                <span>A WEEK (7D)</span>
-                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
-                  WEEK
-                </span>
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
-                {gatheredTimeframeStats.week.count.toLocaleString()}
-              </div>
-              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
-                <span>Photos Gathered</span>
-                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.week.photos.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {/* Card 3: A Month */}
-            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
-              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
-                <span>A MONTH (30D)</span>
-                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
-                  MONTH
-                </span>
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
-                {gatheredTimeframeStats.month.count.toLocaleString()}
-              </div>
-              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
-                <span>Photos Gathered</span>
-                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.month.photos.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {/* Card 4: A Year */}
-            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
-              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
-                <span>A YEAR (ANNUAL)</span>
-                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
-                  YEAR
-                </span>
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
-                {gatheredTimeframeStats.year.count.toLocaleString()}
-              </div>
-              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
-                <span>Photos Gathered</span>
-                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.year.photos.toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Real-time KPI Velocity Strip */}
+        {/* Sender Fleet Global KPI Strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
-          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
-            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Peak Throughput</span>
-            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5 flex items-center gap-1">
-              <span>{Math.round(maxVal * (activeMetric === "throughput" ? 1 : 8))}</span>
-              <span className="text-[10px] font-bold text-[#8fe617]">cards/hr</span>
+          <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold flex items-center justify-between">
+              <span>Senders Today Transmissions</span>
+              <Calendar className="w-3.5 h-3.5 text-[#8fe617]" />
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+              {sendersList.reduce((acc, s) => acc + (s.today || 0), 0).toLocaleString()}
             </div>
+            <div className="text-[10px] text-[#8fe617] font-semibold mt-0.5">Live session zero-start</div>
           </div>
-          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
-            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Verification Rate</span>
-            <div className="text-lg font-black text-[#8fe617] mt-0.5">
-              {totalStudents > 0 ? Math.round((readyForPrintCount / totalStudents) * 100) : 100}%
+
+          <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold flex items-center justify-between">
+              <span>Fleet Weekly Throughput</span>
+              <TrendingUp className="w-3.5 h-3.5 text-[#8fe617]" />
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+              {sendersList.reduce((acc, s) => acc + (s.week || 0), 0).toLocaleString()}
             </div>
+            <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-semibold mt-0.5">Transmitted this week</div>
           </div>
-          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
-            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Processing Cycle</span>
-            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">
-              12ms <span className="text-[10px] font-medium text-[#6b7771] dark:text-[#8a9e93]">(IndexedDB)</span>
+
+          <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold flex items-center justify-between">
+              <span>1-Device Hardware Locks</span>
+              <Shield className="w-3.5 h-3.5 text-[#8fe617]" />
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-[#8fe617] mt-1">
+              {sendersList.filter(s => s.boundDeviceId).length} / {sendersList.length}
             </div>
+            <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-semibold mt-0.5">Bound to authorized PC</div>
           </div>
-          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
-            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Sync Engine</span>
-            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5 flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#8fe617]" />
-              <span className="text-xs font-bold text-[#8fe617]">ONLINE BROADCAST</span>
+
+          <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold flex items-center justify-between">
+              <span>Fleet Quality Rating</span>
+              <Award className="w-3.5 h-3.5 text-[#8fe617]" />
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+              {sendersList.length > 0
+                ? (sendersList.reduce((acc, s) => acc + (s.efficiency || 100), 0) / sendersList.length).toFixed(1)
+                : '100.0'}%
             </div>
+            <div className="text-[10px] text-[#8fe617] font-semibold mt-0.5">Photo & phone compliance</div>
           </div>
         </div>
 
-        {/* SVG Interactive Canvas — Clear Realtime Bar Graph matching screenshot */}
-        <div className="relative w-full overflow-hidden rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126] p-2">
-          <svg
-            ref={chartSvgRef}
-            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-            className="w-full h-80 sm:h-96 md:h-[400px] select-none cursor-crosshair"
-            onPointerMove={handleChartPointerMove}
-            onPointerLeave={handleChartPointerLeave}
-          >
-            <defs>
-              <linearGradient id="lemonBarGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#8fe617" stopOpacity="0.95" />
-                <stop offset="100%" stopColor="#417006" stopOpacity="0.8" />
-              </linearGradient>
-              <linearGradient id="lemonPeakGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#b6ff4d" stopOpacity="1" />
-                <stop offset="100%" stopColor="#8fe617" stopOpacity="0.9" />
-              </linearGradient>
-              <linearGradient id="lemonHoverGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#d4ff80" stopOpacity="1" />
-                <stop offset="100%" stopColor="#8fe617" stopOpacity="0.95" />
-              </linearGradient>
-              <filter id="lemonGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
+        {/* Live Senders Status Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {sendersList.map((s) => {
+            const isOnline = s.status === 'Active' || s.today > 0;
+            return (
+              <div
+                key={s.id || s.username}
+                className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3.5 hover:border-[#8fe617]/50 transition-all shadow-xs"
+              >
+                {/* Operator Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#8fe617]/20 border border-[#8fe617]/30 text-[#256002] dark:text-[#8fe617] flex items-center justify-center font-black font-mono text-sm">
+                      {s.username.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-bold font-mono text-xs text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                        <span>{s.username}</span>
+                        <span className="w-2 h-2 rounded-full bg-[#8fe617] animate-pulse" />
+                      </div>
+                      <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                        {s.school || 'YMS 1'}
+                      </div>
+                    </div>
+                  </div>
 
-            {/* Horizontal Grid Lines */}
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
-              const y = padTop + plotH * (1 - ratio);
-              const valDisplay = Math.round(maxVal * ratio);
-              return (
-                <g key={idx}>
-                  <line
-                    x1={padLeft}
-                    y1={y}
-                    x2={padLeft + plotW}
-                    y2={y}
-                    stroke="#223126"
-                    strokeWidth="1"
-                    strokeDasharray={idx === 0 ? "none" : "3,3"}
-                    opacity={idx === 0 ? 0.6 : 0.3}
-                  />
-                  <text
-                    x={padLeft - 8}
-                    y={y + 4}
-                    fill="#8a9e93"
-                    fontSize="10"
-                    fontFamily="monospace"
-                    textAnchor="end"
-                  >
-                    {valDisplay}
-                  </text>
-                </g>
-              );
-            })}
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
+                    isOnline
+                      ? 'bg-[#8fe617]/15 text-[#256002] dark:text-[#8fe617] border-[#8fe617]/40'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                  }`}>
+                    {isOnline ? 'ONLINE' : 'STANDBY'}
+                  </span>
+                </div>
 
-            {/* Render Bars */}
-            {barPlotData.map((b, idx) => {
-              const isHovered = hoveredPointIndex === idx;
-              const isPeak = idx === peakIndex;
-              const fill = isHovered
-                ? "url(#lemonHoverGrad)"
-                : isPeak
-                ? "url(#lemonPeakGrad)"
-                : "url(#lemonBarGrad)";
+                {/* 4 Telemetry Counters — Starting from 0 and incrementing in real-time */}
+                <div className="grid grid-cols-4 gap-1.5 text-center font-mono">
+                  <div className="p-2 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                    <div className="text-[9px] font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase">Today</div>
+                    <div className="text-sm font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">{s.today}</div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                    <div className="text-[9px] font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase">Week</div>
+                    <div className="text-sm font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">{s.week}</div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                    <div className="text-[9px] font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase">Month</div>
+                    <div className="text-sm font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">{s.month}</div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                    <div className="text-[9px] font-bold text-[#6b7771] dark:text-[#8a9e93] uppercase">Total</div>
+                    <div className="text-sm font-black text-[#8fe617] mt-0.5">{s.total}</div>
+                  </div>
+                </div>
 
-              return (
-                <g key={idx} className="transition-all duration-150">
-                  <rect
-                    x={b.slotX}
-                    y={padTop}
-                    width={b.slotWidth}
-                    height={plotH}
-                    fill={isHovered ? "#8fe617" : "transparent"}
-                    opacity={isHovered ? 0.08 : 0}
-                  />
-                  <rect
-                    x={b.barX}
-                    y={b.barY}
-                    width={b.barWidth}
-                    height={b.barHeight}
-                    rx="6"
-                    fill={fill}
-                    filter={isPeak || isHovered ? "url(#lemonGlow)" : undefined}
-                    className="transition-all duration-200"
-                  />
-                  <text
-                    x={b.centerX}
-                    y={Math.max(padTop + 14, b.barY - 8)}
-                    fill={isHovered ? "#b6ff4d" : isPeak ? "#8fe617" : "#8a9e93"}
-                    fontSize={isHovered ? "12" : "10"}
-                    fontWeight={isHovered || isPeak ? "900" : "700"}
-                    fontFamily="monospace"
-                    textAnchor="middle"
-                  >
-                    {b.value}
-                  </text>
-                  <text
-                    x={b.centerX}
-                    y={padTop + plotH + 18}
-                    fill={isHovered ? "#8fe617" : "#8a9e93"}
-                    fontSize="10"
-                    fontFamily="monospace"
-                    textAnchor="middle"
-                  >
-                    {b.label}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
+                {/* Device Lock & Quality Strip */}
+                <div className="pt-2 border-t border-[#eef5f1] dark:border-[#1a251c] flex items-center justify-between text-[11px] font-mono">
+                  <div className="flex items-center gap-1.5 text-[#6b7771] dark:text-[#8a9e93]">
+                    <Shield className="w-3.5 h-3.5 text-[#8fe617]" />
+                    <span>{s.boundDeviceId ? `Lock: ${s.boundDeviceId.substring(0, 10)}...` : 'Terminal Unlocked'}</span>
+                  </div>
+                  <span className="font-bold text-[#8fe617]">{s.efficiency}% Quality</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
