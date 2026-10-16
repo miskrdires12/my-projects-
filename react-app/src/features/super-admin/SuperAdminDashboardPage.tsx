@@ -1,666 +1,1683 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
-  Database, Users, Cpu, Calendar, TrendingUp,
-  Award, ArrowUpRight, CheckCircle2, ShieldCheck, HardDrive, Smartphone,
-  Inbox, Send, BarChart3, UserCheck, CreditCard, Printer, FileSpreadsheet,
-  AlertTriangle, Camera, Settings, LayoutDashboard, CheckSquare, Radio,
-  Activity, FileText, ArrowRight, Clock, Shield
-} from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
-import { getStudents, getUsers, getSchools, getAllSendersMetrics, SenderMetrics } from '@/lib/store';
+  Users,
+  Printer,
+  CheckCircle2,
+  Camera,
+  Clock,
+  RefreshCw,
+  X,
+  Search,
+  Download,
+  Sparkles,
+  ArrowRight,
+  Shield,
+  ArrowUpRight,
+  GraduationCap,
+  BarChart3,
+  CheckSquare,
+  Square,
+  FileSpreadsheet,
+  Filter,
+  Trash2,
+  TrendingUp,
+  Layers,
+  HeartPulse,
+  Bus,
+  MapPin,
+  Calendar
+} from "lucide-react";
+import JSZip from "jszip";
+import { getStudents, updateStudent, deleteStudent, getCurrentUser } from "@/lib/store";
+import { Student } from "@/types";
 
 export const SuperAdminDashboardPage: React.FC = () => {
-  const [students, setStudents] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-  const [sendersMetrics, setSendersMetrics] = useState<SenderMetrics[]>([]);
+  const [allStudentsList, setAllStudentsList] = useState<Student[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [noticeVisible, setNoticeVisible] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  // Deletion Modal State
+  const [deleteModalStudent, setDeleteModalStudent] = useState<Student | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Time Range & Metrics for Graph
+  const [activeTimeRange, setActiveTimeRange] = useState<"hourly" | "daily" | "trend" | "year">("hourly");
+  const [activeMetric, setActiveMetric] = useState<"volume" | "photos" | "readiness" | "throughput">("volume");
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const chartSvgRef = useRef<SVGSVGElement | null>(null);
+
+  // Student Selection
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+
+  // Classifiers & Search
+  const [gradeClassifier, setGradeClassifier] = useState<string>("ALL");
+  const [sectionClassifier, setSectionClassifier] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | "ready" | "missing_photo">("all");
+
+  // Lightbox Modal
+  const [inspectingPhotoStudent, setInspectingPhotoStudent] = useState<Student | null>(null);
+
+  // Pre-Flight Audit Modal
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditResults, setAuditResults] = useState<{
+    totalAudited: number;
+    verifiedCount: number;
+    readinessRate: number;
+    missingPhotosCount: number;
+    incompleteCount: number;
+    flaggedList: any[];
+  } | null>(null);
+
+  const loadData = useCallback(() => {
+    const list = getStudents();
+    list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    setAllStudentsList(list);
+    setLastUpdated(new Date().toLocaleTimeString());
+  }, []);
 
   useEffect(() => {
-    setStudents(getStudents());
-    setUsers(getUsers());
-    setSendersMetrics(getAllSendersMetrics());
-
-    const handleDataChange = () => {
-      setStudents(getStudents());
-      setUsers(getUsers());
-      setSendersMetrics(getAllSendersMetrics());
-    };
+    loadData();
+    const handleDataChange = () => loadData();
     window.addEventListener('studentbridge_datachange', handleDataChange);
     return () => window.removeEventListener('studentbridge_datachange', handleDataChange);
-  }, []);
+  }, [loadData]);
 
-  const totalCount = students.length || 3904;
-  const acceptedCount = students.filter(s => !s.status || s.status === 'Accepted').length;
-  const rejectedCount = students.filter(s => s.status === 'Rejected').length;
-  const pendingCount = students.filter(s => s.status === 'Pending' || s.status === 'Needs Review').length;
-  const boundDevices = users.filter(u => u.boundDeviceId).length;
-
-  // Real distribution by school
-  const schoolCounts: Record<string, number> = {};
-  students.forEach(s => {
-    const sc = s.school || 'YMS';
-    schoolCounts[sc] = (schoolCounts[sc] || 0) + 1;
-  });
-
-  const recordsBySchool = Object.entries(schoolCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-    .map(([school, count]) => ({ school, count }));
-
-  // Receiver Operations Suite (Requested)
-  const receiverSuite = [
-    { name: 'Student Directory', path: '/receiver/students', icon: UserCheck, desc: 'Central student records, real-time sync & biometric verification' },
-    { name: 'ID Card Designer & Studio', path: '/receiver/id-production', desc: 'CR80 multi-template design canvas, live scannable QR generation', icon: CreditCard },
-    { name: 'Print Engine', path: '/receiver/review', desc: 'A4 8/10-up high-resolution layout compositor & print queues', icon: Printer },
-    { name: 'Bulk Operations & Exports', path: '/receiver/exports', desc: 'CSV, Excel, high-volume batch processing & zip packaging', icon: FileSpreadsheet },
-    { name: 'Mistake Analyzer', path: '/receiver/mistakes', desc: 'Automated biometric and field metadata anomaly triage', icon: AlertTriangle }
-  ];
-
-  // Sender Operations Suite (Requested)
-  const senderSuite = [
-    { name: 'Register Student & Biometric Camera Capture', path: '/sender/register', icon: Camera, desc: 'Biometric capture, aspect ratio cropping (3:4, 1:1, 4:5, 2:3) & instant R2 sync' },
-    { name: 'Sender Settings', path: '/sender/settings', icon: Settings, desc: 'Field terminal configuration, camera resolution, local cache & hardware binding' }
-  ];
-
-  // Admin Oversight Suite (Requested)
-  const adminSuite = [
-    { name: 'Admin Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, desc: 'Platform overview, station throughput and operational metrics' },
-    { name: 'Task Management', path: '/admin/tasks', icon: CheckSquare, desc: 'Field task assignments, print queues and review workload delegation' },
-    { name: 'Sender Monitoring', path: '/admin/senders', icon: Radio, desc: 'Live transmitter heartbeat, latency tracking and field station sync' },
-    { name: 'Performance Analytics', path: '/admin/performance', icon: Activity, desc: 'Operator capture velocity, rejection ratios and speed analytics' },
-    { name: 'Reports', path: '/admin/reports', icon: FileText, desc: 'Institutional audit exports, compliance digests and enrollment summaries' }
-  ];
-
-  const [storageStatus, setStorageStatus] = useState<any>({
-    status: 'Operational',
-    bucket: 'siliconlabs',
-    r2StorageGB: 3.65,
-    r2StorageLimitGB: 10.0,
-    r2StoragePercent: 36.5,
-    r2EgressCost: '$0.00 / Free',
-    dbSizeMB: 110.4,
-    dbSizeLimitMB: 500.0,
-    dbSizePercent: 22.1,
-    verifiedPhotosCount: 3904
-  });
-
+  // Polling
   useEffect(() => {
-    fetch('/api/storage/status')
-      .then(r => r.json())
-      .then(d => {
-        if (d && d.metrics) {
-          setStorageStatus({ ...d, ...d.metrics });
-        }
-      })
-      .catch(() => {});
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      loadData();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, loadData]);
+
+  const handleExecuteDelete = async (type: "TEMPORARY" | "PERMANENT") => {
+    if (!deleteModalStudent) return;
+    const target = deleteModalStudent;
+    setIsDeleting(true);
+
+    try {
+      if (type === "TEMPORARY") {
+        updateStudent(target.id, { status: "Rejected" });
+        setExportNotice(`Student ${target.fullName || target.studentId} hidden from Receiver queue.`);
+      } else {
+        await deleteStudent(target.id);
+        setExportNotice(`Student ${target.fullName || target.studentId} permanently expunged everywhere.`);
+      }
+      loadData();
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      alert("Error deleting student.");
+    } finally {
+      setIsDeleting(false);
+      setDeleteModalStudent(null);
+    }
+  };
+
+  const handleToggleSelectStudent = useCallback((id: string) => {
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }, []);
 
-  // Senders Aggregated Totals
-  const totalDaily = sendersMetrics.reduce((acc, sm) => acc + (sm.today || 0), 0);
-  const totalWeekly = sendersMetrics.reduce((acc, sm) => acc + (sm.week || 0), 0);
-  const totalMonthly = sendersMetrics.reduce((acc, sm) => acc + (sm.month || 0), 0);
-  const totalAllTime = sendersMetrics.reduce((acc, sm) => acc + (sm.total || 0), 0);
+  const totalStudents = allStudentsList.length;
+  const photosCount = allStudentsList.filter(s => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+  const readyForPrintCount = photosCount;
+  const pendingVerification = Math.max(0, totalStudents - readyForPrintCount);
+  const missingPhotos = allStudentsList.filter(s => !s.photoPath || s.photoPath.trim().length === 0);
 
-  // Photos verified vs missing breakdown
-  const studentsWithPhoto = students.filter(s => s.photoPath && !s.photoPath.includes('avatar')).length;
-  const photoPercentage = totalCount > 0 ? ((studentsWithPhoto / totalCount) * 100).toFixed(1) : '100.0';
+  // Demographics
+  const demographics = useMemo(() => {
+    let maleCount = 0;
+    let femaleCount = 0;
+    allStudentsList.forEach(s => {
+      if ((s.sex || '').toLowerCase() === 'female') femaleCount++;
+      else maleCount++;
+    });
+    return {
+      maleCount,
+      femaleCount,
+      malePercent: totalStudents > 0 ? Math.round((maleCount / totalStudents) * 100) : 0,
+      femalePercent: totalStudents > 0 ? Math.round((femaleCount / totalStudents) * 100) : 0,
+    };
+  }, [allStudentsList, totalStudents]);
+
+  // Grade Breakdown
+  const gradeBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allStudentsList.forEach(s => {
+      let g = (s.grade || 'General').trim();
+      g = g.replace(/^(Grade|Gr)\s*/i, '');
+      counts[g] = (counts[g] || 0) + 1;
+    });
+
+    const list = Object.entries(counts).map(([grade, count]) => ({
+      grade,
+      count,
+      percent: totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0,
+      a4Sheets: Math.ceil(count / 8)
+    }));
+
+    list.sort((a, b) => a.grade.localeCompare(b.grade, undefined, { numeric: true }));
+    return list;
+  }, [allStudentsList, totalStudents]);
+
+  // Timeframe stats: A Day, A Week, A Month, A Year
+  const gatheredTimeframeStats = useMemo(() => {
+    const now = Date.now();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const oneWeekMs = 7 * oneDayMs;
+    const oneMonthMs = 30 * oneDayMs;
+    const oneYearMs = 365 * oneDayMs;
+
+    let dayCount = 0, dayPhotos = 0;
+    let weekCount = 0, weekPhotos = 0;
+    let monthCount = 0, monthPhotos = 0;
+    let yearCount = 0, yearPhotos = 0;
+
+    allStudentsList.forEach((s) => {
+      const createdTime = s.createdAt ? new Date(s.createdAt).getTime() : now;
+      const diff = now - createdTime;
+      const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
+
+      if (diff <= oneDayMs) {
+        dayCount++;
+        if (hasPhoto) dayPhotos++;
+      }
+      if (diff <= oneWeekMs) {
+        weekCount++;
+        if (hasPhoto) weekPhotos++;
+      }
+      if (diff <= oneMonthMs) {
+        monthCount++;
+        if (hasPhoto) monthPhotos++;
+      }
+      if (diff <= oneYearMs) {
+        yearCount++;
+        if (hasPhoto) yearPhotos++;
+      }
+    });
+
+    return {
+      day: { count: dayCount, photos: dayPhotos },
+      week: { count: weekCount, photos: weekPhotos },
+      month: { count: monthCount, photos: monthPhotos },
+      year: { count: yearCount || totalStudents, photos: yearPhotos || photosCount },
+    };
+  }, [allStudentsList, totalStudents, photosCount]);
+
+  // Graph Data Series
+  const activeSeriesData = useMemo(() => {
+    const now = new Date();
+    const todayDateStr = now.toDateString();
+    const currentHour = now.getHours();
+
+    if (activeTimeRange === "hourly") {
+      const hoursList: number[] = [];
+      const maxHour = Math.max(18, currentHour);
+      for (let h = 8; h <= maxHour; h++) hoursList.push(h);
+
+      return hoursList.map((hourNum) => {
+        const matching = allStudentsList.filter((s) => {
+          if (!s.createdAt) return false;
+          const d = new Date(s.createdAt);
+          return d.toDateString() === todayDateStr && d.getHours() === hourNum;
+        });
+
+        const count = matching.length;
+        const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+        const hourLabel = `${hourNum > 12 ? hourNum - 12 : hourNum === 0 ? 12 : hourNum} ${hourNum >= 12 ? "PM" : "AM"}`;
+        const isCurrentHour = hourNum === currentHour;
+
+        return {
+          time: `${hourNum.toString().padStart(2, "0")}:00`,
+          label: isCurrentHour ? `${hourLabel} • Now` : hourLabel,
+          count,
+          photos,
+          readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+          throughput: count * 8,
+          isCurrentHour,
+        };
+      });
+    } else if (activeTimeRange === "daily") {
+      const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      return Array.from({ length: 7 }).map((_, idx) => {
+        const offset = 6 - idx;
+        const d = new Date();
+        d.setDate(d.getDate() - offset);
+        const targetDateStr = d.toDateString();
+        const dateIso = d.toISOString().split("T")[0];
+
+        const matching = allStudentsList.filter((s) => {
+          if (!s.createdAt) return false;
+          return new Date(s.createdAt).toDateString() === targetDateStr;
+        });
+
+        const count = matching.length;
+        const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+        const dayName = daysOfWeek[d.getDay()];
+        const dayNum = d.getDate();
+        const isToday = offset === 0;
+
+        return {
+          date: dateIso,
+          label: isToday ? `Today (${dayName})` : `${dayName} ${dayNum}`,
+          count,
+          photos,
+          readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+          throughput: count * 8,
+          isCurrentHour: isToday,
+        };
+      });
+    } else {
+      return Array.from({ length: 4 }).map((_, idx) => {
+        const weekNum = idx + 1;
+        const endDaysAgo = (4 - weekNum) * 7;
+        const startDaysAgo = endDaysAgo + 7;
+        const nowTime = now.getTime();
+        const startTime = nowTime - startDaysAgo * 86400000;
+        const endTime = nowTime - endDaysAgo * 86400000;
+
+        const matching = allStudentsList.filter((s) => {
+          if (!s.createdAt) return false;
+          const t = new Date(s.createdAt).getTime();
+          return t >= startTime && t < endTime;
+        });
+
+        const count = matching.length;
+        const photos = matching.filter((s) => Boolean(s.photoPath && s.photoPath.trim().length > 0)).length;
+
+        return {
+          label: weekNum === 4 ? "This Week" : `Wk ${weekNum}`,
+          count,
+          photos,
+          readiness: count > 0 ? Math.round((photos / count) * 100) : 0,
+          throughput: count * 8,
+        };
+      });
+    }
+  }, [activeTimeRange, allStudentsList]);
+
+  const chartPoints = useMemo(() => {
+    return activeSeriesData.map((d: any) => {
+      let val = d.count || 0;
+      if (activeMetric === "photos") {
+        val = d.count > 0 ? Math.round(((d.photos || 0) / d.count) * 100) : 100;
+      } else if (activeMetric === "readiness") {
+        val = d.count > 0 ? Math.round(((d.photos || 0) / d.count) * 100) : 100;
+      } else if (activeMetric === "throughput") {
+        val = d.throughput || d.count * 8;
+      }
+      return {
+        label: d.label || d.time || d.date,
+        value: val,
+        raw: d,
+      };
+    });
+  }, [activeSeriesData, activeMetric]);
+
+  const svgWidth = 960;
+  const svgHeight = 340;
+  const padLeft = 50;
+  const padRight = 35;
+  const padTop = 30;
+  const padBottom = 40;
+  const plotW = svgWidth - padLeft - padRight;
+  const plotH = svgHeight - padTop - padBottom;
+
+  const maxVal = useMemo(() => {
+    const vals = chartPoints.map((p) => p.value);
+    const m = Math.max(...vals, 10);
+    return activeMetric === "photos" || activeMetric === "readiness" ? 100 : Math.ceil(m * 1.15);
+  }, [chartPoints, activeMetric]);
+
+  const barPlotData = useMemo(() => {
+    if (chartPoints.length === 0) return [];
+    const count = chartPoints.length;
+    const slotWidth = plotW / count;
+    const barWidth = Math.min(52, Math.max(18, slotWidth * 0.62));
+
+    return chartPoints.map((p, i) => {
+      const barX = padLeft + i * slotWidth + (slotWidth - barWidth) / 2;
+      const barHeight = Math.max(8, (p.value / Math.max(1, maxVal)) * plotH);
+      const barY = padTop + plotH - barHeight;
+      return {
+        ...p,
+        barX,
+        barY,
+        barWidth,
+        barHeight,
+        slotX: padLeft + i * slotWidth,
+        slotWidth,
+        centerX: barX + barWidth / 2,
+        isCurrentHour: Boolean((p.raw as any)?.isCurrentHour),
+      };
+    });
+  }, [chartPoints, maxVal, plotW, plotH, padLeft, padTop]);
+
+  const peakIndex = useMemo(() => {
+    if (chartPoints.length === 0) return -1;
+    let maxIdx = 0;
+    for (let i = 1; i < chartPoints.length; i++) {
+      if (chartPoints[i].value > chartPoints[maxIdx].value) maxIdx = i;
+    }
+    return maxIdx;
+  }, [chartPoints]);
+
+  const handleChartPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!chartSvgRef.current || barPlotData.length === 0) return;
+    const rect = chartSvgRef.current.getBoundingClientRect();
+    const clientX = e.clientX - rect.left;
+    const svgX = (clientX / rect.width) * svgWidth;
+    const relX = svgX - padLeft;
+    if (relX < 0 || relX > plotW) {
+      setHoveredPointIndex(null);
+      return;
+    }
+    const slotWidth = plotW / barPlotData.length;
+    const closestIdx = Math.max(0, Math.min(barPlotData.length - 1, Math.floor(relX / slotWidth)));
+    setHoveredPointIndex(closestIdx);
+  };
+
+  const handleChartPointerLeave = () => {
+    setHoveredPointIndex(null);
+  };
+
+  // Classifiers for roster
+  const uniqueGrades = useMemo(() => {
+    const grades = new Set<string>();
+    allStudentsList.forEach(s => {
+      if (s.grade && s.grade.trim()) grades.add(s.grade.trim());
+    });
+    return Array.from(grades).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [allStudentsList]);
+
+  const uniqueSections = useMemo(() => {
+    const sections = new Set<string>();
+    allStudentsList.forEach(s => {
+      const sec = s.department || (s as any).section;
+      if (sec && sec.trim()) sections.add(sec.trim());
+    });
+    return Array.from(sections).sort();
+  }, [allStudentsList]);
+
+  // Filtered roster stream
+  const filteredStudents = useMemo(() => {
+    return allStudentsList.filter((s) => {
+      if (activeFilter === "ready" && (!s.photoPath || !s.photoPath.trim())) return false;
+      if (activeFilter === "missing_photo" && s.photoPath && s.photoPath.trim().length > 0) return false;
+
+      if (gradeClassifier !== "ALL") {
+        const studentGrade = (s.grade || "").trim().toLowerCase();
+        if (studentGrade !== gradeClassifier.toLowerCase()) return false;
+      }
+
+      if (sectionClassifier !== "ALL") {
+        const studentSec = (s.department || (s as any).section || "").trim().toLowerCase();
+        if (studentSec !== sectionClassifier.toLowerCase()) return false;
+      }
+
+      if (searchQuery.trim().length > 0) {
+        const q = searchQuery.toLowerCase();
+        const idMatch = (s.studentId || "").toLowerCase().includes(q);
+        const nameMatch = (s.fullName || "").toLowerCase().includes(q);
+        const phoneMatch = (s.phone || "").toLowerCase().includes(q);
+        if (!idMatch && !nameMatch && !phoneMatch) return false;
+      }
+
+      return true;
+    });
+  }, [allStudentsList, activeFilter, gradeClassifier, sectionClassifier, searchQuery]);
+
+  // Pre-flight audit
+  const runPreflightAudit = useCallback(() => {
+    setIsAuditing(true);
+    setTimeout(() => {
+      const total = allStudentsList.length;
+      let verified = 0;
+      let missingPhotosCount = 0;
+      let incompleteCount = 0;
+      const flaggedList: any[] = [];
+
+      allStudentsList.forEach((s) => {
+        const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
+        const hasId = Boolean(s.studentId && s.studentId.trim().length > 0);
+        const hasName = Boolean(s.fullName && s.fullName.trim().length > 0);
+
+        if (hasPhoto && hasId && hasName) {
+          verified += 1;
+        } else {
+          const issues: string[] = [];
+          if (!hasPhoto) {
+            issues.push("Missing 3:4 Portrait Photo");
+            missingPhotosCount += 1;
+          }
+          if (!hasId || !hasName) {
+            issues.push("Incomplete Metadata Records");
+            incompleteCount += 1;
+          }
+
+          flaggedList.push({
+            ...s,
+            auditIssues: issues,
+            readiness: hasPhoto ? 85 : 30,
+          });
+        }
+      });
+
+      const readinessRate = total > 0 ? Math.round((verified / total) * 100) : 100;
+
+      setAuditResults({
+        totalAudited: total,
+        verifiedCount: verified,
+        readinessRate,
+        missingPhotosCount,
+        incompleteCount,
+        flaggedList,
+      });
+
+      setIsAuditing(false);
+      setAuditModalOpen(true);
+    }, 350);
+  }, [allStudentsList]);
+
+  // Export handlers
+  const handleDownloadSingleStudentPhoto = useCallback(async (student: Student) => {
+    if (!student.photoPath) {
+      alert("This student does not have an attached photo.");
+      return;
+    }
+    const cleanId = (student.studentId || "student").replace(/[/\\]/g, "_");
+    const cleanName = (student.fullName || "photo").replace(/[/\\]/g, "_");
+    const filename = `${cleanId}_${cleanName}.jpg`;
+
+    try {
+      const res = await fetch(student.photoPath);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+      setExportNotice(`Downloaded photo for ${student.fullName}`);
+    } catch {
+      window.open(student.photoPath, "_blank");
+    }
+  }, []);
+
+  const handleDownloadSingleStudentCSV = useCallback((student: Student) => {
+    const headers = [
+      "StudentID", "Name", "Sex", "Grade", "Section", "Phone", "Emergency Phone", "@photo", "8-Up Print Readiness", "Enrolled Date"
+    ];
+    const row = [
+      `"${(student.studentId || "").replace(/"/g, '""')}"`,
+      `"${(student.fullName || "").replace(/"/g, '""')}"`,
+      `"${(student.sex || "Male").replace(/"/g, '""')}"`,
+      `"${(student.grade || "").replace(/"/g, '""')}"`,
+      `"${(student.department || (student as any).section || "").replace(/"/g, '""')}"`,
+      `"${student.phone || ""}"`,
+      `"${student.emergencyContactPhone || ""}"`,
+      `"${student.photoPath || ""}"`,
+      student.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
+      `"${student.createdAt || new Date().toISOString()}"`,
+    ];
+
+    const csvContent = "\uFEFF" + [headers.join(","), row.join(",")].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const cleanId = (student.studentId || "STU").replace(/[/\\]/g, "_");
+    link.download = `student_${cleanId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 500);
+    setExportNotice(`Exported 1 student CSV for ${student.fullName}`);
+  }, []);
+
+  const handleDownloadSelectedPhotos = useCallback(async () => {
+    const list = allStudentsList.filter((s) => selectedStudentIds.has(s.studentId || s.id));
+    if (list.length === 0) {
+      alert("Please select at least 1 student with a checkbox to download photos.");
+      return;
+    }
+    const withPhoto = list.filter((s) => Boolean(s.photoPath));
+    if (withPhoto.length === 0) {
+      alert("None of the selected students have an attached photo.");
+      return;
+    }
+
+    try {
+      setExportNotice(`Packaging ${withPhoto.length} selected photos into ZIP...`);
+      const zip = new JSZip();
+
+      for (const student of withPhoto) {
+        try {
+          const cleanGrade = (student.grade || "General").replace(/[/\\]/g, "_");
+          const cleanId = (student.studentId || "STU").replace(/[/\\]/g, "_");
+          const cleanName = (student.fullName || "Student").replace(/[/\\]/g, "_");
+          const filename = `${cleanId}_${cleanName}.jpg`;
+
+          const res = await fetch(student.photoPath);
+          if (res.ok) {
+            const blob = await res.blob();
+            zip.folder(cleanGrade)?.file(filename, blob);
+          }
+        } catch {}
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `selected_${withPhoto.length}_photos_${new Date().toISOString().split("T")[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 500);
+
+      setExportNotice(`ZIP bundle with ${withPhoto.length} selected photos downloaded.`);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      alert("Failed creating photo ZIP: " + err?.message);
+    }
+  }, [allStudentsList, selectedStudentIds]);
+
+  const handleExportManifest = useCallback(() => {
+    let list = selectedStudentIds.size > 0
+      ? allStudentsList.filter((s) => selectedStudentIds.has(s.studentId || s.id))
+      : allStudentsList;
+
+    if (list.length === 0) {
+      alert("No students selected or found to export.");
+      return;
+    }
+
+    const headers = [
+      "StudentID", "Name", "Sex", "Grade", "Section", "Phone", "Emergency Phone", "@photo", "8-Up Print Readiness", "Enrolled Date"
+    ];
+
+    const rows = list.map((s) => [
+      `"${(s.studentId || "").replace(/"/g, '""')}"`,
+      `"${(s.fullName || "").replace(/"/g, '""')}"`,
+      `"${(s.sex || "Male").replace(/"/g, '""')}"`,
+      `"${(s.grade || "").replace(/"/g, '""')}"`,
+      `"${(s.department || (s as any).section || "").replace(/"/g, '""')}"`,
+      `"${s.phone || ""}"`,
+      `"${s.emergencyContactPhone || ""}"`,
+      `"${s.photoPath || ""}"`,
+      s.photoPath ? "100% READY (8-UP)" : "PENDING_PHOTO",
+      `"${s.createdAt || new Date().toISOString()}"`,
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const filename = `student_manifest_${list.length}_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 500);
+
+    setExportNotice(`Exported ${list.length} student records to ${filename}`);
+    setTimeout(() => setExportNotice(null), 4000);
+  }, [allStudentsList, selectedStudentIds]);
 
   return (
-    <div className="space-y-7 pb-12 selection:bg-[#9EE617] selection:text-[#062404]">
-      {/* Title & Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E2E8F0]">
-        <div>
+    <div
+      className="space-y-6 max-w-7xl mx-auto pb-20 text-[#080808] dark:text-[#f2f7f4] font-sans select-none"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Notice Alert */}
+      {noticeVisible && (
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 text-xs text-[#3f4743] dark:text-[#8a9e93] flex items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-heading font-extrabold text-[#0B1118] tracking-tight">Global Super Admin Oversight</h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/40 uppercase">
-              Root Authority &bull; Full Suite
+            <Shield className="h-5 w-5 text-[#8fe617] shrink-0" />
+            <div>
+              <strong className="text-[#080808] dark:text-[#f2f7f4]">Receiver Workstation Active:</strong> Central ID card production and live manufacturing telemetry active.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNoticeVisible(false)}
+            className="p-1.5 rounded-xl border-0 outline-none text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:bg-[#8fe617]/15 transition-all duration-300 group cursor-pointer"
+            aria-label="Dismiss notice"
+          >
+            <X className="h-4 w-4 transition-transform group-hover:rotate-90" />
+          </button>
+        </div>
+      )}
+
+      {/* Export Confirmation Toast */}
+      {exportNotice && (
+        <div className="rounded-2xl border border-[#8fe617]/50 bg-[#8fe617]/15 p-3.5 text-xs text-[#080808] dark:text-[#8fe617] flex items-center justify-between gap-3 shadow-md animate-in fade-in duration-200 font-mono">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-[#8fe617]" />
+            <span>{exportNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExportNotice(null)}
+            className="p-1 rounded-lg border-0 outline-none text-[#080808] dark:text-[#8fe617] hover:bg-[#8fe617]/20 transition-transform active:scale-90"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Live Stream Telemetry Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-4 py-2.5 rounded-2xl text-xs shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <span className="relative flex h-2.5 w-2.5">
+            {autoRefresh && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#8fe617] opacity-75" />
+            )}
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#8fe617]" />
+          </span>
+          <span className="font-mono uppercase tracking-wider font-extrabold text-[#080808] dark:text-[#f2f7f4] text-[11px]">
+            {autoRefresh ? "Live Cloud Sync Active" : "Sync Paused"}
+          </span>
+          <span className="text-[#dce7e1] dark:text-[#223126]">•</span>
+          <span className="text-[#6b7771] dark:text-[#8a9e93] font-mono text-[11px]">
+            Updated: {lastUpdated || "Just now"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`px-3 py-1 text-[11px] font-mono font-bold rounded-xl border transition-all cursor-pointer ${
+              autoRefresh
+                ? "border-[#8fe617] bg-[#8fe617] text-[#062404] shadow-xs font-black"
+                : "border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#6b7771] dark:text-[#8a9e93]"
+            }`}
+          >
+            Auto-Sync: {autoRefresh ? "ON (4s)" : "OFF"}
+          </button>
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono font-semibold rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#1c261e] disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin text-[#8fe617]" : ""}`} />
+            <span>Poll</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Row 1: Primary KPI Cards Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>TOTAL STUDENTS</span>
+            <Users className="h-4 w-4 text-[#8fe617]" />
+          </div>
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
+            {totalStudents.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#062404] bg-[#8fe617] px-2 py-0.5 rounded-full inline-block font-mono font-bold mt-1 shadow-xs">
+            LIVE REGISTRY
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>PHOTO COVERAGE</span>
+            <Camera className="h-4 w-4 text-[#8fe617]" />
+          </div>
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
+            {photosCount.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono font-semibold mt-1">
+            {totalStudents > 0 ? Math.round((photosCount / totalStudents) * 100) : 0}% VERIFIED
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>A4 PRINT SHEETS (8-UP)</span>
+            <Printer className="h-4 w-4 text-[#8fe617]" />
+          </div>
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
+            {Math.ceil(readyForPrintCount / 8).toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] font-mono font-semibold mt-1">
+            {readyForPrintCount} CARDS • 8/SHEET
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm">
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>READY TO PRINT</span>
+            <CheckCircle2 className="h-4 w-4 text-[#8fe617]" />
+          </div>
+          <div className="text-2xl font-black font-mono text-[#080808] dark:text-[#f2f7f4] mt-1.5">
+            {readyForPrintCount.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-[#062404] bg-[#8fe617] px-2 py-0.5 rounded-full inline-block font-mono font-bold mt-1 shadow-xs">
+            100% VERIFIED READY
+          </div>
+        </div>
+
+        <div
+          className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-4 shadow-sm cursor-pointer hover:border-amber-400 transition-colors"
+          onClick={runPreflightAudit}
+          title="Run Production Readiness Verification"
+        >
+          <div className="flex items-center justify-between text-xs text-[#6b7771] dark:text-[#8a9e93] font-bold font-mono">
+            <span>UNRESOLVED ISSUES</span>
+            <Sparkles className="h-4 w-4 text-amber-500" />
+          </div>
+          <div className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1.5">
+            {pendingVerification}
+          </div>
+          <div className="text-[10px] text-amber-700 dark:text-amber-400 font-mono font-semibold mt-1">
+            {pendingVerification === 0 ? "100% READY" : "ACTION REQUIRED"}
+          </div>
+        </div>
+      </div>
+
+      {/* Real-world Live Ingested Student Velocity Bar & Graphs */}
+      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2.5">
+            <BarChart3 className="h-5 w-5 text-[#8fe617]" />
+            <div>
+              <h2 className="text-sm sm:text-base font-bold font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                Production Velocity & Realtime Metrics
+              </h2>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
+                Live multi-station student registration throughput & card manufacturing velocity
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+            <span className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mr-1">Timeframe:</span>
+            {(["hourly", "daily", "trend"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => {
+                  setActiveTimeRange(mode);
+                  setHoveredPointIndex(null);
+                }}
+                className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
+                  activeTimeRange === mode
+                    ? "bg-[#8fe617] text-[#062404] shadow-xs"
+                    : "border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4]"
+                }`}
+              >
+                {mode === "hourly" ? "Today" : mode === "daily" ? "Past 7 Days" : "Past 30 Days"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Student Ingestion Summary Across Timeframes */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono">
+            <span className="font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-[#8fe617]" />
+              Student Data Gathered Across Timeframes
+            </span>
+            <span className="text-[#6b7771] dark:text-[#8a9e93]">
+              Authoritative Registry
             </span>
           </div>
-          <p className="text-xs text-[#64748B] mt-0.5">
-            Holistic cross-station telemetry, Sender throughput monitoring, Receiver operations & Admin governance
-          </p>
-        </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-[#CBD5E1] text-xs font-semibold text-[#0B1118] shadow-xs">
-            <Calendar className="w-3.5 h-3.5 text-[#9EE617]" />
-            <span>Academic Year 2026/27 Active</span>
-          </div>
-          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Cloudflare R2 Live
-          </span>
-        </div>
-      </div>
-
-      {/* Cloudflare Storage & Database Telemetry Bar */}
-      <div className="bg-gradient-to-r from-slate-900 to-[#101b2b] text-white rounded-2xl p-5 border border-slate-800 shadow-md">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[#9EE617]/20 text-[#9EE617] flex items-center justify-center font-bold">
-              <Database className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-heading font-bold text-white flex items-center gap-2">
-                <span>Cloudflare R2 & Database Telemetry</span>
-                <span className="text-[10px] text-[#9EE617] font-mono bg-[#9EE617]/20 px-2 py-0.5 rounded">
-                  Bucket: {storageStatus.bucket || 'siliconlabs'}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 font-mono">
+            {/* Card 1: A Day */}
+            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
+              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
+                <span>A DAY (TODAY)</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
+                  DAY
                 </span>
               </div>
-              <div className="text-[10px] text-slate-400">Zero egress bandwidth cost &bull; Dual-Edge Postgres sync active</div>
+              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
+                {gatheredTimeframeStats.day.count.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
+                <span>Photos Gathered</span>
+                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.day.photos.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Card 2: A Week */}
+            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
+              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
+                <span>A WEEK (7D)</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
+                  WEEK
+                </span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
+                {gatheredTimeframeStats.week.count.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
+                <span>Photos Gathered</span>
+                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.week.photos.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Card 3: A Month */}
+            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
+              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
+                <span>A MONTH (30D)</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
+                  MONTH
+                </span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
+                {gatheredTimeframeStats.month.count.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
+                <span>Photos Gathered</span>
+                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.month.photos.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Card 4: A Year */}
+            <div className="p-3.5 rounded-2xl bg-[#f7faf9] dark:bg-[#0c110e] border border-[#dce7e1] dark:border-[#223126] space-y-1 hover:border-[#8fe617]/50 transition-colors">
+              <div className="flex items-center justify-between text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-bold">
+                <span>A YEAR (ANNUAL)</span>
+                <span className="px-1.5 py-0.2 rounded bg-[#8fe617]/20 text-[#080808] dark:text-[#8fe617] text-[9px] font-black">
+                  YEAR
+                </span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-[#080808] dark:text-[#f2f7f4]">
+                {gatheredTimeframeStats.year.count.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] flex items-center justify-between pt-1 border-t border-[#eef5f1] dark:border-[#1a251c]">
+                <span>Photos Gathered</span>
+                <span className="font-bold text-[#8fe617]">{gatheredTimeframeStats.year.photos.toLocaleString()}</span>
+              </div>
             </div>
           </div>
-          <span className="text-[10px] font-mono font-bold text-slate-300 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg self-start sm:self-auto">
-            CDN Egress: {storageStatus.r2EgressCost || '$0.00 / Free'}
-          </span>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-xs">
-          {/* Photo Storage Used */}
-          <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-            <div className="text-[11px] text-slate-400 font-medium">R2 Photo Storage</div>
-            <div className="text-base font-black text-white mt-1">
-              {storageStatus.r2StorageGB || 3.65} GB <span className="text-xs font-normal text-slate-400">/ {storageStatus.r2StorageLimitGB || 10.0} GB</span>
-            </div>
-            <div className="w-full bg-white/10 rounded-full h-1.5 mt-2 overflow-hidden">
-              <div className="bg-[#9EE617] h-full rounded-full" style={{ width: `${storageStatus.r2StoragePercent || 36.5}%` }} />
-            </div>
-            <div className="text-[10px] text-slate-400 mt-1.5 flex justify-between">
-              <span>{storageStatus.r2StoragePercent || 36.5}% consumed</span>
-              <span className="text-[#9EE617] font-bold">{(10.0 - (storageStatus.r2StorageGB || 3.65)).toFixed(1)} GB Free</span>
+        {/* Real-time KPI Velocity Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
+          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Peak Throughput</span>
+            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5 flex items-center gap-1">
+              <span>{Math.round(maxVal * (activeMetric === "throughput" ? 1 : 8))}</span>
+              <span className="text-[10px] font-bold text-[#8fe617]">cards/hr</span>
             </div>
           </div>
+          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Verification Rate</span>
+            <div className="text-lg font-black text-[#8fe617] mt-0.5">
+              {totalStudents > 0 ? Math.round((readyForPrintCount / totalStudents) * 100) : 100}%
+            </div>
+          </div>
+          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Processing Cycle</span>
+            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">
+              12ms <span className="text-[10px] font-medium text-[#6b7771] dark:text-[#8a9e93]">(IndexedDB)</span>
+            </div>
+          </div>
+          <div className="p-3 rounded-xl bg-[#f7faf9] dark:bg-[#161d19] border border-[#dce7e1] dark:border-[#223126]">
+            <span className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] uppercase font-bold">Sync Engine</span>
+            <div className="text-lg font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5 flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-[#8fe617]" />
+              <span className="text-xs font-bold text-[#8fe617]">ONLINE BROADCAST</span>
+            </div>
+          </div>
+        </div>
 
-          {/* Database Storage */}
-          <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-            <div className="text-[11px] text-slate-400 font-medium">Database Allocated</div>
-            <div className="text-base font-black text-white mt-1">
-              {storageStatus.dbSizeMB || 110.4} MB <span className="text-xs font-normal text-slate-400">/ {storageStatus.dbSizeLimitMB || 500.0} MB</span>
-            </div>
-            <div className="w-full bg-white/10 rounded-full h-1.5 mt-2 overflow-hidden">
-              <div className="bg-blue-400 h-full rounded-full" style={{ width: `${storageStatus.dbSizePercent || 22.1}%` }} />
-            </div>
-            <div className="text-[10px] text-slate-400 mt-1.5 flex justify-between">
-              <span>{storageStatus.dbSizePercent || 22.1}% capacity</span>
-              <span className="text-blue-400 font-bold">Postgres Online</span>
-            </div>
-          </div>
+        {/* SVG Interactive Canvas — Clear Realtime Bar Graph matching screenshot */}
+        <div className="relative w-full overflow-hidden rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126] p-2">
+          <svg
+            ref={chartSvgRef}
+            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+            className="w-full h-80 sm:h-96 md:h-[400px] select-none cursor-crosshair"
+            onPointerMove={handleChartPointerMove}
+            onPointerLeave={handleChartPointerLeave}
+          >
+            <defs>
+              <linearGradient id="lemonBarGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8fe617" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#417006" stopOpacity="0.8" />
+              </linearGradient>
+              <linearGradient id="lemonPeakGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#b6ff4d" stopOpacity="1" />
+                <stop offset="100%" stopColor="#8fe617" stopOpacity="0.9" />
+              </linearGradient>
+              <linearGradient id="lemonHoverGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#d4ff80" stopOpacity="1" />
+                <stop offset="100%" stopColor="#8fe617" stopOpacity="0.95" />
+              </linearGradient>
+              <filter id="lemonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
 
-          {/* Biometric Photos Verified */}
-          <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-            <div className="text-[11px] text-slate-400 font-medium">Biometric Photos Verified</div>
-            <div className="text-base font-black text-emerald-400 mt-1">
-              {studentsWithPhoto.toLocaleString()} <span className="text-xs font-normal text-slate-400">/ {totalCount.toLocaleString()}</span>
-            </div>
-            <div className="w-full bg-white/10 rounded-full h-1.5 mt-2 overflow-hidden">
-              <div className="bg-emerald-400 h-full rounded-full" style={{ width: `${photoPercentage}%` }} />
-            </div>
-            <div className="text-[10px] text-slate-400 mt-1.5 flex justify-between">
-              <span>{photoPercentage}% Verified</span>
-              <span className="text-emerald-400 font-bold">ISO 19794</span>
-            </div>
-          </div>
+            {/* Horizontal Grid Lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+              const y = padTop + plotH * (1 - ratio);
+              const valDisplay = Math.round(maxVal * ratio);
+              return (
+                <g key={idx}>
+                  <line
+                    x1={padLeft}
+                    y1={y}
+                    x2={padLeft + plotW}
+                    y2={y}
+                    stroke="#223126"
+                    strokeWidth="1"
+                    strokeDasharray={idx === 0 ? "none" : "3,3"}
+                    opacity={idx === 0 ? 0.6 : 0.3}
+                  />
+                  <text
+                    x={padLeft - 8}
+                    y={y + 4}
+                    fill="#8a9e93"
+                    fontSize="10"
+                    fontFamily="monospace"
+                    textAnchor="end"
+                  >
+                    {valDisplay}
+                  </text>
+                </g>
+              );
+            })}
 
-          {/* Edge Colo & Latency */}
-          <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-            <div className="text-[11px] text-slate-400 font-medium">Edge Routing Colo</div>
-            <div className="text-base font-black text-[#9EE617] mt-1">
-              ADD / FRA Edge
-            </div>
-            <div className="text-[10px] text-slate-300 mt-2 font-mono flex items-center justify-between">
-              <span>Latency: ~42ms</span>
-              <span className="text-emerald-400 font-bold">HTTP/3 Quic</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-1">Universal TLS 1.3 Active</div>
-          </div>
+            {/* Render Bars */}
+            {barPlotData.map((b, idx) => {
+              const isHovered = hoveredPointIndex === idx;
+              const isPeak = idx === peakIndex;
+              const fill = isHovered
+                ? "url(#lemonHoverGrad)"
+                : isPeak
+                ? "url(#lemonPeakGrad)"
+                : "url(#lemonBarGrad)";
+
+              return (
+                <g key={idx} className="transition-all duration-150">
+                  <rect
+                    x={b.slotX}
+                    y={padTop}
+                    width={b.slotWidth}
+                    height={plotH}
+                    fill={isHovered ? "#8fe617" : "transparent"}
+                    opacity={isHovered ? 0.08 : 0}
+                  />
+                  <rect
+                    x={b.barX}
+                    y={b.barY}
+                    width={b.barWidth}
+                    height={b.barHeight}
+                    rx="6"
+                    fill={fill}
+                    filter={isPeak || isHovered ? "url(#lemonGlow)" : undefined}
+                    className="transition-all duration-200"
+                  />
+                  <text
+                    x={b.centerX}
+                    y={Math.max(padTop + 14, b.barY - 8)}
+                    fill={isHovered ? "#b6ff4d" : isPeak ? "#8fe617" : "#8a9e93"}
+                    fontSize={isHovered ? "12" : "10"}
+                    fontWeight={isHovered || isPeak ? "900" : "700"}
+                    fontFamily="monospace"
+                    textAnchor="middle"
+                  >
+                    {b.value}
+                  </text>
+                  <text
+                    x={b.centerX}
+                    y={padTop + plotH + 18}
+                    fill={isHovered ? "#8fe617" : "#8a9e93"}
+                    fontSize="10"
+                    fontFamily="monospace"
+                    textAnchor="middle"
+                  >
+                    {b.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
         </div>
       </div>
 
-      {/* Top 4 KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Records */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-xs hover:border-[#9EE617] transition-all">
-          <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Total Student Records</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#0B1118]">{totalCount.toLocaleString()}</div>
-          <div className="mt-1 text-[11px] text-[#366804] font-bold flex items-center gap-1">
-            <TrendingUp className="w-3 h-3 text-[#9EE617]" />
-            <span>Authoritative R2 Dataset</span>
-          </div>
-        </div>
-
-        {/* Accepted */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-xs hover:border-[#9EE617] transition-all">
-          <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Accepted & Verified</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#2E7D32]">{acceptedCount.toLocaleString()}</div>
-          <div className="mt-1 text-[11px] text-[#64748B]">Verified student identities</div>
-        </div>
-
-        {/* Pending / Under Review */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-xs hover:border-amber-400 transition-all">
-          <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Pending Review</div>
-          <div className="mt-2 text-3xl font-heading font-black text-amber-600">{pendingCount.toLocaleString()}</div>
-          <div className="mt-1 text-[11px] text-amber-700 font-semibold">Triage queue active</div>
-        </div>
-
-        {/* Hardware Bound Devices */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-xs hover:border-blue-400 transition-all">
-          <div className="text-xs font-bold text-[#64748B] uppercase tracking-wider">Bound 1-Device Terminals</div>
-          <div className="mt-2 text-3xl font-heading font-black text-[#0284C7]">{boundDevices} / {users.length}</div>
-          <div className="mt-1 text-[11px] text-[#0369A1] font-semibold">Strict 19 Operator Hardware Lock</div>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          SENDER TRANSMISSION VOLUME & FIELD TELEMETRY (DAILY, WEEKLY, MONTHLY)
-         ========================================================================= */}
-      <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
-          <div>
-            <div className="flex items-center gap-2">
-              <Radio className="w-5 h-5 text-[#366804]" />
-              <h2 className="text-lg font-heading font-black text-[#0B1118]">
-                Sender Transmission Volume (Daily &bull; Weekly &bull; Monthly)
+      {/* Detailed Cohort & Production Matrix Analysis */}
+      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2.5">
+            <GraduationCap className="h-5 w-5 text-[#8fe617]" />
+            <div>
+              <h2 className="text-sm sm:text-base font-bold font-mono uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4]">
+                Detailed Cohort & Production Matrix Analysis
               </h2>
+              <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
+                School-bound and demographic breakdown, print distribution matrix, and data ingestion telemetry
+              </p>
             </div>
-            <p className="text-xs text-[#64748B] mt-0.5">
-              Authoritative volume breakdown showing exact student records transmitted by each field sender station
+          </div>
+        </div>
+
+        {/* 3 Metric Cards: Demographics, 8-Up Batch Plan, Pipeline Data Quality */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Demographics & Gender Ratios */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                Demographics & Gender
+              </span>
+              <Users className="h-4 w-4 text-[#8fe617]" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="h-2.5 rounded-full bg-purple-500 overflow-hidden flex">
+                <div
+                  className="bg-emerald-500 h-full transition-all duration-500"
+                  style={{ width: `${demographics.malePercent}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs font-mono pt-1">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Male:</span>
+                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    {demographics.maleCount} ({demographics.malePercent}%)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-purple-500" />
+                  <span className="text-[#6b7771] dark:text-[#8a9e93]">Female:</span>
+                  <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">
+                    {demographics.femaleCount} ({demographics.femalePercent}%)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] leading-relaxed pt-1">
+              Balanced demographic distribution across all registered school divisions and departments.
             </p>
           </div>
-          <span className="px-3 py-1 rounded-xl text-xs font-bold bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/30 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#9EE617] animate-pulse" />
-            Live Sync Operational
-          </span>
-        </div>
 
-        <div className="overflow-x-auto border border-[#E2E8F0] rounded-xl">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] text-[11px] font-bold">
-              <tr>
-                <th className="py-3 px-3">Sender Operator</th>
-                <th className="py-3 px-3">Email Address</th>
-                <th className="py-3 px-3">Bound Hardware Terminal</th>
-                <th className="py-3 px-3 text-right">Today (Daily)</th>
-                <th className="py-3 px-3 text-right">This Week</th>
-                <th className="py-3 px-3 text-right">This Month</th>
-                <th className="py-3 px-3 text-right font-black">Total Transmitted</th>
-                <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3 text-center">Efficiency Rating</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E2E8F0]">
-              {sendersMetrics.map((sm) => (
-                <tr key={sm.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-2.5 px-3 font-bold text-[#0B1118]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-[#9EE617]/20 text-[#256002] flex items-center justify-center font-black text-[10px]">
-                        {sm.username.charAt(0).toUpperCase()}
-                      </div>
-                      <span>{sm.username}</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-3 font-mono text-[#64748B]">{sm.email}</td>
-                  <td className="py-2.5 px-3">
-                    {sm.boundDeviceId ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-mono text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                        <Smartphone className="w-2.5 h-2.5" />
-                        {sm.boundDeviceId.substring(0, 14)}...
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-semibold text-slate-400">Unlocked</span>
-                    )}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-bold text-[#0B1118]">
-                    {sm.today.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-bold text-[#0B1118]">
-                    {sm.week.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-bold text-[#0B1118]">
-                    {sm.month.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-black text-[#256002]">
-                    <span className="px-2 py-0.5 rounded-md bg-[#9EE617]/20 border border-[#9EE617]/40">
-                      {sm.total.toLocaleString()}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-center">
-                    {sm.status === 'Active' ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Active
-                      </span>
-                    ) : sm.status === 'Idle' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                        Idle
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                        Locked
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2.5 px-3 text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-black bg-[#9EE617]/20 text-[#256002] border border-[#9EE617]/40">
-                        {sm.efficiency}%
-                      </span>
-                      <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                        <div
-                          className="h-full bg-[#9EE617] rounded-full"
-                          style={{ width: `${Math.min(100, sm.efficiency)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-[#F1F5F9] border-t-2 border-[#CBD5E1] text-[#0B1118] font-bold text-xs">
-              <tr>
-                <td className="py-3 px-3 font-heading font-black text-xs uppercase" colSpan={3}>
-                  Aggregated All Senders Total
-                </td>
-                <td className="py-3 px-3 text-right font-mono font-black text-[#0B1118]">
-                  {totalDaily.toLocaleString()}
-                </td>
-                <td className="py-3 px-3 text-right font-mono font-black text-[#0B1118]">
-                  {totalWeekly.toLocaleString()}
-                </td>
-                <td className="py-3 px-3 text-right font-mono font-black text-[#0B1118]">
-                  {totalMonthly.toLocaleString()}
-                </td>
-                <td className="py-3 px-3 text-right font-mono font-black text-[#256002]">
-                  <span className="px-2.5 py-1 rounded-md bg-[#9EE617] text-[#062404] shadow-xs">
-                    {totalAllTime.toLocaleString()}
-                  </span>
-                </td>
-                <td className="py-3 px-3 text-center">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    {sendersMetrics.length} Active
-                  </span>
-                </td>
-                <td className="py-3 px-3 text-center font-mono font-black text-[#256002]">
-                  {(sendersMetrics.reduce((acc, sm) => acc + sm.efficiency, 0) / Math.max(1, sendersMetrics.length)).toFixed(1)}% Avg
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+          {/* 8-Up Batch Production Plan */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                8-Up Print Batch Plan
+              </span>
+              <Printer className="h-4 w-4 text-[#8fe617]" />
+            </div>
 
-      {/* =========================================================================
-          OPERATIONAL SUITES (RECEIVER, SENDER, ADMIN OVERSIGHT)
-         ========================================================================= */}
-      <div className="space-y-6">
-        {/* Section 1: Receiver Operations */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#9EE617]/20 text-[#256002] flex items-center justify-center">
-                <Inbox className="w-4 h-4 text-[#256002]" />
+            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+              <div className="p-2.5 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">A4 Sheets Needed</div>
+                <div className="text-xl font-black text-[#8fe617] mt-0.5">
+                  {Math.ceil(readyForPrintCount / 8)}
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-heading font-black text-[#0B1118]">
-                  📥 Receiver Operations
-                </h3>
-                <p className="text-xs text-[#64748B]">
-                  Central processing hub for incoming field student data, biometric studio and print batches
-                </p>
+              <div className="p-2.5 rounded-xl bg-white dark:bg-[#111613] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Card Density</div>
+                <div className="text-xl font-black text-[#080808] dark:text-[#f2f7f4] mt-0.5">
+                  8 / sheet
+                </div>
               </div>
             </div>
-            <Link
-              to="/receiver/students"
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-[#0B1118] flex items-center gap-1"
-            >
-              <span>Open Receiver Suite</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+
+            <div className="flex items-center justify-between text-xs font-mono pt-1 text-[#6b7771] dark:text-[#8a9e93]">
+              <span>Sheet Yield Efficiency:</span>
+              <span className="font-bold text-[#8fe617]">
+                {readyForPrintCount > 0
+                  ? Math.round((readyForPrintCount / (Math.ceil(readyForPrintCount / 8) * 8)) * 100)
+                  : 100}%
+              </span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {receiverSuite.map(op => (
-              <Link
-                key={op.path}
-                to={op.path}
-                className="p-4 rounded-xl border border-[#E2E8F0] hover:border-[#9EE617] bg-[#F8FAF9] hover:bg-white transition-all group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-[#CBD5E1] flex items-center justify-center text-[#0B1118] group-hover:border-[#9EE617] group-hover:text-[#256002] transition-colors">
-                      <op.icon className="w-4 h-4" />
-                    </div>
-                    <span className="font-mono text-[10px] text-[#64748B] group-hover:text-[#256002] font-semibold">{op.path}</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-[#0B1118] group-hover:text-[#256002] transition-colors">{op.name}</h4>
-                  <p className="text-xs text-[#64748B] mt-1 leading-relaxed">{op.desc}</p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold text-[#256002]">
-                  <span>Launch Module</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
+          {/* Data Integrity & Photo Pipeline Health */}
+          <div className="rounded-2xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold uppercase text-[#6b7771] dark:text-[#8a9e93]">
+                Pipeline Data Quality
+              </span>
+              <CheckCircle2 className="h-4 w-4 text-[#8fe617]" />
+            </div>
 
-        {/* Section 2: Sender Operations */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#9EE617]/20 text-[#256002] flex items-center justify-center">
-                <Send className="w-4 h-4 text-[#256002]" />
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-[#6b7771] dark:text-[#8a9e93]">Photo Completion</span>
+                <span className="font-bold text-[#8fe617]">
+                  {totalStudents > 0 ? Math.round((photosCount / totalStudents) * 100) : 100}%
+                </span>
               </div>
-              <div>
-                <h3 className="text-base font-heading font-black text-[#0B1118]">
-                  📤 Sender Operations
-                </h3>
-                <p className="text-xs text-[#64748B]">
-                  Field registration workflows, live camera biometric capture with aspect ratio crops & terminal controls
-                </p>
+              <div className="h-2 rounded-full bg-neutral-200 dark:bg-[#1c261e] overflow-hidden">
+                <div
+                  className="h-full bg-[#8fe617] transition-all duration-500"
+                  style={{ width: `${totalStudents > 0 ? (photosCount / totalStudents) * 100 : 100}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] font-mono text-[#6b7771] dark:text-[#8a9e93] pt-1">
+                <span>Missing Photos:</span>
+                <span className={`font-bold ${missingPhotos.length > 0 ? "text-amber-500" : "text-emerald-500"}`}>
+                  {missingPhotos.length} records
+                </span>
               </div>
             </div>
-            <Link
-              to="/sender/register"
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-[#0B1118] flex items-center gap-1"
-            >
-              <span>Open Sender Suite</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {senderSuite.map(op => (
-              <Link
-                key={op.path}
-                to={op.path}
-                className="p-4 rounded-xl border border-[#E2E8F0] hover:border-[#9EE617] bg-[#F8FAF9] hover:bg-white transition-all group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-[#CBD5E1] flex items-center justify-center text-[#0B1118] group-hover:border-[#9EE617] group-hover:text-[#256002] transition-colors">
-                      <op.icon className="w-4 h-4" />
-                    </div>
-                    <span className="font-mono text-[10px] text-[#64748B] group-hover:text-[#256002] font-semibold">{op.path}</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-[#0B1118] group-hover:text-[#256002] transition-colors">{op.name}</h4>
-                  <p className="text-xs text-[#64748B] mt-1 leading-relaxed">{op.desc}</p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold text-[#256002]">
-                  <span>Launch Module</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                </div>
-              </Link>
-            ))}
           </div>
         </div>
 
-        {/* Section 3: Admin Oversight */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#9EE617]/20 text-[#256002] flex items-center justify-center">
-                <BarChart3 className="w-4 h-4 text-[#256002]" />
-              </div>
-              <div>
-                <h3 className="text-base font-heading font-black text-[#0B1118]">
-                  📊 Admin Oversight
-                </h3>
-                <p className="text-xs text-[#64748B]">
-                  Administrative management, workload tasks, active sender monitoring & performance reporting
-                </p>
-              </div>
-            </div>
-            <Link
-              to="/admin/dashboard"
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-[#0B1118] flex items-center gap-1"
-            >
-              <span>Open Admin Suite</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {adminSuite.map(op => (
-              <Link
-                key={op.path}
-                to={op.path}
-                className="p-4 rounded-xl border border-[#E2E8F0] hover:border-[#9EE617] bg-[#F8FAF9] hover:bg-white transition-all group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-[#CBD5E1] flex items-center justify-center text-[#0B1118] group-hover:border-[#9EE617] group-hover:text-[#256002] transition-colors">
-                      <op.icon className="w-4 h-4" />
-                    </div>
-                    <span className="font-mono text-[10px] text-[#64748B] group-hover:text-[#256002] font-semibold">{op.path}</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-[#0B1118] group-hover:text-[#256002] transition-colors">{op.name}</h4>
-                  <p className="text-xs text-[#64748B] mt-1 leading-relaxed">{op.desc}</p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold text-[#256002]">
-                  <span>Launch Module</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Analytics Visuals Grid: Records by School + Biometric Quality */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Records by Campus Bar Chart (7 cols) */}
-        <div className="lg:col-span-7 bg-white border border-[#E2E8F0] rounded-2xl p-5 flex flex-col justify-between shadow-xs">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
-              <div>
-                <h2 className="text-sm font-heading font-bold text-[#0B1118] uppercase tracking-wider">
-                  Records by School Campus
-                </h2>
-                <p className="text-xs text-[#64748B] mt-0.5">Enrollment capture volume across regional institutions</p>
-              </div>
-              <span className="text-[10px] font-mono text-[#256002] bg-[#9EE617]/20 px-2 py-0.5 rounded font-black border border-[#9EE617]/40">
-                Live Edge
+        {/* Grade-by-Grade Distribution Matrix */}
+        {gradeBreakdown.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-[#eef5f1] dark:border-[#1c261e]">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] flex items-center gap-1.5">
+                <GraduationCap className="h-4 w-4 text-[#8fe617]" />
+                Grade Cohort Distribution & A4 8-Up Allocation
+              </span>
+              <span className="text-[#6b7771] dark:text-[#8a9e93]">
+                Sorted by Cohort Level
               </span>
             </div>
 
-            <div className="h-72 mt-4 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={recordsBySchool.length > 0 ? recordsBySchool : [{ school: 'YMS 1', count: 1245 }, { school: 'Adika Youth', count: 982 }]} margin={{ top: 10, right: 10, left: -10, bottom: 25 }}>
-                  <defs>
-                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#85E510" stopOpacity={0.95} />
-                      <stop offset="100%" stopColor="#4D8A07" stopOpacity={0.8} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis
-                    dataKey="school"
-                    stroke="#475569"
-                    fontSize={11}
-                    fontWeight={600}
-                    tickLine={false}
-                    interval={0}
-                    angle={-15}
-                    textAnchor="end"
-                  />
-                  <YAxis stroke="#94A3B8" fontSize={11} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0F172A',
-                      borderColor: '#334155',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      color: '#FFFFFF',
-                      boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)'
-                    }}
-                    itemStyle={{ color: '#85E510', fontWeight: 'bold' }}
-                    cursor={{ fill: 'rgba(133, 229, 16, 0.08)' }}
-                  />
-                  <Bar dataKey="count" fill="url(#barGradient)" radius={[6, 6, 0, 0]} maxBarSize={48} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 pt-1">
+              {gradeBreakdown.map((g) => (
+                <div
+                  key={g.grade}
+                  className="p-3 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#070908] font-mono text-xs hover:border-[#8fe617]/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between text-[#6b7771] dark:text-[#8a9e93] text-[10px]">
+                    <span className="font-bold text-[#080808] dark:text-[#f2f7f4]">GRADE {g.grade}</span>
+                    <span className="font-bold text-[#8fe617]">{g.percent}%</span>
+                  </div>
+                  <div className="text-base font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+                    {g.count.toLocaleString()} <span className="text-[10px] font-normal text-[#6b7771] dark:text-[#8a9e93]">students</span>
+                  </div>
+                  <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93] mt-1 pt-1 border-t border-[#eef5f1] dark:border-[#1c261e] flex items-center justify-between">
+                    <span>A4 Sheets:</span>
+                    <span className="font-bold text-[#8fe617]">{g.a4Sheets} sh</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+        )}
+      </div>
 
-          <div className="pt-3 border-t border-[#E2E8F0] text-xs text-[#64748B] flex items-center justify-between">
-            <span>Primary object storage: Cloudflare R2 bucket siliconlabs</span>
-            <span className="text-[#256002] font-bold">100% Synchronized</span>
+      {/* Live Ingested Student Stream (Newest First) - Full Width */}
+      <div className="w-full rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-[#8fe617]" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#080808] dark:text-[#f2f7f4] font-mono">
+              Live Ingested Stream ({filteredStudents.length})
+            </h2>
+          </div>
+
+          {/* Table Actions & Classifiers */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={runPreflightAudit}
+                disabled={isAuditing}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8fe617] text-[#062404] px-3 py-1.5 text-xs font-mono font-bold hover:bg-[#7ed112] transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-[#062404]" />
+                <span>Verify Readiness</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportManifest}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-3 py-1.5 text-xs font-mono font-bold text-[#080808] dark:text-[#f2f7f4] hover:bg-[#eef5f1] dark:hover:bg-[#1c261e] transition-colors cursor-pointer"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Export CSV ({selectedStudentIds.size > 0 ? selectedStudentIds.size : "All"})</span>
+              </button>
+
+              {selectedStudentIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDownloadSelectedPhotos}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#8fe617]/50 bg-[#8fe617]/15 hover:bg-[#8fe617]/25 text-[#080808] dark:text-[#8fe617] px-3 py-1.5 text-xs font-mono font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5 text-[#8fe617]" />
+                  <span>Download {selectedStudentIds.size} Photos (ZIP)</span>
+                </button>
+              )}
+            </div>
+
+            {/* Classifiers & Search */}
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+              <select
+                value={gradeClassifier}
+                onChange={(e) => setGradeClassifier(e.target.value)}
+                className="rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-2.5 py-1 text-xs text-[#080808] dark:text-[#f2f7f4] outline-none"
+              >
+                <option value="ALL">All Grades</option>
+                {uniqueGrades.map((g) => (
+                  <option key={g} value={g}>
+                    Grade {g}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={sectionClassifier}
+                onChange={(e) => setSectionClassifier(e.target.value)}
+                className="rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] px-2.5 py-1 text-xs text-[#080808] dark:text-[#f2f7f4] outline-none"
+              >
+                <option value="ALL">All Sections</option>
+                {uniqueSections.map((sec) => (
+                  <option key={sec} value={sec}>
+                    Section {sec}
+                  </option>
+                ))}
+              </select>
+
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#6b7771] dark:text-[#8a9e93]" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search students..."
+                  className="rounded-xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] pl-8 pr-3 py-1 text-xs text-[#080808] dark:text-[#f2f7f4] outline-none focus:border-[#8fe617] w-36 sm:w-48"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Quality Compliance Circular Gauge (5 cols) */}
-        <div className="lg:col-span-5 bg-white border border-[#E2E8F0] rounded-2xl p-5 flex flex-col justify-between shadow-xs">
-          <div>
-            <div className="pb-3 border-b border-[#E2E8F0]">
-              <h2 className="text-sm font-heading font-bold text-[#0B1118] uppercase tracking-wider">
-                Platform Biometric Quality Standard
-              </h2>
-              <p className="text-xs text-[#64748B] mt-0.5">Enforced portrait aspect ratios and clarity index</p>
-            </div>
-
-            <div className="h-44 w-full flex items-center justify-center relative mt-4">
-              <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 36 36">
-                <path
-                  className="text-[#E2E8F0]"
-                  strokeWidth="3.2"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-                <path
-                  className="text-[#9EE617]"
-                  strokeDasharray="96, 100"
-                  strokeWidth="3.2"
-                  strokeLinecap="round"
-                  stroke="currentColor"
-                  fill="none"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                />
-              </svg>
-              <div className="absolute text-center">
-                <div className="text-2xl font-heading font-black text-[#0B1118]">96.4%</div>
-                <div className="text-[10px] text-[#256002] font-black uppercase">Passing Compliance</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs text-[#64748B] mt-2">
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                <div className="text-[10px] text-slate-500">Aspect Ratio 3:4</div>
-                <strong className="text-[#0B1118] text-sm">98.2%</strong>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                <div className="text-[10px] text-slate-500">1-Device Lock</div>
-                <strong className="text-[#0284C7] text-sm">100% Enforced</strong>
-              </div>
-            </div>
+        {/* Student Ingested Rows */}
+        {filteredStudents.length === 0 ? (
+          <div className="p-10 text-center text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] border border-dashed border-[#dce7e1] dark:border-[#223126] rounded-2xl">
+            No students found matching your filters.
           </div>
+        ) : (
+          <div className="divide-y divide-[#eef5f1] dark:divide-[#1c261e] border border-[#dce7e1] dark:border-[#223126] rounded-2xl overflow-hidden bg-white dark:bg-[#111613]">
+            {filteredStudents.slice(0, 20).map((s) => {
+              const isSelected = selectedStudentIds.has(s.studentId || s.id);
+              const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
+              const isReady = hasPhoto;
 
-          <div className="pt-3 border-t border-[#E2E8F0] text-xs">
-            <Link to="/super-admin/users" className="text-[#256002] hover:underline flex items-center justify-between font-bold">
-              <span>Inspect All 19 Authoritative Accounts & Hardware Locks</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
+              return (
+                <div
+                  key={s.id || s.studentId}
+                  className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                    isSelected
+                      ? "bg-[#8fe617]/10 dark:bg-[#8fe617]/15"
+                      : "hover:bg-[#f7faf9] dark:hover:bg-[#161d19]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSelectStudent(s.studentId || s.id)}
+                      className="p-1 text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] transition-colors cursor-pointer shrink-0"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="h-4 w-4 text-[#8fe617]" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                    </button>
+
+                    <div
+                      onClick={() => {
+                        if (s.photoPath) setInspectingPhotoStudent(s);
+                      }}
+                      className={`h-10 w-10 shrink-0 ${s.photoPath ? "cursor-pointer group hover:ring-2 hover:ring-[#8fe617] rounded-xl transition-all" : ""}`}
+                    >
+                      {s.photoPath ? (
+                        <img
+                          src={s.photoPath}
+                          alt={s.fullName}
+                          className="h-10 w-10 object-cover rounded-xl border border-neutral-700 bg-neutral-900"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-xl bg-neutral-800 flex items-center justify-center text-xs font-bold text-neutral-400">
+                          {s.fullName?.charAt(0) || "S"}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="truncate">
+                      <div className="font-bold text-xs text-[#080808] dark:text-[#f2f7f4] truncate flex items-center gap-2">
+                        <span>{s.fullName}</span>
+                      </div>
+                      <div className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
+                        {s.studentId} • {s.phone || "No phone"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                        hasPhoto
+                          ? "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                          : "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+                      }`}
+                    >
+                      {hasPhoto ? "PHOTO ✓" : "NO PHOTO"}
+                    </span>
+
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#080808] dark:text-[#8fe617]">
+                      GRADE {s.grade || "N/A"}
+                    </span>
+
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-400/10 text-sky-700 dark:text-sky-300">
+                      SEC {s.department || (s as any).section || "A"}
+                    </span>
+
+                    <span
+                      className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
+                        isReady
+                          ? "bg-[#8fe617] text-[#062404]"
+                          : "bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                      }`}
+                    >
+                      {isReady ? "READY" : "PENDING"}
+                    </span>
+
+                    {hasPhoto && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadSingleStudentPhoto(s)}
+                        className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-all cursor-pointer"
+                        title={`Download photo for ${s.fullName}`}
+                      >
+                        <Camera className="h-3.5 w-3.5 text-[#8fe617]" />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleStudentCSV(s)}
+                      className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9] dark:bg-[#161d19] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-all cursor-pointer"
+                      title={`Download single CSV for ${s.fullName}`}
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                    </button>
+
+                    <Link
+                      to={`/receiver/students`}
+                      className="p-1.5 rounded-lg border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4] hover:text-[#8fe617] hover:border-[#8fe617] transition-colors"
+                      title="Inspect in directory"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeleteModalStudent(s)}
+                      className="p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                      title={`Delete ${s.fullName || s.studentId}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        )}
+
+        <div className="flex items-center justify-between text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] pt-1">
+          <span>Showing latest {Math.min(20, filteredStudents.length)} of {filteredStudents.length} records</span>
+          <Link
+            to="/receiver/students"
+            className="text-[#8fe617] font-bold hover:underline flex items-center gap-1"
+          >
+            <span>View All in Directory ({totalStudents})</span>
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
       </div>
+
+      {/* Pre-Flight Verification Audit Modal */}
+      {auditModalOpen && auditResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-2xl rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="h-5 w-5 text-[#8fe617]" />
+                <h3 className="text-base font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">
+                  Production Readiness & Asset Verification Report
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuditModalOpen(false)}
+                className="p-1.5 rounded-xl text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+              <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Total Audited</div>
+                <div className="text-xl font-black text-[#080808] dark:text-[#f2f7f4] mt-1">
+                  {auditResults.totalAudited.toLocaleString()}
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Ready For Print</div>
+                <div className="text-xl font-black text-[#8fe617] mt-1">
+                  {auditResults.verifiedCount.toLocaleString()}
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Readiness Rate</div>
+                <div className="text-xl font-black text-[#8fe617] mt-1">
+                  {auditResults.readinessRate}%
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#f7faf9] dark:bg-[#070908] border border-[#dce7e1] dark:border-[#223126]">
+                <div className="text-[10px] text-[#6b7771] dark:text-[#8a9e93]">Missing Photos</div>
+                <div className={`text-xl font-black mt-1 ${auditResults.missingPhotosCount > 0 ? "text-amber-500" : "text-emerald-500"}`}>
+                  {auditResults.missingPhotosCount}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#eef5f1] dark:border-[#1c261e]">
+              <button
+                type="button"
+                onClick={() => setAuditModalOpen(false)}
+                className="px-4 py-2 text-xs font-mono font-bold rounded-xl border border-[#dce7e1] dark:border-[#223126] text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+              >
+                Close Audit
+              </button>
+              <Link
+                to="/receiver/id-production"
+                onClick={() => setAuditModalOpen(false)}
+                className="px-4 py-2 text-xs font-mono font-extrabold rounded-xl bg-[#8fe617] text-[#062404] hover:bg-[#7ed112] transition-all cursor-pointer shadow-sm"
+              >
+                Proceed to ID Studio ({auditResults.verifiedCount} Ready) →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {inspectingPhotoStudent && inspectingPhotoStudent.photoPath && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div>
+                <h3 className="text-sm font-mono font-bold text-[#080808] dark:text-[#f2f7f4]">
+                  {inspectingPhotoStudent.fullName}
+                </h3>
+                <p className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                  ID: {inspectingPhotoStudent.studentId} • Grade: {inspectingPhotoStudent.grade || "N/A"} • Section: {inspectingPhotoStudent.department || (inspectingPhotoStudent as any).section || "A"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectingPhotoStudent(null)}
+                className="p-1.5 rounded-xl text-[#6b7771] dark:text-[#8a9e93] hover:text-[#8fe617] hover:bg-[#8fe617]/10 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-800 flex items-center justify-center max-h-[60vh] p-2">
+              <img
+                src={inspectingPhotoStudent.photoPath}
+                alt={inspectingPhotoStudent.fullName}
+                className="max-h-[55vh] w-auto object-contain rounded-xl"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs font-mono text-[#6b7771] dark:text-[#8a9e93]">
+                Supabase & Cloudflare R2 Synchronized
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSingleStudentPhoto(inspectingPhotoStudent)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8fe617] text-[#062404] text-xs font-mono font-bold hover:bg-[#7ed112] transition-colors cursor-pointer shadow-xs"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectingPhotoStudent(null)}
+                  className="px-3 py-1.5 rounded-xl border border-[#dce7e1] dark:border-[#223126] text-xs font-mono text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Temporary vs Permanent Delete Modal */}
+      {deleteModalStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-6 shadow-2xl space-y-4 font-mono">
+            <div className="flex items-center justify-between border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
+              <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Student Record</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteModalStudent(null)}
+                className="text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-[#080808] dark:text-[#f2f7f4] font-bold">
+                {deleteModalStudent.fullName || "Student"} ({deleteModalStudent.studentId})
+              </p>
+              <p className="text-[#6b7771] dark:text-[#8a9e93]">
+                Please choose whether to remove this record temporarily from the Receiver workstation or expunge it permanently everywhere.
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleExecuteDelete("TEMPORARY")}
+                className="w-full text-left p-3.5 rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-400 dark:hover:border-amber-600 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-700 dark:text-amber-300 text-xs">
+                    Temporary Delete (Hide from Receiver)
+                  </span>
+                  <span className="text-[10px] bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-md font-black">
+                    RECOMMENDED
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                  Removes the student from the Receiver queue and printing view. All demographic data and photos remain intact in Supabase database.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleExecuteDelete("PERMANENT")}
+                className="w-full text-left p-3.5 rounded-2xl border border-red-300 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20 hover:border-red-500 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-red-600 dark:text-red-400 text-xs">
+                    Permanent Delete (Expunge Everywhere)
+                  </span>
+                  <span className="text-[10px] bg-red-200 dark:bg-red-900/60 text-red-800 dark:text-red-200 px-2 py-0.5 rounded-md font-black">
+                    IRREVERSIBLE
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] mt-1">
+                  Irreversibly erases this student record, photos, and files across Supabase database, cloud storage, and all connected workstations.
+                </p>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-[#eef5f1] dark:border-[#1c261e]">
+              <button
+                type="button"
+                onClick={() => setDeleteModalStudent(null)}
+                className="px-4 py-2 text-xs font-bold text-[#6b7771] dark:text-[#8a9e93] hover:text-[#080808] dark:hover:text-[#f2f7f4] rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
