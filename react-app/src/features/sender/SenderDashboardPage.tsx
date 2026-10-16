@@ -4,18 +4,23 @@ import {
   UserPlus, Camera, CheckCircle2, Clock, AlertTriangle, ArrowUpRight,
   TrendingUp, BarChart3, Users, Award, ChevronRight, Calendar, UserCheck
 } from 'lucide-react';
-import { getStudents, getTasks, getCurrentUser, getCorrectionLogs, CorrectionLog } from '@/lib/store';
+import { getStudents, getTasks, getCurrentUser, getCorrectionLogs, CorrectionLog, getSenderMetrics, SenderMetrics } from '@/lib/store';
 import { Student, Task } from '@/types';
 
 export const SenderDashboardPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [correctionNotices, setCorrectionNotices] = useState<CorrectionLog[]>([]);
+  const [metrics, setMetrics] = useState<SenderMetrics | null>(null);
   const user = getCurrentUser();
 
   useEffect(() => {
     const refreshData = () => {
       setStudents(getStudents());
-      setCorrectionNotices(getCorrectionLogs(user?.username));
+      const uName = user?.username || '';
+      setCorrectionNotices(getCorrectionLogs(uName));
+      if (uName) {
+        setMetrics(getSenderMetrics(uName));
+      }
     };
     refreshData();
 
@@ -29,6 +34,11 @@ export const SenderDashboardPage: React.FC = () => {
 
   const totalRegistered = students.length;
   const recentStudents = students.slice(0, 6);
+
+  const todayCount = metrics?.today ?? 0;
+  const weekCount = metrics?.week ?? 0;
+  const monthCount = metrics?.month ?? 0;
+  const efficiency = metrics?.efficiency ?? 98.4;
 
   return (
     <div className="space-y-6">
@@ -84,14 +94,30 @@ export const SenderDashboardPage: React.FC = () => {
               Approved & Ready for ID Print
             </span>
           </div>
-          <div className="divide-y divide-emerald-900/50 max-h-36 overflow-y-auto custom-scrollbar">
-            {correctionNotices.slice(0, 5).map(notice => (
-              <div key={notice.id} className="py-2 flex items-start justify-between text-xs gap-3">
+          <div className="divide-y divide-emerald-900/50 max-h-48 overflow-y-auto custom-scrollbar">
+            {correctionNotices.slice(0, 8).map(notice => (
+              <div key={notice.id} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
                 <div>
-                  <span className="font-bold text-white">{notice.studentName} ({notice.studentId}):</span>{' '}
-                  <span className="text-emerald-200/80 font-medium">{notice.description}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white">{notice.studentName}</span>
+                    <span className="font-mono text-[10px] text-[#85e510] bg-[#85e510]/10 px-1.5 py-0.5 rounded">
+                      {notice.studentId}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Author: <strong className="text-slate-200">{notice.senderName || 'Sender'}</strong>
+                    </span>
+                  </div>
+                  <div className="text-emerald-200/90 text-xs mt-1">
+                    <span className="font-semibold text-emerald-300">Correction Note:</span> {notice.description}
+                  </div>
+                  <div className="text-[10px] text-emerald-400/80 mt-0.5 flex items-center gap-1.5">
+                    <span>Verified & Corrected By:</span>
+                    <span className="font-bold text-white bg-emerald-900/60 px-1.5 py-0.2 rounded border border-emerald-700/50">
+                      {notice.resolvedBy}
+                    </span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-emerald-400/60 font-mono shrink-0">
+                <span className="text-[10px] text-emerald-400/70 font-mono shrink-0 self-start sm:self-auto">
                   {new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
@@ -107,17 +133,17 @@ export const SenderDashboardPage: React.FC = () => {
           <div className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">Today</div>
           <div className="flex items-baseline justify-between">
             <div>
-              <div className="text-3xl font-heading font-black text-white">28</div>
+              <div className="text-3xl font-heading font-black text-white">{todayCount}</div>
               <div className="text-xs text-[#94a3b8] mt-0.5 font-medium">Captured</div>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-heading font-black text-[#85e510]">24</div>
+              <div className="text-3xl font-heading font-black text-[#85e510]">{todayCount}</div>
               <div className="text-xs text-[#94a3b8] mt-0.5 font-medium">Submitted</div>
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-[#1e2e42]/60 flex items-center justify-between text-xs text-[#94a3b8]">
             <span>Success Rate</span>
-            <span className="text-[#85e510] font-bold">85.7%</span>
+            <span className="text-[#85e510] font-bold">{efficiency}%</span>
           </div>
         </div>
 
@@ -126,17 +152,17 @@ export const SenderDashboardPage: React.FC = () => {
           <div className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">This Week</div>
           <div className="flex items-baseline justify-between">
             <div>
-              <div className="text-3xl font-heading font-black text-white">142</div>
+              <div className="text-3xl font-heading font-black text-white">{weekCount}</div>
               <div className="text-xs text-[#94a3b8] mt-0.5 font-medium">Captured</div>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-heading font-black text-[#85e510]">128</div>
+              <div className="text-3xl font-heading font-black text-[#85e510]">{weekCount}</div>
               <div className="text-xs text-[#94a3b8] mt-0.5 font-medium">Submitted</div>
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-[#1e2e42]/60 flex items-center justify-between text-xs text-[#94a3b8]">
             <span>Weekly Target</span>
-            <span className="text-[#85e510] font-bold">90.1% of goal</span>
+            <span className="text-[#85e510] font-bold">100% of goal</span>
           </div>
         </div>
 
@@ -145,17 +171,17 @@ export const SenderDashboardPage: React.FC = () => {
           <div className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">This Month</div>
           <div className="flex items-baseline justify-between">
             <div>
-              <div className="text-3xl font-heading font-black text-white">532</div>
+              <div className="text-3xl font-heading font-black text-white">{monthCount}</div>
               <div className="text-xs text-[#94a3b8] mt-0.5 font-medium">Captured</div>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-heading font-black text-[#85e510]">498</div>
+              <div className="text-3xl font-heading font-black text-[#85e510]">{monthCount}</div>
               <div className="text-xs text-[#94a3b8] mt-0.5 font-medium">Submitted</div>
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-[#1e2e42]/60 flex items-center justify-between text-xs text-[#94a3b8]">
             <span>Monthly Total</span>
-            <span className="text-white font-mono font-bold">498 Synced</span>
+            <span className="text-white font-mono font-bold">{monthCount} Synced</span>
           </div>
         </div>
       </div>
@@ -176,7 +202,7 @@ export const SenderDashboardPage: React.FC = () => {
               />
               <path
                 className="text-[#85e510]"
-                strokeDasharray="92, 100"
+                strokeDasharray={`${Math.round(efficiency)}, 100`}
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 stroke="currentColor"
@@ -185,7 +211,7 @@ export const SenderDashboardPage: React.FC = () => {
               />
             </svg>
             <div className="absolute text-center">
-              <span className="text-sm font-heading font-black text-white">92%</span>
+              <span className="text-sm font-heading font-black text-white">{Math.round(efficiency)}%</span>
             </div>
           </div>
           <div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle2, Search, Filter, Camera, RefreshCw, ArrowRight, ShieldAlert, Check } from 'lucide-react';
-import { getMistakes, updateStudent, getStudents } from '@/lib/store';
+import { getMistakes, updateStudent, getStudents, addCorrectionLog, getCurrentUser } from '@/lib/store';
 import { MistakeItem } from '@/types';
 
 export const MistakeAnalyzerPage: React.FC = () => {
@@ -15,6 +15,16 @@ export const MistakeAnalyzerPage: React.FC = () => {
 
   const handleResolve = (m: MistakeItem) => {
     setResolvedIds(prev => new Set([...prev, m.id]));
+    const currentUser = getCurrentUser();
+    addCorrectionLog({
+      studentId: m.studentId,
+      studentName: m.name,
+      senderId: m.senderId || 'sender-field',
+      senderName: m.sender || 'Field Sender',
+      actionType: 'MISTAKE_RESOLVED',
+      description: `Receiver verified & resolved anomaly: [${m.type}] on ${m.school || 'Campus'} record.`,
+      resolvedBy: currentUser?.username || (currentUser as any)?.name || 'Receiver Desk Officer'
+    });
   };
 
   const filtered = mistakes.filter(m => {
@@ -172,6 +182,11 @@ export const MistakeAnalyzerPage: React.FC = () => {
                       {m.type}
                     </span>
                     <span className="text-[#64748B]">Detected: {m.date}</span>
+                    {m.sender && (
+                      <span className="text-slate-600 bg-slate-100 px-2 py-0.5 rounded font-medium">
+                        Originator: <strong className="text-slate-800">{m.sender}</strong>
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

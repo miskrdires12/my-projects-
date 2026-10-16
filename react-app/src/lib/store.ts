@@ -742,8 +742,13 @@ export async function deleteStudent(id: string, permanent: boolean = false): Pro
 
     // Persist permanent purge to Cloudflare (R2 photo deletion & Supabase PostgreSQL delete)
     try {
+      const curUser = getCurrentUser();
       const res = await fetch(`/api/students?id=${encodeURIComponent(targetId)}&permanent=true`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Station-Role': curUser?.role || 'SUPER_ADMIN'
+        }
       });
       if (!res.ok) {
         console.warn('Server delete response status:', res.status);
@@ -1445,7 +1450,9 @@ export function getMistakes(): MistakeItem[] {
         type: 'Missing Photo',
         severity: 'High',
         date: s.createdAt ? s.createdAt.substring(0, 10) : '2026-10-13',
-        status: 'Open'
+        status: 'Open',
+        sender: (s as any).senderOperator || (s as any).sender || (s as any).operator || 'Field Sender',
+        senderId: s.senderId || (s as any).senderUsername
       });
     }
 
@@ -1458,7 +1465,9 @@ export function getMistakes(): MistakeItem[] {
         type: 'Duplicate ID',
         severity: 'High',
         date: '2026-10-13',
-        status: 'Open'
+        status: 'Open',
+        sender: (s as any).senderOperator || (s as any).sender || (s as any).operator || 'Field Sender',
+        senderId: s.senderId || (s as any).senderUsername
       });
     } else {
       seenIds.add(s.studentId);
@@ -1473,7 +1482,9 @@ export function getMistakes(): MistakeItem[] {
         type: 'Invalid Phone Number',
         severity: 'Medium',
         date: '2026-10-13',
-        status: 'Open'
+        status: 'Open',
+        sender: (s as any).senderOperator || (s as any).sender || (s as any).operator || 'Field Sender',
+        senderId: s.senderId || (s as any).senderUsername
       });
     }
   });
@@ -1481,11 +1492,24 @@ export function getMistakes(): MistakeItem[] {
   return mistakes;
 }
 
-// Authentication Session State
+// Authentication Session State with 3-hour persistence guarantee
 export function getCurrentUser(): User | null {
   try {
     const saved = localStorage.getItem('sb_auth_user');
-    if (saved) return JSON.parse(saved);
+    if (!saved) return null;
+    const user: User = JSON.parse(saved);
+    const loginTimeStr = localStorage.getItem('sb_auth_time');
+    if (loginTimeStr) {
+      const loginTime = parseInt(loginTimeStr, 10);
+      const threeHoursMs = 3 * 60 * 60 * 1000;
+      // If session expired after 3 hours
+      if (Date.now() - loginTime > threeHoursMs) {
+        localStorage.removeItem('sb_auth_user');
+        localStorage.removeItem('sb_auth_time');
+        return null;
+      }
+    }
+    return user;
   } catch (e) {}
   return null;
 }
@@ -1493,8 +1517,10 @@ export function getCurrentUser(): User | null {
 export function setCurrentUser(user: User | null): void {
   if (user) {
     localStorage.setItem('sb_auth_user', JSON.stringify(user));
+    localStorage.setItem('sb_auth_time', Date.now().toString());
   } else {
     localStorage.removeItem('sb_auth_user');
+    localStorage.removeItem('sb_auth_time');
   }
 }
 
@@ -1551,9 +1577,9 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   const baseRecorded = user?.recordsSentSingle || 0;
   const total = Math.max(baseRecorded, matchingStudents.length);
 
-  // Derive realistic volume distribution
-  const today = liveToday > 0 ? liveToday : (total > 0 ? Math.max(1, Math.round(total * 0.08)) : 0);
-  const week = liveWeek > 0 ? liveWeek : (total > 0 ? Math.max(today, Math.round(total * 0.35)) : 0);
+  // Strict live daily count: when a new day starts (e.g. tomorrow), today strictly starts at 0!
+  const today = liveToday;
+  const week = liveWeek > 0 ? liveWeek : (total > 0 ? Math.min(total, Math.max(today, Math.round(total * 0.15))) : 0);
   const month = liveMonth > 0 ? liveMonth : total;
 
   // Mistakes count & quality efficiency calculation

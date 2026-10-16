@@ -1,15 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { CheckSquare, Clock, AlertTriangle, CheckCircle2, ChevronRight, Filter } from 'lucide-react';
-import { getTasks, updateTaskStatus } from '@/lib/store';
+import { CheckSquare, Clock, AlertTriangle, CheckCircle2, ChevronRight, Filter, User } from 'lucide-react';
+import { getTasks, updateTaskStatus, getCurrentUser } from '@/lib/store';
 import { Task } from '@/types';
 
 export const SenderTasksPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filter, setFilter] = useState<'ALL' | 'Pending' | 'In Progress' | 'Completed'>('ALL');
+  const user = getCurrentUser();
+
+  const loadSenderTasks = () => {
+    const all = getTasks();
+    if (!user) {
+      setTasks(all);
+      return;
+    }
+    const uName = (user.username || '').toLowerCase().trim();
+    const uEmail = (user.email || '').toLowerCase().trim();
+    const uSchool = (user.school || '').toLowerCase().trim();
+
+    // Match task assigned specifically to this user (or if assigned to their assigned school campus)
+    const assignedToSender = all.filter(t => {
+      const assigned = (t.assignedTo || '').toLowerCase().trim();
+      const school = (t.school || '').toLowerCase().trim();
+      return (
+        assigned === uName ||
+        assigned === uEmail ||
+        (uEmail.includes('@') && assigned === uEmail.split('@')[0]) ||
+        (uSchool && school === uSchool) ||
+        assigned === 'all' ||
+        assigned === 'field operator' ||
+        assigned === 'operator'
+      );
+    });
+
+    setTasks(assignedToSender);
+  };
 
   useEffect(() => {
-    setTasks(getTasks());
-  }, []);
+    loadSenderTasks();
+    const handler = () => loadSenderTasks();
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, [user]);
 
   const handleStatusToggle = (task: Task) => {
     let nextStatus: Task['status'] = 'In Progress';
@@ -18,7 +50,7 @@ export const SenderTasksPage: React.FC = () => {
     else nextStatus = 'Pending';
 
     updateTaskStatus(task.id, nextStatus);
-    setTasks([...getTasks()]);
+    loadSenderTasks();
   };
 
   const filteredTasks = tasks.filter(t => filter === 'ALL' || t.status === filter);

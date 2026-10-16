@@ -14,7 +14,7 @@ export const LoginPage: React.FC = () => {
   const location = useLocation();
 
   // Default credentials
-  const [email, setEmail] = useState('miskrdires11@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);

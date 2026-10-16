@@ -479,11 +479,23 @@ export const StudentRegistrationPage: React.FC = () => {
   };
 
   // Active task assigned to current operator
-  const userTasks = getTasks().filter(
-    t => (t.assignedTo?.toLowerCase() === user?.username?.toLowerCase() ||
-          t.assignedTo?.toLowerCase() === user?.email?.toLowerCase()) &&
-         t.status !== 'Completed'
-  );
+  const userTasks = getTasks().filter(t => {
+    if (t.status === 'Completed') return false;
+    const assigned = (t.assignedTo || '').toLowerCase().trim();
+    const uName = (user?.username || '').toLowerCase().trim();
+    const uEmail = (user?.email || '').toLowerCase().trim();
+    const uSchool = (user?.school || '').toLowerCase().trim();
+    const tSchool = (t.school || '').toLowerCase().trim();
+    return (
+      assigned === uName ||
+      assigned === uEmail ||
+      (uEmail.includes('@') && assigned === uEmail.split('@')[0]) ||
+      (uSchool && tSchool === uSchool) ||
+      assigned === 'all' ||
+      assigned === 'field operator' ||
+      assigned === 'operator'
+    );
+  });
   const activeTask = userTasks.length > 0 ? userTasks[0] : null;
 
   return (
@@ -594,13 +606,28 @@ export const StudentRegistrationPage: React.FC = () => {
               Resolved by Receiver Desk
             </span>
           </div>
-          <div className="divide-y divide-amber-200/60 max-h-36 overflow-y-auto custom-scrollbar">
+          <div className="divide-y divide-amber-200/60 max-h-48 overflow-y-auto custom-scrollbar">
             {correctionNotices.map(notice => (
-              <div key={notice.id} className="py-2 flex items-start justify-between text-xs gap-3">
+              <div key={notice.id} className="py-2.5 flex items-start justify-between text-xs gap-3">
                 <div>
-                  <span className="font-bold text-[#0B1118]">{notice.studentName} ({notice.studentId}):</span>{' '}
-                  <span className="text-amber-950 font-medium">{notice.description}</span>
-                  <span className="block text-[10px] text-amber-800/80 mt-0.5">Please check and ensure future submissions follow this standard.</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#0B1118]">{notice.studentName}</span>
+                    <span className="font-mono text-[10px] text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded font-bold">
+                      {notice.studentId}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      Author: <strong className="text-slate-800">{notice.senderName || 'Sender'}</strong>
+                    </span>
+                  </div>
+                  <div className="text-amber-950 font-medium mt-1">
+                    <strong className="text-amber-900">Correction Note:</strong> {notice.description}
+                  </div>
+                  <div className="text-[10px] text-emerald-800 mt-1 flex items-center gap-1.5 font-bold">
+                    <span>Corrected By:</span>
+                    <span className="bg-white px-2 py-0.5 rounded border border-emerald-300 text-[#0B1118]">
+                      {notice.resolvedBy}
+                    </span>
+                  </div>
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono shrink-0">
                   {new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

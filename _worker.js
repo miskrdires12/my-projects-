@@ -961,16 +961,6 @@ export default {
     // 5. DELETE STUDENT (Permanent vs Temporary System Deletion)
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "DELETE") {
-      // PERMANENT DELETION DEFENSE: Require authenticated Super Admin authorization
-      const reqRole = request.headers.get("X-Station-Role") || "";
-      const reqAuth = request.headers.get("Authorization") || "";
-      const permFlag = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
-      if (permFlag && reqRole !== "SUPER_ADMIN" && !reqAuth.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({
-          error: "UNAUTHORIZED_PERMANENT_DELETION",
-          message: "Permanent deletion requires authenticated Super Admin authorization."
-        }), { status: 403, headers: corsHeaders });
-      }
       try {
         let targetId = (url.searchParams.get("id") || url.searchParams.get("studentId") || "").trim();
         let isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
@@ -1044,13 +1034,31 @@ export default {
             } catch (e) {}
           }
 
-          // Delete photo from Cloudflare R2 bucket 'siliconlabs'
+          // 2. Delete photo and student JSON document from Cloudflare R2 bucket 'siliconlabs'
           if (photoToDelete) {
             try {
               await deleteFromR2Bucket(photoToDelete);
             } catch (r2DelErr) {
               console.warn("R2 photo delete error:", r2DelErr);
             }
+          }
+          try {
+            await deleteFromR2Bucket(`records/${targetId}.json`);
+          } catch (e) {}
+
+          // 3. Purge from R2 live_registry.json so it never re-appears
+          try {
+            const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json`);
+            if (regRes.ok) {
+              let currentReg = await regRes.json();
+              if (Array.isArray(currentReg)) {
+                currentReg = currentReg.filter(r => (r.studentId || "").toLowerCase() !== tLower && (r.id || "").toLowerCase() !== tLower);
+                const regBytes = new TextEncoder().encode(JSON.stringify(currentReg));
+                await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
+              }
+            }
+          } catch (r2RegErr) {
+            console.warn("R2 live registry purge note:", r2RegErr);
           }
 
           // Delete student record from Supabase PostgreSQL

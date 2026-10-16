@@ -129,4 +129,6 @@ export interface MistakeItem {
   severity: 'High' | 'Medium' | 'Low';
   date: string;
   status: string;
+  sender?: string;
+  senderId?: string;
 }
