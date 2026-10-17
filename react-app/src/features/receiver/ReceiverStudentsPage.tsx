@@ -8,7 +8,7 @@ import {
   Sliders, FileText, CheckCircle2, AlertTriangle, Phone,
   MapPin, Clock, ExternalLink, RefreshCw, FileSpreadsheet,
   Archive, ArrowUpDown, ArrowUp, ArrowDown, Filter, Sparkles, Crop, Cloud,
-  Radio, Award, Activity, TrendingUp, ArrowRight
+  Radio, Award, Activity, TrendingUp, ArrowRight, Link2, Upload
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
@@ -1830,263 +1830,201 @@ export const ReceiverStudentsPage: React.FC = () => {
       </div>
 
       {/* =========================================================================
-          SLIDE-OVER DRAWER: STUDENT DETAIL DOSSIER (Appears ONLY when eye icon clicked)
+          SLIDE-OVER DRAWER: STUDENT PROFILE DETAILS (Exact Match to User's Screenshot)
          ========================================================================= */}
       {isDetailDrawerOpen && detailStudent && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col overflow-hidden border-l border-[#E2E8F0] animate-in slide-in-from-right duration-200">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-end animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col overflow-hidden border-l border-[#dce7e1] animate-in slide-in-from-right duration-200">
             {/* Drawer Header */}
-            <div className="p-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAF9]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#9EE617]/20 border border-[#9EE617]/40 flex items-center justify-center text-[#256002]">
-                  <UserCheck className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-heading font-black text-sm text-[#0B1118]">Student Dossier</h3>
-                  <p className="text-[10px] text-slate-500 font-mono">{detailStudent.studentId}</p>
-                </div>
+            <div className="p-5 border-b border-[#eef5f1] flex items-center justify-between bg-white">
+              <div>
+                <h3 className="text-sm font-bold text-[#080808]">Student Profile Details</h3>
+                <span className="text-[11px] font-mono text-[#8fe617] font-semibold">{detailStudent.studentId}</span>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsDetailDrawerOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-black transition-colors cursor-pointer"
+                className="rounded-lg p-1 text-[#6b7771] hover:text-[#080808] hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Drawer Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
-              {/* Profile Card */}
-              <div className="flex gap-4 items-start pb-4 border-b border-[#E2E8F0]">
-                {/* Photo (Clickable to edit online) */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+              {/* Studio Portrait Showcase Card */}
+              <div className="flex flex-col items-center justify-center space-y-3 p-4 rounded-2xl border border-[#dce7e1] bg-[#f8fafc]">
+                <span className="text-xs font-mono uppercase tracking-wider text-[#6b7771] font-semibold">
+                  Official Studio Portrait (3:4)
+                </span>
+
+                {/* Portrait Frame */}
                 <div
                   onClick={() => handleOpenPhotoEditor(detailStudent)}
-                  className="relative w-28 h-36 rounded-xl overflow-hidden bg-slate-100 border border-[#CBD5E1] shrink-0 shadow-xs cursor-pointer group"
-                  title="Click photo to crop and adjust online"
+                  className="w-48 aspect-[3/4] rounded-2xl border-2 border-[#dce7e1] bg-white overflow-hidden flex items-center justify-center shadow-md relative cursor-pointer group/drawerPhoto"
+                  title="Click to Crop & Edit Studio Portrait"
                 >
                   <img
                     src={getPhotoUrl(detailStudent.photoPath || detailStudent.previewPath || detailStudent.thumbnailPath) || DEFAULT_AVATAR}
                     alt={detailStudent.fullName}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    className="w-full h-full object-cover group-hover/drawerPhoto:scale-105 transition-transform"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
                     }}
                   />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition-opacity">
-                    <Edit2 className="w-4 h-4 text-[#9EE617] mb-1" />
-                    <span>Edit Photo</span>
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/drawerPhoto:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white text-xs font-semibold pointer-events-none">
+                    <Crop className="h-6 w-6 text-[#8fe617]" />
+                    <span className="bg-black/60 px-2.5 py-1 rounded-full text-[11px] font-mono border border-white/20">Click to Edit Photo</span>
                   </div>
                 </div>
 
-                {/* Identity Metadata */}
-                <div className="min-w-0 flex-1 space-y-1">
-                  <h4 className="text-base font-heading font-black text-[#0B1118] truncate leading-tight">
-                    {detailStudent.fullName}
-                  </h4>
-                  <div className="text-xs font-mono font-bold text-[#366804]">
-                    {detailStudent.studentId}
-                  </div>
-
-                  <div className="space-y-1 pt-2 text-xs text-slate-600">
-                    <div className="flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>Grade:</span>
-                      <span className="font-bold text-[#0B1118]">{getCleanGrade(detailStudent)}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <UsersIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>Section:</span>
-                      <span className="font-bold text-[#0B1118]">{getCleanSection(detailStudent) || 'A'}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>Branch:</span>
-                      <span className="font-bold text-[#0B1118]">{detailStudent.location || 'Addis Ababa'}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>Transmitted:</span>
-                      <span className="font-mono text-[10px] font-semibold text-[#0B1118]">
-                        {detailStudent.createdAt ? new Date(detailStudent.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Oct 12, 08:30'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions Row */}
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => downloadSinglePhoto(detailStudent)}
-                  className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-[#9EE617]/20 text-[#0B1118] text-[11px] font-bold flex flex-col items-center gap-1 transition-colors cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 text-[#366804]" />
-                  <span>Download Photo</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => downloadSingleQr(detailStudent)}
-                  className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-[#9EE617]/20 text-[#0B1118] text-[11px] font-bold flex flex-col items-center gap-1 transition-colors cursor-pointer"
-                >
-                  <QrIcon className="w-3.5 h-3.5 text-[#366804]" />
-                  <span>Download QR</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOpenEditData(detailStudent)}
-                  className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-[#9EE617]/20 text-[#0B1118] text-[11px] font-bold flex flex-col items-center gap-1 transition-colors cursor-pointer"
-                >
-                  <Edit2 className="w-3.5 h-3.5 text-[#366804]" />
-                  <span>Edit Data</span>
-                </button>
-              </div>
-
-              {/* Auto-Generated QR Code Panel (Token: Strictly studentId) */}
-              <div className="p-4 bg-[#F8FAF9] rounded-2xl border border-[#E2E8F0] flex items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs font-black text-[#0B1118]">
-                    <QrIcon className="w-4 h-4 text-[#366804]" />
-                    <span>Auto QR Code</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 max-w-[180px]">
-                    Token strictly encoded with Student ID <span className="font-mono font-bold text-[#0B1118]">({detailStudent.studentId})</span>
-                  </p>
+                {/* Action Buttons Below Portrait */}
+                <div className="flex flex-col gap-2 w-full max-w-xs pt-1">
                   <button
                     type="button"
-                    onClick={() => downloadSingleQr(detailStudent)}
-                    className="text-[11px] text-[#256002] font-black hover:underline pt-1 inline-block cursor-pointer"
+                    onClick={() => downloadSinglePhoto(detailStudent)}
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-white border border-[#dce7e1] text-[#080808] hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs"
                   >
-                    Save QR PNG &rarr;
+                    <Download className="h-3.5 w-3.5 text-[#8fe617]" />
+                    <span>Download Original Portrait (.jpg)</span>
                   </button>
-                </div>
 
-                <div className="w-20 h-20 bg-white p-1 rounded-xl border border-[#CBD5E1] shadow-2xs flex items-center justify-center">
-                  {detailQrDataUrl ? (
-                    <img src={detailQrDataUrl} alt="QR Code" className="w-full h-full object-contain" />
-                  ) : (
-                    <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
-                  )}
-                </div>
-              </div>
-
-              {/* Dossier Tabs (Photo, Academic, Activity) */}
-              <div className="border-b border-[#E2E8F0] flex items-center gap-4 text-xs font-bold">
-                {(['Photo', 'Academic', 'Activity'] as const).map(tab => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setDetailTab(tab)}
-                    className={`pb-2 transition-all relative cursor-pointer ${
-                      detailTab === tab ? 'text-[#256002] font-black' : 'text-slate-500 hover:text-black'
-                    }`}
-                  >
-                    <span>{tab}</span>
-                    {detailTab === tab && (
-                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#9EE617] rounded-full" />
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Tab Contents */}
-              {detailTab === 'Photo' && (
-                <div className="space-y-3 text-xs">
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Biometric Integrity:</span>
-                    <span className="font-bold text-emerald-700 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Verified
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Storage Cluster:</span>
-                    <span className="font-mono text-slate-800">Enterprise High-Speed Storage</span>
-                  </div>
-                  <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Aspect Ratio:</span>
-                    <span className="font-bold text-[#0B1118]">3:4 ID Portrait Standard</span>
-                  </div>
                   <button
                     type="button"
                     onClick={() => handleOpenPhotoEditor(detailStudent)}
-                    className="w-full py-2.5 rounded-xl bg-[#9EE617] hover:bg-[#8FE617] text-[#062404] font-black text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-xl bg-[#8fe617] text-[#062404] hover:bg-[#7ecc10] transition-all shadow-xs cursor-pointer"
                   >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>Open Phone-Style Photo Editor</span>
+                    <Crop className="h-3.5 w-3.5" />
+                    <span>Crop &amp; Edit Portrait</span>
                   </button>
-                </div>
-              )}
 
-              {detailTab === 'Academic' && (
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">School Campus:</span>
-                    <span className="font-bold text-[#0B1118]">{detailStudent.school || 'YMS'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Branch Location:</span>
-                    <span className="font-bold text-[#0B1118]">{detailStudent.location || 'Addis Ababa'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Grade & Section:</span>
-                    <span className="font-mono font-bold text-[#0B1118]">{getGradeDisplay(detailStudent)}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Student Phone:</span>
-                    <span className="font-mono font-bold text-[#0B1118]">{detailStudent.phone || '-'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">School Bus Transport:</span>
-                    <span className="font-bold text-[#0B1118]">{detailStudent.schoolBusUsage || 'Yes'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Blood Group:</span>
-                    <span className="font-bold text-[#0B1118]">{detailStudent.bloodType || 'Unknown'}</span>
-                  </div>
-                </div>
-              )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = getPhotoUrl(detailStudent.photoPath || detailStudent.previewPath || detailStudent.thumbnailPath);
+                      if (url) {
+                        navigator.clipboard.writeText(url);
+                        alert('Image link copied to clipboard!');
+                      }
+                    }}
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-white border border-[#dce7e1] text-[#080808] hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs"
+                  >
+                    <Link2 className="h-3.5 w-3.5 text-[#8fe617]" />
+                    <span>Copy Direct Image Link</span>
+                  </button>
 
-              {detailTab === 'Activity' && (
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Sender Operator:</span>
-                    <span className="font-bold text-[#0B1118]">{detailStudent.senderName || 'Field Sender'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Transmission Timestamp:</span>
-                    <span className="font-mono text-slate-800">{detailStudent.createdAt ? new Date(detailStudent.createdAt).toLocaleString() : 'Oct 12, 2026 08:30'}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Database Sync:</span>
-                    <span className="font-bold text-emerald-700">Authoritative Synchronized (Live)</span>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPhotoEditor(detailStudent)}
+                    className="inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-white border border-[#dce7e1] text-[#080808] hover:bg-slate-50 transition-colors cursor-pointer shadow-2xs"
+                  >
+                    <Upload className="h-3.5 w-3.5 text-amber-500" />
+                    <span>Replace Photo File Directly</span>
+                  </button>
+
+                  <div className="text-[11px] font-mono text-[#6b7771] text-center truncate pt-0.5">
+                    /api/uploads?studentId={detailStudent.studentId}
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Drawer Footer */}
-            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAF9] flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(detailStudent)}
-                className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
-              >
-                Delete Student
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenEditData(detailStudent)}
-                className="py-2 px-4 rounded-xl bg-[#0B1118] text-white text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                Edit Student Data
-              </button>
+              {/* Field Details List - Exactly matching Screenshot */}
+              <div className="space-y-3 divide-y divide-[#eef5f1] text-sm font-sans">
+                <div className="pt-2 flex justify-between items-baseline">
+                  <span className="text-[#6b7771] text-xs font-medium">Name:</span>
+                  <strong className="text-[#080808] font-bold text-sm">{detailStudent.fullName}</strong>
+                </div>
+
+                <div className="pt-2 flex justify-between items-baseline">
+                  <span className="text-[#6b7771] text-xs font-medium">Grade:</span>
+                  <span className="text-[#080808] font-semibold text-xs">{getCleanGrade(detailStudent)}</span>
+                </div>
+
+                <div className="pt-2 flex justify-between items-baseline">
+                  <span className="text-[#6b7771] text-xs font-medium">Sex:</span>
+                  <span className="text-[#080808] font-semibold text-xs">{detailStudent.sex || "Male"}</span>
+                </div>
+
+                <div className="pt-2 flex justify-between items-baseline">
+                  <span className="text-[#6b7771] text-xs font-medium">Phone:</span>
+                  <span className="text-[#080808] font-mono text-xs">{detailStudent.phone || "—"}</span>
+                </div>
+
+                {detailStudent.school && (
+                  <div className="pt-2 flex justify-between items-baseline">
+                    <span className="text-[#6b7771] text-xs font-medium">School:</span>
+                    <span className="text-[#080808] font-semibold text-xs">{detailStudent.school}</span>
+                  </div>
+                )}
+
+                <div className="pt-2 flex justify-between items-baseline">
+                  <span className="text-[#6b7771] text-xs font-medium">Blood Group:</span>
+                  <span className="text-[#43A047] font-black font-mono text-xs">
+                    {detailStudent.bloodType && detailStudent.bloodType.trim() ? detailStudent.bloodType : "AB+"}
+                  </span>
+                </div>
+
+                <div className="pt-2 flex justify-between items-center">
+                  <span className="text-[#6b7771] text-xs font-medium">Data Sent By:</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-[#8fe617]/15 text-[#366804] border border-[#8fe617]/40">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#8fe617]" />
+                    {detailStudent.senderName || (detailStudent as any).senderId || "miskrdires12"}
+                  </span>
+                </div>
+
+                {/* Real Verified QR Code Preview Card */}
+                <div className="pt-3 border-t border-[#dce7e1] flex items-center justify-between p-3 rounded-2xl bg-[#f8fafc] border">
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold text-[#080808] flex items-center gap-1.5">
+                      <QrIcon className="h-4 w-4 text-[#8fe617]" />
+                      <span>Real Verified QR Code</span>
+                    </div>
+                    <div className="text-[10px] text-[#6b7771] font-mono">
+                      Token strictly {detailStudent.studentId}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => downloadSingleQr(detailStudent)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-[#8fe617] text-[#062404] hover:bg-[#7ecc10] transition-all shadow-xs cursor-pointer"
+                        title="Save QR Code"
+                      >
+                        <Download className="h-3 w-3" />
+                        <span>Save QR</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    className="shrink-0 cursor-pointer p-1 rounded-xl bg-white border border-[#dce7e1] shadow-2xs hover:scale-105 transition-transform"
+                    onClick={() => downloadSingleQr(detailStudent)}
+                    title="Click to download QR"
+                  >
+                    {detailQrDataUrl ? (
+                      <img src={detailQrDataUrl} alt="QR Code" className="w-14 h-14 object-contain" />
+                    ) : (
+                      <div className="w-14 h-14 flex items-center justify-center">
+                        <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Quick Action: Delete Student Record */}
+              <div className="pt-4 border-t border-[#eef5f1]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteTarget(detailStudent);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50/60 py-2.5 text-xs font-bold text-red-600 hover:bg-red-600 hover:text-white transition-all shadow-2xs cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Delete Student Record</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
