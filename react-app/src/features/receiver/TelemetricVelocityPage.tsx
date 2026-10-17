@@ -98,7 +98,7 @@ export const TelemetricVelocityPage: React.FC = () => {
             studentPhotosCatalogCount: verifiedPhotos,
             totalDatabaseRecords: currentStudents.length + 25
           },
-          poolerHost: 'aws-0-eu-central-1.pooler.supabase.com',
+          poolerHost: 'cloudflare-edge.r2.cloudflarestorage.com',
           region: 'eu-central-1',
           sslMode: 'require',
           lastActivity: new Date().toISOString(),
@@ -132,7 +132,7 @@ export const TelemetricVelocityPage: React.FC = () => {
           studentPhotosCatalogCount: verifiedPhotos,
           totalDatabaseRecords: currentStudents.length + 20
         },
-        poolerHost: 'aws-0-eu-central-1.pooler.supabase.com',
+        poolerHost: 'cloudflare-edge.r2.cloudflarestorage.com',
         region: 'eu-central-1',
         sslMode: 'require',
         lastActivity: new Date().toISOString(),
@@ -342,7 +342,7 @@ export const TelemetricVelocityPage: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
-              Live Cloudflare R2 bucket &apos;{supabaseStatus?.storageBucket || 'siliconlabs'}&apos; &amp; Supabase PostgreSQL connection
+              Live Cloudflare Edge Runtime &amp; R2 bucket &apos;{supabaseStatus?.storageBucket || 'siliconlabs'}&apos; (Zero Egress)
             </p>
           </div>
 
@@ -364,7 +364,7 @@ export const TelemetricVelocityPage: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#85E510] text-[#062404] text-xs font-black hover:brightness-105 transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
             >
               <Zap className={`w-3.5 h-3.5 ${pinging ? 'animate-bounce' : ''}`} />
-              <span>{pinging ? 'Pinging...' : 'Send Keep-Alive Ping'}</span>
+              <span>{pinging ? 'Pinging...' : 'Test Edge Pulse'}</span>
             </button>
           </div>
         </div>
@@ -386,7 +386,7 @@ export const TelemetricVelocityPage: React.FC = () => {
               </span>
             </div>
             <div className="mt-1 text-[10px] text-[#6b7771] dark:text-[#8a9e93] truncate">
-              Pooler: {supabaseStatus?.poolerHost || 'aws-0-eu-central-1.pooler.supabase.com'}
+              Pooler: {supabaseStatus?.poolerHost || 'cloudflare-edge.r2.cloudflarestorage.com'}
             </div>
           </div>
 
