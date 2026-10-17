@@ -3,8 +3,8 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Users, CreditCard, Printer, Layers, Settings,
   UserPlus, LayoutGrid, CheckSquare, BarChart2,
-  Smartphone, HardDrive, Activity, AlertTriangle,
-  LogOut, Database, X, Shield, RefreshCw
+  Smartphone, Activity, AlertTriangle,
+  LogOut, Database, X, Shield
 } from 'lucide-react';
 import { getCurrentUser, setCurrentUser } from '@/lib/store';
 import { UserRole } from '@/types';
@@ -71,8 +71,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { to: '/super-admin/users', label: 'Provision Operators & RBAC', icon: Shield, iconColor: 'text-amber-500' },
         { to: '/super-admin/database', label: 'Database & Audit Logs', icon: Database, iconColor: 'text-blue-500' },
-        { to: '/super-admin/backups', label: 'Backup & Recovery Center', icon: HardDrive, iconColor: 'text-purple-500' },
-        { to: '/super-admin/sync', label: 'Sync & Reconciliation', icon: RefreshCw, iconColor: 'text-cyan-500' },
         { to: '/super-admin/settings', label: 'Admin System Settings', icon: Settings, iconColor: 'text-emerald-500' },
       ]
     }

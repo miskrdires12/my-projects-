@@ -48,8 +48,6 @@ import { DatabaseControlPage } from '@/features/super-admin/DatabaseControlPage'
 import { SuperAdminStoragePage } from '@/features/super-admin/SuperAdminStoragePage';
 import { AuditLogsPage } from '@/features/super-admin/AuditLogsPage';
 import { SuperAdminSettingsPage } from '@/features/super-admin/SuperAdminSettingsPage';
-import { SuperAdminBackupsPage } from '@/features/super-admin/SuperAdminBackupsPage';
-import { SuperAdminSyncPage } from '@/features/super-admin/SuperAdminSyncPage';
 import { ReceiverImportPage } from '@/features/receiver/ReceiverImportPage';
 
 import { getCurrentUser } from '@/lib/store';
@@ -133,8 +131,6 @@ export const App: React.FC = () => {
             <Route path="/super-admin/reports" element={<SuperAdminReportsPage />} />
             <Route path="/super-admin/integrations" element={<SuperAdminIntegrationsPage />} />
             <Route path="/super-admin/database" element={<DatabaseControlPage />} />
-            <Route path="/super-admin/backups" element={<SuperAdminBackupsPage />} />
-            <Route path="/super-admin/sync" element={<SuperAdminSyncPage />} />
             <Route path="/super-admin/storage" element={<SuperAdminStoragePage />} />
             <Route path="/super-admin/audit-logs" element={<AuditLogsPage />} />
             <Route path="/super-admin/settings" element={<SuperAdminSettingsPage />} />
