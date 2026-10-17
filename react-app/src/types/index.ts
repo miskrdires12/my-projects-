@@ -14,6 +14,8 @@ export interface User {
   recordsSentSingle?: number;
   recordsEncoded?: number;
   workSessionCount?: number;
+  totalWorkMinutes?: number;
+  lastLoginAt?: string | null;
   createdAt?: string;
 }
 

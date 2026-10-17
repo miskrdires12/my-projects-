@@ -106,6 +106,7 @@ export const App: React.FC = () => {
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             <Route path="/admin/telemetric-velocity" element={<TelemetricVelocityPage />} />
             <Route path="/admin/senders" element={<AdminSendersPage />} />
+            <Route path="/admin/users" element={<AdminSendersPage />} />
             <Route path="/admin/tasks" element={<AdminTasksPage />} />
             <Route path="/admin/reviews" element={<AdminReviewsPage />} />
             <Route path="/admin/performance" element={<AdminPerformancePage />} />

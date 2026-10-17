@@ -1553,6 +1553,7 @@ export interface SenderMetrics {
   username: string;
   email: string;
   role: string;
+  branch: string;
   school?: string;
   boundDeviceId: string | null;
   status: 'Active' | 'Idle' | 'Locked';
@@ -1698,12 +1699,23 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
     ? Number((60 / avgTimeTaken).toFixed(2))
     : 0;
 
+  // Determine branch based on school or direct user branch
+  const assignedSchool = user?.school || (norm === 'dagim' ? 'Mojo' : norm === 'biruk' || norm === 'henok' ? 'Yacine' : norm === 'zemichael' || norm === 'yonas' ? 'Debebech' : norm === 'abeni1' || norm === 'sol' ? 'High Tech 1' : 'YMS 1');
+  let assignedBranch = user?.branch || 'Addis Ababa';
+  for (const [branchName, schools] of Object.entries(BRANCH_SCHOOL_MAP)) {
+    if (schools.some(s => s.toLowerCase() === assignedSchool.toLowerCase())) {
+      assignedBranch = branchName;
+      break;
+    }
+  }
+
   return {
     id: user?.id || `usr-${norm}`,
     username: user?.username || senderIdentifier,
     email: user?.email || `${norm}@gmail.com`,
     role: user?.role || 'SENDER',
-    school: user?.school || user?.branch,
+    branch: assignedBranch,
+    school: assignedSchool,
     boundDeviceId: user?.boundDeviceId || null,
     status,
     efficiency,
