@@ -106,6 +106,16 @@ export const AdminSendersPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // 4. Instant Role Permission Change
+  const handleRoleChange = (user: UserType, newRole: 'SENDER' | 'RECEIVER' | 'ADMIN') => {
+    if (user.role === newRole) return;
+    const updated = { ...user, role: newRole };
+    addUser(updated as any);
+    setToastMessage(`Permissions for "${user.username}" updated to ${newRole} immediately.`);
+    loadData();
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
   // Filtering
   const filteredUsers = users.filter((u) => {
     const term = search.toLowerCase();
@@ -351,17 +361,22 @@ export const AdminSendersPage: React.FC = () => {
 
                       {/* 3. ROLE PRIVILEGE */}
                       <td className="px-5 py-3.5 font-mono">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
+                        <select
+                          value={user.role}
+                          onChange={(e) => handleRoleChange(user, e.target.value as any)}
+                          className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase border cursor-pointer focus:outline-none transition-colors ${
                             user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'
-                              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40'
+                              ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/30'
                               : user.role === 'SENDER'
-                              ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/40'
-                              : 'bg-[#8fe617]/20 text-emerald-800 dark:text-[#8fe617] border border-[#8fe617]/40'
+                              ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/40 hover:bg-blue-500/30'
+                              : 'bg-[#8fe617]/20 text-emerald-800 dark:text-[#8fe617] border-[#8fe617]/40 hover:bg-[#8fe617]/30'
                           }`}
+                          title="Click to instantly switch role permission"
                         >
-                          {user.role}
-                        </span>
+                          <option value="SENDER" className="bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4]">SENDER</option>
+                          <option value="RECEIVER" className="bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4]">RECEIVER</option>
+                          <option value="ADMIN" className="bg-white dark:bg-[#111613] text-[#080808] dark:text-[#f2f7f4]">ADMIN</option>
+                        </select>
                       </td>
 
                       {/* 4. AUTHORIZED DEVICE (1-DEVICE LOCK) */}
