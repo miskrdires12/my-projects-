@@ -89,6 +89,7 @@ export const LoginPage: React.FC = () => {
 
       // Asynchronously query edge auth & 1-device hardware lock
       let edgeAuthPassed = false;
+      let tokenReceived: string | undefined = undefined;
       try {
         const edgeRes = await fetch('/api/auth/login', {
           method: 'POST',
@@ -109,6 +110,9 @@ export const LoginPage: React.FC = () => {
           return;
         } else if (edgeRes.ok) {
           const edgeData = await edgeRes.json();
+          if (edgeData.token) {
+            tokenReceived = edgeData.token;
+          }
           if (edgeData.user) {
             user.boundDeviceId = edgeData.user.boundDeviceId || deviceId;
             user.role = edgeData.user.role || user.role;
@@ -138,7 +142,7 @@ export const LoginPage: React.FC = () => {
         user.boundDeviceId = deviceId;
       }
 
-      finishLogin(user);
+      finishLogin(user, tokenReceived);
     } catch (err: any) {
       setError(err?.message || 'Authentication failed. Please retry.');
     } finally {
@@ -146,8 +150,8 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const finishLogin = (user: UserType) => {
-    setCurrentUser(user);
+  const finishLogin = (user: UserType, token?: string | null) => {
+    setCurrentUser(user, token);
 
     // Direct role-specific workspace landing (Senders always go to /sender/register)
     if (user.role === 'SUPER_ADMIN') {

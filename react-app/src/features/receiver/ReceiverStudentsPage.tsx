@@ -18,7 +18,7 @@ import {
   getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP,
   generateStudentQrToken, getStudentPhotoFileName, getStudentQrFileName,
-  addCorrectionLog, getAllSendersMetrics, SenderMetrics
+  addCorrectionLog, getAllSendersMetrics, SenderMetrics, getAuthHeaders
 } from '@/lib/store';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
@@ -517,7 +517,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     try {
       const upRes = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           studentId: targetSid,
           grade: cleanGrade,

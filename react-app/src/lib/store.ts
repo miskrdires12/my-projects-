@@ -695,7 +695,7 @@ export function updateStudent(id: string, updates: Partial<Student>): void {
     // Persist update to Supabase PostgreSQL in background
     fetch('/api/students', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         id: memoryStudents[index].id,
         studentId: memoryStudents[index].studentId,
@@ -747,13 +747,9 @@ export async function deleteStudent(id: string, permanent: boolean = false): Pro
 
     // Persist permanent purge to Cloudflare (R2 photo deletion & Supabase PostgreSQL delete)
     try {
-      const curUser = getCurrentUser();
       const res = await fetch(`/api/students?id=${encodeURIComponent(targetId)}&permanent=true`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Station-Role': curUser?.role || 'SUPER_ADMIN'
-        }
+        headers: getAuthHeaders()
       });
       if (!res.ok) {
         console.warn('Server delete response status:', res.status);
@@ -929,7 +925,7 @@ export function addUser(newUser: User & { password?: string; branch?: string; sc
   // Sync to API / Edge Worker
   fetch('/api/users', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(newUser)
   }).catch(() => {});
 
@@ -955,7 +951,7 @@ export function updateUser(id: string, updates: Partial<User & { password?: stri
 
     fetch('/api/users', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(memoryUsers[index])
     }).catch(() => {});
 
@@ -1049,12 +1045,13 @@ export function deleteUser(id: string): void {
 
   // 3. Notify Cloudflare edge worker to purge locks and free the workstation
   fetch(`/api/users?id=${encodeURIComponent(targetId)}&email=${encodeURIComponent(targetEmail)}&username=${encodeURIComponent(targetUsername)}&deviceId=${encodeURIComponent(boundDevice || '')}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getAuthHeaders()
   }).catch(() => {});
 
   fetch('/api/auth/reset-lock', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ userId: targetId, email: targetEmail, username: targetUsername, deviceId: boundDevice })
   }).catch(() => {});
 
@@ -1139,19 +1136,19 @@ export function resetUserHardwareLock(userId: string): void {
   // Synchronize unbind with edge worker
   fetch('/api/auth/reset-lock', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ userId: targetId, email: targetEmail, username: targetUsername, deviceId: boundDevice })
   }).catch(() => {});
 
   fetch('/api/auth/unbind', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ userId: targetId, email: targetEmail, username: targetUsername, deviceId: boundDevice })
   }).catch(() => {});
 
   fetch('/api/users', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ id: targetId, email: targetEmail, username: targetUsername, boundDeviceId: null })
   }).catch(() => {});
 
@@ -1195,13 +1192,13 @@ export function setUserHardwareLock(userId: string, deviceId: string): void {
     // Synchronize hardware terminal lock to edge worker
     fetch('/api/auth/bind-lock', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ userId: u.id, email: u.email, username: u.username, deviceId })
     }).catch(() => {});
 
     fetch('/api/users', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ ...u, boundDeviceId: deviceId })
     }).catch(() => {});
   }
@@ -1497,7 +1494,44 @@ export function getMistakes(): MistakeItem[] {
   return mistakes;
 }
 
-// Authentication Session State with 3-hour persistence guarantee
+// Authentication Session State with 24-hour persistence guarantee
+export function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem('sb_auth_token');
+  } catch (e) {
+    return null;
+  }
+}
+
+export function setAuthToken(token: string | null): void {
+  try {
+    if (token) {
+      localStorage.setItem('sb_auth_token', token);
+    } else {
+      localStorage.removeItem('sb_auth_token');
+    }
+  } catch (e) {}
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const curUser = getCurrentUser();
+  if (curUser?.role) {
+    headers['X-Station-Role'] = curUser.role;
+  }
+  const devId = localStorage.getItem('sb_device_id');
+  if (devId) {
+    headers['X-Device-Id'] = devId;
+  }
+  return headers;
+}
+
 export function getCurrentUser(): User | null {
   try {
     const saved = localStorage.getItem('sb_auth_user');
@@ -1506,10 +1540,11 @@ export function getCurrentUser(): User | null {
     const loginTimeStr = localStorage.getItem('sb_auth_time');
     if (loginTimeStr) {
       const loginTime = parseInt(loginTimeStr, 10);
-      const threeHoursMs = 3 * 60 * 60 * 1000;
-      // If session expired after 3 hours
-      if (Date.now() - loginTime > threeHoursMs) {
+      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+      // If session expired after 24 hours
+      if (Date.now() - loginTime > twentyFourHoursMs) {
         localStorage.removeItem('sb_auth_user');
+        localStorage.removeItem('sb_auth_token');
         localStorage.removeItem('sb_auth_time');
         return null;
       }
@@ -1519,12 +1554,16 @@ export function getCurrentUser(): User | null {
   return null;
 }
 
-export function setCurrentUser(user: User | null): void {
+export function setCurrentUser(user: User | null, token?: string | null): void {
   if (user) {
     localStorage.setItem('sb_auth_user', JSON.stringify(user));
     localStorage.setItem('sb_auth_time', Date.now().toString());
+    if (token) {
+      localStorage.setItem('sb_auth_token', token);
+    }
   } else {
     localStorage.removeItem('sb_auth_user');
+    localStorage.removeItem('sb_auth_token');
     localStorage.removeItem('sb_auth_time');
   }
 }

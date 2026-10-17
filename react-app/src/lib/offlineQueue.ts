@@ -5,6 +5,7 @@
  */
 
 import { Student } from '@/types';
+import { getAuthHeaders } from './store';
 
 const DB_NAME = 'StudentBridgeDB';
 const DB_VERSION = 1;
@@ -127,7 +128,7 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
       if (op.type === 'CREATE_STUDENT') {
         const res = await fetch('/api/students', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify(op.payload)
         });
 
@@ -140,7 +141,7 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
       } else if (op.type === 'UPDATE_STUDENT') {
         const res = await fetch('/api/students', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify(op.payload)
         });
         if (res.ok) {
@@ -151,7 +152,8 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
         }
       } else if (op.type === 'DELETE_STUDENT') {
         const res = await fetch(`/api/students?id=${encodeURIComponent(op.payload.id || op.payload.studentId)}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: { ...getAuthHeaders() }
         });
         if (res.ok) {
           await removePendingOperation(op.id);

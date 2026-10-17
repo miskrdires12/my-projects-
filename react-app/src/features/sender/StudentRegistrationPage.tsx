@@ -9,7 +9,7 @@ import {
 import {
   getStudents, addStudent, getSchools, getCurrentUser, getTasks,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP, getSenderMetrics, SenderMetrics,
-  generateStudentQrToken, getCorrectionLogs, CorrectionLog
+  generateStudentQrToken, getCorrectionLogs, CorrectionLog, getAuthHeaders
 } from '@/lib/store';
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
@@ -337,7 +337,7 @@ export const StudentRegistrationPage: React.FC = () => {
         try {
           const upRes = await fetch('/api/upload', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
             body: JSON.stringify({
               studentId: studentId.trim(),
               grade: cleanGrade,
@@ -415,7 +415,7 @@ export const StudentRegistrationPage: React.FC = () => {
       try {
         const res = await fetch('/api/students', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify(studentPayload)
         });
 
