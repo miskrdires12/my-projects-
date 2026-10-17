@@ -1228,7 +1228,7 @@ export default {
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "DELETE") {
       const authUser = await authenticateRequest(request);
-      const isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
+      let isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
       // Permanent purges require ADMIN or SUPER_ADMIN; soft-deletes/restores allow RECEIVER as well
       const allowedRoles = isPermanent ? ["ADMIN", "SUPER_ADMIN"] : ["RECEIVER", "ADMIN", "SUPER_ADMIN"];
       const authErr = requireAuthorization(authUser, allowedRoles);
