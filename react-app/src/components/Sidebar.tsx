@@ -4,7 +4,7 @@ import {
   Users, CreditCard, Printer, Layers, Settings,
   UserPlus, LayoutGrid, CheckSquare, BarChart2,
   Smartphone, HardDrive, Activity, AlertTriangle,
-  LogOut, Database, X, Shield
+  LogOut, Database, X, Shield, RefreshCw
 } from 'lucide-react';
 import { getCurrentUser, setCurrentUser } from '@/lib/store';
 import { UserRole } from '@/types';
@@ -71,6 +71,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { to: '/super-admin/users', label: 'Provision Operators & RBAC', icon: Shield, iconColor: 'text-amber-500' },
         { to: '/super-admin/database', label: 'Database & Audit Logs', icon: Database, iconColor: 'text-blue-500' },
+        { to: '/super-admin/backups', label: 'Backup & Recovery Center', icon: HardDrive, iconColor: 'text-purple-500' },
+        { to: '/super-admin/sync', label: 'Sync & Reconciliation', icon: RefreshCw, iconColor: 'text-cyan-500' },
         { to: '/super-admin/settings', label: 'Admin System Settings', icon: Settings, iconColor: 'text-emerald-500' },
       ]
     }
@@ -115,6 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { to: '/admin/dashboard', label: 'Live Dashboard & Metrics', icon: LayoutGrid, iconColor: 'text-slate-500' },
         { to: '/admin/telemetric-velocity', label: 'Telemetric Velocity & Fleet', icon: Activity, iconColor: 'text-[#85E510]' },
         { to: '/admin/senders', label: 'Provision Operators & RBAC', icon: Shield, iconColor: 'text-amber-500' },
+        { to: '/admin/quality-control', label: 'Data Quality & Correction', icon: AlertTriangle, iconColor: 'text-rose-500' },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare, iconColor: 'text-slate-500' },
         { to: '/admin/settings', label: 'Admin System Settings', icon: Settings, iconColor: 'text-emerald-500' },
       ]

@@ -34,6 +34,7 @@ import { AdminReviewsPage } from '@/features/admin/AdminReviewsPage';
 import { AdminPerformancePage } from '@/features/admin/AdminPerformancePage';
 import { AdminReportsPage } from '@/features/admin/AdminReportsPage';
 import { AdminSettingsPage } from '@/features/admin/AdminSettingsPage';
+import { AdminQualityControlPage } from '@/features/admin/AdminQualityControlPage';
 
 // Super Admin Pages
 import { SuperAdminDashboardPage } from '@/features/super-admin/SuperAdminDashboardPage';
@@ -47,6 +48,9 @@ import { DatabaseControlPage } from '@/features/super-admin/DatabaseControlPage'
 import { SuperAdminStoragePage } from '@/features/super-admin/SuperAdminStoragePage';
 import { AuditLogsPage } from '@/features/super-admin/AuditLogsPage';
 import { SuperAdminSettingsPage } from '@/features/super-admin/SuperAdminSettingsPage';
+import { SuperAdminBackupsPage } from '@/features/super-admin/SuperAdminBackupsPage';
+import { SuperAdminSyncPage } from '@/features/super-admin/SuperAdminSyncPage';
+import { ReceiverImportPage } from '@/features/receiver/ReceiverImportPage';
 
 import { getCurrentUser } from '@/lib/store';
 
@@ -97,6 +101,8 @@ export const App: React.FC = () => {
             <Route path="/receiver/id-production" element={<ReceiverIdProductionPage />} />
             <Route path="/receiver/mistakes" element={<MistakeAnalyzerPage />} />
             <Route path="/receiver/exports" element={<ReceiverExportsPage />} />
+            <Route path="/receiver/bulk" element={<ReceiverExportsPage />} />
+            <Route path="/receiver/import" element={<ReceiverImportPage />} />
             <Route path="/receiver/database" element={<ReceiverDatabasePage />} />
             <Route path="/receiver/settings" element={<ReceiverSettingsPage />} />
             <Route path="/receiver/activity" element={<ReceiverActivityPage />} />
@@ -110,12 +116,14 @@ export const App: React.FC = () => {
             <Route path="/admin/tasks" element={<AdminTasksPage />} />
             <Route path="/admin/reviews" element={<AdminReviewsPage />} />
             <Route path="/admin/performance" element={<AdminPerformancePage />} />
+            <Route path="/admin/quality-control" element={<AdminQualityControlPage />} />
             <Route path="/admin/reports" element={<AdminReportsPage />} />
             <Route path="/admin/database" element={<DatabaseControlPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/*" element={<Navigate to="/admin/dashboard" replace />} />
 
             {/* 4. Super Admin Workspace */}
+            <Route path="/super-admin" element={<Navigate to="/super-admin/dashboard" replace />} />
             <Route path="/super-admin/dashboard" element={<SuperAdminDashboardPage />} />
             <Route path="/super-admin/telemetric-velocity" element={<TelemetricVelocityPage />} />
             <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
@@ -125,6 +133,8 @@ export const App: React.FC = () => {
             <Route path="/super-admin/reports" element={<SuperAdminReportsPage />} />
             <Route path="/super-admin/integrations" element={<SuperAdminIntegrationsPage />} />
             <Route path="/super-admin/database" element={<DatabaseControlPage />} />
+            <Route path="/super-admin/backups" element={<SuperAdminBackupsPage />} />
+            <Route path="/super-admin/sync" element={<SuperAdminSyncPage />} />
             <Route path="/super-admin/storage" element={<SuperAdminStoragePage />} />
             <Route path="/super-admin/audit-logs" element={<AuditLogsPage />} />
             <Route path="/super-admin/settings" element={<SuperAdminSettingsPage />} />
