@@ -18,6 +18,22 @@
   --border-subtle: #EDF2F7;
 }
 
+.dark {
+  --background: #0B1118;
+  --surface: #141A22;
+  --surface-muted: #1E2633;
+  --charcoal: #F8FAFC;
+  --charcoal-dark: #FFFFFF;
+  --accent: #9EE617;
+  --accent-light: #BEF264;
+  --accent-hover: #8FE617;
+  --accent-glow: rgba(158, 230, 23, 0.35);
+  --foreground: #F1F5F9;
+  --foreground-muted: #94A3B8;
+  --border: #243041;
+  --border-subtle: #1A2330;
+}
+
 html,
 body,
 #root {
@@ -33,6 +49,22 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden !important;
   -webkit-font-smoothing: antialiased;
+
+  /* Enterprise Anti-Copy Protection: Protect sensitive student records & telemetry from accidental or unauthorized selection/copying */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Allow text inputs and textareas to be selectable and editable */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
 }
 
 /* Rounded Cards */
@@ -42,6 +74,12 @@ body {
   border-radius: 1rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease-in-out;
+}
+
+.dark .card-enterprise {
+  background-color: #141A22;
+  border-color: #243041;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .card-enterprise:hover {
@@ -55,10 +93,22 @@ body {
   border: 1px solid rgba(158, 230, 23, 0.45);
 }
 
+.dark .badge-accepted {
+  background: rgba(158, 230, 23, 0.2);
+  color: #9EE617;
+  border-color: rgba(158, 230, 23, 0.4);
+}
+
 .badge-pending {
   background: rgba(245, 158, 11, 0.12);
   color: #b45309;
   border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.dark .badge-pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FBBF24;
+  border-color: rgba(245, 158, 11, 0.4);
 }
 
 .badge-rejected {
@@ -67,16 +117,34 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+.dark .badge-rejected {
+  background: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
 .badge-female {
   background: rgba(168, 85, 247, 0.12);
   color: #7e22ce;
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
+.dark .badge-female {
+  background: rgba(168, 85, 247, 0.2);
+  color: #C084FC;
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
 .badge-male {
   background: rgba(14, 165, 233, 0.12);
   color: #0369a1;
   border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.dark .badge-male {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38BDF8;
+  border-color: rgba(14, 165, 233, 0.4);
 }
 
 /* Custom Scrollbar */
@@ -87,11 +155,18 @@ body {
 ::-webkit-scrollbar-track {
   background: #F1F5F9;
 }
+.dark ::-webkit-scrollbar-track {
+  background: #0B1118;
+}
 ::-webkit-scrollbar-thumb {
   background: rgba(11, 17, 24, 0.2);
   border-radius: 9999px;
 }
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(158, 230, 23, 0.8);
 }
+
 
