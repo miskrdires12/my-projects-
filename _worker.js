@@ -1696,10 +1696,31 @@ export default {
     }
 
     if (url.pathname === "/api/auth/bind-lock" && request.method === "POST") {
+      const authUser = await authenticateRequest(request);
+      if (!authUser) {
+        return new Response(JSON.stringify({ error: "UNAUTHORIZED", message: "Authentication required to bind terminal." }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      }
+
       try {
         const body = await request.json();
         const { userId, email, username, deviceId } = body;
         const target = userId || email || username;
+
+        // Operators can only bind their own account unless they are ADMIN or SUPER_ADMIN
+        const isSelf = (userId && authUser.sub === userId) ||
+                       (email && authUser.email.toLowerCase() === email.toLowerCase()) ||
+                       (username && authUser.username.toLowerCase() === username.toLowerCase());
+        const isAdmin = authUser.role === "ADMIN" || authUser.role === "SUPER_ADMIN";
+
+        if (!isSelf && !isAdmin) {
+          return new Response(JSON.stringify({ error: "FORBIDDEN", message: "You do not have permission to bind hardware for other accounts." }), {
+            status: 403,
+            headers: { "Content-Type": "application/json", ...corsHeaders }
+          });
+        }
 
         if (email) edgeDeviceLocks.set(email.toLowerCase(), deviceId);
         if (username) edgeDeviceLocks.set(username.toLowerCase(), deviceId);
@@ -1738,6 +1759,10 @@ export default {
     }
 
     if ((url.pathname === "/api/auth/unbind" || url.pathname === "/api/auth/reset-lock") && request.method === "POST") {
+      const authUser = await authenticateRequest(request);
+      const authErr = requireAuthorization(authUser, ["ADMIN", "SUPER_ADMIN"]);
+      if (authErr) return authErr;
+
       try {
         const body = await request.json();
         const { userId, email, username, deviceId } = body;
