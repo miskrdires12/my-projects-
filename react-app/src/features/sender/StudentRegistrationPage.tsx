@@ -283,6 +283,7 @@ export const StudentRegistrationPage: React.FC = () => {
         if (dataUrl && dataUrl.length > 500) {
           setCapturedPhoto(dataUrl);
           stopCamera();
+          setIsEditorOpen(true);
         } else {
           alert('Could not capture photo frame. Please try again.');
         }
@@ -301,6 +302,7 @@ export const StudentRegistrationPage: React.FC = () => {
         if (event.target?.result) {
           setCapturedPhoto(event.target.result as string);
           stopCamera();
+          setIsEditorOpen(true);
         }
       };
       reader.readAsDataURL(file);
@@ -360,24 +362,30 @@ export const StudentRegistrationPage: React.FC = () => {
       const finalPhotoUrl = r2PhotoUrl || (capturedPhoto ? `${R2_PUBLIC_BASE_URL}/${photoKey}` : undefined);
 
       const parsedGradeInfo = parseGradeAndSection(grade);
+      const fullDisplayGrade = parsedGradeInfo.displayString || grade.trim();
+      const resolvedSection = parsedGradeInfo.cleanSection || '';
 
-      const studentPayload: Student & { capturedPhoto?: string; photoBase64?: string } = {
+      const studentPayload: Student & { capturedPhoto?: string; photoBase64?: string; section?: string; branch?: string } = {
         id: 'cmu-' + Date.now().toString(36),
         studentId: studentId.trim(),
         fullName: fullName.trim(),
         sex,
-        grade: parsedGradeInfo.cleanGrade,
-        department: parsedGradeInfo.cleanSection || undefined,
+        grade: fullDisplayGrade,
+        department: resolvedSection || undefined,
+        section: resolvedSection || undefined,
         phone: phone.trim(),
         bloodType: bloodType || undefined,
         school: school.trim(),
         location,
+        branch: location,
         country: 'Ethiopia',
         dateOfBirth: dateOfBirth || undefined,
-        address: address || undefined,
+        address: address || location,
+        cityRegion: location,
         guardianFullName: guardianName || undefined,
         emergencyContactPhone: emergencyContact.trim(),
         schoolBusUsage,
+        busUser: schoolBusUsage,
         nationality,
         photoPath: finalPhotoUrl,
         previewPath: capturedPhoto || finalPhotoUrl || undefined,
@@ -391,7 +399,7 @@ export const StudentRegistrationPage: React.FC = () => {
           studentId: studentId.trim(),
           fullName: fullName.trim(),
           rollNumber: '',
-          grade: parsedGradeInfo.cleanGrade
+          grade: fullDisplayGrade
         }),
         senderName: user?.username || 'Field Operator',
         status: 'Accepted',

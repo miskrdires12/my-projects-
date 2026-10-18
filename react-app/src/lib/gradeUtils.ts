@@ -29,18 +29,67 @@ const CANONICAL_GRADE_ORDER = [
   '12'
 ];
 
+export const BRANCH_SCHOOL_MAP: Record<string, string[]> = {
+  'Addis Ababa': [
+    'YMS 1', 'YMS 2', 'YMS 3', 'YMS 4',
+    'School of America 1', 'School of America 2', 'School of America 3', 'School of America 4',
+    'Adika Youth', 'Warka', 'Ferway', 'Sena Yerosen',
+    'YMS', 'School of America'
+  ],
+  'Adama': ['Yacine', 'Debebech'],
+  'Mojo': ['Mojo'],
+  'Harar': [
+    'High Tech 1', 'High Tech 2', 'High Tech 3', 'High Tech 4',
+    'High Tech'
+  ]
+};
+
+export const DEFAULT_BRANCHES = Object.keys(BRANCH_SCHOOL_MAP);
+
+export function getBranchForSchool(schoolName?: string | null): string {
+  if (!schoolName) return 'Addis Ababa';
+  const sn = schoolName.toLowerCase().trim();
+  for (const [branch, schools] of Object.entries(BRANCH_SCHOOL_MAP)) {
+    if (schools.some(s => s.toLowerCase() === sn)) {
+      return branch;
+    }
+  }
+  return 'Addis Ababa';
+}
+
+export function getStudentBranch(student?: Partial<Student> | null): string {
+  if (!student) return 'Addis Ababa';
+  if (student.location && DEFAULT_BRANCHES.includes(student.location)) return student.location;
+  if ((student as any).branch && DEFAULT_BRANCHES.includes((student as any).branch)) return (student as any).branch;
+  if (student.address) {
+    for (const b of DEFAULT_BRANCHES) {
+      if (student.address.toLowerCase().includes(b.toLowerCase())) return b;
+    }
+  }
+  if (student.school) {
+    return getBranchForSchool(student.school);
+  }
+  return student.location || (student as any).branch || 'Addis Ababa';
+}
+
 /**
  * Robustly parses and normalizes any raw grade / section combination.
  * Strips the 'Grade' word and keeps clean compact representation:
  * Examples: 'Grade 1A' -> '1A', 'Grade 1' -> '1', '10 A' -> '10A', 'UKG C' -> 'UKG C', 'LKG' -> 'LKG'.
  */
-export function parseGradeAndSection(rawGrade?: string | null, rawDept?: string | null): ParsedGradeInfo {
+export function parseGradeAndSection(
+  rawGrade?: string | null,
+  rawDept?: string | null,
+  rawSec?: string | null
+): ParsedGradeInfo {
   const raw = (rawGrade || '').trim();
-  const dept = (rawDept || '').trim();
+  const deptInput = (rawDept || rawSec || '').trim();
 
   let extractedSec = '';
-  if (/^[A-Za-z]$/.test(dept)) {
-    extractedSec = dept.toUpperCase();
+  // Check direct single letter or 'Section A' or 'Sec A'
+  const secMatchDirect = deptInput.match(/(?:section|sec)?\s*([A-Za-z])$/i);
+  if (secMatchDirect) {
+    extractedSec = secMatchDirect[1].toUpperCase();
   }
 
   // Strip leading 'Grade ' or 'grade '
@@ -122,22 +171,28 @@ export function parseGradeAndSection(rawGrade?: string | null, rawDept?: string 
 /**
  * Returns the normalized clean grade for a student (e.g. '10', '1', 'LKG')
  */
-export function getCleanGrade(student: Partial<Student>): string {
-  return parseGradeAndSection(student.grade, student.department).cleanGrade;
+export function getCleanGrade(student?: Partial<Student> | null): string {
+  if (!student) return '10';
+  const sec = student.department || (student as any)?.section;
+  return parseGradeAndSection(student.grade, sec).cleanGrade;
 }
 
 /**
  * Returns the normalized clean section for a student (e.g. 'A', 'B', or '')
  */
-export function getCleanSection(student: Partial<Student>): string {
-  return parseGradeAndSection(student.grade, student.department).cleanSection;
+export function getCleanSection(student?: Partial<Student> | null): string {
+  if (!student) return '';
+  const sec = student.department || (student as any)?.section;
+  return parseGradeAndSection(student.grade, sec).cleanSection;
 }
 
 /**
  * Returns human-readable display string without 'Grade' word: e.g. '1A' or '1' or 'UKG C'
  */
-export function getGradeDisplay(student: Partial<Student>): string {
-  return parseGradeAndSection(student.grade, student.department).displayString;
+export function getGradeDisplay(student?: Partial<Student> | null): string {
+  if (!student) return '';
+  const sec = student.department || (student as any)?.section;
+  return parseGradeAndSection(student.grade, sec).displayString || student.grade || '';
 }
 
 /**

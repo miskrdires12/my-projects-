@@ -30,7 +30,9 @@ import {
   matchesSectionFilter,
   getCleanGrade,
   getCleanSection,
-  getGradeDisplay
+  getGradeDisplay,
+  getStudentBranch,
+  getBranchForSchool
 } from '@/lib/gradeUtils';
 
 export const ReceiverStudentsPage: React.FC = () => {
@@ -305,7 +307,8 @@ export const ReceiverStudentsPage: React.FC = () => {
 
       const matchGrade = matchesGradeFilter(s, gradeFilter);
       const matchSection = matchesSectionFilter(s, sectionFilter);
-      const matchBranch = branchFilter === 'ALL' || s.location === branchFilter;
+      const sBranch = getStudentBranch(s);
+      const matchBranch = branchFilter === 'ALL' || sBranch === branchFilter;
       const matchSchool = schoolFilter === 'ALL' || s.school === schoolFilter;
       const matchSender = senderFilter === 'ALL' || (s.senderName || s.senderId) === senderFilter;
       const matchDate = !selectedDate || (s.createdAt && s.createdAt.substring(0, 10) === selectedDate);
@@ -584,7 +587,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     setEditSex(s.sex === 'Female' ? 'Female' : 'Male');
     setEditGrade(s.grade || '9');
     setEditSection(getSection(s));
-    const loc = s.location || 'Addis Ababa';
+    const loc = getStudentBranch(s);
     setEditBranch(loc);
     const validSchools = BRANCH_SCHOOL_MAP[loc] || ['YMS'];
     setEditSchool(validSchools.includes(s.school || '') ? s.school! : validSchools[0]);
@@ -608,7 +611,10 @@ export const ReceiverStudentsPage: React.FC = () => {
       sex: editSex,
       grade: editGrade.trim(),
       department: editSection.trim(),
+      section: editSection.trim(),
       location: editBranch,
+      branch: editBranch,
+      address: editBranch,
       school: editSchool,
       phone: formatPhoneNumber(editPhone),
       dateOfBirth: editDob,
@@ -919,12 +925,13 @@ export const ReceiverStudentsPage: React.FC = () => {
           'Name': s.fullName,
           'StudentId': s.studentId,
           'Sex': s.sex || 'Male',
-          'Grade': s.grade || '',
+          'Grade': getGradeDisplay(s),
+          'Section': getCleanSection(s),
           'BloodType': s.bloodType || 'Unknown',
           'Phone': s.phone || '',
           '@photo': photoLocalPath,
           '@qr': qrName,
-          'Branch': s.location || 'Addis Ababa',
+          'Branch': getStudentBranch(s),
           'School': s.school || '',
           'Status': s.status || 'Accepted'
         };
@@ -1615,7 +1622,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                         <div className="font-bold text-[#0B1118] truncate max-w-[160px]">{s.school || 'YMS'}</div>
                         <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
                           <MapPin className="w-2.5 h-2.5 text-[#366804]" />
-                          <span>{s.location || 'Addis Ababa'}</span>
+                          <span className="font-semibold text-slate-700">{getStudentBranch(s)}</span>
                         </div>
                       </td>
 
@@ -1937,26 +1944,24 @@ export const ReceiverStudentsPage: React.FC = () => {
                 </div>
 
                 <div className="pt-2 flex justify-between items-baseline">
-                  <span className="text-[#6b7771] text-xs font-medium">Grade:</span>
-                  <span className="text-[#080808] font-semibold text-xs">{getCleanGrade(detailStudent)}</span>
+                  <span className="text-[#6b7771] text-xs font-medium">Grade & Section:</span>
+                  <span className="text-[#080808] font-bold text-xs">{getGradeDisplay(detailStudent)}</span>
                 </div>
 
                 <div className="pt-2 flex justify-between items-baseline">
-                  <span className="text-[#6b7771] text-xs font-medium">Sex:</span>
-                  <span className="text-[#080808] font-semibold text-xs">{detailStudent.sex || "Male"}</span>
+                  <span className="text-[#6b7771] text-xs font-medium">Section:</span>
+                  <span className="text-[#080808] font-bold text-xs">{getCleanSection(detailStudent)}</span>
                 </div>
 
                 <div className="pt-2 flex justify-between items-baseline">
-                  <span className="text-[#6b7771] text-xs font-medium">Phone:</span>
-                  <span className="text-[#080808] font-mono text-xs">{detailStudent.phone || "—"}</span>
+                  <span className="text-[#6b7771] text-xs font-medium">Branch:</span>
+                  <span className="text-[#080808] font-bold text-xs">{getStudentBranch(detailStudent)}</span>
                 </div>
 
-                {detailStudent.school && (
-                  <div className="pt-2 flex justify-between items-baseline">
-                    <span className="text-[#6b7771] text-xs font-medium">School:</span>
-                    <span className="text-[#080808] font-semibold text-xs">{detailStudent.school}</span>
-                  </div>
-                )}
+                <div className="pt-2 flex justify-between items-baseline">
+                  <span className="text-[#6b7771] text-xs font-medium">School:</span>
+                  <span className="text-[#080808] font-semibold text-xs">{detailStudent.school || "YMS"}</span>
+                </div>
 
                 <div className="pt-2 flex justify-between items-baseline">
                   <span className="text-[#6b7771] text-xs font-medium">Blood Group:</span>

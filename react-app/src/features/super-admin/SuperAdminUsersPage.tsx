@@ -4,12 +4,13 @@ import {
   UserPlus, RefreshCw, KeyRound, Trash2, Download, Sparkles, Building2, MapPin
 } from 'lucide-react';
 import {
-  getUsers, resetUserHardwareLock, addUser, updateUser, deleteUser,
-  BRANCH_SCHOOL_MAP, DEFAULT_BRANCHES, getStudents
+  getUsers, resetUserHardwareLock, setUserHardwareLock, addUser, updateUser, deleteUser,
+  BRANCH_SCHOOL_MAP, DEFAULT_BRANCHES, getStudents, getCurrentUser
 } from '@/lib/store';
 import { User, UserRole, Student } from '@/types';
 
 export const SuperAdminUsersPage: React.FC = () => {
+  const currentUser = getCurrentUser();
   const [activeTab, setActiveTab] = useState<'All' | 'Senders' | 'Receivers' | 'Admins' | 'Super Admin'>('All');
   const [branchFilter, setBranchFilter] = useState<string>('All');
   const [users, setUsers] = useState<User[]>([]);
@@ -48,10 +49,18 @@ export const SuperAdminUsersPage: React.FC = () => {
     setNewSchool(schools[0] || 'YMS');
   };
 
-  const handleResetLock = (userId: string, username: string) => {
-    resetUserHardwareLock(userId);
+  const handleToggleLock = (user: User) => {
+    if (user.boundDeviceId) {
+      resetUserHardwareLock(user.id);
+      resetUserHardwareLock(user.username);
+      resetUserHardwareLock(user.email);
+      setToastMessage(`Hardware device lock cleared for "${user.username}". Terminal is now unlocked.`);
+    } else {
+      const generatedDeviceId = 'dev-terminal-' + Math.random().toString(36).substring(2, 9);
+      setUserHardwareLock(user.id, generatedDeviceId);
+      setToastMessage(`Hardware 1-device lock enabled for "${user.username}" (bound to terminal).`);
+    }
     loadData();
-    setToastMessage(`1-Device Lock successfully reset for ${username}. Hardware terminal unbound.`);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
@@ -63,11 +72,14 @@ export const SuperAdminUsersPage: React.FC = () => {
   };
 
   const handleDeleteUser = (userId: string, email: string) => {
-    if (window.confirm(`Are you sure you want to remove account "${email}" from the system? This will also unbind and free any linked workstation.`)) {
+    const userObj = users.find(u => u.id === userId || u.email === email);
+    const identifier = userObj?.username || email;
+    if (window.confirm(`Are you sure you want to permanently delete operator account "${identifier}"? This will delete the account from database and completely unbind any linked terminal.`)) {
       deleteUser(userId);
       deleteUser(email);
+      if (userObj?.username) deleteUser(userObj.username);
       loadData();
-      setToastMessage(`Account "${email}" permanently removed and workstation unlocked.`);
+      setToastMessage(`Account "${identifier}" permanently removed and workstation unlocked.`);
       setTimeout(() => setToastMessage(null), 4000);
     }
   };
@@ -364,32 +376,38 @@ export const SuperAdminUsersPage: React.FC = () => {
                       </select>
                     </td>
 
-                    {/* Actions: Reset Lock & Delete */}
-                    <td className="py-3.5 text-right pr-6 space-x-2">
-                      {hasDevice ? (
+                    {/* Actions: Lock / Unlock & Delete */}
+                    <td className="py-3.5 text-right pr-6">
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => handleResetLock(u.id, u.username)}
-                          title="Unbind Workstation"
-                          className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold transition-all inline-flex items-center gap-1"
+                          onClick={() => handleToggleLock(u)}
+                          title={hasDevice ? `Locked to ${u.boundDeviceId}. Click to unlock workstation.` : "Unlocked. Click to lock to workstation terminal."}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer ${
+                            hasDevice
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 shadow-2xs'
+                              : 'bg-[#F4F7F5] hover:bg-slate-200 text-slate-700 border-slate-300'
+                          }`}
                         >
-                          <Unlock className="w-3 h-3" />
-                          <span>Reset Lock</span>
+                          {hasDevice ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Unlock className="w-3.5 h-3.5 text-slate-500" />}
+                          <span>{hasDevice ? 'Locked' : 'Unlocked'}</span>
                         </button>
-                      ) : (
-                        <span className="text-[11px] text-[#94A3B8] mr-2">Unlocked</span>
-                      )}
 
-                      {!isPreset && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteUser(u.id, u.email)}
-                          title="Delete Account"
-                          className="p-1 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-all inline-block"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                        {currentUser && (u.id === currentUser.id || u.email?.toLowerCase() === currentUser.email?.toLowerCase() || u.username?.toLowerCase() === currentUser.username?.toLowerCase() || u.email === 'miskrdires11@gmail.com') ? (
+                          <span className="text-[10px] text-slate-400 font-bold px-2 py-1 rounded bg-slate-100 border border-slate-200 inline-block">
+                            Protected
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(u.id, u.email)}
+                            title={`Permanently delete operator "${u.username}"`}
+                            className="p-1.5 rounded-lg text-rose-600 hover:text-rose-800 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all inline-flex items-center justify-center cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

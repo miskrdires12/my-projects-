@@ -35,6 +35,7 @@ import {
 import JSZip from "jszip";
 import { getStudents, updateStudent, deleteStudent, getCurrentUser, getAllSendersMetrics, SenderMetrics } from "@/lib/store";
 import { Student } from "@/types";
+import { getGradeDisplay, getCleanSection, getStudentBranch } from "@/lib/gradeUtils";
 
 export const AdminDashboardPage: React.FC = () => {
   const [allStudentsList, setAllStudentsList] = useState<Student[]>([]);
@@ -1130,7 +1131,7 @@ export const AdminDashboardPage: React.FC = () => {
                         <span>{s.fullName}</span>
                       </div>
                       <div className="text-[11px] text-[#6b7771] dark:text-[#8a9e93] font-mono">
-                        {s.studentId} • {s.phone || "No phone"}
+                        {s.studentId} • {s.school || 'YMS'} ({getStudentBranch(s)}) • {s.phone || "No phone"}
                       </div>
                     </div>
                   </div>
@@ -1147,12 +1148,14 @@ export const AdminDashboardPage: React.FC = () => {
                     </span>
 
                     <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-[#8fe617]/40 bg-[#8fe617]/10 text-[#080808] dark:text-[#8fe617]">
-                      GRADE {s.grade || "N/A"}
+                      GRADE {getGradeDisplay(s)}
                     </span>
 
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-400/10 text-sky-700 dark:text-sky-300">
-                      SEC {s.department || (s as any).section || "A"}
-                    </span>
+                    {getCleanSection(s) && (
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-400/10 text-sky-700 dark:text-sky-300">
+                        SEC {getCleanSection(s)}
+                      </span>
+                    )}
 
                     <span
                       className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${

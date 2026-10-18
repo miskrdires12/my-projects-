@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldCheck, CheckCircle2, XCircle, ArrowRight, User, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getStudents, updateStudent } from '@/lib/store';
 import { Student } from '@/types';
+import { getGradeDisplay, getCleanSection, getStudentBranch } from '@/lib/gradeUtils';
 
 export const ReceiverReviewPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -69,11 +70,16 @@ export const ReceiverReviewPage: React.FC = () => {
 
         <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-xs">
           <span className="px-3 py-1 rounded-full bg-[#F8FAF9] border border-[#CBD5E1] text-[#202833] font-semibold">
-            Campus: {current.school || 'YMS'}
+            Campus: {current.school || 'YMS'} ({getStudentBranch(current)})
           </span>
           <span className="px-3 py-1 rounded-full bg-[#F8FAF9] border border-[#CBD5E1] text-[#202833] font-semibold">
-            Grade: {current.grade}
+            Grade: {getGradeDisplay(current)}
           </span>
+          {getCleanSection(current) && (
+            <span className="px-3 py-1 rounded-full bg-[#F8FAF9] border border-[#CBD5E1] text-[#202833] font-semibold">
+              Section: {getCleanSection(current)}
+            </span>
+          )}
           <span className="px-3 py-1 rounded-full bg-[#F8FAF9] border border-[#CBD5E1] text-[#202833] font-mono">
             Phone: {current.phone || 'N/A'}
           </span>

@@ -39,6 +39,35 @@ function applyEnvSecrets(env) {
 }
 
 // -----------------------------------------------------------------------------
+// BRANCH AND SCHOOL MAPPING (Canonical)
+// -----------------------------------------------------------------------------
+const BRANCH_SCHOOL_MAP = {
+  "Addis Ababa": ["YMS 1", "YMS 2", "YMS 3", "YMS 4", "YMS 5", "YMS 6", "YMS 7", "YMS 8", "YMS 9", "YMS 10", "YMS 11", "YMS 12", "YMS 13", "YMS 14", "YMS 15", "YMS 16", "YMS 17", "YMS 18", "YMS 19"],
+  "Adama": ["Sena Yerosen"],
+  "Hawassa": ["Hawassa Campus 1", "Hawassa Campus 2"],
+  "Dire Dawa": ["Dire Dawa Academy"],
+  "Bahir Dar": ["Bahir Dar Academy"],
+  "Mekelle": ["Mekelle Center"]
+};
+
+function getBranchForSchoolWorker(school) {
+  if (!school) return "Addis Ababa";
+  const s = String(school).trim();
+  if (/sena\s*yerosen/i.test(s)) return "Adama";
+  for (const [branch, schools] of Object.entries(BRANCH_SCHOOL_MAP)) {
+    if (schools.some(sch => sch.toLowerCase() === s.toLowerCase())) {
+      return branch;
+    }
+  }
+  if (/adama/i.test(s)) return "Adama";
+  if (/hawassa/i.test(s)) return "Hawassa";
+  if (/dire\s*dawa/i.test(s)) return "Dire Dawa";
+  if (/bahir\s*dar/i.test(s)) return "Bahir Dar";
+  if (/mekelle/i.test(s)) return "Mekelle";
+  return "Addis Ababa";
+}
+
+// -----------------------------------------------------------------------------
 // SERVER-SIDE CRYPTOGRAPHIC JWT SESSION & RBAC SYSTEM (Web Crypto API)
 // -----------------------------------------------------------------------------
 function base64UrlEncode(bytes) {
@@ -507,7 +536,26 @@ async function getAllStudentsDataset(env, originUrl) {
       }
     }
     let grade = s.grade;
-    return { ...s, school, bloodType, grade };
+    const resolvedBranch = s.branch || s.location || s.address || getBranchForSchoolWorker(school);
+    let department = s.department || s.section || "";
+    let section = s.section || s.department || "";
+    if (!department && grade) {
+      const m = grade.match(/(\d+)\s*([A-Za-z])/);
+      if (m) {
+        department = m[2].toUpperCase();
+        section = m[2].toUpperCase();
+      }
+    }
+    return {
+      ...s,
+      school,
+      bloodType,
+      grade,
+      branch: resolvedBranch,
+      location: resolvedBranch,
+      department: department || null,
+      section: section || null
+    };
   });
   lastAllFetchTime = Date.now();
   return cachedAllStudents;
@@ -1019,14 +1067,25 @@ export default {
           }
         }
 
+        const cleanGradeRaw = (grade || "").trim();
+        const cleanDept = (body.department || body.section || "").trim();
+        const cleanSection = (body.section || body.department || "").trim();
+        const schoolName = (school || "YMS 1").trim();
+        const resolvedBranch = body.branch || body.location || getBranchForSchoolWorker(schoolName);
+
         const newStudent = {
           id: body.id || ("cmu-" + Date.now().toString(36)),
           studentId: studentId.trim(),
           fullName: fullName.trim(),
           sex: sex || "Female",
-          grade: grade.trim(),
-          school: school.trim(),
-          address: body.address || body.location || "Addis Ababa",
+          grade: cleanGradeRaw,
+          department: cleanDept || cleanSection || null,
+          section: cleanSection || cleanDept || null,
+          school: schoolName,
+          branch: resolvedBranch,
+          location: resolvedBranch,
+          address: body.address || resolvedBranch,
+          cityRegion: body.cityRegion || resolvedBranch,
           phone: cleanPhone || "+251900000000",
           bloodType: body.bloodType || "Unknown",
           nationality: body.nationality || "Ethiopian",
@@ -1038,8 +1097,10 @@ export default {
           qrCodeData: body.qrCodeData || JSON.stringify({
             id: studentId.trim(),
             name: fullName.trim(),
-            grade: grade.trim(),
-            school: school.trim(),
+            grade: cleanGradeRaw,
+            section: cleanSection,
+            school: schoolName,
+            branch: resolvedBranch,
             status: "Accepted",
             verified: true,
             issuer: "Silicon Labs StudentBridge"
@@ -1777,6 +1838,26 @@ export default {
           });
         }
 
+        // Persist bound device lock into R2 provisioned users registry
+        try {
+          const r2Users = await loadR2ProvisionedUsers();
+          let r2Mod = false;
+          r2Users.forEach(u => {
+            if (
+              (u.id && u.id === userId) ||
+              (u.email && u.email.toLowerCase() === (email || "").toLowerCase()) ||
+              (u.username && u.username.toLowerCase() === (username || "").toLowerCase())
+            ) {
+              u.boundDeviceId = deviceId;
+              u.updatedAt = new Date().toISOString();
+              r2Mod = true;
+            }
+          });
+          if (r2Mod) {
+            await saveR2ProvisionedUsers(r2Users);
+          }
+        } catch (e) {}
+
         await fetch(`${SUPABASE_URL}/rest/v1/users?or=(id.eq.${encodeURIComponent(target)},email.eq.${encodeURIComponent(target)})`, {
           method: "PATCH",
           headers: {
@@ -1838,6 +1919,48 @@ export default {
             }
           });
         }
+
+        // Persist unlocked state into R2 provisioned users registry
+        try {
+          const r2Users = await loadR2ProvisionedUsers();
+          let r2Mod = false;
+          r2Users.forEach(u => {
+            if (
+              (u.id && targets.includes(u.id.toLowerCase())) ||
+              (u.email && targets.includes(u.email.toLowerCase())) ||
+              (u.username && targets.includes(u.username.toLowerCase()))
+            ) {
+              u.boundDeviceId = null;
+              u.boundDeviceInfo = null;
+              u.updatedAt = new Date().toISOString();
+              r2Mod = true;
+            }
+          });
+          if (r2Mod) {
+            await saveR2ProvisionedUsers(r2Users);
+          }
+        } catch (e) {}
+
+        // Persist unlocked state into Supabase cloudflare.users
+        try {
+          const queryParts = [];
+          if (userId) queryParts.push(`id.eq.${encodeURIComponent(userId)}`);
+          if (email) queryParts.push(`email.eq.${encodeURIComponent(email)}`);
+          if (username) queryParts.push(`username.eq.${encodeURIComponent(username)}`);
+          if (queryParts.length > 0) {
+            await fetch(`${SUPABASE_URL}/rest/v1/users?or=(${queryParts.join(",")})`, {
+              method: "PATCH",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                "Content-Profile": "cloudflare",
+                "Accept-Profile": "cloudflare"
+              },
+              body: JSON.stringify({ boundDeviceId: null, boundDeviceInfo: null, updatedAt: new Date().toISOString() })
+            });
+          }
+        } catch (e) {}
 
         return new Response(JSON.stringify({ success: true, message: "Hardware device lock reset and terminal unbound successfully." }), {
           headers: { "Content-Type": "application/json", ...corsHeaders }

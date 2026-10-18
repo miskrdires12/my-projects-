@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, Filter, Camera, CheckCircle2, UserPlus, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getStudents } from '@/lib/store';
 import { Student } from '@/types';
-import { getDistinctGradeOptions, matchesGradeFilter, getGradeDisplay } from '@/lib/gradeUtils';
+import { getDistinctGradeOptions, matchesGradeFilter, getGradeDisplay, getStudentBranch } from '@/lib/gradeUtils';
 
 export const SenderStudentsPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -143,7 +143,10 @@ export const SenderStudentsPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-3 font-mono text-[#8fe617] font-semibold">{s.studentId}</td>
-                    <td className="py-3 text-white font-medium">{s.school || 'YMS'}</td>
+                    <td className="py-3">
+                      <div className="text-white font-medium">{s.school || 'YMS'}</div>
+                      <div className="text-[10px] text-[#9eb2a6] font-mono">{getStudentBranch(s)}</div>
+                    </td>
                     <td className="py-3">
                       <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-bold text-white text-[11px]">
                         {getGradeDisplay(s)}

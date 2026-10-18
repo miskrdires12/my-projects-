@@ -54,3 +54,5 @@ lean-deploy.zip
 # Local private storage fallback directory
 /storage/
 scratch/
+react-app/node_modules/
+react-app/dist/

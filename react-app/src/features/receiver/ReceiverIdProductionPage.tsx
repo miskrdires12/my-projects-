@@ -11,6 +11,7 @@ import {
   getPhotoUrl, subscribeToStudentSync, generateStudentQrToken
 } from '@/lib/store';
 import { Student, CardTemplate, PrintJob } from '@/types';
+import { getGradeDisplay, getStudentBranch } from '@/lib/gradeUtils';
 
 export const ReceiverIdProductionPage: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -412,7 +413,7 @@ export const ReceiverIdProductionPage: React.FC = () => {
                       <div className="min-w-0">
                         <div className="font-bold text-xs text-[#202833] truncate">{s.fullName}</div>
                         <div className="font-mono text-[10px] text-[#0284C7] font-semibold">{s.studentId}</div>
-                        <div className="text-[10px] text-[#64748B] truncate">{s.school} &bull; {s.grade}</div>
+                        <div className="text-[10px] text-[#64748B] truncate">{s.school || 'YMS'} ({getStudentBranch(s)}) &bull; {getGradeDisplay(s)}</div>
                       </div>
                     </div>
 
@@ -522,7 +523,7 @@ export const ReceiverIdProductionPage: React.FC = () => {
 
                           <div className="flex items-center gap-1.5">
                             <span className="text-[#64748B] font-semibold text-[10px]">Grade / Class:</span>
-                            <span className="font-bold text-[#202833]">{selectedStudent.grade || 'Grade 9'}</span>
+                            <span className="font-bold text-[#202833]">{getGradeDisplay(selectedStudent)}</span>
                           </div>
 
                           <div className="flex items-center gap-1.5">

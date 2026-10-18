@@ -1,7 +1,8 @@
 import { Student, User, Task, School, AuditLog, StudentCoreRequest, MistakeItem, UserRole, CardTemplate, PrintJob } from '@/types';
 import { publishStudentSync, subscribeToStudentSync, getPhotoUrl, getPhotoEncodeClass } from './syncEngine';
+import { parseGradeAndSection, getBranchForSchool, getStudentBranch } from './gradeUtils';
 
-export { getPhotoUrl, getPhotoEncodeClass, publishStudentSync, subscribeToStudentSync };
+export { getPhotoUrl, getPhotoEncodeClass, publishStudentSync, subscribeToStudentSync, getBranchForSchool, getStudentBranch };
 
 // Branch to School Mapping
 export const BRANCH_SCHOOL_MAP: Record<string, string[]> = {
@@ -581,8 +582,8 @@ export async function initStore(): Promise<void> {
 export function normalizeStudentData(s: Student): Student {
   if (!s) return s;
   const d = (s.createdAt || (s as any).registrationDate || (s as any).date || '').substring(0, 10);
-  let school = s.school;
-  let bloodType = s.bloodType;
+  let school = s.school || 'YMS';
+  let bloodType = s.bloodType || 'Unknown';
   if (d >= '2026-10-14') {
     if ((school || '').toLowerCase() === 'yms') {
       school = 'YMS 1';
@@ -591,7 +592,28 @@ export function normalizeStudentData(s: Student): Student {
       bloodType = 'Unknown';
     }
   }
-  return { ...s, school, bloodType };
+
+  const parsedG = parseGradeAndSection(s.grade, s.department, (s as any).section);
+  const department = (s.department || (s as any).section || parsedG.cleanSection || '').trim();
+  const section = ((s as any).section || s.department || parsedG.cleanSection || '').trim();
+  const branch = getStudentBranch(s);
+  const location = s.location || branch;
+
+  let grade = s.grade || parsedG.cleanGrade || '';
+  if (section && !grade.toUpperCase().includes(section.toUpperCase())) {
+    grade = `${parsedG.cleanGrade || grade}${section}`;
+  }
+
+  return {
+    ...s,
+    school,
+    bloodType,
+    grade,
+    department: department || undefined,
+    section: section || undefined,
+    location,
+    branch
+  } as Student;
 }
 
 export function getStudents(): Student[] {
@@ -601,7 +623,21 @@ export function getStudents(): Student[] {
 export function addStudent(newStudent: Student): void {
   // Ensure default and encoded fields
   if (!newStudent.status) newStudent.status = 'Accepted';
-  if (!newStudent.location) newStudent.location = 'Addis Ababa';
+  const branch = getStudentBranch(newStudent);
+  if (!newStudent.location) newStudent.location = branch;
+  (newStudent as any).branch = branch;
+
+  // Grade & Section normalization
+  const parsedG = parseGradeAndSection(newStudent.grade, newStudent.department, (newStudent as any).section);
+  const sec = (newStudent.department || (newStudent as any).section || parsedG.cleanSection || '').trim();
+  if (sec) {
+    newStudent.department = sec;
+    (newStudent as any).section = sec;
+    if (!newStudent.grade.toUpperCase().includes(sec.toUpperCase())) {
+      newStudent.grade = `${parsedG.cleanGrade || newStudent.grade}${sec}`;
+    }
+  }
+
   if (!newStudent.idProductionStatus) newStudent.idProductionStatus = 'READY';
   if (!newStudent.photoIntegrityStatus) {
     newStudent.photoIntegrityStatus = (newStudent.photoPath || newStudent.previewPath || newStudent.thumbnailPath) ? 'PHOTO_VERIFIED' : 'NO_PHOTO';
@@ -1624,6 +1660,39 @@ interface SenderLiveTelemetry {
   recentIntervalsSecs: number[];
 }
 
+function getStoredSenderTelemetry(norm: string): SenderLiveTelemetry {
+  const now = Date.now();
+  const defaultTelemetry: SenderLiveTelemetry = {
+    today: 0,
+    week: 0,
+    month: 0,
+    total: 0,
+    sessionStart: now,
+    lastCapture: null,
+    totalActiveTimeSecs: 0,
+    recentIntervalsSecs: []
+  };
+
+  if (typeof window === 'undefined') return defaultTelemetry;
+
+  try {
+    const raw = localStorage.getItem(`sb_sender_telemetry_${norm}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...defaultTelemetry, ...parsed };
+    }
+  } catch (e) {}
+
+  return defaultTelemetry;
+}
+
+function saveStoredSenderTelemetry(norm: string, data: SenderLiveTelemetry): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`sb_sender_telemetry_${norm}`, JSON.stringify(data));
+  } catch (e) {}
+}
+
 const liveSenderSessionCaptures: Record<string, SenderLiveTelemetry> = {};
 
 export function incrementSenderLiveCaptures(senderIdentifier: string): void {
@@ -1631,16 +1700,7 @@ export function incrementSenderLiveCaptures(senderIdentifier: string): void {
   const norm = senderIdentifier.toLowerCase().trim();
   const now = Date.now();
   if (!liveSenderSessionCaptures[norm]) {
-    liveSenderSessionCaptures[norm] = {
-      today: 0,
-      week: 0,
-      month: 0,
-      total: 0,
-      sessionStart: now,
-      lastCapture: null,
-      totalActiveTimeSecs: 0,
-      recentIntervalsSecs: []
-    };
+    liveSenderSessionCaptures[norm] = getStoredSenderTelemetry(norm);
   }
 
   const prev = liveSenderSessionCaptures[norm].lastCapture;
@@ -1656,6 +1716,8 @@ export function incrementSenderLiveCaptures(senderIdentifier: string): void {
   if (liveSenderSessionCaptures[norm].recentIntervalsSecs.length > 20) {
     liveSenderSessionCaptures[norm].recentIntervalsSecs.shift();
   }
+
+  saveStoredSenderTelemetry(norm, liveSenderSessionCaptures[norm]);
 }
 
 export function resetSenderLiveCaptures(senderIdentifier?: string): void {
@@ -1672,6 +1734,7 @@ export function resetSenderLiveCaptures(senderIdentifier?: string): void {
       totalActiveTimeSecs: 0,
       recentIntervalsSecs: []
     };
+    saveStoredSenderTelemetry(norm, liveSenderSessionCaptures[norm]);
   } else {
     Object.keys(liveSenderSessionCaptures).forEach(k => {
       liveSenderSessionCaptures[k] = {
@@ -1684,6 +1747,7 @@ export function resetSenderLiveCaptures(senderIdentifier?: string): void {
         totalActiveTimeSecs: 0,
         recentIntervalsSecs: []
       };
+      saveStoredSenderTelemetry(k, liveSenderSessionCaptures[k]);
     });
   }
 }
@@ -1694,23 +1758,54 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
     u => u.username.toLowerCase() === norm || u.email.toLowerCase() === norm
   );
 
-  // Guarantee strictly starting from 0 for daily, weekly, monthly, and total
-  const now = Date.now();
-  const live = liveSenderSessionCaptures[norm] || {
-    today: 0,
-    week: 0,
-    month: 0,
-    total: 0,
-    sessionStart: now,
-    lastCapture: null,
-    totalActiveTimeSecs: 0,
-    recentIntervalsSecs: []
-  };
+  if (!liveSenderSessionCaptures[norm]) {
+    liveSenderSessionCaptures[norm] = getStoredSenderTelemetry(norm);
+  }
+  const live = liveSenderSessionCaptures[norm];
 
-  const today = live.today;
-  const week = live.week;
-  const month = live.month;
-  const total = live.total;
+  // REAL and ACTUAL calculation from authoritative memoryStudents dataset:
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const weekStart = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const monthStart = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+
+  let realTotal = 0;
+  let realToday = 0;
+  let realWeek = 0;
+  let realMonth = 0;
+
+  memoryStudents.forEach(s => {
+    const sn = (s.senderName || '').toLowerCase().trim();
+    const sid = (s.senderId || '').toLowerCase().trim();
+    const match =
+      sn === norm ||
+      sid === norm ||
+      (user && (
+        (user.id && sid === user.id.toLowerCase()) ||
+        (user.username && sn === user.username.toLowerCase()) ||
+        (user.email && sn === user.email.toLowerCase())
+      ));
+
+    if (match) {
+      realTotal++;
+      const sTime = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+      if (sTime >= todayStart) realToday++;
+      if (sTime >= weekStart) realWeek++;
+      if (sTime >= monthStart) realMonth++;
+    }
+  });
+
+  const today = Math.max(realToday, live.today);
+  const week = Math.max(realWeek, live.week, today);
+  const month = Math.max(realMonth, live.month, week);
+  const total = Math.max(realTotal, live.total, user?.recordsSentSingle || 0, month);
+
+  // Sync back into live telemetry for persistence across refresh
+  live.today = today;
+  live.week = week;
+  live.month = month;
+  live.total = total;
+  saveStoredSenderTelemetry(norm, live);
 
   const mistakesCount = 0;
   const efficiency = 100;
@@ -1740,13 +1835,7 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
 
   // Determine branch based on school or direct user branch
   const assignedSchool = user?.school || (norm === 'dagim' ? 'Mojo' : norm === 'biruk' || norm === 'henok' ? 'Yacine' : norm === 'zemichael' || norm === 'yonas' ? 'Debebech' : norm === 'abeni1' || norm === 'sol' ? 'High Tech 1' : 'YMS 1');
-  let assignedBranch = user?.branch || 'Addis Ababa';
-  for (const [branchName, schools] of Object.entries(BRANCH_SCHOOL_MAP)) {
-    if (schools.some(s => s.toLowerCase() === assignedSchool.toLowerCase())) {
-      assignedBranch = branchName;
-      break;
-    }
-  }
+  let assignedBranch = user?.branch || getBranchForSchool(assignedSchool);
 
   return {
     id: user?.id || `usr-${norm}`,

@@ -33,12 +33,18 @@ export const SenderDashboardPage: React.FC = () => {
   }, [user]);
 
   const totalRegistered = students.length;
-  const recentStudents = students.slice(0, 6);
-
   const todayCount = metrics?.today ?? 0;
   const weekCount = metrics?.week ?? 0;
   const monthCount = metrics?.month ?? 0;
+  const totalCount = metrics?.total ?? totalRegistered;
   const efficiency = metrics?.efficiency ?? 98.4;
+
+  const senderStudents = students.filter(s => {
+    const sn = (s.senderName || '').toLowerCase().trim();
+    const un = (user?.username || '').toLowerCase().trim();
+    return un && sn === un;
+  });
+  const recentStudents = (senderStudents.length > 0 ? senderStudents : students).slice(0, 6);
 
   return (
     <div className="space-y-6">
@@ -126,8 +132,8 @@ export const SenderDashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Row 1 Metric Cards: Today, This Week, This Month - Exact match to screenshot 3 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Row 1 Metric Cards: Today, This Week, This Month, Total */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Today Card */}
         <div className="bg-[#131e2b] border border-[#1e2e42] rounded-2xl p-5 hover:border-[#85e510]/40 transition-all">
           <div className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">Today</div>
@@ -182,6 +188,25 @@ export const SenderDashboardPage: React.FC = () => {
           <div className="mt-4 pt-3 border-t border-[#1e2e42]/60 flex items-center justify-between text-xs text-[#94a3b8]">
             <span>Monthly Total</span>
             <span className="text-white font-mono font-bold">{monthCount} Synced</span>
+          </div>
+        </div>
+
+        {/* Total Submissions Card */}
+        <div className="bg-[#131e2b] border border-[#1e2e42] rounded-2xl p-5 hover:border-[#85e510]/40 transition-all">
+          <div className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">Total Submissions</div>
+          <div className="flex items-baseline justify-between">
+            <div>
+              <div className="text-3xl font-heading font-black text-white">{totalCount}</div>
+              <div className="text-xs text-[#94a3b8] mt-0.5 font-medium">All-Time</div>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-heading font-black text-[#85e510]">{totalCount}</div>
+              <div className="text-xs text-[#94a3b8] mt-0.5 font-medium">Transmitted</div>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-[#1e2e42]/60 flex items-center justify-between text-xs text-[#94a3b8]">
+            <span>Persistent Vault</span>
+            <span className="text-[#85e510] font-bold font-mono">Real Synced</span>
           </div>
         </div>
       </div>

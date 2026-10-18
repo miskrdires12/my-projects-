@@ -58,6 +58,8 @@ export interface Student {
   idProductionStatus?: 'QUEUED' | 'READY' | 'IN_PRODUCTION' | 'COMPLETED' | string;
   cardSerialNumber?: string;
   department?: string;
+  section?: string;
+  branch?: string;
   academicYear?: string;
   recordHistory?: { date: string; action: string; user: string; role: string; notes: string; }[];
 }
