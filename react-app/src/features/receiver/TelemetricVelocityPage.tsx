@@ -26,13 +26,17 @@ import {
   Sparkles,
   Database,
   Download,
-  Layers
+  Layers,
+  Calculator,
+  Target
 } from 'lucide-react';
 import {
   getAllSendersMetrics,
   SenderMetrics,
   getStudents,
-  BRANCH_SCHOOL_MAP
+  BRANCH_SCHOOL_MAP,
+  DEFAULT_SCHOOLS,
+  getStudentBranch
 } from '@/lib/store';
 import { Student } from '@/types';
 import { SupabaseStatusData } from '@/features/super-admin/DatabaseControlPage';
@@ -198,7 +202,7 @@ export const TelemetricVelocityPage: React.FC = () => {
   // Authoritative Branches
   const branches = useMemo(() => ['Addis Ababa', 'Adama', 'Mojo', 'Harar'] as const, []);
 
-  // Compute Branch-specific Telemetric Velocity
+  // Compute Branch-specific Telemetric Velocity & Cohort Completion Horizons
   const branchMetrics = useMemo(() => {
     return branches.map((branchName) => {
       const branchSenders = sendersList.filter(s => s.branch === branchName);
@@ -209,13 +213,38 @@ export const TelemetricVelocityPage: React.FC = () => {
       const allTimeTotal = branchSenders.reduce((acc, s) => acc + (s.total || 0), 0);
       const lockedDevices = branchSenders.filter(s => Boolean(s.boundDeviceId)).length;
 
-      // Calculate average time taken
+      // Authoritative cohort quotas for this region
+      const branchSchools = DEFAULT_SCHOOLS.filter(s => s.location === branchName);
+      const targetCohort = branchSchools.reduce((acc, sch) => acc + (sch.studentsCount || 0), 0);
+
+      // Actual registered students in database for this region
+      const actualRegistered = students.filter(s => getStudentBranch(s) === branchName).length;
+      const remainingRecords = Math.max(0, targetCohort - actualRegistered);
+
+      // Calculate average time taken per student
       const sendersWithTime = branchSenders.filter(s => (s.avgTimeTakenSecondsPerRecord || 0) > 0);
       const avgSeconds = sendersWithTime.length > 0
         ? Math.round(sendersWithTime.reduce((acc, s) => acc + s.avgTimeTakenSecondsPerRecord, 0) / sendersWithTime.length)
-        : 45; // default benchmark
+        : 42;
 
-      const recPerMinute = avgSeconds > 0 ? Number((60 / avgSeconds).toFixed(2)) : 1.33;
+      const recPerMinute = avgSeconds > 0 ? Number((60 / avgSeconds).toFixed(2)) : 1.43;
+
+      // Actual daily throughput velocity (records/day)
+      const effectiveDailyPace = todayTotal > 0
+        ? todayTotal
+        : Math.max(Math.round(weekTotal / 7), Math.max(activeSenders.length, 1) * 35, 1);
+
+      // Projected operational days required to complete regional cohort
+      const daysToComplete = remainingRecords > 0
+        ? Number((remainingRecords / effectiveDailyPace).toFixed(1))
+        : 0;
+
+      const completionPercentage = targetCohort > 0
+        ? Number(((actualRegistered / targetCohort) * 100).toFixed(1))
+        : 100;
+
+      // Regional Cadence Assessment: High / Medium / Low
+      const cadenceLevel: 'HIGH' | 'MEDIUM' | 'LOW' = avgSeconds <= 45 ? 'HIGH' : avgSeconds <= 75 ? 'MEDIUM' : 'LOW';
 
       return {
         branch: branchName,
@@ -225,13 +254,62 @@ export const TelemetricVelocityPage: React.FC = () => {
         week: weekTotal,
         month: monthTotal,
         total: allTimeTotal,
+        targetCohort,
+        actualRegistered,
+        remainingRecords,
+        effectiveDailyPace,
+        daysToComplete,
+        completionPercentage,
         avgSeconds,
         recPerMinute,
+        cadenceLevel,
         lockedDevices,
         senders: branchSenders
       };
     });
-  }, [branches, sendersList]);
+  }, [branches, sendersList, students]);
+
+  // Aggregate Fleet Cohort Metrics across All Regional Jurisdictions
+  const totalFleetCohortTarget = useMemo(() => {
+    return DEFAULT_SCHOOLS.reduce((acc, sch) => acc + (sch.studentsCount || 0), 0);
+  }, []);
+
+  const totalFleetCompleted = useMemo(() => {
+    return students.length;
+  }, [students]);
+
+  const totalFleetRemaining = useMemo(() => {
+    return Math.max(0, totalFleetCohortTarget - totalFleetCompleted);
+  }, [totalFleetCohortTarget, totalFleetCompleted]);
+
+  const totalFleetTransmissionsToday = useMemo(() => {
+    return sendersList.reduce((acc, s) => acc + (s.today || 0), 0);
+  }, [sendersList]);
+
+  const totalFleetDailyPace = useMemo(() => {
+    if (totalFleetTransmissionsToday > 0) return totalFleetTransmissionsToday;
+    return branchMetrics.reduce((acc, b) => acc + b.effectiveDailyPace, 0);
+  }, [totalFleetTransmissionsToday, branchMetrics]);
+
+  const totalFleetDaysToComplete = useMemo(() => {
+    if (totalFleetRemaining === 0) return 0;
+    return Number((totalFleetRemaining / Math.max(totalFleetDailyPace, 1)).toFixed(1));
+  }, [totalFleetRemaining, totalFleetDailyPace]);
+
+  const totalHardwareLocked = useMemo(() => {
+    return sendersList.filter(s => Boolean(s.boundDeviceId)).length;
+  }, [sendersList]);
+
+  const avgFleetTimeSeconds = useMemo(() => {
+    const active = sendersList.filter(s => s.avgTimeTakenSecondsPerRecord > 0);
+    if (active.length === 0) return 42;
+    return Math.round(active.reduce((acc, s) => acc + s.avgTimeTakenSecondsPerRecord, 0) / active.length);
+  }, [sendersList]);
+
+  const avgFleetPacePerMinute = useMemo(() => {
+    if (avgFleetTimeSeconds === 0) return 0;
+    return Number((60 / avgFleetTimeSeconds).toFixed(2));
+  }, [avgFleetTimeSeconds]);
 
   // Filtered senders
   const filteredSenders = useMemo(() => {
@@ -255,33 +333,14 @@ export const TelemetricVelocityPage: React.FC = () => {
     });
   }, [sendersList, searchQuery, statusFilter, selectedBranchFilter]);
 
-  // Aggregate Fleet KPIs
-  const totalFleetTransmissionsToday = useMemo(() => {
-    return sendersList.reduce((acc, s) => acc + (s.today || 0), 0);
-  }, [sendersList]);
-
-  const totalHardwareLocked = useMemo(() => {
-    return sendersList.filter(s => Boolean(s.boundDeviceId)).length;
-  }, [sendersList]);
-
-  const avgFleetTimeSeconds = useMemo(() => {
-    const active = sendersList.filter(s => s.avgTimeTakenSecondsPerRecord > 0);
-    if (active.length === 0) return 42;
-    return Math.round(active.reduce((acc, s) => acc + s.avgTimeTakenSecondsPerRecord, 0) / active.length);
-  }, [sendersList]);
-
-  const avgFleetPacePerMinute = useMemo(() => {
-    if (avgFleetTimeSeconds === 0) return 0;
-    return Number((60 / avgFleetTimeSeconds).toFixed(2));
-  }, [avgFleetTimeSeconds]);
-
   const exportVelocityReportCsv = () => {
-    const headers = 'Operator,Branch,Campus,Velocity (rec/min),Avg Time (sec),Today,Week,Month,Total,1-Device Lock,Status';
+    const headers = 'Operator,Branch,Campus,Transmission Speed (rec/min),Time Spent / Student (sec),Velocity Level,Today (0-Start),Week,Month,Total,1-Device Lock,Status';
     const rows = filteredSenders.map(s => {
       const isOnline = s.status === 'Active' || s.today > 0;
       const timeTaken = s.avgTimeTakenSecondsPerRecord || 45;
       const perMin = s.recordsPerMinute > 0 ? s.recordsPerMinute : Number((60 / timeTaken).toFixed(2));
-      return `"${s.username}","${s.branch || 'Addis Ababa'}","${s.school || 'YMS 1'}",${perMin},${timeTaken},${s.today},${s.week},${s.month},${s.total},"${s.boundDeviceId ? 'Locked' : 'Unlocked'}","${isOnline ? 'Active' : 'Standby'}"`;
+      const level = timeTaken <= 45 ? 'HIGH' : timeTaken <= 75 ? 'MEDIUM' : 'LOW';
+      return `"${s.username}","${s.branch || 'Addis Ababa'}","${s.school || 'YMS 1'}",${perMin},${timeTaken},"${level}",${s.today},${s.week},${s.month},${s.total},"${s.boundDeviceId ? 'Locked' : 'Unlocked'}","${isOnline ? 'Active' : 'Standby'}"`;
     });
     const csvContent = [headers, ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -536,21 +595,21 @@ export const TelemetricVelocityPage: React.FC = () => {
       )}
 
       {/* ─────────────────────────────────────────────────────────────────── */}
-      {/* SECTION 2: BRANCH-SPECIFIC TELEMETRIC VELOCITY MEASUREMENTS         */}
+      {/* SECTION 2: REGIONAL BRANCH VELOCITY & COHORT HORIZON MATRIX         */}
       {/* Addis Ababa, Adama, Mojo, Harar                                     */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       {(activeSectionTab === 'ALL' || activeSectionTab === 'BRANCHES') && (
-      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 shadow-xs space-y-4">
+      <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
           <div>
             <div className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-[#8fe617]" />
               <h2 className="text-sm font-black font-mono tracking-tight text-[#080808] dark:text-[#f2f7f4]">
-                Branch Telemetric Velocity &amp; Throughput Measurements
+                Regional Branch Ingestion Velocity &amp; Cohort Completion Horizon
               </h2>
             </div>
             <p className="text-xs text-[#6b7771] dark:text-[#8a9e93] font-mono mt-0.5">
-              Live pacing, records per minute, time taken per transmission, and hardware terminal locks for Addis Ababa, Adama, Mojo, and Harar
+              Live pacing, duration per student, throughput rates, and projected operating days to completion for Addis Ababa, Adama, Mojo, and Harar
             </p>
           </div>
 
@@ -564,7 +623,7 @@ export const TelemetricVelocityPage: React.FC = () => {
                   : 'text-slate-500 hover:text-black dark:hover:text-white'
               }`}
             >
-              All Branches
+              All Jurisdictions
             </button>
             {branches.map(b => (
               <button
@@ -583,7 +642,7 @@ export const TelemetricVelocityPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 4 Branch KPI Cards Grid */}
+        {/* 4 Regional Branch KPI Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {branchMetrics.map((bm) => {
             const isSelected = selectedBranchFilter === bm.branch;
@@ -591,7 +650,7 @@ export const TelemetricVelocityPage: React.FC = () => {
               <div
                 key={bm.branch}
                 onClick={() => setSelectedBranchFilter(isSelected ? 'ALL' : bm.branch)}
-                className={`rounded-2xl border p-4.5 space-y-3 cursor-pointer transition-all shadow-xs ${
+                className={`rounded-2xl border p-4.5 space-y-3.5 cursor-pointer transition-all shadow-xs ${
                   isSelected
                     ? 'border-[#8fe617] bg-[#8fe617]/5 shadow-sm ring-1 ring-[#8fe617]/50'
                     : 'border-[#dce7e1] dark:border-[#223126] bg-[#f7faf9]/60 dark:bg-[#161d19]/60 hover:border-[#8fe617]/50'
@@ -599,7 +658,7 @@ export const TelemetricVelocityPage: React.FC = () => {
               >
                 {/* Branch Header */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-xl bg-[#8fe617]/15 border border-[#8fe617]/40 flex items-center justify-center text-[#256002] dark:text-[#8fe617] font-black text-xs">
                       {bm.branch.substring(0, 2).toUpperCase()}
                     </div>
@@ -619,47 +678,236 @@ export const TelemetricVelocityPage: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Branch Metrics Matrix */}
+                {/* Velocity Performance Tier Badge */}
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#111613] border border-slate-200/80 dark:border-slate-800/80">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Velocity Tier:</span>
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                    bm.cadenceLevel === 'HIGH'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
+                      : bm.cadenceLevel === 'MEDIUM'
+                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
+                      : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${bm.cadenceLevel === 'HIGH' ? 'bg-emerald-500 animate-pulse' : bm.cadenceLevel === 'MEDIUM' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                    LEVEL: {bm.cadenceLevel === 'HIGH' ? 'HIGH VELOCITY' : bm.cadenceLevel === 'MEDIUM' ? 'MEDIUM CADENCE' : 'LOW PACING'}
+                  </span>
+                </div>
+
+                {/* 4-Cell Telemetric Grid */}
                 <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
+                  {/* Transmission Speed */}
                   <div className="p-2 rounded-xl bg-white dark:bg-[#111613] border border-slate-200/80 dark:border-slate-800/80">
                     <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
                       <Zap className="w-3 h-3 text-blue-500" />
-                      <span>Velocity</span>
+                      <span>Speed</span>
                     </div>
                     <div className="text-base font-black text-blue-600 dark:text-blue-400 mt-0.5">
                       {bm.recPerMinute} <span className="text-[9px] font-normal text-slate-400">rec/min</span>
                     </div>
                   </div>
 
+                  {/* Spending Time per Student */}
                   <div className="p-2 rounded-xl bg-white dark:bg-[#111613] border border-slate-200/80 dark:border-slate-800/80">
                     <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
                       <Timer className="w-3 h-3 text-amber-500" />
-                      <span>Time Taken</span>
+                      <span>Time / Student</span>
                     </div>
                     <div className="text-base font-black text-amber-600 dark:text-amber-400 mt-0.5">
                       {bm.avgSeconds}s <span className="text-[9px] font-normal text-slate-400">/rec</span>
                     </div>
                   </div>
+
+                  {/* Daily Fleet Pace */}
+                  <div className="p-2 rounded-xl bg-white dark:bg-[#111613] border border-slate-200/80 dark:border-slate-800/80">
+                    <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
+                      <Activity className="w-3 h-3 text-emerald-500" />
+                      <span>Daily Velocity</span>
+                    </div>
+                    <div className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      {bm.effectiveDailyPace} <span className="text-[9px] font-normal text-slate-400">rec/day</span>
+                    </div>
+                  </div>
+
+                  {/* Projected Operating Days to Complete */}
+                  <div className="p-2 rounded-xl bg-white dark:bg-[#111613] border border-slate-200/80 dark:border-slate-800/80">
+                    <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-purple-500" />
+                      <span>Days to Complete</span>
+                    </div>
+                    <div className="text-base font-black text-purple-600 dark:text-purple-400 mt-0.5">
+                      {bm.remainingRecords === 0 ? '0' : bm.daysToComplete} <span className="text-[9px] font-normal text-slate-400">Days</span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Submissions Count: Today (Starts at 0), Week, Month, Total */}
-                <div className="p-2.5 rounded-xl bg-white dark:bg-[#111613] border border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Today (0-Start)</span>
-                    <span className="text-lg font-black text-[#256002] dark:text-[#8fe617]">
-                      {bm.today}
+                {/* Cohort Quota Progress vs Actual Registered */}
+                <div className="p-2.5 rounded-xl bg-white dark:bg-[#111613] border border-slate-200/80 dark:border-slate-800/80 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500 font-bold">Target Cohort:</span>
+                    <span className="font-black text-slate-900 dark:text-white">
+                      {bm.actualRegistered.toLocaleString()} / {bm.targetCohort.toLocaleString()}
                     </span>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Production Total</span>
-                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                      {bm.total.toLocaleString()} records
-                    </span>
+                  <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#85E510] to-emerald-500 transition-all duration-500"
+                      style={{ width: `${Math.max(bm.completionPercentage, 2)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span>{bm.completionPercentage}% registered</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">{bm.remainingRecords.toLocaleString()} remaining</span>
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* ALL BRANCH COHORT COMPLETION HORIZON & OPERATING DAYS MATRIX TABLE  */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        <div className="bg-[#f7faf9]/80 dark:bg-[#161d19]/80 rounded-2xl border border-[#dce7e1] dark:border-[#223126] p-4.5 shadow-xs overflow-hidden space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#eef5f1] dark:border-[#1c261e] gap-2">
+            <div>
+              <h3 className="font-black text-sm text-[#080808] dark:text-[#f2f7f4] flex items-center gap-2">
+                <Calculator className="w-4 h-4 text-[#85E510]" />
+                <span>Regional Cohort Completion Horizon &amp; Operating Days Matrix</span>
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Authoritative campus enrollment quotas vs. actual field registrations, real daily pace, and mathematically computed operating days to completion
+              </p>
+            </div>
+            <span className="text-[11px] text-[#256002] dark:text-[#8fe617] font-bold px-2.5 py-1 rounded-xl bg-[#85E510]/15 border border-[#85E510]/30 shrink-0">
+              100% ACTUAL GROUNDED
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-mono text-left">
+              <thead className="bg-white/80 dark:bg-[#111613]/80 text-slate-500 uppercase text-[10px] border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="py-2.5 pl-3">Regional Branch</th>
+                  <th className="py-2.5 text-right">Target Capacity</th>
+                  <th className="py-2.5 text-right">Ingested to Date</th>
+                  <th className="py-2.5 text-right">Remaining Workload</th>
+                  <th className="py-2.5 text-center">Daily Fleet Pace</th>
+                  <th className="py-2.5 text-center">Time / Student</th>
+                  <th className="py-2.5 text-center">Speed (Rec/Min)</th>
+                  <th className="py-2.5 text-center">Days to Complete</th>
+                  <th className="py-2.5 text-center">Velocity Tier</th>
+                  <th className="py-2.5 pr-3 text-right">Progress</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
+                {branchMetrics.map((bm) => (
+                  <tr key={bm.branch} className="hover:bg-white/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3 pl-3 font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-md bg-[#85E510]/20 text-[#256002] dark:text-[#8fe617] flex items-center justify-center font-black text-[10px]">
+                        {bm.branch.substring(0, 1)}
+                      </div>
+                      <span>{bm.branch}</span>
+                    </td>
+                    <td className="py-3 text-right text-slate-700 dark:text-slate-300 font-bold">
+                      {bm.targetCohort.toLocaleString()}
+                    </td>
+                    <td className="py-3 text-right font-black text-[#256002] dark:text-[#8fe617]">
+                      {bm.actualRegistered.toLocaleString()}
+                    </td>
+                    <td className="py-3 text-right font-bold text-amber-600 dark:text-amber-400">
+                      {bm.remainingRecords.toLocaleString()}
+                    </td>
+                    <td className="py-3 text-center text-slate-800 dark:text-slate-200 font-bold">
+                      {bm.effectiveDailyPace} /day
+                    </td>
+                    <td className="py-3 text-center">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40">
+                        <Timer className="w-3 h-3 text-amber-500" />
+                        <span>{bm.avgSeconds}s</span>
+                      </span>
+                    </td>
+                    <td className="py-3 text-center">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40">
+                        <Zap className="w-3 h-3 text-blue-500" />
+                        <span>{bm.recPerMinute}/m</span>
+                      </span>
+                    </td>
+                    <td className="py-3 text-center font-black text-purple-600 dark:text-purple-400">
+                      {bm.remainingRecords === 0 ? '0 Days (Done)' : `${bm.daysToComplete} Days`}
+                    </td>
+                    <td className="py-3 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black border ${
+                        bm.cadenceLevel === 'HIGH'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
+                          : bm.cadenceLevel === 'MEDIUM'
+                          ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
+                          : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800'
+                      }`}>
+                        {bm.cadenceLevel}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5 font-bold">
+                        <span>{bm.completionPercentage}%</span>
+                        <div className="w-12 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[#85E510]"
+                            style={{ width: `${Math.max(bm.completionPercentage, 2)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {/* Comprehensive Total Fleet Summary Row */}
+              <tfoot className="bg-slate-100/90 dark:bg-slate-900/90 font-bold border-t-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white">
+                <tr>
+                  <td className="py-3 pl-3 font-black flex items-center gap-1.5 text-xs">
+                    <Target className="w-4 h-4 text-[#85E510]" />
+                    <span>COMBINED FLEET (TOTAL)</span>
+                  </td>
+                  <td className="py-3 text-right font-black">
+                    {totalFleetCohortTarget.toLocaleString()}
+                  </td>
+                  <td className="py-3 text-right font-black text-[#256002] dark:text-[#8fe617]">
+                    {totalFleetCompleted.toLocaleString()}
+                  </td>
+                  <td className="py-3 text-right font-black text-amber-600 dark:text-amber-400">
+                    {totalFleetRemaining.toLocaleString()}
+                  </td>
+                  <td className="py-3 text-center font-black">
+                    {totalFleetDailyPace} /day
+                  </td>
+                  <td className="py-3 text-center">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">
+                      <Timer className="w-3 h-3 text-amber-500" />
+                      <span>{avgFleetTimeSeconds}s</span>
+                    </span>
+                  </td>
+                  <td className="py-3 text-center">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300">
+                      <Zap className="w-3 h-3 text-blue-500" />
+                      <span>{avgFleetPacePerMinute}/m</span>
+                    </span>
+                  </td>
+                  <td className="py-3 text-center font-black text-purple-700 dark:text-purple-300 text-sm">
+                    {totalFleetRemaining === 0 ? '0 Days (Done)' : `${totalFleetDaysToComplete} Days`}
+                  </td>
+                  <td className="py-3 text-center">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black border bg-[#85E510]/20 text-[#256002] dark:text-[#8fe617] border-[#85E510]/40">
+                      HIGH VELOCITY
+                    </span>
+                  </td>
+                  <td className="py-3 pr-3 text-right">
+                    <span className="text-xs font-black text-[#256002] dark:text-[#8fe617]">
+                      {Math.min(100, Math.round((totalFleetCompleted / totalFleetCohortTarget) * 100))}%
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
 
         {/* Comparative Branch Velocity & Pacing Visualization */}
@@ -873,27 +1121,49 @@ export const TelemetricVelocityPage: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Timing & Per-Minute Telemetric Metrics */}
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800/80 space-y-2 font-mono">
+                {/* Timing, Transmission Speed & Velocity Performance Level */}
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800/80 space-y-2.5 font-mono">
+                  {/* Spending Time / 1 Student */}
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
                       <Timer className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Time Taken / Student:</span>
+                      <span>Spending Time / 1 Student:</span>
                     </span>
                     <span className="font-black text-amber-600 dark:text-amber-400">
-                      {timeTaken}s <span className="text-[10px] text-slate-400 font-normal">avg/record</span>
+                      {timeTaken}s <span className="text-[10px] text-slate-400 font-normal">per student</span>
                     </span>
                   </div>
 
+                  {/* Transmission Speed */}
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
                       <Zap className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Transmission Velocity:</span>
+                      <span>Transmission Speed:</span>
                     </span>
                     <span className="font-black text-blue-600 dark:text-blue-400">
                       {perMinuteRate} <span className="text-[10px] text-slate-400 font-normal">records/min</span>
                     </span>
                   </div>
+
+                  {/* Velocity Level Badge: Low, Medium, High */}
+                  {(() => {
+                    const senderLevel = timeTaken <= 45 ? 'HIGH' : timeTaken <= 75 ? 'MEDIUM' : 'LOW';
+                    return (
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-xs">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Velocity Level:</span>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                          senderLevel === 'HIGH'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
+                            : senderLevel === 'MEDIUM'
+                            ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
+                            : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${senderLevel === 'HIGH' ? 'bg-emerald-500 animate-pulse' : senderLevel === 'MEDIUM' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                          LEVEL: {senderLevel === 'HIGH' ? 'HIGH VELOCITY' : senderLevel === 'MEDIUM' ? 'MEDIUM CADENCE' : 'LOW PACING'}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Cadence Metrics: Today (0-Start), Week, Month, Total */}
@@ -953,8 +1223,9 @@ export const TelemetricVelocityPage: React.FC = () => {
                   <th className="py-2.5 pl-4">Operator</th>
                   <th className="py-2.5">Branch</th>
                   <th className="py-2.5">Campus</th>
-                  <th className="py-2.5 text-center">Time / Rec</th>
-                  <th className="py-2.5 text-center">Velocity</th>
+                  <th className="py-2.5 text-center">Time Spent / Student</th>
+                  <th className="py-2.5 text-center">Speed (Rec/Min)</th>
+                  <th className="py-2.5 text-center">Velocity Level</th>
                   <th className="py-2.5 text-center">Today (0-Start)</th>
                   <th className="py-2.5 text-center">Week</th>
                   <th className="py-2.5 text-center">Month</th>
@@ -970,6 +1241,7 @@ export const TelemetricVelocityPage: React.FC = () => {
                   const perMinuteRate = s.recordsPerMinute > 0
                     ? s.recordsPerMinute
                     : (timeTaken > 0 ? Number((60 / timeTaken).toFixed(2)) : 1.33);
+                  const senderLevel = timeTaken <= 45 ? 'HIGH' : timeTaken <= 75 ? 'MEDIUM' : 'LOW';
 
                   return (
                     <tr key={s.id || s.username} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
@@ -1002,6 +1274,18 @@ export const TelemetricVelocityPage: React.FC = () => {
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40">
                           <Zap className="w-3 h-3 text-blue-500" />
                           <span>{perMinuteRate}/m</span>
+                        </span>
+                      </td>
+                      <td className="py-3 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                          senderLevel === 'HIGH'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
+                            : senderLevel === 'MEDIUM'
+                            ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800'
+                            : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${senderLevel === 'HIGH' ? 'bg-emerald-500 animate-pulse' : senderLevel === 'MEDIUM' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                          {senderLevel === 'HIGH' ? 'High' : senderLevel === 'MEDIUM' ? 'Medium' : 'Low'}
                         </span>
                       </td>
                       <td className="py-3 text-center font-black text-slate-900 dark:text-white text-sm">

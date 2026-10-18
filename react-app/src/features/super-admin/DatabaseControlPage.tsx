@@ -1382,7 +1382,7 @@ export function DatabaseClient({
             }`}
           >
             <HardDrive className="w-4 h-4" />
-            <span>Storage, Zero-Egress &amp; Predictive Limits</span>
+            <span>Storage Quotas, Zero-Egress &amp; Predictive Capacity Command</span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 font-bold ml-1">
               FORECAST
             </span>
@@ -1390,7 +1390,7 @@ export function DatabaseClient({
         </div>
 
         <div className="text-[11px] text-slate-400 pr-2">
-          {activeDatabaseTab === 'DATABASE' ? 'PostgreSQL Relational & Audit Logs' : 'Cloudflare R2 & Exhaustion Forecaster'}
+          {activeDatabaseTab === 'DATABASE' ? 'PostgreSQL Relational Fabric & Audit Ledger' : 'Cloudflare R2 Object Store & Predictive Ingestion Forecaster'}
         </div>
       </div>
 

@@ -23,7 +23,7 @@ export const BRANCH_SCHOOL_MAP: Record<string, string[]> = {
 export const DEFAULT_BRANCHES = Object.keys(BRANCH_SCHOOL_MAP);
 
 // Initial fallback schools strictly mapped to authorized branches
-const DEFAULT_SCHOOLS: School[] = [
+export const DEFAULT_SCHOOLS: School[] = [
   { id: "sch_yms1", name: "YMS 1", location: "Addis Ababa", status: "Active", studentsCount: 420 },
   { id: "sch_yms2", name: "YMS 2", location: "Addis Ababa", status: "Active", studentsCount: 380 },
   { id: "sch_yms3", name: "YMS 3", location: "Addis Ababa", status: "Active", studentsCount: 310 },

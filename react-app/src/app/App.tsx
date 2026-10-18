@@ -102,6 +102,7 @@ export const App: React.FC = () => {
             <Route path="/receiver/bulk" element={<ReceiverExportsPage />} />
             <Route path="/receiver/import" element={<ReceiverImportPage />} />
             <Route path="/receiver/database" element={<ReceiverDatabasePage />} />
+            <Route path="/receiver/storage" element={<SuperAdminStoragePage />} />
             <Route path="/receiver/settings" element={<ReceiverSettingsPage />} />
             <Route path="/receiver/activity" element={<ReceiverActivityPage />} />
             <Route path="/receiver/*" element={<Navigate to="/receiver/dashboard" replace />} />
@@ -117,6 +118,7 @@ export const App: React.FC = () => {
             <Route path="/admin/quality-control" element={<AdminQualityControlPage />} />
             <Route path="/admin/reports" element={<AdminReportsPage />} />
             <Route path="/admin/database" element={<DatabaseControlPage />} />
+            <Route path="/admin/storage" element={<SuperAdminStoragePage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/*" element={<Navigate to="/admin/dashboard" replace />} />
 
