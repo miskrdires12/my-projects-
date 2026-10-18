@@ -14,6 +14,7 @@ import {
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
+import { CameraCaptureModal } from '@/components/CameraCaptureModal';
 import { R2_PUBLIC_BASE_URL } from '@/lib/syncEngine';
 import { parseGradeAndSection } from '@/lib/gradeUtils';
 
@@ -48,14 +49,9 @@ export const StudentRegistrationPage: React.FC = () => {
   const [emergencyContact, setEmergencyContact] = useState('');
   const [nationality, setNationality] = useState('Ethiopian');
 
-  // Camera & Photo States - Default to BACK camera ('environment')
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Camera & Photo States
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('environment');
-  const [isStreamReady, setIsStreamReady] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
@@ -156,143 +152,6 @@ export const StudentRegistrationPage: React.FC = () => {
     }
   };
 
-  // Bulletproof Callback Ref to immediately bind video element upon mounting
-  const setVideoRef = useCallback((element: HTMLVideoElement | null) => {
-    videoRef.current = element;
-    if (element && cameraStream) {
-      try {
-        if (element.srcObject !== cameraStream) {
-          element.srcObject = cameraStream;
-        }
-        element.muted = true;
-        element.playsInline = true;
-        element.play().then(() => {
-          setIsStreamReady(true);
-        }).catch((err) => {
-          console.warn('Camera autoplay warning:', err);
-          setIsStreamReady(true);
-        });
-      } catch (err) {
-        console.warn('Error attaching video stream:', err);
-      }
-    }
-  }, [cameraStream]);
-
-  // Stop Webcam cleanly
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => {
-        try { track.stop(); } catch (e) {}
-      });
-      setCameraStream(null);
-    }
-    if (videoRef.current) {
-      try { videoRef.current.srcObject = null; } catch (e) {}
-    }
-    setIsStreamReady(false);
-    setIsCameraActive(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
-
-  // Start Webcam with multi-tier fallback & camera facing support
-  const startCamera = async (facing: 'user' | 'environment' = cameraFacing) => {
-    setCameraError(null);
-    setIsStreamReady(false);
-    stopCamera();
-
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Webcam API is not available on this browser or insecure context. Please upload an image file.');
-      }
-
-      let stream: MediaStream | null = null;
-      try {
-        // Tier 1: HD user-facing or back-facing portrait video
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: facing },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false,
-        });
-      } catch (tier1Err) {
-        console.warn('HD camera constraint failed, falling back to standard video:', tier1Err);
-        // Tier 2: Universal hardware fallback
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-      }
-
-      if (!stream) {
-        throw new Error('No video stream received from camera.');
-      }
-
-      setCameraStream(stream);
-      setIsCameraActive(true);
-      setCameraFacing(facing);
-
-      // Timeout safety: never let user remain permanently blocked behind loading spinner
-      setTimeout(() => {
-        setIsStreamReady(true);
-      }, 900);
-    } catch (err: any) {
-      console.warn('Camera access issue:', err);
-      let msg = 'Camera access unavailable. Please check camera permissions or upload a portrait photo.';
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        msg = 'Camera permission denied. Please allow camera access in browser permissions or upload an image file.';
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        msg = 'No camera sensor found on this hardware. Please use the Upload Image option.';
-      }
-      setCameraError(msg);
-      setIsCameraActive(false);
-    }
-  };
-
-  // Flip Camera (Front <-> Back)
-  const toggleCameraFacing = () => {
-    const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
-    startCamera(nextFacing);
-  };
-
-  // Take Snapshot from video
-  const capturePhoto = () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) {
-      alert('Camera feed is still initializing. Please wait a moment.');
-      return;
-    }
-
-    const vw = video.videoWidth || 640;
-    const vh = video.videoHeight || 480;
-
-    canvas.width = vw;
-    canvas.height = vh;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0, vw, vh);
-      try {
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-        if (dataUrl && dataUrl.length > 500) {
-          setCapturedPhoto(dataUrl);
-          stopCamera();
-          setIsEditorOpen(true);
-        } else {
-          alert('Could not capture photo frame. Please try again.');
-        }
-      } catch (e: any) {
-        alert('Photo snapshot failed: ' + e.message);
-      }
-    }
-  };
-
   // File Upload Fallback
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -301,7 +160,6 @@ export const StudentRegistrationPage: React.FC = () => {
       reader.onload = (event) => {
         if (event.target?.result) {
           setCapturedPhoto(event.target.result as string);
-          stopCamera();
           setIsEditorOpen(true);
         }
       };
@@ -508,9 +366,6 @@ export const StudentRegistrationPage: React.FC = () => {
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto pb-12">
-      {/* Hidden Canvas for snapshot processing */}
-      <canvas ref={canvasRef} className="hidden" />
-
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
         <div>
@@ -671,11 +526,7 @@ export const StudentRegistrationPage: React.FC = () => {
               </h2>
               {capturedPhoto ? (
                 <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#85E510]/20 text-[#366804] border border-[#85E510]/40 flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Captured
-                </span>
-              ) : isCameraActive ? (
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1 animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" /> Camera Live
+                  <Check className="w-3 h-3" /> Captured &bull; R2 Ready
                 </span>
               ) : (
                 <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -684,72 +535,9 @@ export const StudentRegistrationPage: React.FC = () => {
               )}
             </div>
 
-            {/* Photo Preview & Live Camera Container */}
+            {/* Photo Preview Container */}
             <div className="relative aspect-[3/4] w-full max-w-[340px] sm:max-w-[380px] mx-auto bg-[#F4F7F5] rounded-2xl border-2 border-dashed border-[#CBD5E1] overflow-hidden flex flex-col items-center justify-center shadow-inner group">
-              {isCameraActive ? (
-                <div className="relative w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
-                  <video
-                    ref={setVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    onPlaying={() => setIsStreamReady(true)}
-                    onLoadedMetadata={(e) => {
-                      const v = e.target as HTMLVideoElement;
-                      v.muted = true;
-                      v.play().catch(() => {});
-                      setIsStreamReady(true);
-                    }}
-                    onCanPlay={() => setIsStreamReady(true)}
-                    className="w-full h-full object-cover"
-                  />
-
-                  {/* Biometric Facial Guides HUD Overlay (Eye Line & Nose Guide - Silhouette Removed) */}
-                  <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center select-none">
-                    {/* Top Alignment Instruction (Reduced Opacity) */}
-                    <div className="absolute top-2.5 inset-x-4 text-center bg-black/35 backdrop-blur-xs py-1 px-3 rounded-full text-[10px] sm:text-[11px] font-semibold text-white/80 border border-white/10 shadow-xs max-w-[90%] mx-auto">
-                      Align student eyes on <span className="text-[#85E510] font-bold">Eye Line</span> & nose on <span className="text-[#85E510] font-bold">Nose Guide</span>
-                    </div>
-
-                    {/* Biometric Framing Guides (Clean Viewfinder - Oval Contour Removed) */}
-                    <div className="relative w-[85%] aspect-[3/4] flex items-center justify-center">
-                      {/* Horizontal Eye Level Line */}
-                      <div className="absolute top-[38%] inset-x-0 border-b-2 border-dashed border-[#85E510]/80 flex items-center justify-between px-2">
-                        <span className="text-[9px] font-bold uppercase tracking-wider bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
-                          Eye Line
-                        </span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
-                          Eye Line
-                        </span>
-                      </div>
-
-                      {/* Vertical Nose Alignment & Center Crosshair */}
-                      <div className="absolute top-[28%] bottom-[32%] left-1/2 -translate-x-1/2 border-l-2 border-dashed border-[#85E510]/70" />
-                      <div className="absolute top-[52%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                        <div className="w-5 h-5 rounded-full border-2 border-[#85E510] bg-black/30 flex items-center justify-center">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-ping" />
-                        </div>
-                        <span className="text-[8px] font-bold uppercase tracking-widest bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] mt-0.5">
-                          Nose
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Sensor Active Status */}
-                    <div className="absolute bottom-2.5 px-3 py-1 bg-black/40 backdrop-blur-xs rounded-full text-[10px] font-mono text-slate-200 border border-white/10 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse" />
-                      <span>Biometric Feed Active</span>
-                    </div>
-                  </div>
-
-                  {!isStreamReady && (
-                    <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center text-white text-xs gap-2 z-20 transition-opacity">
-                      <RefreshCw className="w-5 h-5 animate-spin text-[#85E510]" />
-                      <span className="font-semibold text-slate-200">Starting camera feed...</span>
-                    </div>
-                  )}
-                </div>
-              ) : capturedPhoto ? (
+              {capturedPhoto ? (
                 <div className="relative w-full h-full bg-slate-900 flex items-center justify-center overflow-hidden">
                   <img
                     src={capturedPhoto}
@@ -761,19 +549,41 @@ export const StudentRegistrationPage: React.FC = () => {
                     }}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/60 backdrop-blur-sm rounded-lg text-[10px] font-mono text-white">
+                  <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-xs rounded-md text-[9px] font-mono font-bold text-[#85E510] border border-[#85E510]/30 flex items-center gap-1">
+                    <CheckCircle2 className="w-2.5 h-2.5" /> Biometric OK
+                  </div>
+                  <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/70 backdrop-blur-xs rounded-lg text-[10px] font-mono text-white border border-white/10">
                     {studentId}
                   </div>
+                  {/* Quick Edit Overlay */}
+                  <button
+                    type="button"
+                    onClick={() => setIsEditorOpen(true)}
+                    className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs font-bold gap-1 cursor-pointer"
+                  >
+                    <Scissors className="w-6 h-6 text-[#85E510]" />
+                    <span>Click to Edit &amp; Crop</span>
+                  </button>
                 </div>
               ) : (
-                <div className="p-6 text-center text-[#64748B] flex flex-col items-center">
-                  <div className="w-16 h-16 rounded-full bg-white border border-[#E2E8F0] flex items-center justify-center text-[#94A3B8] mb-3 shadow-sm">
-                    <ImageIcon className="w-8 h-8" />
+                <div className="p-6 text-center text-[#64748B] flex flex-col items-center space-y-3">
+                  <div className="w-16 h-16 rounded-2xl bg-white border border-[#E2E8F0] flex items-center justify-center text-[#4D8A07] shadow-sm">
+                    <Camera className="w-8 h-8" />
                   </div>
-                  <div className="text-xs font-bold text-[#202833]">No Photograph Selected</div>
-                  <p className="text-[11px] text-[#94A3B8] mt-1 max-w-[220px]">
-                    Activate live camera with Eye/Nose biometric guides, or upload an image
-                  </p>
+                  <div>
+                    <div className="text-xs font-bold text-[#202833]">No Photograph Captured</div>
+                    <p className="text-[11px] text-[#94A3B8] mt-1 max-w-[240px]">
+                      Click below to open the dedicated biometric camera popup with Eye Line and Nose crosshairs.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCameraModalOpen(true)}
+                    className="px-4 py-2 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Launch Camera Modal</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -788,92 +598,63 @@ export const StudentRegistrationPage: React.FC = () => {
 
           {/* Photo Actions */}
           <div className="space-y-2 pt-2">
-            {isCameraActive ? (
-              <div className="space-y-2">
-                {/* Take Photo Button (Only after camera is active!) */}
-                <button
-                  type="button"
-                  onClick={capturePhoto}
-                  className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
-                >
-                  <Camera className="w-4 h-4 text-[#062404]" />
-                  <span>Capture Photo Now</span>
-                </button>
+            <div className="space-y-2">
+              {/* Activate Camera Button - Pops up Modal */}
+              <button
+                type="button"
+                onClick={() => setIsCameraModalOpen(true)}
+                className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Camera className="w-4 h-4 text-[#062404]" />
+                <span>{capturedPhoto ? 'Retake Photo (Camera Popup)' : 'Activate Camera'}</span>
+              </button>
 
-                <div className="grid grid-cols-2 gap-2">
+              {/* Edit & Crop Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (capturedPhoto) {
+                    setIsEditorOpen(true);
+                  } else {
+                    fileInputRef.current?.click();
+                  }
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-[#85E510] text-[#202833] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+              >
+                <Scissors className="w-4 h-4 text-[#4D8A07]" />
+                <span>{capturedPhoto ? 'Edit & Crop Photo' : 'Upload & Crop Photo'}</span>
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
+              {capturedPhoto && (
+                <div className="flex items-center justify-between pt-1 text-[11px]">
+                  <span className="text-emerald-700 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Portrait Ready
+                  </span>
                   <button
                     type="button"
-                    onClick={toggleCameraFacing}
-                    className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-[#CBD5E1] text-[#202833] font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    onClick={() => {
+                      setCapturedPhoto(null);
+                      setBrightness(100);
+                      setContrast(100);
+                      setSaturation(100);
+                      setRotation(0);
+                      setZoom(1);
+                    }}
+                    className="text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 cursor-pointer"
                   >
-                    <SwitchCamera className="w-3.5 h-3.5 text-[#4D8A07]" />
-                    <span>Flip Camera</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={stopCamera}
-                    className="py-2.5 px-3 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] text-[#202833] font-bold text-xs cursor-pointer"
-                  >
-                    Cancel
+                    <RefreshCw className="w-3 h-3" /> Remove Photo
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {/* Activate Camera Button */}
-                <button
-                  type="button"
-                  onClick={() => startCamera()}
-                  className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Camera className="w-4 h-4 text-[#062404]" />
-                  <span>Activate Camera</span>
-                </button>
-
-                {/* Edit & Crop Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (capturedPhoto) {
-                      setIsEditorOpen(true);
-                    } else {
-                      fileInputRef.current?.click();
-                    }
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-[#85E510] text-[#202833] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
-                >
-                  <Scissors className="w-4 h-4 text-[#4D8A07]" />
-                  <span>{capturedPhoto ? 'Edit & Crop Photo' : 'Upload & Crop Photo'}</span>
-                </button>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-
-                {capturedPhoto && (
-                  <div className="flex justify-end pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCapturedPhoto(null);
-                        setBrightness(100);
-                        setContrast(100);
-                        setSaturation(100);
-                        setRotation(0);
-                        setZoom(1);
-                      }}
-                      className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3" /> Retake Photo
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -1215,6 +996,18 @@ export const StudentRegistrationPage: React.FC = () => {
           </div>
         </div>
       </form>
+
+      {/* Biometric Camera Capture Modal Popup */}
+      <CameraCaptureModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        studentId={studentId}
+        onCapture={(dataUrl) => {
+          setCapturedPhoto(dataUrl);
+          setIsCameraModalOpen(false);
+          setIsEditorOpen(true);
+        }}
+      />
 
       {/* Smartphone-Style Photo Editor & Crop Modal */}
       <PhoneCropModal

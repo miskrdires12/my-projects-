@@ -1766,8 +1766,8 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   // REAL and ACTUAL calculation from authoritative memoryStudents dataset:
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const weekStart = now.getTime() - 7 * 24 * 60 * 60 * 1000;
-  const monthStart = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30).getTime();
 
   let realTotal = 0;
   let realToday = 0;

@@ -1,21 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, User, Smartphone, Shield, LogOut, CheckCircle2, Download, Table, Save } from 'lucide-react';
+import {
+  Settings, User, Smartphone, Shield, LogOut, CheckCircle2,
+  Download, Table, Save, Printer, Sliders, HardDrive, RotateCcw,
+  RefreshCw, Volume2, Layers, Check, Database
+} from 'lucide-react';
 import { getCurrentUser, setCurrentUser, getOrCreateDeviceId } from '@/lib/store';
+import { getAppSettings, updateAppSettings, resetAppSettings, AppSettings } from '@/lib/settingsStore';
 
 export const ReceiverSettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const user = getCurrentUser();
   const deviceId = getOrCreateDeviceId();
 
-  const [defaultPageSize, setDefaultPageSize] = useState('100');
-  const [zipConvention, setZipConvention] = useState('School/Grade/ID_Name.jpg');
+  const [settings, setSettings] = useState<AppSettings>(getAppSettings());
+  const [activeTab, setActiveTab] = useState<'profile' | 'directory' | 'print' | 'export' | 'security' | 'diagnostics'>('directory');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    setToastMessage('Receiver workstation preferences saved.');
+  useEffect(() => {
+    const handleUpdate = () => setSettings(getAppSettings());
+    window.addEventListener('studentbridge_settings_change', handleUpdate);
+    return () => window.removeEventListener('studentbridge_settings_change', handleUpdate);
+  }, []);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleFieldChange = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    const updated = updateAppSettings({ [key]: value });
+    setSettings(updated);
+    showToast(`Updated ${String(key)}.`);
+  };
+
+  const handleReset = () => {
+    if (confirm('Reset receiver preferences to default configuration?')) {
+      const reset = resetAppSettings();
+      setSettings(reset);
+      showToast('Receiver settings reset to defaults.');
+    }
   };
 
   const handleSignOut = () => {
@@ -24,20 +48,27 @@ export const ReceiverSettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#E2E8F0]">
+    <div className="space-y-6 max-w-5xl mx-auto pb-14 font-mono select-none animate-in fade-in duration-200">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[#E2E8F0] dark:border-[#223126]">
         <div>
-          <h1 className="text-2xl font-heading font-black text-[#202833] tracking-tight">
-            Receiver Station Settings
+          <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+            <span className="text-[#366804] dark:text-[#8fe617] font-bold">RECEIVER STATION</span>
+            <span>/</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-300">PRINT &amp; DIRECTORY PREFERENCES</span>
+          </div>
+          <h1 className="text-2xl font-black tracking-tight text-[#0B1118] dark:text-white flex items-center gap-2">
+            Receiver Workstation Settings
           </h1>
-          <p className="text-xs text-[#64748B] mt-1">
-            Directory density settings, export conventions, operator credentials, and terminal locks
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Configure directory page density, 8-up print DPI resolution, export naming conventions, and terminal binding
           </p>
         </div>
 
         <button
+          type="button"
           onClick={handleSignOut}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-all"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900/40 text-xs font-bold transition-all cursor-pointer"
         >
           <LogOut className="w-4 h-4" />
           <span>Sign Out</span>
@@ -45,123 +76,324 @@ export const ReceiverSettingsPage: React.FC = () => {
       </div>
 
       {toastMessage && (
-        <div className="p-3.5 rounded-xl bg-[#85E510]/15 border border-[#85E510]/40 text-[#366804] text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span className="font-semibold">{toastMessage}</span>
+        <div className="p-3.5 rounded-2xl bg-[#85E510]/15 border border-[#85E510]/40 text-[#256002] dark:text-[#8fe617] text-xs font-bold flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-[#85E510]" />
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* User Account */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 space-y-4 shadow-sm">
-          <div className="flex items-center gap-3 pb-3 border-b border-[#E2E8F0]">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700">
-              <User className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-heading font-black text-[#202833]">Receiver Account</h3>
-              <p className="text-[11px] text-[#64748B]">Central repository review privileges</p>
-            </div>
-          </div>
+      {/* Tabs */}
+      <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-2xl bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] shadow-xs">
+        <button
+          type="button"
+          onClick={() => setActiveTab('directory')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'directory'
+              ? 'bg-[#85E510] text-[#062404] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+          }`}
+        >
+          <Table className="w-3.5 h-3.5" />
+          <span>Directory &amp; Review</span>
+        </button>
 
-          <div className="space-y-3 text-xs">
-            <div>
-              <span className="text-[#64748B] block font-medium">Username</span>
-              <span className="font-bold text-[#202833]">{user?.username || 'yonatantesfa'}</span>
-            </div>
-            <div>
-              <span className="text-[#64748B] block font-medium">Email</span>
-              <span className="font-mono text-[#202833]">{user?.email || 'yonatantesfa@gmail.com'}</span>
-            </div>
-            <div>
-              <span className="text-[#64748B] block font-medium">Station Role</span>
-              <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700">
-                {user?.role || 'RECEIVER'}
-              </span>
-            </div>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('print')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'print'
+              ? 'bg-[#85E510] text-[#062404] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+          }`}
+        >
+          <Printer className="w-3.5 h-3.5" />
+          <span>8-Up Print &amp; ID Studio</span>
+        </button>
 
-        {/* 1-Device Lock */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 space-y-4 shadow-sm">
-          <div className="flex items-center gap-3 pb-3 border-b border-[#E2E8F0]">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700">
-              <Smartphone className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-heading font-black text-[#202833]">Terminal Security</h3>
-              <p className="text-[11px] text-[#64748B]">1-Device hardware binding status</p>
-            </div>
-          </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('export')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'export'
+              ? 'bg-[#85E510] text-[#062404] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+          }`}
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Export Conventions</span>
+        </button>
 
-          <div className="space-y-3 text-xs">
-            <div>
-              <span className="text-[#64748B] block font-medium">Bound Terminal ID</span>
-              <span className="font-mono font-bold text-[#366804] bg-[#F8FAF9] px-2.5 py-1 rounded-lg border border-[#E2E8F0] inline-block mt-1">
-                {deviceId}
-              </span>
-            </div>
-            <div className="p-3 rounded-xl bg-[#F8FAF9] border border-[#E2E8F0] text-[11px] text-[#64748B] leading-relaxed">
-              This terminal is registered with 1-Device lock enforcement. Changes require Super Admin authorization.
-            </div>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('security')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'security'
+              ? 'bg-[#85E510] text-[#062404] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+          }`}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          <span>1-Device Lock</span>
+        </button>
 
-        {/* Directory & Export Preferences */}
-        <div className="md:col-span-2 bg-white border border-[#E2E8F0] rounded-2xl p-6 space-y-4 shadow-sm">
-          <div className="flex items-center gap-3 pb-3 border-b border-[#E2E8F0]">
-            <div className="w-10 h-10 rounded-xl bg-[#85E510]/20 flex items-center justify-center text-[#4D8A07]">
+        <button
+          type="button"
+          onClick={() => setActiveTab('profile')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'profile'
+              ? 'bg-[#85E510] text-[#062404] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+          }`}
+        >
+          <User className="w-3.5 h-3.5" />
+          <span>Operator Profile</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('diagnostics')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'diagnostics'
+              ? 'bg-[#85E510] text-[#062404] shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+          }`}
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>Reset Defaults</span>
+        </button>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* TAB 1: DIRECTORY & REVIEW PREFERENCES                               */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'directory' && (
+        <div className="bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] rounded-3xl p-6 space-y-6 shadow-xs">
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="w-10 h-10 rounded-2xl bg-[#85E510]/20 text-[#256002] dark:text-[#8fe617] flex items-center justify-center">
               <Table className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-heading font-black text-[#202833]">Directory & Export Preferences</h3>
-              <p className="text-[11px] text-[#64748B]">Default directory page size and archive naming conventions</p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Directory Density &amp; Review Pacing</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Control table row pagination and real-time review settings</p>
             </div>
           </div>
 
-          <form onSubmit={handleSave} className="space-y-4 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[#202833] font-bold mb-1.5">Default Table Density</label>
-                <select
-                  value={defaultPageSize}
-                  onChange={(e) => setDefaultPageSize(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-semibold text-[#202833]"
-                >
-                  <option value="25">25 records per page</option>
-                  <option value="50">50 records per page</option>
-                  <option value="100">100 records per page</option>
-                  <option value="250">250 records per page</option>
-                  <option value="500">500 records per page (High Density)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[#202833] font-bold mb-1.5">Classified Photo ZIP Partitioning</label>
-                <select
-                  value={zipConvention}
-                  onChange={(e) => setZipConvention(e.target.value)}
-                  className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 text-xs font-semibold text-[#202833]"
-                >
-                  <option value="School/Grade/ID_Name.jpg">{'{School}/{Grade}/{ID}_{Name}.jpg'}</option>
-                  <option value="Grade/ID_Name.jpg">{'{Grade}/{ID}_{Name}.jpg'}</option>
-                  <option value="Flat/ID_Name.jpg">{'{ID}_{Name}.jpg'} (Single Folder)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="submit"
-                className="py-2.5 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs shadow-sm flex items-center gap-1.5 transition-all"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800 space-y-2">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">Default Table Page Size</span>
+              <select
+                value={settings.tablePageSize}
+                onChange={(e) => handleFieldChange('tablePageSize', Number(e.target.value))}
+                className="w-full bg-white dark:bg-[#111613] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold"
               >
-                <Save className="w-4 h-4" />
-                <span>Save Preferences</span>
-              </button>
+                <option value={50}>50 Students per page</option>
+                <option value={100}>100 Students per page (Recommended)</option>
+                <option value={250}>250 Students per page (High Density)</option>
+                <option value={500}>500 Students per page (Maximum)</option>
+              </select>
             </div>
-          </form>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800 space-y-2">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">Auto-Sync Heartbeat Pacing</span>
+              <select
+                value={settings.storageSyncIntervalMs}
+                onChange={(e) => handleFieldChange('storageSyncIntervalMs', Number(e.target.value))}
+                className="w-full bg-white dark:bg-[#111613] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold"
+              >
+                <option value={2000}>2 Seconds (High Frequency)</option>
+                <option value={4000}>4 Seconds (Standard Production)</option>
+                <option value={8000}>8 Seconds (Battery &amp; Low Bandwidth)</option>
+              </select>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* TAB 2: 8-UP PRINT & ID BADGE STUDIO                                 */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'print' && (
+        <div className="bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] rounded-3xl p-6 space-y-6 shadow-xs">
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-blue-600 flex items-center justify-center">
+              <Printer className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">8-Up Sheet Print Engine &amp; DPI Standards</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Configure high-resolution A4 card production and cutting crosshairs</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800 space-y-2">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">Print Resolution (DPI)</span>
+              <select
+                value={settings.printDpi}
+                onChange={(e) => handleFieldChange('printDpi', e.target.value as any)}
+                className="w-full bg-white dark:bg-[#111613] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold"
+              >
+                <option value="300dpi">300 DPI (Commercial Print Standard - Fast)</option>
+                <option value="600dpi">600 DPI (Ultra Sharp - High Density Text)</option>
+              </select>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="font-bold text-slate-800 dark:text-slate-200 block">Print Crop &amp; Cutting Marks</span>
+                <span className="text-[11px] text-slate-500">Render corner crosshairs for Guillotine cutters</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.includeCropMarks}
+                onChange={(e) => handleFieldChange('includeCropMarks', e.target.checked)}
+                className="w-5 h-5 rounded border-slate-300 text-[#85E510] focus:ring-0 cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* TAB 3: EXPORT CONVENTIONS                                           */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'export' && (
+        <div className="bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] rounded-3xl p-6 space-y-6 shadow-xs">
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/15 text-purple-600 flex items-center justify-center">
+              <Download className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">ZIP &amp; CSV Export Conventions</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">File naming standards for bulk download manifests</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800 space-y-2">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">ZIP File Structure</span>
+              <select
+                value={settings.zipExportConvention}
+                onChange={(e) => handleFieldChange('zipExportConvention', e.target.value)}
+                className="w-full bg-white dark:bg-[#111613] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold"
+              >
+                <option value="School/Grade/ID_Name.jpg">School / Grade / ID_Name.jpg (Recommended)</option>
+                <option value="Flat/ID.jpg">Flat Directory (ID.jpg)</option>
+                <option value="Grade/Section/ID.jpg">Grade / Section / ID.jpg</option>
+              </select>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800 space-y-2">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">CSV Export Delimiter</span>
+              <select
+                value={settings.csvDelimiter}
+                onChange={(e) => handleFieldChange('csvDelimiter', e.target.value as any)}
+                className="w-full bg-white dark:bg-[#111613] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold"
+              >
+                <option value=",">Comma (,) - Standard</option>
+                <option value=";">Semicolon (;) - European Excel</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* TAB 4: 1-DEVICE LOCK                                                */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'security' && (
+        <div className="bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] rounded-3xl p-6 space-y-4 shadow-xs">
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/15 text-purple-600 flex items-center justify-center">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Receiver Terminal Hardware Binding</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">1-Email = 1-Device hardware authorization</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-xs">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800 space-y-1">
+              <span className="text-slate-400 uppercase font-bold text-[10px] block">Bound Terminal ID</span>
+              <span className="font-mono font-bold text-[#256002] dark:text-[#8fe617] break-all block">
+                {deviceId}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-400 text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-purple-600" />
+              <span>Receiver Privilege Bound to {user?.email || 'Current Account'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* TAB 5: OPERATOR PROFILE                                             */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'profile' && (
+        <div className="bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] rounded-3xl p-6 space-y-4 shadow-xs">
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-blue-600 flex items-center justify-center font-bold">
+              {user?.username?.substring(0, 2).toUpperCase() || 'RC'}
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Receiver Account Identity</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Central registry operator profile</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 text-xs">
+            <div>
+              <span className="text-slate-400 uppercase font-bold text-[10px] block">Username</span>
+              <span className="font-bold text-slate-900 dark:text-white text-sm">{user?.username || 'yonatantesfa'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 uppercase font-bold text-[10px] block">Email</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">{user?.email || 'yonatantesfa@gmail.com'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 uppercase font-bold text-[10px] block">Station Role</span>
+              <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                {user?.role || 'RECEIVER'} (CENTRAL REVIEW)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* TAB 6: DIAGNOSTICS & RESET                                          */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'diagnostics' && (
+        <div className="bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] rounded-3xl p-6 space-y-4 shadow-xs">
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center">
+              <RotateCcw className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Maintenance &amp; Preferences Reset</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Restore default receiver parameters</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-[#070908] border border-slate-200 dark:border-slate-800 text-xs">
+            <div>
+              <span className="font-bold text-slate-900 dark:text-white block">Reset Receiver Preferences</span>
+              <span className="text-[11px] text-slate-500">Restore default print resolution, directory pagination, and export formats</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="px-3.5 py-1.5 rounded-xl border border-rose-300 dark:border-rose-900 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-bold transition-all cursor-pointer"
+            >
+              Reset Defaults
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+export default ReceiverSettingsPage;

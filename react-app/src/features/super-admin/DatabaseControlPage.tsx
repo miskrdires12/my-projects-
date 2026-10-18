@@ -9,10 +9,12 @@
 import React, { useState, useEffect, useCallback, useTransition } from "react";
 import { getStudents, getUsers, getAuditLogs, deleteStudent } from "@/lib/store";
 import { Student, User as UserType } from "@/types";
+import { SuperAdminStoragePage } from "./SuperAdminStoragePage";
 
 import {
   Activity,
   HardDrive,
+  Database,
   CheckCircle2,
   AlertTriangle,
   Download,
@@ -1325,6 +1327,8 @@ export function DatabaseClient({
     }
   };
 
+  const [activeDatabaseTab, setActiveDatabaseTab] = useState<'DATABASE' | 'STORAGE_LIMITS'>('DATABASE');
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto text-[#080808] dark:text-[#f2f7f4]">
       {/* Feedback Toast */}
@@ -1351,6 +1355,49 @@ export function DatabaseClient({
           </button>
         </div>
       )}
+
+      {/* Top Section Switcher Tabs: Database & Audit vs Storage & Predictive Limits */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 rounded-2xl bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] shadow-xs font-mono">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setActiveDatabaseTab('DATABASE')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeDatabaseTab === 'DATABASE'
+                ? 'bg-[#85E510] text-[#062404] shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Database Records &amp; Visualizer</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveDatabaseTab('STORAGE_LIMITS')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeDatabaseTab === 'STORAGE_LIMITS'
+                ? 'bg-[#85E510] text-[#062404] shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <HardDrive className="w-4 h-4" />
+            <span>Storage, Zero-Egress &amp; Predictive Limits</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 font-bold ml-1">
+              FORECAST
+            </span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-slate-400 pr-2">
+          {activeDatabaseTab === 'DATABASE' ? 'PostgreSQL Relational & Audit Logs' : 'Cloudflare R2 & Exhaustion Forecaster'}
+        </div>
+      </div>
+
+      {activeDatabaseTab === 'STORAGE_LIMITS' ? (
+        <SuperAdminStoragePage />
+      ) : (
+        <>
 
       {/* ────────────────────────────────────────────────────────────────────
           SUPABASE CLOUD INFRASTRUCTURE & STORAGE TELEMETRY PANEL
@@ -2141,6 +2188,8 @@ export function DatabaseClient({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

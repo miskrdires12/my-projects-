@@ -24,7 +24,9 @@ import {
   HardDrive,
   ShieldCheck,
   Sparkles,
-  Database
+  Database,
+  Download,
+  Layers
 } from 'lucide-react';
 import {
   getAllSendersMetrics,
@@ -36,6 +38,7 @@ import { Student } from '@/types';
 import { SupabaseStatusData } from '@/features/super-admin/DatabaseControlPage';
 
 export const TelemetricVelocityPage: React.FC = () => {
+  const [activeSectionTab, setActiveSectionTab] = useState<'ALL' | 'BRANCHES' | 'CLOUD_EDGE' | 'LEDGER'>('ALL');
   const [sendersList, setSendersList] = useState<SenderMetrics[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -272,6 +275,24 @@ export const TelemetricVelocityPage: React.FC = () => {
     return Number((60 / avgFleetTimeSeconds).toFixed(2));
   }, [avgFleetTimeSeconds]);
 
+  const exportVelocityReportCsv = () => {
+    const headers = 'Operator,Branch,Campus,Velocity (rec/min),Avg Time (sec),Today,Week,Month,Total,1-Device Lock,Status';
+    const rows = filteredSenders.map(s => {
+      const isOnline = s.status === 'Active' || s.today > 0;
+      const timeTaken = s.avgTimeTakenSecondsPerRecord || 45;
+      const perMin = s.recordsPerMinute > 0 ? s.recordsPerMinute : Number((60 / timeTaken).toFixed(2));
+      return `"${s.username}","${s.branch || 'Addis Ababa'}","${s.school || 'YMS 1'}",${perMin},${timeTaken},${s.today},${s.week},${s.month},${s.total},"${s.boundDeviceId ? 'Locked' : 'Unlocked'}","${isOnline ? 'Active' : 'Standby'}"`;
+    });
+    const csvContent = [headers, ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Telemetric_Velocity_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6 max-w-[1720px] mx-auto pb-12 select-none animate-in fade-in duration-200 font-mono">
       {/* Top Banner / Breadcrumb & Header */}
@@ -318,6 +339,69 @@ export const TelemetricVelocityPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Section Switcher Tabs & Quick Navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 rounded-2xl bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] shadow-xs">
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveSectionTab('ALL')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeSectionTab === 'ALL'
+                ? 'bg-[#85E510] text-[#062404] shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Complete Radar (All Views)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSectionTab('BRANCHES')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeSectionTab === 'BRANCHES'
+                ? 'bg-[#85E510] text-[#062404] shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Regional Branches</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSectionTab('CLOUD_EDGE')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeSectionTab === 'CLOUD_EDGE'
+                ? 'bg-[#85E510] text-[#062404] shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Supabase Cloud &amp; R2</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSectionTab('LEDGER')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeSectionTab === 'LEDGER'
+                ? 'bg-[#85E510] text-[#062404] shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Operator Ledger</span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={exportVelocityReportCsv}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-slate-800"
+        >
+          <Download className="w-3.5 h-3.5 text-[#85E510]" />
+          <span>Export Velocity CSV</span>
+        </button>
+      </div>
+
       {pingFeedback && (
         <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-[#85E510]/15 border border-[#85E510]/40 text-[#256002] dark:text-[#8fe617] text-xs font-bold animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 shrink-0 text-[#85E510]" />
@@ -328,6 +412,7 @@ export const TelemetricVelocityPage: React.FC = () => {
       {/* ─────────────────────────────────────────────────────────────────── */}
       {/* SECTION 1: SUPABASE CLOUD STATUS & TELEMETRY                        */}
       {/* ─────────────────────────────────────────────────────────────────── */}
+      {(activeSectionTab === 'ALL' || activeSectionTab === 'CLOUD_EDGE') && (
       <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
           <div>
@@ -448,11 +533,13 @@ export const TelemetricVelocityPage: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────── */}
       {/* SECTION 2: BRANCH-SPECIFIC TELEMETRIC VELOCITY MEASUREMENTS         */}
       {/* Addis Ababa, Adama, Mojo, Harar                                     */}
       {/* ─────────────────────────────────────────────────────────────────── */}
+      {(activeSectionTab === 'ALL' || activeSectionTab === 'BRANCHES') && (
       <div className="rounded-3xl border border-[#dce7e1] dark:border-[#223126] bg-white dark:bg-[#111613] p-5 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#eef5f1] dark:border-[#1c261e] pb-3">
           <div>
@@ -574,11 +661,48 @@ export const TelemetricVelocityPage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Comparative Branch Velocity & Pacing Visualization */}
+        <div className="p-4 rounded-2xl bg-[#f7faf9]/80 dark:bg-[#161d19]/80 border border-[#dce7e1] dark:border-[#223126] space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4 text-[#85E510]" />
+              Comparative Branch Throughput Pacing (% of Total Fleet Today)
+            </span>
+            <span className="text-slate-400 font-mono text-[11px]">
+              Total Today: {totalFleetTransmissionsToday} registrations
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {branchMetrics.map((bm) => {
+              const share = totalFleetTransmissionsToday > 0
+                ? Math.round((bm.today / totalFleetTransmissionsToday) * 100)
+                : 25;
+              return (
+                <div key={bm.branch} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{bm.branch}</span>
+                    <span className="text-slate-500 font-semibold">{bm.today} today ({share}%) &bull; {bm.recPerMinute} rec/min</span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#85E510] to-emerald-500 transition-all duration-500"
+                      style={{ width: `${Math.max(share, 4)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────── */}
-      {/* SECTION 3: FLEET OVERVIEW KPIS                                      */}
+      {/* SECTION 3: FLEET OVERVIEW KPIS & SECTION 4: LEDGER                  */}
       {/* ─────────────────────────────────────────────────────────────────── */}
+      {(activeSectionTab === 'ALL' || activeSectionTab === 'LEDGER') && (
+        <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Live Today Submissions (Starts from 0) */}
         <div className="p-4 rounded-2xl bg-white dark:bg-[#111613] border border-slate-200 dark:border-[#223126] shadow-xs relative overflow-hidden group hover:border-[#85E510]/50 transition-all">
@@ -918,6 +1042,9 @@ export const TelemetricVelocityPage: React.FC = () => {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };
+

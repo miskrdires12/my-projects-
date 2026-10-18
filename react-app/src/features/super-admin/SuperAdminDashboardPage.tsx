@@ -83,8 +83,34 @@ export const SuperAdminDashboardPage: React.FC = () => {
   const loadData = useCallback(() => {
     const list = getStudents();
     list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    setAllStudentsList(list);
-    setSendersList(getAllSendersMetrics());
+    setAllStudentsList((prev) => {
+      if (prev.length === list.length && prev.length > 0) {
+        if (
+          prev[0]?.id === list[0]?.id &&
+          prev[prev.length - 1]?.id === list[list.length - 1]?.id &&
+          prev[0]?.photoPath === list[0]?.photoPath
+        ) {
+          return prev; // Reference stability: prevents re-rendering and data fluctuating!
+        }
+      }
+      return list;
+    });
+    setSendersList((prev) => {
+      const next = getAllSendersMetrics();
+      if (
+        prev.length === next.length &&
+        prev.every(
+          (p, i) =>
+            p.total === next[i]?.total &&
+            p.today === next[i]?.today &&
+            p.status === next[i]?.status &&
+            p.boundDeviceId === next[i]?.boundDeviceId
+        )
+      ) {
+        return prev;
+      }
+      return next;
+    });
     setLastUpdated(new Date().toLocaleTimeString());
   }, []);
 
@@ -182,13 +208,17 @@ export const SuperAdminDashboardPage: React.FC = () => {
     return list;
   }, [allStudentsList, totalStudents]);
 
-  // Timeframe stats: A Day, A Week, A Month, A Year
+  // Timeframe stats: A Day, A Week, A Month, A Year - Anchored to Calendar Boundaries
   const gatheredTimeframeStats = useMemo(() => {
-    const now = Date.now();
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    const oneWeekMs = 7 * oneDayMs;
-    const oneMonthMs = 30 * oneDayMs;
-    const oneYearMs = 365 * oneDayMs;
+    const dNow = new Date();
+    // Midnight start of today (00:00:00)
+    const todayStart = new Date(dNow.getFullYear(), dNow.getMonth(), dNow.getDate()).getTime();
+    // 7 days ago at midnight
+    const weekStart = new Date(dNow.getFullYear(), dNow.getMonth(), dNow.getDate() - 7).getTime();
+    // 30 days ago at midnight
+    const monthStart = new Date(dNow.getFullYear(), dNow.getMonth(), dNow.getDate() - 30).getTime();
+    // Start of current calendar year
+    const yearStart = new Date(dNow.getFullYear(), 0, 1).getTime();
 
     let dayCount = 0, dayPhotos = 0;
     let weekCount = 0, weekPhotos = 0;
@@ -196,23 +226,28 @@ export const SuperAdminDashboardPage: React.FC = () => {
     let yearCount = 0, yearPhotos = 0;
 
     allStudentsList.forEach((s) => {
-      const createdTime = s.createdAt ? new Date(s.createdAt).getTime() : now;
-      const diff = now - createdTime;
+      let createdTime = 0;
+      if (s.createdAt) {
+        const parsed = new Date(s.createdAt).getTime();
+        if (!isNaN(parsed) && parsed > 0) {
+          createdTime = parsed;
+        }
+      }
       const hasPhoto = Boolean(s.photoPath && s.photoPath.trim().length > 0);
 
-      if (diff <= oneDayMs) {
+      if (createdTime >= todayStart) {
         dayCount++;
         if (hasPhoto) dayPhotos++;
       }
-      if (diff <= oneWeekMs) {
+      if (createdTime >= weekStart) {
         weekCount++;
         if (hasPhoto) weekPhotos++;
       }
-      if (diff <= oneMonthMs) {
+      if (createdTime >= monthStart) {
         monthCount++;
         if (hasPhoto) monthPhotos++;
       }
-      if (diff <= oneYearMs) {
+      if (createdTime >= yearStart || createdTime === 0) {
         yearCount++;
         if (hasPhoto) yearPhotos++;
       }
