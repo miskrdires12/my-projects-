@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   Shield, Search, UserPlus, X, RefreshCw, Trash2,
-  Lock, AlertTriangle, ArrowLeft, LogOut, CheckCircle2,
+  Lock, Unlock, AlertTriangle, ArrowLeft, LogOut, CheckCircle2,
   Smartphone, RotateCcw, Upload, Download, Sparkles,
   Camera, Calendar, Zap, User
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
-  getUsers, resetUserHardwareLock, getAllSendersMetrics,
+  getUsers, resetUserHardwareLock, setUserHardwareLock, getAllSendersMetrics,
   addUser, deleteUser, BRANCH_SCHOOL_MAP, initStore, getCurrentUser, setCurrentUser
 } from '@/lib/store';
 import { User as UserType } from '@/types';
@@ -49,6 +49,22 @@ export const AdminSendersPage: React.FC = () => {
       window.removeEventListener('studentbridge_userchange', handleSync);
     };
   }, []);
+
+  // 1. Toggle / Manage Hardware Device Lock
+  const handleToggleLock = (user: UserType) => {
+    if (user.boundDeviceId) {
+      resetUserHardwareLock(user.id);
+      resetUserHardwareLock(user.username);
+      resetUserHardwareLock(user.email);
+      setToastMessage(`Hardware device lock for "${user.username}" unlocked. Workstation is now unbound.`);
+    } else {
+      const generatedDeviceId = 'dev-terminal-' + Math.random().toString(36).substring(2, 9);
+      setUserHardwareLock(user.id, generatedDeviceId);
+      setToastMessage(`Hardware lock enabled for "${user.username}" (bound to hardware terminal).`);
+    }
+    loadData();
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   // 1. Disconnect Device (Reset Hardware Lock)
   const handleDisconnectDevice = (user: UserType) => {
@@ -459,11 +475,15 @@ export const AdminSendersPage: React.FC = () => {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => handleDisconnectDevice(user)}
-                            className="p-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-500/15 transition-all cursor-pointer"
-                            title="Reset 1-device lock"
+                            onClick={() => handleToggleLock(user)}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                              isLocked
+                                ? 'text-emerald-700 dark:text-[#8fe617] bg-[#8fe617]/15 hover:bg-[#8fe617]/25'
+                                : 'text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-500/15'
+                            }`}
+                            title={isLocked ? 'Hardware Device Locked (Click to Unlock/Unbind)' : 'Lock Operator to Hardware Terminal (1-Device Lock)'}
                           >
-                            <RotateCcw className="h-4 w-4" />
+                            {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                           </button>
 
                           {isAdmin ? (

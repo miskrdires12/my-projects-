@@ -9,7 +9,7 @@ import {
 import {
   getStudents, addStudent, getSchools, getCurrentUser, getTasks,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP, getSenderMetrics, SenderMetrics,
-  generateStudentQrToken, getCorrectionLogs, CorrectionLog
+  generateStudentQrToken, getCorrectionLogs, CorrectionLog, getAuthHeaders
 } from '@/lib/store';
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
@@ -53,7 +53,6 @@ export const StudentRegistrationPage: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('environment');
   const [isStreamReady, setIsStreamReady] = useState(false);
@@ -192,7 +191,6 @@ export const StudentRegistrationPage: React.FC = () => {
     }
     setIsStreamReady(false);
     setIsCameraActive(false);
-    setIsCameraModalOpen(false);
   };
 
   useEffect(() => {
@@ -201,29 +199,11 @@ export const StudentRegistrationPage: React.FC = () => {
     };
   }, []);
 
-  // Ensure video element plays stream as soon as modal opens or stream is ready
-  useEffect(() => {
-    if (isCameraModalOpen && cameraStream && videoRef.current) {
-      const v = videoRef.current;
-      if (v.srcObject !== cameraStream) {
-        v.srcObject = cameraStream;
-      }
-      v.muted = true;
-      v.playsInline = true;
-      v.play().then(() => {
-        setIsStreamReady(true);
-      }).catch((err) => {
-        console.warn('Camera play warning in effect:', err);
-        setIsStreamReady(true);
-      });
-    }
-  }, [cameraStream, isCameraModalOpen]);
-
   // Start Webcam with multi-tier fallback & camera facing support
   const startCamera = async (facing: 'user' | 'environment' = cameraFacing) => {
     setCameraError(null);
     setIsStreamReady(false);
-    setIsCameraModalOpen(true);
+    stopCamera();
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -258,21 +238,10 @@ export const StudentRegistrationPage: React.FC = () => {
       setIsCameraActive(true);
       setCameraFacing(facing);
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true;
-        videoRef.current.playsInline = true;
-        videoRef.current.play().then(() => {
-          setIsStreamReady(true);
-        }).catch(() => {
-          setIsStreamReady(true);
-        });
-      }
-
       // Timeout safety: never let user remain permanently blocked behind loading spinner
       setTimeout(() => {
         setIsStreamReady(true);
-      }, 700);
+      }, 900);
     } catch (err: any) {
       console.warn('Camera access issue:', err);
       let msg = 'Camera access unavailable. Please check camera permissions or upload a portrait photo.';
@@ -289,25 +258,20 @@ export const StudentRegistrationPage: React.FC = () => {
   // Flip Camera (Front <-> Back)
   const toggleCameraFacing = () => {
     const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
-    setCameraFacing(nextFacing);
     startCamera(nextFacing);
   };
 
   // Take Snapshot from video
   const capturePhoto = () => {
     const video = videoRef.current;
-    if (!video) {
+    const canvas = canvasRef.current;
+    if (!video || !canvas) {
       alert('Camera feed is still initializing. Please wait a moment.');
       return;
     }
 
-    let canvas = canvasRef.current;
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-    }
-
-    const vw = video.videoWidth || video.clientWidth || 640;
-    const vh = video.videoHeight || video.clientHeight || 480;
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
 
     canvas.width = vw;
     canvas.height = vh;
@@ -373,7 +337,7 @@ export const StudentRegistrationPage: React.FC = () => {
         try {
           const upRes = await fetch('/api/upload', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
             body: JSON.stringify({
               studentId: studentId.trim(),
               grade: cleanGrade,
@@ -405,7 +369,7 @@ export const StudentRegistrationPage: React.FC = () => {
         grade: parsedGradeInfo.cleanGrade,
         department: parsedGradeInfo.cleanSection || undefined,
         phone: phone.trim(),
-        bloodType: bloodType && bloodType.trim() ? bloodType.trim() : 'Unknown',
+        bloodType: bloodType || undefined,
         school: school.trim(),
         location,
         country: 'Ethiopia',
@@ -451,7 +415,7 @@ export const StudentRegistrationPage: React.FC = () => {
       try {
         const res = await fetch('/api/students', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify(studentPayload)
         });
 
@@ -515,11 +479,23 @@ export const StudentRegistrationPage: React.FC = () => {
   };
 
   // Active task assigned to current operator
-  const userTasks = getTasks().filter(
-    t => (t.assignedTo?.toLowerCase() === user?.username?.toLowerCase() ||
-          t.assignedTo?.toLowerCase() === user?.email?.toLowerCase()) &&
-         t.status !== 'Completed'
-  );
+  const userTasks = getTasks().filter(t => {
+    if (t.status === 'Completed') return false;
+    const assigned = (t.assignedTo || '').toLowerCase().trim();
+    const uName = (user?.username || '').toLowerCase().trim();
+    const uEmail = (user?.email || '').toLowerCase().trim();
+    const uSchool = (user?.school || '').toLowerCase().trim();
+    const tSchool = (t.school || '').toLowerCase().trim();
+    return (
+      assigned === uName ||
+      assigned === uEmail ||
+      (uEmail.includes('@') && assigned === uEmail.split('@')[0]) ||
+      (uSchool && tSchool === uSchool) ||
+      assigned === 'all' ||
+      assigned === 'field operator' ||
+      assigned === 'operator'
+    );
+  });
   const activeTask = userTasks.length > 0 ? userTasks[0] : null;
 
   return (
@@ -630,13 +606,28 @@ export const StudentRegistrationPage: React.FC = () => {
               Resolved by Receiver Desk
             </span>
           </div>
-          <div className="divide-y divide-amber-200/60 max-h-36 overflow-y-auto custom-scrollbar">
+          <div className="divide-y divide-amber-200/60 max-h-48 overflow-y-auto custom-scrollbar">
             {correctionNotices.map(notice => (
-              <div key={notice.id} className="py-2 flex items-start justify-between text-xs gap-3">
+              <div key={notice.id} className="py-2.5 flex items-start justify-between text-xs gap-3">
                 <div>
-                  <span className="font-bold text-[#0B1118]">{notice.studentName} ({notice.studentId}):</span>{' '}
-                  <span className="text-amber-950 font-medium">{notice.description}</span>
-                  <span className="block text-[10px] text-amber-800/80 mt-0.5">Please check and ensure future submissions follow this standard.</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#0B1118]">{notice.studentName}</span>
+                    <span className="font-mono text-[10px] text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded font-bold">
+                      {notice.studentId}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      Author: <strong className="text-slate-800">{notice.senderName || 'Sender'}</strong>
+                    </span>
+                  </div>
+                  <div className="text-amber-950 font-medium mt-1">
+                    <strong className="text-amber-900">Correction Note:</strong> {notice.description}
+                  </div>
+                  <div className="text-[10px] text-emerald-800 mt-1 flex items-center gap-1.5 font-bold">
+                    <span>Corrected By:</span>
+                    <span className="bg-white px-2 py-0.5 rounded border border-emerald-300 text-[#0B1118]">
+                      {notice.resolvedBy}
+                    </span>
+                  </div>
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono shrink-0">
                   {new Date(notice.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -685,9 +676,72 @@ export const StudentRegistrationPage: React.FC = () => {
               )}
             </div>
 
-            {/* Photo Preview Container (Clean 3:4 ID Portrait) */}
+            {/* Photo Preview & Live Camera Container */}
             <div className="relative aspect-[3/4] w-full max-w-[340px] sm:max-w-[380px] mx-auto bg-[#F4F7F5] rounded-2xl border-2 border-dashed border-[#CBD5E1] overflow-hidden flex flex-col items-center justify-center shadow-inner group">
-              {capturedPhoto ? (
+              {isCameraActive ? (
+                <div className="relative w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
+                  <video
+                    ref={setVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    onPlaying={() => setIsStreamReady(true)}
+                    onLoadedMetadata={(e) => {
+                      const v = e.target as HTMLVideoElement;
+                      v.muted = true;
+                      v.play().catch(() => {});
+                      setIsStreamReady(true);
+                    }}
+                    onCanPlay={() => setIsStreamReady(true)}
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* Biometric Facial Guides HUD Overlay (Eye Line & Nose Guide - Silhouette Removed) */}
+                  <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center select-none">
+                    {/* Top Alignment Instruction (Reduced Opacity) */}
+                    <div className="absolute top-2.5 inset-x-4 text-center bg-black/35 backdrop-blur-xs py-1 px-3 rounded-full text-[10px] sm:text-[11px] font-semibold text-white/80 border border-white/10 shadow-xs max-w-[90%] mx-auto">
+                      Align student eyes on <span className="text-[#85E510] font-bold">Eye Line</span> & nose on <span className="text-[#85E510] font-bold">Nose Guide</span>
+                    </div>
+
+                    {/* Biometric Framing Guides (Clean Viewfinder - Oval Contour Removed) */}
+                    <div className="relative w-[85%] aspect-[3/4] flex items-center justify-center">
+                      {/* Horizontal Eye Level Line */}
+                      <div className="absolute top-[38%] inset-x-0 border-b-2 border-dashed border-[#85E510]/80 flex items-center justify-between px-2">
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
+                          Eye Line
+                        </span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
+                          Eye Line
+                        </span>
+                      </div>
+
+                      {/* Vertical Nose Alignment & Center Crosshair */}
+                      <div className="absolute top-[28%] bottom-[32%] left-1/2 -translate-x-1/2 border-l-2 border-dashed border-[#85E510]/70" />
+                      <div className="absolute top-[52%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+                        <div className="w-5 h-5 rounded-full border-2 border-[#85E510] bg-black/30 flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#85E510] animate-ping" />
+                        </div>
+                        <span className="text-[8px] font-bold uppercase tracking-widest bg-black/40 px-1.5 py-0.5 rounded text-[#85E510] mt-0.5">
+                          Nose
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Sensor Active Status */}
+                    <div className="absolute bottom-2.5 px-3 py-1 bg-black/40 backdrop-blur-xs rounded-full text-[10px] font-mono text-slate-200 border border-white/10 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#85E510] animate-pulse" />
+                      <span>Biometric Feed Active</span>
+                    </div>
+                  </div>
+
+                  {!isStreamReady && (
+                    <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center text-white text-xs gap-2 z-20 transition-opacity">
+                      <RefreshCw className="w-5 h-5 animate-spin text-[#85E510]" />
+                      <span className="font-semibold text-slate-200">Starting camera feed...</span>
+                    </div>
+                  )}
+                </div>
+              ) : capturedPhoto ? (
                 <div className="relative w-full h-full bg-slate-900 flex items-center justify-center overflow-hidden">
                   <img
                     src={capturedPhoto}
@@ -710,7 +764,7 @@ export const StudentRegistrationPage: React.FC = () => {
                   </div>
                   <div className="text-xs font-bold text-[#202833]">No Photograph Selected</div>
                   <p className="text-[11px] text-[#94A3B8] mt-1 max-w-[220px]">
-                    Click Activate Camera to launch the biometric camera pop-up, or upload an image
+                    Activate live camera with Eye/Nose biometric guides, or upload an image
                   </p>
                 </div>
               )}
@@ -726,60 +780,92 @@ export const StudentRegistrationPage: React.FC = () => {
 
           {/* Photo Actions */}
           <div className="space-y-2 pt-2">
-            <div className="space-y-2">
-              {/* Activate Camera Button (Opens Pop-up Modal) */}
-              <button
-                type="button"
-                onClick={() => startCamera()}
-                className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <Camera className="w-4 h-4 text-[#062404]" />
-                <span>{capturedPhoto ? 'Retake Photo (Camera Pop-up)' : 'Activate Camera (Pop-up)'}</span>
-              </button>
+            {isCameraActive ? (
+              <div className="space-y-2">
+                {/* Take Photo Button (Only after camera is active!) */}
+                <button
+                  type="button"
+                  onClick={capturePhoto}
+                  className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <Camera className="w-4 h-4 text-[#062404]" />
+                  <span>Capture Photo Now</span>
+                </button>
 
-              {/* Edit & Crop Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (capturedPhoto) {
-                    setIsEditorOpen(true);
-                  } else {
-                    fileInputRef.current?.click();
-                  }
-                }}
-                className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-[#85E510] text-[#202833] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
-              >
-                <Scissors className="w-4 h-4 text-[#4D8A07]" />
-                <span>{capturedPhoto ? 'Edit & Crop Photo' : 'Upload & Crop Photo'}</span>
-              </button>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-
-              {capturedPhoto && (
-                <div className="flex justify-end pt-0.5">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setCapturedPhoto(null);
-                      setBrightness(100);
-                      setContrast(100);
-                      setSaturation(100);
-                      setRotation(0);
-                      setZoom(1);
-                    }}
-                    className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 cursor-pointer"
+                    onClick={toggleCameraFacing}
+                    className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-[#CBD5E1] text-[#202833] font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
                   >
-                    <RefreshCw className="w-3 h-3" /> Clear Photo
+                    <SwitchCamera className="w-3.5 h-3.5 text-[#4D8A07]" />
+                    <span>Flip Camera</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="py-2.5 px-3 rounded-xl bg-[#F4F7F5] hover:bg-[#E2E8F0] text-[#202833] font-bold text-xs cursor-pointer"
+                  >
+                    Cancel
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {/* Activate Camera Button */}
+                <button
+                  type="button"
+                  onClick={() => startCamera()}
+                  className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs sm:text-sm shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Camera className="w-4 h-4 text-[#062404]" />
+                  <span>Activate Camera</span>
+                </button>
+
+                {/* Edit & Crop Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (capturedPhoto) {
+                      setIsEditorOpen(true);
+                    } else {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-50 border border-[#85E510] text-[#202833] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+                >
+                  <Scissors className="w-4 h-4 text-[#4D8A07]" />
+                  <span>{capturedPhoto ? 'Edit & Crop Photo' : 'Upload & Crop Photo'}</span>
+                </button>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+
+                {capturedPhoto && (
+                  <div className="flex justify-end pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCapturedPhoto(null);
+                        setBrightness(100);
+                        setContrast(100);
+                        setSaturation(100);
+                        setRotation(0);
+                        setZoom(1);
+                      }}
+                      className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Retake Photo
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -928,11 +1014,11 @@ export const StudentRegistrationPage: React.FC = () => {
                 </div>
                 <div className="relative">
                   <select
-                    value={bloodType || 'Unknown'}
+                    value={bloodType}
                     onChange={(e) => setBloodType(e.target.value)}
                     className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#0B1118] focus:border-[#85E510] focus:ring-1 focus:ring-[#85E510] cursor-pointer appearance-none transition-all"
                   >
-                    <option value="Unknown">Unknown (Not Specified)</option>
+                    <option value="">-- No Blood Group Selected --</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
                     <option value="B+">B+</option>
@@ -1121,161 +1207,6 @@ export const StudentRegistrationPage: React.FC = () => {
           </div>
         </div>
       </form>
-
-      {/* ------------------------------------------------------------- */}
-      {/* CAMERA POP-UP MODAL (Fullscreen Biometric Viewfinder Overlay) */}
-      {/* ------------------------------------------------------------- */}
-      {isCameraModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-[#0E1520] border border-slate-700/80 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-            {/* Modal Header */}
-            <div className="p-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#85E510]/20 flex items-center justify-center text-[#85E510]">
-                  <Camera className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-heading font-black text-sm text-white tracking-wide">
-                    Live Biometric Camera Capture
-                  </h3>
-                  <p className="text-[10px] text-slate-400 font-medium">
-                    3:4 ID Portrait Standard &bull; Center eyes on Eye Line
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={stopCamera}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                title="Close camera"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Camera Viewfinder Area */}
-            <div className="relative w-full aspect-[3/4] max-h-[62vh] bg-slate-950 flex items-center justify-center overflow-hidden">
-              <video
-                ref={setVideoRef}
-                autoPlay
-                playsInline
-                muted
-                onPlaying={() => setIsStreamReady(true)}
-                onLoadedMetadata={(e) => {
-                  const v = e.target as HTMLVideoElement;
-                  v.muted = true;
-                  v.play().catch(() => {});
-                  setIsStreamReady(true);
-                }}
-                onCanPlay={() => setIsStreamReady(true)}
-                className="w-full h-full object-cover"
-              />
-
-              {/* Biometric Guide Overlay */}
-              <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center select-none">
-                <div className="absolute top-3 inset-x-4 text-center bg-black/50 backdrop-blur-xs py-1.5 px-3 rounded-full text-xs font-semibold text-white/90 border border-white/10 shadow-xs max-w-[90%] mx-auto">
-                  Align eyes on <span className="text-[#85E510] font-bold">Eye Line</span> & nose on <span className="text-[#85E510] font-bold">Crosshair</span>
-                </div>
-
-                <div className="relative w-[85%] aspect-[3/4] flex items-center justify-center">
-                  {/* Eye Level Line */}
-                  <div className="absolute top-[38%] inset-x-0 border-b-2 border-dashed border-[#85E510]/80 flex items-center justify-between px-2">
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
-                      Eye Line
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] -mt-5">
-                      Eye Line
-                    </span>
-                  </div>
-
-                  {/* Nose Crosshair */}
-                  <div className="absolute top-[28%] bottom-[32%] left-1/2 -translate-x-1/2 border-l-2 border-dashed border-[#85E510]/70" />
-                  <div className="absolute top-[52%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div className="w-6 h-6 rounded-full border-2 border-[#85E510] bg-black/40 flex items-center justify-center shadow-lg">
-                      <div className="w-2 h-2 rounded-full bg-[#85E510] animate-ping" />
-                    </div>
-                    <span className="text-[8px] font-bold uppercase tracking-widest bg-black/50 px-1.5 py-0.5 rounded text-[#85E510] mt-0.5">
-                      Nose
-                    </span>
-                  </div>
-                </div>
-
-                {/* Sensor Active Status */}
-                <div className="absolute bottom-3 px-3.5 py-1 bg-black/60 backdrop-blur-sm rounded-full text-[11px] font-mono text-slate-200 border border-white/10 flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#85E510] animate-pulse" />
-                  <span>Biometric Sensor Active</span>
-                </div>
-              </div>
-
-              {cameraError ? (
-                <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-white text-xs p-6 text-center gap-3 z-30">
-                  <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
-                    <AlertCircle className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-white mb-1">Camera Notice</h4>
-                    <p className="text-slate-300 text-xs max-w-xs">{cameraError}</p>
-                  </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => startCamera(cameraFacing)}
-                      className="px-4 py-2 rounded-xl bg-[#85E510] text-[#062404] font-bold text-xs cursor-pointer"
-                    >
-                      Try Again
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stopCamera();
-                        fileInputRef.current?.click();
-                      }}
-                      className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 font-bold text-xs hover:bg-slate-700 cursor-pointer"
-                    >
-                      Upload File Instead
-                    </button>
-                  </div>
-                </div>
-              ) : !isStreamReady ? (
-                <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center text-white text-xs gap-2 z-20 transition-opacity">
-                  <RefreshCw className="w-6 h-6 animate-spin text-[#85E510]" />
-                  <span className="font-semibold text-slate-200">Initializing live optical feed...</span>
-                </div>
-              ) : null}
-            </div>
-
-            {/* Modal Footer Controls */}
-            <div className="p-4 bg-slate-900 border-t border-slate-800 flex flex-col gap-2.5">
-              <button
-                type="button"
-                onClick={capturePhoto}
-                className="w-full py-3 px-4 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99]"
-              >
-                <Camera className="w-5 h-5 text-[#062404]" />
-                <span>Capture Photo Now</span>
-              </button>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={toggleCameraFacing}
-                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-700"
-                >
-                  <SwitchCamera className="w-4 h-4 text-[#85E510]" />
-                  <span>Flip Camera</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={stopCamera}
-                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-400 font-bold text-xs cursor-pointer border border-slate-700 transition-colors"
-                >
-                  Cancel / Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Smartphone-Style Photo Editor & Crop Modal */}
       <PhoneCropModal
