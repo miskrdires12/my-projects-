@@ -1079,12 +1079,48 @@ export default {
         // 2. Cloudflare R2 Authoritative Insert
         let insertedRecord = newStudent;
 
-        // 3. Isolated R2 Recovery Artifact (Immutable per-student document; never overwrite shared registry)
+        // 3. Isolated R2 Recovery Artifact & Live Registry Update
         try {
           const recBytes = new TextEncoder().encode(JSON.stringify(insertedRecord, null, 2));
           await uploadToR2Bucket(`records/${insertedRecord.studentId}.json`, recBytes, "application/json");
+
+          // Update R2 records/live_registry.json
+          let currentLiveReg = [];
+          try {
+            const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json?t=${Date.now()}`);
+            if (regRes.ok) currentLiveReg = await regRes.json();
+          } catch (e) {}
+
+          if (Array.isArray(currentLiveReg)) {
+            const existingIdx = currentLiveReg.findIndex(r => r.studentId === insertedRecord.studentId);
+            if (existingIdx !== -1) {
+              currentLiveReg[existingIdx] = { ...currentLiveReg[existingIdx], ...insertedRecord };
+            } else {
+              currentLiveReg.unshift(insertedRecord);
+            }
+            const regBytes = new TextEncoder().encode(JSON.stringify(currentLiveReg));
+            await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
+          }
         } catch (r2RecErr) {
-          console.warn("R2 per-student recovery persistence note:", r2RecErr);
+          console.warn("R2 student persistence note:", r2RecErr);
+        }
+
+        // 4. Authoritative Write to Supabase cloudflare.students
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/students`, {
+            method: "POST",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              "Content-Profile": "cloudflare",
+              "Accept-Profile": "cloudflare",
+              "Prefer": "resolution=merge-duplicates"
+            },
+            body: JSON.stringify(dbInsertPayload)
+          });
+        } catch (sbInsertErr) {
+          console.warn("Supabase student sync notice:", sbInsertErr);
         }
 
         customStudents.unshift(insertedRecord);
@@ -1965,7 +2001,28 @@ export default {
 
           await saveR2ProvisionedUsers(filtered);
 
-          // Purged from Cloudflare R2
+          // Authoritative delete from Supabase cloudflare.users
+          try {
+            const queryParts = [];
+            if (delId) queryParts.push(`id.eq.${encodeURIComponent(delId)}`);
+            if (delEmail) queryParts.push(`email.eq.${encodeURIComponent(delEmail)}`);
+            if (delUsername) queryParts.push(`username.eq.${encodeURIComponent(delUsername)}`);
+            if (queryParts.length > 0) {
+              await fetch(`${SUPABASE_URL}/rest/v1/users?or=(${queryParts.join(",")})`, {
+                method: "DELETE",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Profile": "cloudflare",
+                  "Accept-Profile": "cloudflare"
+                }
+              });
+            }
+          } catch (sbDelErr) {
+            console.warn("Supabase user delete sync notice:", sbDelErr);
+          }
+
+          // Purged from Cloudflare R2 & Supabase
           return new Response(JSON.stringify({ success: true, message: "User deleted and workstation freed." }), {
             headers: { "Content-Type": "application/json", ...corsHeaders }
           });
