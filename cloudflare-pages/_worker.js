@@ -434,10 +434,10 @@ async function getAllStudentsDataset(env, originUrl) {
     const d = (s.createdAt || s.registrationDate || "").substring(0, 10);
     let school = s.school;
     let bloodType = s.bloodType;
+    if ((school || "").toLowerCase() === "yms" || (school || "").toLowerCase() === "yms 1") {
+      school = "YMS 1";
+    }
     if (d >= "2026-10-14") {
-      if ((school || "").toLowerCase() === "yms") {
-        school = "YMS 1";
-      }
       if (bloodType === "O+") {
         bloodType = "Unknown";
       }
