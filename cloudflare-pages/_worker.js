@@ -339,6 +339,72 @@ async function deleteFromR2Bucket(key) {
   return res.ok || res.status === 204 || res.status === 404;
 }
 
+function formatCleanGrade(rawGrade) {
+  if (!rawGrade) return "Unknown";
+  let g = String(rawGrade).trim();
+
+  // Strip leading 'Grade '
+  g = g.replace(/^Grade\s+/i, "").trim();
+
+  // 'Grade 11-A' or '11-A' -> '11A'
+  const dashMatch = g.match(/^(\d{1,2})\s*[-_ ]+\s*([A-Za-z])$/i);
+  if (dashMatch) {
+    return dashMatch[1] + dashMatch[2].toUpperCase();
+  }
+
+  // Pre-KG
+  if (/^(?:pre[\s-_]*kg|per[\s-_]*kg|per[\s-_]*gk)/i.test(g)) {
+    const m = g.match(/\b([A-Za-z])\b$/);
+    const sec = m ? m[1].toUpperCase() : "";
+    return sec ? "Pre-KG " + sec : "Pre-KG";
+  }
+
+  // LKG
+  if (/^1?lkg/i.test(g)) {
+    const m = g.match(/\b([A-Za-z])\b$/) || g.match(/lkg\s*([A-Za-z])/i);
+    const sec = m ? m[1].toUpperCase() : "";
+    return sec ? "LKG " + sec : "LKG";
+  }
+
+  // UKG
+  if (/^ukg/i.test(g)) {
+    const m = g.match(/\b([A-Za-z])\b$/) || g.match(/ukg\s*([A-Za-z])/i);
+    const sec = m ? m[1].toUpperCase() : "";
+    return sec ? "UKG " + sec : "UKG";
+  }
+
+  // KG 1, KG 2, KG 3
+  if (/^kg\s*(\d)/i.test(g)) {
+    const mKg = g.match(/^kg\s*(\d)/i);
+    const num = mKg ? mKg[1] : "";
+    const m = g.match(/\b([A-Za-z])\b$/) || g.match(/^kg\s*\d\s*([A-Za-z])/i);
+    const sec = m ? m[1].toUpperCase() : "";
+    return "KG " + num + (sec ? sec : "");
+  }
+
+  // Nursery
+  if (/^nursery/i.test(g)) {
+    const m = g.match(/\b([A-Za-z])\b$/);
+    const sec = m ? m[1].toUpperCase() : "";
+    return sec ? "Nursery " + sec : "Nursery";
+  }
+
+  // Numeric: '1A', '1 A', '1', '12', '12C'
+  const numSecMatch = g.match(/^(\d{1,2})\s*([A-Za-z])?$/i);
+  if (numSecMatch) {
+    const num = numSecMatch[1];
+    const sec = (numSecMatch[2] || "").toUpperCase();
+    return sec ? num + sec : num;
+  }
+
+  const looseMatch = g.match(/^(\d{1,2})\s*([A-Za-z])/i);
+  if (looseMatch) {
+    return looseMatch[1] + looseMatch[2].toUpperCase();
+  }
+
+  return g;
+}
+
 function parseGradeAndSection(rawGrade) {
   if (!rawGrade) return { grade: "Unknown", section: "" };
   const str = String(rawGrade).trim();
@@ -360,10 +426,11 @@ function parseGradeAndSection(rawGrade) {
   if (numMatch) {
     const num = parseInt(numMatch[1], 10);
     const sec = (numMatch[2] || "").toUpperCase();
-    return { grade: `Grade ${num}`, section: sec };
+    return { grade: `${num}`, section: sec };
   }
 
-  return { grade: str, section: "" };
+  const cleaned = formatCleanGrade(str);
+  return { grade: cleaned, section: "" };
 }
 
 let cachedAllStudents = null;
@@ -439,7 +506,8 @@ async function getAllStudentsDataset(env, originUrl) {
         bloodType = "Unknown";
       }
     }
-    return { ...s, school, bloodType };
+    let grade = s.grade;
+    return { ...s, school, bloodType, grade };
   });
   lastAllFetchTime = Date.now();
   return cachedAllStudents;
@@ -1011,12 +1079,48 @@ export default {
         // 2. Cloudflare R2 Authoritative Insert
         let insertedRecord = newStudent;
 
-        // 3. Isolated R2 Recovery Artifact (Immutable per-student document; never overwrite shared registry)
+        // 3. Isolated R2 Recovery Artifact & Live Registry Update
         try {
           const recBytes = new TextEncoder().encode(JSON.stringify(insertedRecord, null, 2));
           await uploadToR2Bucket(`records/${insertedRecord.studentId}.json`, recBytes, "application/json");
+
+          // Update R2 records/live_registry.json
+          let currentLiveReg = [];
+          try {
+            const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json?t=${Date.now()}`);
+            if (regRes.ok) currentLiveReg = await regRes.json();
+          } catch (e) {}
+
+          if (Array.isArray(currentLiveReg)) {
+            const existingIdx = currentLiveReg.findIndex(r => r.studentId === insertedRecord.studentId);
+            if (existingIdx !== -1) {
+              currentLiveReg[existingIdx] = { ...currentLiveReg[existingIdx], ...insertedRecord };
+            } else {
+              currentLiveReg.unshift(insertedRecord);
+            }
+            const regBytes = new TextEncoder().encode(JSON.stringify(currentLiveReg));
+            await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
+          }
         } catch (r2RecErr) {
-          console.warn("R2 per-student recovery persistence note:", r2RecErr);
+          console.warn("R2 student persistence note:", r2RecErr);
+        }
+
+        // 4. Authoritative Write to Supabase cloudflare.students
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/students`, {
+            method: "POST",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              "Content-Profile": "cloudflare",
+              "Accept-Profile": "cloudflare",
+              "Prefer": "resolution=merge-duplicates"
+            },
+            body: JSON.stringify(dbInsertPayload)
+          });
+        } catch (sbInsertErr) {
+          console.warn("Supabase student sync notice:", sbInsertErr);
         }
 
         customStudents.unshift(insertedRecord);
@@ -1897,7 +2001,28 @@ export default {
 
           await saveR2ProvisionedUsers(filtered);
 
-          // Purged from Cloudflare R2
+          // Authoritative delete from Supabase cloudflare.users
+          try {
+            const queryParts = [];
+            if (delId) queryParts.push(`id.eq.${encodeURIComponent(delId)}`);
+            if (delEmail) queryParts.push(`email.eq.${encodeURIComponent(delEmail)}`);
+            if (delUsername) queryParts.push(`username.eq.${encodeURIComponent(delUsername)}`);
+            if (queryParts.length > 0) {
+              await fetch(`${SUPABASE_URL}/rest/v1/users?or=(${queryParts.join(",")})`, {
+                method: "DELETE",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Profile": "cloudflare",
+                  "Accept-Profile": "cloudflare"
+                }
+              });
+            }
+          } catch (sbDelErr) {
+            console.warn("Supabase user delete sync notice:", sbDelErr);
+          }
+
+          // Purged from Cloudflare R2 & Supabase
           return new Response(JSON.stringify({ success: true, message: "User deleted and workstation freed." }), {
             headers: { "Content-Type": "application/json", ...corsHeaders }
           });
