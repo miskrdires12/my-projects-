@@ -15,24 +15,24 @@ const CANONICAL_GRADE_ORDER = [
   'KG 1',
   'KG 2',
   'KG 3',
-  'Grade 1',
-  'Grade 2',
-  'Grade 3',
-  'Grade 4',
-  'Grade 5',
-  'Grade 6',
-  'Grade 7',
-  'Grade 8',
-  'Grade 9',
-  'Grade 10',
-  'Grade 11',
-  'Grade 12'
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12'
 ];
 
 /**
  * Robustly parses and normalizes any raw grade / section combination.
- * Handles inputs like '10', '10 A', '10A', '10-A', 'Grade 10-C', '10 D 00000',
- * 'Pre KG B', 'LKG A', 'UKG C', 'KG 2B', 'Nursery B', etc.
+ * Strips the 'Grade' word and keeps clean compact representation:
+ * Examples: 'Grade 1A' -> '1A', 'Grade 1' -> '1', '10 A' -> '10A', 'UKG C' -> 'UKG C', 'LKG' -> 'LKG'.
  */
 export function parseGradeAndSection(rawGrade?: string | null, rawDept?: string | null): ParsedGradeInfo {
   const raw = (rawGrade || '').trim();
@@ -80,13 +80,13 @@ export function parseGradeAndSection(rawGrade?: string | null, rawDept?: string 
     const m = g.match(/\b([A-Za-z])\b$/) || g.match(/^kg\s*\d\s*([A-Za-z])/i);
     if (m && !cleanSec) cleanSec = m[1].toUpperCase();
   }
-  // 6. Numeric Grades: 1 to 12
+  // 6. Numeric Grades: 1 to 12 (Strip 'Grade ' word completely)
   else {
     const numMatch = g.match(/^(\d{1,2})/);
     if (numMatch) {
       const num = parseInt(numMatch[1], 10);
       if (num >= 1 && num <= 12) {
-        cleanGrade = `Grade ${num}`;
+        cleanGrade = `${num}`;
         const rest = g.substring(numMatch[1].length).trim().replace(/^[-_\s]+/, '');
         const secMatch = rest.match(/^([A-Za-z])/);
         if (secMatch && !cleanSec) {
@@ -98,10 +98,18 @@ export function parseGradeAndSection(rawGrade?: string | null, rawDept?: string 
 
   // Fallback if unrecognized
   if (!cleanGrade) {
-    cleanGrade = raw ? (raw.startsWith('Grade') ? raw : `Grade ${raw}`) : 'Grade 10';
+    cleanGrade = raw ? raw.replace(/^Grade\s+/i, '').trim() : '10';
   }
 
-  const displayString = cleanSec ? `${cleanGrade} — ${cleanSec}` : cleanGrade;
+  // Display string: e.g. '1A' or '1' or 'LKG C' or 'Nursery'
+  let displayString = cleanGrade;
+  if (cleanSec) {
+    if (/^\d+$/.test(cleanGrade)) {
+      displayString = `${cleanGrade}${cleanSec}`;
+    } else {
+      displayString = `${cleanGrade} ${cleanSec}`;
+    }
+  }
 
   return {
     cleanGrade,
@@ -112,7 +120,7 @@ export function parseGradeAndSection(rawGrade?: string | null, rawDept?: string 
 }
 
 /**
- * Returns the normalized clean grade for a student (e.g. 'Grade 10', 'Grade 1', 'LKG')
+ * Returns the normalized clean grade for a student (e.g. '10', '1', 'LKG')
  */
 export function getCleanGrade(student: Partial<Student>): string {
   return parseGradeAndSection(student.grade, student.department).cleanGrade;
@@ -126,7 +134,7 @@ export function getCleanSection(student: Partial<Student>): string {
 }
 
 /**
- * Returns human-readable display string: 'Grade 10 — A' or 'Grade 10'
+ * Returns human-readable display string without 'Grade' word: e.g. '1A' or '1' or 'UKG C'
  */
 export function getGradeDisplay(student: Partial<Student>): string {
   return parseGradeAndSection(student.grade, student.department).displayString;
@@ -134,17 +142,19 @@ export function getGradeDisplay(student: Partial<Student>): string {
 
 /**
  * Checks if a student matches a selected grade filter.
- * Supports filters like 'ALL', 'Grade 10', '10', 'LKG', etc.
+ * Supports filters like 'ALL', '10', '1', '1A', 'LKG', etc.
  */
 export function matchesGradeFilter(student: Partial<Student>, filterValue: string): boolean {
   if (!filterValue || filterValue === 'ALL') return true;
 
-  const targetClean = filterValue.startsWith('Grade ') || CANONICAL_GRADE_ORDER.includes(filterValue)
-    ? filterValue
-    : `Grade ${filterValue}`;
+  const targetClean = filterValue.replace(/^Grade\s+/i, '').trim();
+  const studentInfo = parseGradeAndSection(student.grade, student.department);
 
-  const studentClean = getCleanGrade(student);
-  return studentClean.toLowerCase() === targetClean.toLowerCase();
+  // Match full display string (e.g. '1A') or base grade (e.g. '1')
+  if (studentInfo.displayString.toLowerCase() === targetClean.toLowerCase()) return true;
+  if (studentInfo.cleanGrade.toLowerCase() === targetClean.toLowerCase()) return true;
+
+  return false;
 }
 
 /**

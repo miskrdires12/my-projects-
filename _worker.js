@@ -339,6 +339,72 @@ async function deleteFromR2Bucket(key) {
   return res.ok || res.status === 204 || res.status === 404;
 }
 
+function formatCleanGrade(rawGrade) {
+  if (!rawGrade) return "Unknown";
+  let g = String(rawGrade).trim();
+
+  // Strip leading 'Grade '
+  g = g.replace(/^Grade\s+/i, "").trim();
+
+  // 'Grade 11-A' or '11-A' -> '11A'
+  const dashMatch = g.match(/^(\d{1,2})\s*[-_ ]+\s*([A-Za-z])$/i);
+  if (dashMatch) {
+    return dashMatch[1] + dashMatch[2].toUpperCase();
+  }
+
+  // Pre-KG
+  if (/^(?:pre[\s-_]*kg|per[\s-_]*kg|per[\s-_]*gk)/i.test(g)) {
+    const m = g.match(/\b([A-Za-z])\b$/);
+    const sec = m ? m[1].toUpperCase() : "";
+    return sec ? "Pre-KG " + sec : "Pre-KG";
+  }
+
+  // LKG
+  if (/^1?lkg/i.test(g)) {
+    const m = g.match(/\b([A-Za-z])\b$/) || g.match(/lkg\s*([A-Za-z])/i);
+    const sec = m ? m[1].toUpperCase() : "";
+    return sec ? "LKG " + sec : "LKG";
+  }
+
+  // UKG
+  if (/^ukg/i.test(g)) {
+    const m = g.match(/\b([A-Za-z])\b$/) || g.match(/ukg\s*([A-Za-z])/i);
+    const sec = m ? m[1].toUpperCase() : "";
+    return sec ? "UKG " + sec : "UKG";
+  }
+
+  // KG 1, KG 2, KG 3
+  if (/^kg\s*(\d)/i.test(g)) {
+    const mKg = g.match(/^kg\s*(\d)/i);
+    const num = mKg ? mKg[1] : "";
+    const m = g.match(/\b([A-Za-z])\b$/) || g.match(/^kg\s*\d\s*([A-Za-z])/i);
+    const sec = m ? m[1].toUpperCase() : "";
+    return "KG " + num + (sec ? sec : "");
+  }
+
+  // Nursery
+  if (/^nursery/i.test(g)) {
+    const m = g.match(/\b([A-Za-z])\b$/);
+    const sec = m ? m[1].toUpperCase() : "";
+    return sec ? "Nursery " + sec : "Nursery";
+  }
+
+  // Numeric: '1A', '1 A', '1', '12', '12C'
+  const numSecMatch = g.match(/^(\d{1,2})\s*([A-Za-z])?$/i);
+  if (numSecMatch) {
+    const num = numSecMatch[1];
+    const sec = (numSecMatch[2] || "").toUpperCase();
+    return sec ? num + sec : num;
+  }
+
+  const looseMatch = g.match(/^(\d{1,2})\s*([A-Za-z])/i);
+  if (looseMatch) {
+    return looseMatch[1] + looseMatch[2].toUpperCase();
+  }
+
+  return g;
+}
+
 function parseGradeAndSection(rawGrade) {
   if (!rawGrade) return { grade: "Unknown", section: "" };
   const str = String(rawGrade).trim();
@@ -360,10 +426,11 @@ function parseGradeAndSection(rawGrade) {
   if (numMatch) {
     const num = parseInt(numMatch[1], 10);
     const sec = (numMatch[2] || "").toUpperCase();
-    return { grade: `Grade ${num}`, section: sec };
+    return { grade: `${num}`, section: sec };
   }
 
-  return { grade: str, section: "" };
+  const cleaned = formatCleanGrade(str);
+  return { grade: cleaned, section: "" };
 }
 
 let cachedAllStudents = null;
@@ -442,7 +509,11 @@ async function getAllStudentsDataset(env, originUrl) {
         bloodType = "Unknown";
       }
     }
-    return { ...s, school, bloodType };
+    let grade = s.grade;
+    if (grade) {
+      grade = formatCleanGrade(grade);
+    }
+    return { ...s, school, bloodType, grade };
   });
   lastAllFetchTime = Date.now();
   return cachedAllStudents;
