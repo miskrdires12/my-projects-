@@ -501,8 +501,10 @@ export const ReceiverStudentsPage: React.FC = () => {
         const gradeB = `${b.grade || ''} ${b.department || ''}`.trim();
         comparison = gradeA.localeCompare(gradeB, undefined, { numeric: true });
       } else if (sortField === 'createdAt') {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        const rawDateA = a.createdAt || (a as any).registrationDate || a.updatedAt || a.recordHistory?.[0]?.date || '';
+        const rawDateB = b.createdAt || (b as any).registrationDate || b.updatedAt || b.recordHistory?.[0]?.date || '';
+        const timeA = rawDateA ? new Date(rawDateA).getTime() : 0;
+        const timeB = rawDateB ? new Date(rawDateB).getTime() : 0;
         comparison = timeA - timeB;
         if (comparison === 0) {
           comparison = (a.studentId || '').localeCompare(b.studentId || '', undefined, { numeric: true });
@@ -1872,7 +1874,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                       {/* Date Transmitted */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {(() => {
-                          const iso = s.createdAt;
+                          const iso = s.createdAt || (s as any).registrationDate || s.updatedAt || s.recordHistory?.[0]?.date;
                           if (!iso) return <span className="font-mono text-[10px] text-slate-400">—</span>;
                           try {
                             const d = new Date(iso);

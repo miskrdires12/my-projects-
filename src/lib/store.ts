@@ -447,40 +447,93 @@ function upsertStudentFromSync(incoming: Student): void {
 }
 
 export async function initStore(): Promise<void> {
-  // 1. Fetch live student records from server / Supabase PostgreSQL (All 3,723+ Records)
+  const deletedIds = getDeletedStudentIds();
+
+  // 1. Fetch authoritative master baseline (/data/students.json)
+  let baseStudents: Student[] = [];
+  try {
+    const res = await fetch('/data/students.json');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        baseStudents = data;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not load /data/students.json', e);
+  }
+
+  // 2. Concurrently fetch the latest live field submissions from Supabase/API (last 500 records)
+  let liveServerStudents: Student[] = [];
   try {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), 6000) : null;
-    const res = await fetch('/api/students?all=true&limit=5000', {
+    const res = await fetch('/api/students?limit=500', {
       signal: controller ? controller.signal : undefined
     });
     if (timeoutId) clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
-      if (data && Array.isArray(data.students) && data.students.length > 0) {
-        memoryStudents = data.students;
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
-        }
+      if (data && Array.isArray(data.students)) {
+        liveServerStudents = data.students;
       }
     }
   } catch (apiErr) {
-    console.warn('Live API fetch failed, falling back to local dataset:', apiErr);
+    console.warn('Live API fetch warning:', apiErr);
   }
 
-  // 2. Fallback to /data/students.json if memoryStudents is still empty
-  if (memoryStudents.length === 0) {
-    try {
-      const res = await fetch('/data/students.json');
-      if (res.ok) {
-        memoryStudents = await res.json();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
-        }
-      }
-    } catch (e) {
-      console.warn('Could not load /data/students.json', e);
+  // 3. Load locally registered / cached students from localStorage ('sb_custom_students')
+  let localCustomStudents: Student[] = [];
+  try {
+    const raw = localStorage.getItem('sb_custom_students');
+    if (raw) localCustomStudents = JSON.parse(raw);
+  } catch (e) {}
+
+  // 4. Merge all sources authoritatively by studentId
+  const studentMap = new Map<string, Student>();
+
+  baseStudents.forEach(s => {
+    if (s && s.studentId) studentMap.set(s.studentId, s);
+  });
+
+  liveServerStudents.forEach(s => {
+    if (s && s.studentId) {
+      studentMap.set(s.studentId, { ...(studentMap.get(s.studentId) || {}), ...s });
     }
+  });
+
+  localCustomStudents.forEach(s => {
+    if (s && s.studentId) {
+      studentMap.set(s.studentId, { ...(studentMap.get(s.studentId) || {}), ...s });
+    }
+  });
+
+  // 5. Clean, normalize dates, filter deleted, and sort
+  const allMerged: Student[] = [];
+  for (const s of studentMap.values()) {
+    const sid = s.studentId || '';
+    const sidLower = sid.toLowerCase();
+    const id = s.id || '';
+    if (deletedIds.has(sid) || deletedIds.has(sidLower) || deletedIds.has(id)) {
+      continue;
+    }
+
+    const exactDate = s.createdAt || (s as any).registrationDate || s.updatedAt || s.recordHistory?.[0]?.date || new Date().toISOString();
+    s.createdAt = exactDate;
+    (s as any).registrationDate = exactDate;
+
+    allMerged.push(s);
+  }
+
+  allMerged.sort((a, b) => {
+    const dateA = a.createdAt || '';
+    const dateB = b.createdAt || '';
+    return dateB.localeCompare(dateA);
+  });
+
+  memoryStudents = allMerged;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
   }
 
   // 3. Fetch live users from server / Supabase PostgreSQL
