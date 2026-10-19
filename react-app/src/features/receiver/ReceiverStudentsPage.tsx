@@ -18,7 +18,8 @@ import {
   getPhotoUrl, getPhotoEncodeClass, subscribeToStudentSync,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP,
   generateStudentQrToken, getStudentPhotoFileName, getStudentQrFileName,
-  addCorrectionLog, getAllSendersMetrics, SenderMetrics, getAuthHeaders
+  addCorrectionLog, getAllSendersMetrics, SenderMetrics, getAuthHeaders,
+  initStore
 } from '@/lib/store';
 import { Student } from '@/types';
 import { PhoneCropModal } from '@/components/PhoneCropModal';
@@ -203,20 +204,14 @@ export const ReceiverStudentsPage: React.FC = () => {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/students?all=true&limit=5000');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.students && json.students.length > 0) {
-          setStudents(getStudents());
-          return;
-        }
-      }
+      await initStore();
     } catch (e) {
       console.warn('Syncing with local storage:', e);
     } finally {
+      setStudents(getStudents());
+      setSendersList(getAllSendersMetrics());
       setIsLoading(false);
     }
-    setStudents(getStudents());
   };
 
   const [sendersList, setSendersList] = useState<SenderMetrics[]>(() => getAllSendersMetrics());
@@ -241,7 +236,6 @@ export const ReceiverStudentsPage: React.FC = () => {
       if (sid) {
         setStudents(prev => prev.map(s => (s.studentId === sid || s.id === sid) ? { ...s, receiverHidden: true, hiddenAt: new Date().toISOString() } : s));
       }
-      handleDataChange();
     };
     window.addEventListener('studentbridge_datachange', handleDataChange);
     window.addEventListener('studentbridge_userchange', handleDataChange);
@@ -261,6 +255,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       },
       (deletedId) => {
         setStudents((prev) => prev.filter(s => s.studentId !== deletedId && s.id !== deletedId));
+        deleteStudent(deletedId, true).catch(() => {});
       }
     );
 
@@ -327,7 +322,8 @@ export const ReceiverStudentsPage: React.FC = () => {
       const matchBranch = branchFilter === 'ALL' || sBranch === branchFilter;
       const matchSchool = schoolFilter === 'ALL' || s.school === schoolFilter;
       const matchSender = senderFilter === 'ALL' || (s.senderName || s.senderId) === senderFilter;
-      const matchDate = !selectedDate || (s.createdAt && s.createdAt.substring(0, 10) === selectedDate);
+      const studentDate = (s.createdAt || (s as any).registrationDate || s.recordHistory?.[0]?.date || '').substring(0, 10);
+      const matchDate = !selectedDate || (studentDate === selectedDate);
 
       const st = (s.status || 'Active').toUpperCase();
       const isAccepted = st === 'ACCEPTED' || st === 'ACTIVE' || st === 'VERIFIED';
@@ -343,6 +339,7 @@ export const ReceiverStudentsPage: React.FC = () => {
   const distinctSenders = useMemo(() => {
     const set = new Set<string>();
     students.forEach(s => {
+      if (s.receiverHidden) return;
       if (s.senderName) set.add(s.senderName);
       else if (s.senderId) set.add(s.senderId);
     });
@@ -353,7 +350,8 @@ export const ReceiverStudentsPage: React.FC = () => {
   const calendarDateCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     students.forEach(s => {
-      const d = (s.createdAt || '').substring(0, 10);
+      if (!s || s.receiverHidden) return;
+      const d = (s.createdAt || (s as any).registrationDate || s.recordHistory?.[0]?.date || '').substring(0, 10);
       if (d) counts[d] = (counts[d] || 0) + 1;
     });
     return counts;
@@ -365,9 +363,13 @@ export const ReceiverStudentsPage: React.FC = () => {
 
   // Real-Time Transmission & Amounts Telemetry
   const telemetryAmounts = useMemo(() => {
-    const todayStr = new Date().toISOString().substring(0, 10);
+    const now = new Date();
+    const localTodayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const utcTodayStr = now.toISOString().substring(0, 10);
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+
+    const activeStudents = students.filter(s => !s.receiverHidden);
 
     let todayCount = 0;
     let weekCount = 0;
@@ -375,30 +377,32 @@ export const ReceiverStudentsPage: React.FC = () => {
     let withPhotoCount = 0;
     let latestTransmitted: Student | null = null;
 
-    students.forEach(s => {
+    activeStudents.forEach(s => {
       if (!s) return;
-      const createdAt = s.createdAt || '';
-      if (createdAt.startsWith(todayStr)) todayCount++;
-      if (createdAt >= sevenDaysAgo) weekCount++;
-      if (createdAt >= thirtyDaysAgo) monthCount++;
+      const rawDate = s.createdAt || (s as any).registrationDate || s.recordHistory?.[0]?.date || '';
+      const datePrefix = rawDate.replace('T', ' ').substring(0, 10);
+      const isToday = datePrefix === localTodayStr || datePrefix === utcTodayStr || rawDate.startsWith(localTodayStr) || rawDate.startsWith(utcTodayStr);
+      if (isToday) todayCount++;
+      if (rawDate >= sevenDaysAgo || isToday) weekCount++;
+      if (rawDate >= thirtyDaysAgo || isToday) monthCount++;
 
       const hasPhoto = s.photoIntegrityStatus === 'PHOTO_VERIFIED' ||
         (s.photoPath && !s.photoPath.includes('avatar') && !s.photoPath.includes('placeholder')) ||
         (s.previewPath && !s.previewPath.includes('avatar'));
       if (hasPhoto) withPhotoCount++;
 
-      if (!latestTransmitted || (createdAt && createdAt > (latestTransmitted.createdAt || ''))) {
+      if (!latestTransmitted || (rawDate && rawDate > (latestTransmitted.createdAt || ''))) {
         latestTransmitted = s;
       }
     });
 
     return {
-      total: students.length,
+      total: activeStudents.length,
       today: todayCount,
       week: weekCount,
       month: monthCount,
       withPhoto: withPhotoCount,
-      pendingPhoto: Math.max(0, students.length - withPhotoCount),
+      pendingPhoto: Math.max(0, activeStudents.length - withPhotoCount),
       activeSenders: distinctSenders.length,
       latestTransmitted
     };

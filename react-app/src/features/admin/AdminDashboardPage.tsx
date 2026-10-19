@@ -142,10 +142,10 @@ export const AdminDashboardPage: React.FC = () => {
 
     try {
       if (type === "TEMPORARY") {
-        updateStudent(target.id, { status: "Rejected" });
+        await deleteStudent(target.studentId || target.id, false);
         setExportNotice(`Student ${target.fullName || target.studentId} hidden from Receiver queue.`);
       } else {
-        await deleteStudent(target.id);
+        await deleteStudent(target.studentId || target.id, true);
         setExportNotice(`Student ${target.fullName || target.studentId} permanently expunged everywhere.`);
       }
       loadData();

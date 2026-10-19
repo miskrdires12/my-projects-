@@ -9,7 +9,8 @@ import {
 import {
   getStudents, addStudent, getSchools, getCurrentUser, getTasks,
   DEFAULT_BRANCHES, BRANCH_SCHOOL_MAP, getSenderMetrics, SenderMetrics,
-  generateStudentQrToken, getCorrectionLogs, CorrectionLog, getAuthHeaders
+  generateStudentQrToken, getCorrectionLogs, CorrectionLog, getAuthHeaders,
+  incrementSenderLiveCaptures, getPhotoUrl
 } from '@/lib/store';
 import { queueOfflineOperation } from '@/lib/offlineQueue';
 import { Student } from '@/types';
@@ -304,8 +305,15 @@ export const StudentRegistrationPage: React.FC = () => {
       }
 
       // 3. Delivery Confirmed: Persist in local store & notify Receiver Station immediately
-      addStudent(cloudSaved);
-      setSubmittedStudent(cloudSaved);
+      const confirmedStudent = {
+        ...cloudSaved,
+        capturedPhoto: cloudSaved.capturedPhoto || capturedPhoto,
+        photoBase64: cloudSaved.photoBase64 || capturedPhoto
+      };
+      addStudent(confirmedStudent);
+      const senderIdent = user?.username || user?.email || 'Field Operator';
+      incrementSenderLiveCaptures(senderIdent);
+      setSubmittedStudent(confirmedStudent);
       refreshMetrics();
     } catch (err: any) {
       setSubmitError(err.message || 'Error occurred during registration. Next student registration blocked until upload succeeds.');
@@ -495,6 +503,70 @@ export const StudentRegistrationPage: React.FC = () => {
         </div>
       )}
 
+      {/* Live Long-Range Transmission Confirmed & Verified Banner */}
+      {submittedStudent && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950 via-slate-900 to-[#0e1d09] border-2 border-[#85E510] text-white shadow-xl space-y-3 animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-emerald-800/60 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="w-3 h-3 rounded-full bg-[#85E510] animate-pulse shrink-0" />
+              <div>
+                <div className="font-heading font-black text-sm text-[#85E510] uppercase tracking-wide flex items-center gap-2">
+                  <span>Long-Range Transmission Confirmed &amp; Verified</span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#85E510]/20 text-[#85E510] border border-[#85E510]/40 text-[10px] font-mono font-bold">
+                    R2 + Supabase Synchronized
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Delivered on: <strong className="text-white">{new Date().toLocaleTimeString()}</strong> &bull; Date: <strong className="text-white">{new Date().toISOString().substring(0, 10)}</strong> &bull; Station: <span className="text-[#85E510] font-bold">Receiver Verified</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={resetFormForNext}
+                className="w-full sm:w-auto py-2 px-4 rounded-xl bg-[#85E510] hover:bg-[#76cf0c] text-[#062404] font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <span>Register Next Student</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-black/40 rounded-xl p-3 border border-emerald-900/40">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-14 rounded-lg bg-slate-800 border border-emerald-500/40 overflow-hidden shrink-0 flex items-center justify-center">
+                {(submittedStudent.capturedPhoto || getPhotoUrl(submittedStudent.photoPath || submittedStudent.previewPath)) ? (
+                  <img
+                    src={submittedStudent.capturedPhoto || getPhotoUrl(submittedStudent.photoPath || submittedStudent.previewPath) || ''}
+                    alt={submittedStudent.fullName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <UserCheck className="w-6 h-6 text-emerald-400" />
+                )}
+              </div>
+              <div>
+                <div className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>{submittedStudent.fullName}</span>
+                  <span className="font-mono text-xs text-[#85E510] bg-[#85E510]/10 px-2 py-0.5 rounded border border-[#85E510]/30 font-bold">
+                    {submittedStudent.studentId}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-300 mt-0.5">
+                  {submittedStudent.school} &bull; Grade {submittedStudent.grade} {submittedStudent.department ? `(${submittedStudent.department})` : ''} &bull; {submittedStudent.phone || 'No phone'}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-right text-xs text-slate-400 font-mono w-full sm:w-auto">
+              <div>Your Today Total: <strong className="text-[#85E510] text-sm">{senderMetrics.today}</strong></div>
+              <div>Authoritative Sent: <strong className="text-white text-sm">{senderMetrics.total}</strong></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {submitError && (
         <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 shadow-md space-y-2.5 animate-in fade-in duration-200">
@@ -991,7 +1063,7 @@ export const StudentRegistrationPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isSubmitting || isIdTaken || !fullName.trim()}
+              disabled={isSubmitting || isIdTaken || !fullName.trim() || !!submittedStudent}
               className="w-full sm:flex-1 py-3.5 px-5 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] disabled:opacity-50 text-[#062404] font-heading font-black text-sm shadow-[0_4px_15px_rgba(133,229,16,0.3)] transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               {isSubmitting ? (
@@ -999,10 +1071,15 @@ export const StudentRegistrationPage: React.FC = () => {
                   <RefreshCw className="w-4 h-4 animate-spin text-[#062404]" />
                   <span>{submitStatusText || 'Saving to Cloudflare R2 Storage...'}</span>
                 </>
+              ) : submittedStudent ? (
+                <>
+                  <Check className="w-4 h-4 text-[#062404]" />
+                  <span>Student Delivered &bull; Click Register Next to Continue</span>
+                </>
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4 text-[#062404]" />
-                  <span>Register & Transmit Student</span>
+                  <span>Register &amp; Transmit Student</span>
                 </>
               )}
             </button>

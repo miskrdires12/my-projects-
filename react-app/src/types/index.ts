@@ -35,6 +35,8 @@ export interface Student {
   thumbnailPath?: string;
   previewPath?: string;
   originalPhotoPath?: string;
+  capturedPhoto?: string;
+  photoBase64?: string;
   photoIntegrityStatus?: 'PHOTO_VERIFIED' | 'NO_PHOTO' | 'REPAIR_REQUIRED' | string;
   qrCodeData?: string;
   senderName?: string;

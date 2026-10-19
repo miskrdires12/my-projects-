@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, CheckCircle2, XCircle, ArrowRight, User, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getStudents, updateStudent } from '@/lib/store';
+import { getStudents, updateStudent, getPhotoUrl } from '@/lib/store';
 import { Student } from '@/types';
 import { getGradeDisplay, getCleanSection, getStudentBranch } from '@/lib/gradeUtils';
 
@@ -36,7 +36,7 @@ export const ReceiverReviewPage: React.FC = () => {
     );
   }
 
-  const photoSrc = current.previewPath || (current.photoPath ? `https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev/${current.photoPath.replace(/^\//, '')}` : null);
+  const photoSrc = getPhotoUrl(current.photoPath || current.previewPath || current.thumbnailPath);
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto pb-12">

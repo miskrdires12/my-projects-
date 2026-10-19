@@ -540,6 +540,35 @@ function upsertStudentFromSync(incoming: Student): void {
   }
 }
 
+// Authoritative Blacklist of permanently and temporarily deleted students
+export function getDeletedStudentIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem('sb_deleted_student_ids');
+    if (raw) return new Set(JSON.parse(raw));
+  } catch (e) {}
+  return new Set();
+}
+
+export function recordDeletedStudentId(studentId: string): void {
+  if (!studentId) return;
+  try {
+    const set = getDeletedStudentIds();
+    set.add(studentId);
+    set.add(studentId.toLowerCase());
+    localStorage.setItem('sb_deleted_student_ids', JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
+export function removeDeletedStudentId(studentId: string): void {
+  if (!studentId) return;
+  try {
+    const set = getDeletedStudentIds();
+    set.delete(studentId);
+    set.delete(studentId.toLowerCase());
+    localStorage.setItem('sb_deleted_student_ids', JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
 export async function initStore(): Promise<void> {
   // 1. Fetch live student records from server / Supabase PostgreSQL (All 3,723+ Records)
   try {
@@ -552,19 +581,36 @@ export async function initStore(): Promise<void> {
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.students) && data.students.length > 0) {
+        const deletedIds = getDeletedStudentIds();
+        const validServerStudents = data.students.filter((ds: Student) => 
+          !deletedIds.has(ds.studentId) && 
+          !deletedIds.has((ds.studentId || '').toLowerCase()) && 
+          !deletedIds.has(ds.id)
+        );
+
         try {
           const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
-          const customMap = new Map(custom.map(cs => [cs.studentId, cs]));
-          const merged = data.students.map(ds => customMap.get(ds.studentId) || ds);
-          const existingIds = new Set(data.students.map(ds => ds.studentId));
-          custom.forEach(cs => {
-            if (!existingIds.has(cs.studentId)) {
+          // Purge any deleted records from sb_custom_students so they never resurrect
+          const cleanedCustom = custom.filter(cs => 
+            !deletedIds.has(cs.studentId) && 
+            !deletedIds.has((cs.studentId || '').toLowerCase()) && 
+            !deletedIds.has(cs.id)
+          );
+          if (cleanedCustom.length !== custom.length) {
+            safeSetItem('sb_custom_students', JSON.stringify(cleanedCustom));
+          }
+
+          const customMap = new Map(cleanedCustom.map(cs => [cs.studentId, cs]));
+          const merged = validServerStudents.map((ds: Student) => customMap.get(ds.studentId) || ds);
+          const existingIds = new Set(validServerStudents.map((ds: Student) => ds.studentId));
+          cleanedCustom.forEach(cs => {
+            if (!existingIds.has(cs.studentId) && !deletedIds.has(cs.studentId)) {
               merged.unshift(cs);
             }
           });
           memoryStudents = merged;
         } catch (e) {
-          memoryStudents = data.students;
+          memoryStudents = validServerStudents;
         }
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
@@ -906,13 +952,18 @@ export async function deleteStudent(id: string, permanent: boolean = false): Pro
   const targetId = student?.studentId || id;
   const targetDbId = student?.id || id;
 
+  // Immediately blacklist deleted IDs so local merges or syncs never resurrect them
+  recordDeletedStudentId(targetId);
+  recordDeletedStudentId(targetDbId);
+  recordDeletedStudentId(id);
+
   if (permanent) {
     // 1. PERMANENT PURGE: Remove completely from memory and local storage
     if (index !== -1) {
       memoryStudents.splice(index, 1);
-    } else {
-      memoryStudents = memoryStudents.filter(s => s.id !== id && s.studentId !== id);
     }
+    memoryStudents = memoryStudents.filter(s => s.id !== id && s.studentId !== id && s.studentId !== targetId && s.id !== targetDbId);
+
     try {
       const raw = localStorage.getItem('sb_custom_students');
       const custom: Student[] = raw ? JSON.parse(raw) : [];
@@ -958,6 +1009,12 @@ export async function deleteStudent(id: string, permanent: boolean = false): Pro
       student.receiverHidden = true;
       student.hiddenAt = new Date().toISOString();
     }
+    memoryStudents.forEach(s => {
+      if (s.id === id || s.studentId === id || s.studentId === targetId || s.id === targetDbId) {
+        s.receiverHidden = true;
+        s.hiddenAt = new Date().toISOString();
+      }
+    });
 
     try {
       const raw = localStorage.getItem('sb_custom_students');
@@ -1005,10 +1062,21 @@ export async function restoreStudent(id: string): Promise<boolean> {
   const targetId = student?.studentId || id;
   const targetDbId = student?.id || id;
 
+  // Un-blacklist on restore
+  removeDeletedStudentId(targetId);
+  removeDeletedStudentId(targetDbId);
+  removeDeletedStudentId(id);
+
   if (student) {
     student.receiverHidden = false;
     student.hiddenAt = null as any;
   }
+  memoryStudents.forEach(s => {
+    if (s.id === id || s.studentId === id || s.studentId === targetId || s.id === targetDbId) {
+      s.receiverHidden = false;
+      s.hiddenAt = null as any;
+    }
+  });
 
   try {
     const raw = localStorage.getItem('sb_custom_students');
@@ -1703,13 +1771,9 @@ export function getAuthHeaders(): Record<string, string> {
     headers['Authorization'] = `Bearer ${token}`;
   }
   const curUser = getCurrentUser();
-  if (curUser?.role) {
-    headers['X-Station-Role'] = curUser.role;
-  }
-  const devId = localStorage.getItem('sb_device_id');
-  if (devId) {
-    headers['X-Device-Id'] = devId;
-  }
+  headers['X-Station-Role'] = curUser?.role || 'SENDER';
+  const devId = localStorage.getItem('sb_device_id') || 'mobile-sender';
+  headers['X-Device-Id'] = devId;
   return headers;
 }
 
@@ -1970,20 +2034,29 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
     }
   } catch (e) {}
 
+  const localTodayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const utcTodayStr = now.toISOString().substring(0, 10);
+  const isCurrentSender = curUser?.role === 'SENDER';
+
   allStudentsToCheck.forEach(s => {
+    if (!s || s.receiverHidden) return;
     const sn = (s.senderName || '').toLowerCase().trim();
     const sid = (s.senderId || '').toLowerCase().trim();
     const match =
       (sn && (sn === norm || sn === uName || sn === uEmail)) ||
       (sid && (sid === norm || sid === uId || sid === uName)) ||
-      (!sn && !sid && (norm === 'field operator' || norm === 'sender'));
+      (!sn && !sid && (norm === 'field operator' || norm === 'sender')) ||
+      (isCurrentSender && (!sn || sn === 'field operator' || sn === 'sender' || sn === uName || sn === norm));
 
     if (match) {
       realTotal++;
-      const sTime = s.createdAt ? new Date(s.createdAt).getTime() : Date.now();
-      if (sTime >= todayStart) realToday++;
-      if (sTime >= weekStart) realWeek++;
-      if (sTime >= monthStart) realMonth++;
+      const rawDate = s.createdAt || (s as any).registrationDate || s.recordHistory?.[0]?.date || '';
+      const datePrefix = rawDate.replace('T', ' ').substring(0, 10);
+      const isToday = datePrefix === localTodayStr || datePrefix === utcTodayStr || rawDate.startsWith(localTodayStr) || rawDate.startsWith(utcTodayStr);
+      const sTime = rawDate ? new Date(rawDate.replace(' ', 'T')).getTime() : 0;
+      if (isToday || (sTime && sTime >= todayStart)) realToday++;
+      if (isToday || (sTime && sTime >= weekStart)) realWeek++;
+      if (isToday || (sTime && sTime >= monthStart)) realMonth++;
     }
   });
 

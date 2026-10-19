@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Filter, Camera, CheckCircle2, UserPlus, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getStudents } from '@/lib/store';
+import { getStudents, getPhotoUrl } from '@/lib/store';
 import { Student } from '@/types';
 import { getDistinctGradeOptions, matchesGradeFilter, getGradeDisplay, getStudentBranch } from '@/lib/gradeUtils';
 
@@ -120,7 +120,7 @@ export const SenderStudentsPage: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-[#1e2c22]/70">
               {pagedStudents.map((s) => {
-                const photoSrc = s.previewPath || (s.photoPath ? `https://pub-93e8bf84c42949ec88306f456caa0fc9.r2.dev/${s.photoPath.replace(/^\//, '')}` : null);
+                const photoSrc = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath);
 
                 return (
                   <tr key={s.id || s.studentId} className="hover:bg-white/[0.02] transition-colors">
