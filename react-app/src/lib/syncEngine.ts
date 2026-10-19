@@ -23,8 +23,13 @@ export interface SyncPayload {
  * Routes all R2 photos through the same-origin Edge Worker API `/api/photos/${key}`.
  * This guarantees zero-egress, SSL-trusted, globally CDN cached image delivery from any range (even 200,000+ km).
  */
-export function getPhotoUrl(pathOrUrl?: string | null): string | null {
-  if (!pathOrUrl || typeof pathOrUrl !== 'string') return null;
+export function getPhotoUrl(pathOrUrl?: any | null): string | null {
+  if (!pathOrUrl) return null;
+  if (typeof pathOrUrl === 'object') {
+    const s = pathOrUrl;
+    return getPhotoUrl(s.capturedPhoto || s.photoBase64 || s.previewPath || s.photoPath || s.thumbnailPath || s.originalPhotoPath);
+  }
+  if (typeof pathOrUrl !== 'string') return null;
   const trimmed = pathOrUrl.trim();
   if (!trimmed) return null;
 
@@ -73,6 +78,8 @@ export function getPhotoUrl(pathOrUrl?: string | null): string | null {
  */
 export function getPhotoEncodeClass(student: Student): 'Encoded' | 'Unencoded' {
   if (student.photoIntegrityStatus === 'PHOTO_VERIFIED') return 'Encoded';
+  if ((student as any).capturedPhoto && (student as any).capturedPhoto.trim().length > 0) return 'Encoded';
+  if ((student as any).photoBase64 && (student as any).photoBase64.trim().length > 0) return 'Encoded';
   if (student.photoPath && student.photoPath.trim().length > 0) return 'Encoded';
   if (student.previewPath && student.previewPath.trim().length > 0) return 'Encoded';
   if (student.thumbnailPath && student.thumbnailPath.trim().length > 0) return 'Encoded';
@@ -112,31 +119,41 @@ export async function publishStudentSync(
 ): Promise<boolean> {
   try {
     const rawStudent = typeof studentOrId !== 'string' ? studentOrId : undefined;
-    const student = cleanStudentForSync(rawStudent);
     const studentId = typeof studentOrId === 'string' ? studentOrId : studentOrId.studentId;
 
-    const payload: SyncPayload = {
+    // 1. Full-fidelity payload for Local Short-Range (BroadcastChannel & DOM Event, 0ms)
+    // Retains full biometric photo (capturedPhoto, photoBase64, previewPath) for instant cross-tab receipt
+    const localPayload: SyncPayload = {
       action,
-      student,
+      student: rawStudent,
       studentId,
       timestamp: Date.now()
     };
 
-    // 1. Broadcast locally across browser tabs (0ms)
+    // Broadcast locally across browser tabs (Short Range: 0ms)
     if (broadcastChannel) {
       try {
-        broadcastChannel.postMessage(payload);
+        broadcastChannel.postMessage(localPayload);
       } catch (bcErr) {
         console.warn('BroadcastChannel post warning:', bcErr);
       }
     }
 
-    // 2. Dispatch local DOM event for same-window reactive listeners
+    // Dispatch local DOM event for same-window reactive listeners
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('studentbridge_datachange', { detail: payload }));
+      window.dispatchEvent(new CustomEvent('studentbridge_datachange', { detail: localPayload }));
     }
 
-    // 3. Broadcast to Global Cloud Sync Bus (cross-device: phone -> PC Receiver worldwide)
+    // 2. Lightweight payload for Long-Range (Global Cloud SSE via ntfy.sh)
+    // Strips large base64 strings so ntfy.sh does not reject payload exceeding header/body limits
+    const cloudStudent = cleanStudentForSync(rawStudent);
+    const cloudPayload: SyncPayload = {
+      action,
+      student: cloudStudent,
+      studentId,
+      timestamp: Date.now()
+    };
+
     fetch(SYNC_BASE_URL, {
       method: 'POST',
       headers: {
@@ -144,7 +161,7 @@ export async function publishStudentSync(
         Priority: 'urgent',
         Tags: 'student,sync,encoded'
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cloudPayload),
       cache: 'no-store'
     }).catch(err => {
       console.warn('Cloud sync publish notice:', err);

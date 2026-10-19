@@ -1714,7 +1714,7 @@ export const ReceiverStudentsPage: React.FC = () => {
               ) : (
                 pagedStudents.map((s) => {
                   const isSelected = selectedIds.has(s.studentId);
-                  const photoSrc = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath) || DEFAULT_AVATAR;
+                  const photoSrc = getPhotoUrl(s.capturedPhoto || s.photoBase64 || s.previewPath || s.photoPath || s.thumbnailPath) || DEFAULT_AVATAR;
                   const isBulked = bulkedIds.has(s.studentId) || s.bulkedStatus === 'BULKED';
 
                   return (
@@ -2078,7 +2078,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   title="Click to Crop & Edit Studio Portrait"
                 >
                   <img
-                    src={getPhotoUrl(detailStudent.photoPath || detailStudent.previewPath || detailStudent.thumbnailPath) || DEFAULT_AVATAR}
+                    src={getPhotoUrl(detailStudent.capturedPhoto || detailStudent.photoBase64 || detailStudent.photoPath || detailStudent.previewPath || detailStudent.thumbnailPath) || DEFAULT_AVATAR}
                     alt={detailStudent.fullName}
                     className="w-full h-full object-cover group-hover/drawerPhoto:scale-105 transition-transform"
                     onError={(e) => {
@@ -2114,7 +2114,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const url = getPhotoUrl(detailStudent.photoPath || detailStudent.previewPath || detailStudent.thumbnailPath);
+                      const url = getPhotoUrl(detailStudent.capturedPhoto || detailStudent.photoBase64 || detailStudent.photoPath || detailStudent.previewPath || detailStudent.thumbnailPath);
                       if (url) {
                         navigator.clipboard.writeText(url);
                         alert('Image link copied to clipboard!');
@@ -2246,7 +2246,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       {isPhotoEditorOpen && editingPhotoStudent && (
         <PhoneCropModal
           isOpen={isPhotoEditorOpen}
-          imageUrl={getPhotoUrl(editingPhotoStudent.photoPath || editingPhotoStudent.previewPath || editingPhotoStudent.thumbnailPath) || DEFAULT_AVATAR}
+          imageUrl={getPhotoUrl(editingPhotoStudent.capturedPhoto || editingPhotoStudent.photoBase64 || editingPhotoStudent.photoPath || editingPhotoStudent.previewPath || editingPhotoStudent.thumbnailPath) || DEFAULT_AVATAR}
           studentId={editingPhotoStudent.studentId}
           title={`Edit Student Photograph (${editingPhotoStudent.fullName})`}
           onClose={() => {
@@ -2549,7 +2549,7 @@ export const ReceiverStudentsPage: React.FC = () => {
               <div className="p-3 bg-slate-100 rounded-xl flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white border border-slate-300 overflow-hidden shrink-0">
                   <img
-                    src={getPhotoUrl(deleteTarget.photoPath || deleteTarget.previewPath) || DEFAULT_AVATAR}
+                    src={getPhotoUrl(deleteTarget.capturedPhoto || deleteTarget.photoBase64 || deleteTarget.photoPath || deleteTarget.previewPath) || DEFAULT_AVATAR}
                     alt=""
                     className="w-full h-full object-cover"
                   />
@@ -2809,7 +2809,7 @@ export const ReceiverStudentsPage: React.FC = () => {
 
                 return filteredMistakes.map(m => {
                   const s = m.student;
-                  const photoSrc = getPhotoUrl(s.photoPath || s.previewPath || s.thumbnailPath) || DEFAULT_AVATAR;
+                  const photoSrc = getPhotoUrl(s.capturedPhoto || s.photoBase64 || s.photoPath || s.previewPath || s.thumbnailPath) || DEFAULT_AVATAR;
 
                   return (
                     <div
