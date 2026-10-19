@@ -368,6 +368,114 @@ async function deleteFromR2Bucket(key) {
   return res.ok || res.status === 204 || res.status === 404;
 }
 
+async function getFromR2Bucket(key) {
+  if (!key) return null;
+  let cleanKey = key;
+  if (cleanKey.includes(R2_PUBLIC_BASE_URL)) {
+    cleanKey = cleanKey.replace(`${R2_PUBLIC_BASE_URL}/`, "");
+  } else if (cleanKey.startsWith("http")) {
+    try {
+      const u = new URL(cleanKey);
+      cleanKey = u.pathname.replace(/^\/+/, "");
+      if (cleanKey.startsWith("api/photos/")) {
+        cleanKey = cleanKey.replace(/^api\/photos\//, "");
+      }
+    } catch (e) {}
+  }
+  cleanKey = cleanKey.replace(/^\/+/, "");
+  if (!cleanKey) return null;
+
+  // 1. Try env R2 binding if bound in Cloudflare Pages
+  if (activeEnv) {
+    const r2Binding = activeEnv.SILICONLABS || activeEnv.BUCKET || activeEnv.R2_BUCKET || activeEnv.siliconlabs;
+    if (r2Binding && typeof r2Binding.get === "function") {
+      try {
+        const obj = await r2Binding.get(cleanKey);
+        if (obj) {
+          const bytes = new Uint8Array(await obj.arrayBuffer());
+          const contentType = obj.httpMetadata?.contentType || "image/jpeg";
+          return { bytes, contentType };
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 2. Authenticated AWS S3 SigV4 GET
+  const fetchSingleKey = async (targetKey) => {
+    try {
+      const path = `/${R2_BUCKET}/${targetKey}`;
+      const url = new URL(path, R2_ENDPOINT);
+      const now = new Date();
+      const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+      const dateStamp = amzDate.substring(0, 8);
+      const region = "auto";
+      const service = "s3";
+
+      const payloadHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+      const host = url.host;
+
+      const canonicalHeaders = `host:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+      const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+      const canonicalRequest = `GET\n${path}\n\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
+      const algorithm = "AWS4-HMAC-SHA256";
+      const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+      const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${await sha256Hex(new TextEncoder().encode(canonicalRequest))}`;
+
+      const signingKey = await getSignatureKey(R2_SECRET_ACCESS_KEY, dateStamp, region, service);
+      const sigBytes = await hmacSha256(signingKey, new TextEncoder().encode(stringToSign));
+      const signature = Array.from(sigBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+
+      const authHeader = `${algorithm} Credential=${R2_ACCESS_KEY_ID}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+      const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "Host": host,
+          "x-amz-date": amzDate,
+          "x-amz-content-sha256": payloadHash,
+          "Authorization": authHeader
+        }
+      });
+
+      if (res.ok) {
+        const contentType = res.headers.get("content-type") || "image/jpeg";
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        return { bytes, contentType };
+      }
+    } catch (e) {
+      console.warn("SigV4 fetchSingleKey notice:", e);
+    }
+    return null;
+  };
+
+  // Try direct key first
+  let result = await fetchSingleKey(cleanKey);
+  if (result) return result;
+
+  // Try decoding or encoding URI components if path has spaces or special chars
+  if (cleanKey.includes("%")) {
+    try {
+      const unescaped = decodeURIComponent(cleanKey);
+      if (unescaped !== cleanKey) {
+        result = await fetchSingleKey(unescaped);
+        if (result) return result;
+      }
+    } catch (e) {}
+  }
+
+  // Try root name alias (e.g. if key is "Grade_10/Abebe.jpg", check "Abebe.jpg")
+  if (cleanKey.includes("/")) {
+    const baseName = cleanKey.split("/").pop();
+    if (baseName) {
+      result = await fetchSingleKey(baseName);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
 function formatCleanGrade(rawGrade) {
   if (!rawGrade) return "Unknown";
   let g = String(rawGrade).trim();
@@ -975,7 +1083,8 @@ export default {
 
         return new Response(JSON.stringify({
           success: true,
-          url: r2Url,
+          url: `/api/photos/${photoKey}`,
+          r2Url: r2Url,
           key: photoKey,
           storage: "Cloudflare R2",
           bucket: R2_BUCKET
@@ -1050,8 +1159,8 @@ export default {
 
             // Upload directly to Cloudflare R2 bucket 'siliconlabs' strictly by name
             const r2Url = await uploadToR2Bucket(photoKey, bytes, contentType);
-            photoPath = r2Url;
-            previewPath = r2Url;
+            photoPath = `/api/photos/${photoKey}`;
+            previewPath = `/api/photos/${photoKey}`;
             uploadedPhotos.set(photoKey, { contentType, bytes });
 
             // Also dual-upload root name alias
@@ -1062,8 +1171,8 @@ export default {
             } catch (e) {}
           } catch (r2Err) {
             console.warn("Direct R2 upload warning:", r2Err);
-            photoPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
-            previewPath = `${R2_PUBLIC_BASE_URL}/${photoKey}`;
+            photoPath = `/api/photos/${photoKey}`;
+            previewPath = `/api/photos/${photoKey}`;
           }
         }
 
@@ -1594,21 +1703,56 @@ export default {
     // 8. PHOTO SERVING & PROXY
     // -------------------------------------------------------------------------
     if (url.pathname.startsWith("/api/photos/")) {
-      const key = decodeURIComponent(url.pathname.replace("/api/photos/", ""));
+      const key = decodeURIComponent(url.pathname.replace(/^\/api\/photos\//, ""));
       if (uploadedPhotos.has(key)) {
         const item = uploadedPhotos.get(key);
         return new Response(item.bytes, {
           status: 200,
           headers: {
-            "Content-Type": item.contentType,
+            "Content-Type": item.contentType || "image/jpeg",
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "public, max-age=31536000, immutable"
           }
         });
       }
 
+      // Check root basename in uploadedPhotos
+      if (key.includes("/")) {
+        const base = key.split("/").pop();
+        if (base && uploadedPhotos.has(base)) {
+          const item = uploadedPhotos.get(base);
+          return new Response(item.bytes, {
+            status: 200,
+            headers: {
+              "Content-Type": item.contentType || "image/jpeg",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=31536000, immutable"
+            }
+          });
+        }
+      }
+
+      // Read directly from R2 Bucket using SigV4 credentials (works globally across 200,000+ km!)
       try {
-        const cdnRes = await fetch(`${R2_PUBLIC_BASE_URL}/${key}`);
+        const r2Item = await getFromR2Bucket(key);
+        if (r2Item) {
+          uploadedPhotos.set(key, r2Item);
+          return new Response(r2Item.bytes, {
+            status: 200,
+            headers: {
+              "Content-Type": r2Item.contentType || "image/jpeg",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=31536000, immutable"
+            }
+          });
+        }
+      } catch (e) {
+        console.warn("SigV4 R2 photo fetch error:", e);
+      }
+
+      // Fallback: public CDN fetch
+      try {
+        const cdnRes = await fetch(`${R2_PUBLIC_BASE_URL}/${encodeURIComponent(key).replace(/%2F/g, '/')}`);
         if (cdnRes.ok) {
           const headers = new Headers(cdnRes.headers);
           headers.set("Access-Control-Allow-Origin", "*");
@@ -1627,18 +1771,33 @@ export default {
 
       try {
         const photoRes = await fetch(targetPhotoUrl);
-        if (!photoRes.ok) return new Response("Failed to fetch photo from storage", { status: photoRes.status });
-
-        const headers = new Headers(photoRes.headers);
-        headers.set("Access-Control-Allow-Origin", "*");
-        headers.set("Cache-Control", "public, max-age=31536000, immutable");
-        if (url.searchParams.get("download") === "1" || url.pathname === "/api/download-proxy") {
-          headers.set("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+        if (photoRes.ok) {
+          const headers = new Headers(photoRes.headers);
+          headers.set("Access-Control-Allow-Origin", "*");
+          headers.set("Cache-Control", "public, max-age=31536000, immutable");
+          if (url.searchParams.get("download") === "1" || url.pathname === "/api/download-proxy") {
+            headers.set("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+          }
+          return new Response(photoRes.body, { status: 200, headers });
         }
-        return new Response(photoRes.body, { status: 200, headers });
-      } catch (err) {
-        return new Response("Proxy error: " + err.message, { status: 500 });
-      }
+      } catch (err) {}
+
+      // Fallback: SigV4 bucket read if it is an R2 URL
+      try {
+        const r2Item = await getFromR2Bucket(targetPhotoUrl);
+        if (r2Item) {
+          const headers = new Headers();
+          headers.set("Content-Type", r2Item.contentType || "image/jpeg");
+          headers.set("Access-Control-Allow-Origin", "*");
+          headers.set("Cache-Control", "public, max-age=31536000, immutable");
+          if (url.searchParams.get("download") === "1" || url.pathname === "/api/download-proxy") {
+            headers.set("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+          }
+          return new Response(r2Item.bytes, { status: 200, headers });
+        }
+      } catch (e) {}
+
+      return new Response("Failed to fetch photo from storage", { status: 404, headers: corsHeaders });
     }
 
     // -------------------------------------------------------------------------

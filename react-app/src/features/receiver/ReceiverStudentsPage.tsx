@@ -264,7 +264,13 @@ export const ReceiverStudentsPage: React.FC = () => {
       }
     );
 
+    // Auto-poll every 10 seconds to catch remote transmissions over long distance
+    const autoPollInterval = setInterval(() => {
+      loadData();
+    }, 10000);
+
     return () => {
+      clearInterval(autoPollInterval);
       window.removeEventListener('studentbridge_datachange', handleDataChange);
       window.removeEventListener('studentbridge_userchange', handleDataChange);
       window.removeEventListener('studentbridge_softdelete', handleSoftDelete);
@@ -356,6 +362,47 @@ export const ReceiverStudentsPage: React.FC = () => {
   const distinctDates = useMemo(() => {
     return Object.keys(calendarDateCounts).sort().reverse();
   }, [calendarDateCounts]);
+
+  // Real-Time Transmission & Amounts Telemetry
+  const telemetryAmounts = useMemo(() => {
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+
+    let todayCount = 0;
+    let weekCount = 0;
+    let monthCount = 0;
+    let withPhotoCount = 0;
+    let latestTransmitted: Student | null = null;
+
+    students.forEach(s => {
+      if (!s) return;
+      const createdAt = s.createdAt || '';
+      if (createdAt.startsWith(todayStr)) todayCount++;
+      if (createdAt >= sevenDaysAgo) weekCount++;
+      if (createdAt >= thirtyDaysAgo) monthCount++;
+
+      const hasPhoto = s.photoIntegrityStatus === 'PHOTO_VERIFIED' ||
+        (s.photoPath && !s.photoPath.includes('avatar') && !s.photoPath.includes('placeholder')) ||
+        (s.previewPath && !s.previewPath.includes('avatar'));
+      if (hasPhoto) withPhotoCount++;
+
+      if (!latestTransmitted || (createdAt && createdAt > (latestTransmitted.createdAt || ''))) {
+        latestTransmitted = s;
+      }
+    });
+
+    return {
+      total: students.length,
+      today: todayCount,
+      week: weekCount,
+      month: monthCount,
+      withPhoto: withPhotoCount,
+      pendingPhoto: Math.max(0, students.length - withPhotoCount),
+      activeSenders: distinctSenders.length,
+      latestTransmitted
+    };
+  }, [students, distinctSenders]);
 
   // Dynamically computed registry anomalies for the Mistake Analyzer pop-up
   const mistakeItems = useMemo(() => {
@@ -1288,6 +1335,98 @@ export const ReceiverStudentsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Real-Time Live Transmission & Amounts Telemetry Banner */}
+      <div className="bg-gradient-to-r from-[#0B1118] via-[#162232] to-[#0B1118] border border-[#2D3748] rounded-2xl p-4 text-white shadow-md">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-slate-700/60">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#9EE617] opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#9EE617]" />
+            </span>
+            <div>
+              <span className="text-xs font-black tracking-wider uppercase text-[#9EE617]">
+                Live Real-Time Data Receiver Console
+              </span>
+              <p className="text-[11px] text-slate-300">
+                Connected to global field sender bus &bull; Synchronizing live transmissions worldwide
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {telemetryAmounts.latestTransmitted ? (
+              <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-slate-700/80 text-[11px]">
+                <Clock className="w-3.5 h-3.5 text-[#9EE617]" />
+                <span className="text-slate-300">Last Received:</span>
+                <strong className="text-white font-mono">
+                  {telemetryAmounts.latestTransmitted.createdAt
+                    ? new Date(telemetryAmounts.latestTransmitted.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                    : 'Just now'}
+                </strong>
+                <span className="text-slate-400">({telemetryAmounts.latestTransmitted.senderName || 'Sender'})</span>
+              </div>
+            ) : (
+              <span className="text-slate-400 text-xs">Waiting for incoming transmission...</span>
+            )}
+          </div>
+        </div>
+
+        {/* 4 Metric Amount Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-3">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Total Received</span>
+              <UsersIcon className="w-3.5 h-3.5 text-[#9EE617]" />
+            </div>
+            <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-white">
+              {telemetryAmounts.total.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Authoritative registry count</div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Transmitted Today</span>
+              <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-[#9EE617] flex items-center gap-2">
+              <span>{telemetryAmounts.today.toLocaleString()}</span>
+              {telemetryAmounts.today > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#9EE617]/20 text-[#9EE617] font-black border border-[#9EE617]/40">
+                  +{telemetryAmounts.today} New
+                </span>
+              )}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Sent by operators today</div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Biometric Photos Encoded</span>
+              <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
+            </div>
+            <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-white flex items-center gap-1.5">
+              <span>{telemetryAmounts.withPhoto.toLocaleString()}</span>
+              <span className="text-xs text-slate-400 font-normal">
+                ({telemetryAmounts.total > 0 ? ((telemetryAmounts.withPhoto / telemetryAmounts.total) * 100).toFixed(1) : 100}%)
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Verified portrait photos in R2</div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Active Senders</span>
+              <Radio className="w-3.5 h-3.5 text-purple-400" />
+            </div>
+            <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-white">
+              {telemetryAmounts.activeSenders} Stations
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Field operators transmitting</div>
+          </div>
+        </div>
+      </div>
+
       {/* Top Calendar Date Filter */}
       <div className="bg-white p-3 rounded-2xl border border-[#E2E8F0] shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -1727,13 +1866,51 @@ export const ReceiverStudentsPage: React.FC = () => {
                       </td>
 
                       {/* Date Transmitted */}
-                      <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600 whitespace-nowrap">
-                        {s.createdAt ? new Date(s.createdAt).toLocaleDateString([], {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }) : 'Oct 12, 08:30'}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {(() => {
+                          const iso = s.createdAt;
+                          if (!iso) return <span className="font-mono text-[10px] text-slate-400">—</span>;
+                          try {
+                            const d = new Date(iso);
+                            if (isNaN(d.getTime())) return <span className="font-mono text-[10px] text-slate-600">{iso}</span>;
+                            const yyyy = d.getFullYear();
+                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                            const dd = String(d.getDate()).padStart(2, '0');
+                            const hh = String(d.getHours()).padStart(2, '0');
+                            const min = String(d.getMinutes()).padStart(2, '0');
+                            const ss = String(d.getSeconds()).padStart(2, '0');
+                            const dateStr = `${yyyy}-${mm}-${dd}`;
+                            const timeStr = `${hh}:${min}:${ss}`;
+                            const isToday = dateStr === new Date().toISOString().substring(0, 10);
+                            const diffMinutes = Math.floor((Date.now() - d.getTime()) / 60000);
+                            const isRecent = diffMinutes >= 0 && diffMinutes <= 30;
+
+                            return (
+                              <div className="flex flex-col gap-0.5 font-mono text-[10px]">
+                                <div className="flex items-center gap-1.5 font-bold text-[#0B1118]">
+                                  <Calendar className="w-3 h-3 text-[#256002]" />
+                                  <span>{dateStr}</span>
+                                  {isRecent && (
+                                    <span className="px-1.5 py-0.2 rounded-full bg-[#9EE617] text-[#062404] text-[9px] font-black animate-pulse">
+                                      {diffMinutes === 0 ? 'Just now' : `${diffMinutes}m ago`}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                                  <Clock className="w-3 h-3 text-slate-400" />
+                                  <span>{timeStr}</span>
+                                  {isToday && !isRecent && (
+                                    <span className="text-[9px] text-[#256002] font-bold px-1 rounded bg-[#9EE617]/20">
+                                      Today
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          } catch (e) {
+                            return <span className="font-mono text-[10px] text-slate-600">{iso}</span>;
+                          }
+                        })()}
                       </td>
 
                       {/* QR Code Action (Token strictly studentId) */}

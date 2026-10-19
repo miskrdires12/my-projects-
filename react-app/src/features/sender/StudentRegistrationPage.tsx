@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Camera, RefreshCw, CheckCircle2, AlertCircle, RotateCw, ZoomIn, ZoomOut,
+  Camera, RefreshCw, CheckCircle2, AlertCircle, AlertTriangle, RotateCw, ZoomIn, ZoomOut,
   Upload, UserCheck, ArrowRight, ShieldCheck, Sparkles, X, Sliders, Crop,
   ChevronDown, ChevronUp, Image as ImageIcon, Check, Printer, SwitchCamera,
   TrendingUp, Calendar, Clock, BarChart2, MapPin, Scissors
@@ -174,9 +174,9 @@ export const StudentRegistrationPage: React.FC = () => {
   };
 
 
-  // Student Registration Submission
+  // Student Registration Submission (Strict Gating: photo & server confirmation mandatory)
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setSubmitError(null);
 
     if (isIdTaken) {
@@ -189,8 +189,13 @@ export const StudentRegistrationPage: React.FC = () => {
       return;
     }
 
+    if (!capturedPhoto || !capturedPhoto.startsWith('data:image')) {
+      setSubmitError('Biometric portrait photograph is strictly required before sending. Please capture or upload a photo.');
+      return;
+    }
+
     setIsSubmitting(true);
-    setSubmitStatusText('Saving biometric photograph to Cloudflare R2 storage...');
+    setSubmitStatusText('Step 1/2: Uploading biometric photograph to Cloudflare R2...');
 
     try {
       const cleanGrade = (grade.trim() || 'General').replace(/[\/\\:*?"<>|\s]+/g, '_');
@@ -198,32 +203,28 @@ export const StudentRegistrationPage: React.FC = () => {
       const photoKey = `${cleanGrade}/${cleanName}.jpg`;
       let r2PhotoUrl: string | undefined = undefined;
 
-      // Direct Cloudflare R2 Bucket Upload (Saved strictly by student name)
-      if (capturedPhoto && capturedPhoto.startsWith('data:image')) {
-        try {
-          const upRes = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-            body: JSON.stringify({
-              studentId: studentId.trim(),
-              grade: cleanGrade,
-              fullName: cleanName,
-              filename: photoKey,
-              data: capturedPhoto
-            })
-          });
-          if (upRes.ok) {
-            const upData = await upRes.json();
-            if (upData.url || upData.r2Url) {
-              r2PhotoUrl = upData.url || upData.r2Url;
-            }
-          }
-        } catch (r2Err) {
-          console.warn('Direct Cloudflare R2 upload attempt, edge worker fallback:', r2Err);
-        }
+      // 1. Mandatory Photo Upload to Cloudflare R2 (Saved strictly by student name)
+      const upRes = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          studentId: studentId.trim(),
+          grade: cleanGrade,
+          fullName: cleanName,
+          filename: photoKey,
+          data: capturedPhoto
+        })
+      });
+
+      if (!upRes.ok) {
+        const errData = await upRes.json().catch(() => ({}));
+        throw new Error(errData.error || errData.message || `Photo upload to receiver failed (HTTP ${upRes.status}). Check network connection and retry.`);
       }
 
-      const finalPhotoUrl = r2PhotoUrl || (capturedPhoto ? `${R2_PUBLIC_BASE_URL}/${photoKey}` : undefined);
+      const upData = await upRes.json();
+      r2PhotoUrl = upData.url || `/api/photos/${photoKey}`;
+
+      const finalPhotoUrl = r2PhotoUrl;
 
       const parsedGradeInfo = parseGradeAndSection(grade);
       const fullDisplayGrade = parsedGradeInfo.displayString || grade.trim();
@@ -252,12 +253,12 @@ export const StudentRegistrationPage: React.FC = () => {
         busUser: schoolBusUsage,
         nationality,
         photoPath: finalPhotoUrl,
-        previewPath: capturedPhoto || finalPhotoUrl || undefined,
-        thumbnailPath: capturedPhoto || finalPhotoUrl || undefined,
+        previewPath: finalPhotoUrl,
+        thumbnailPath: finalPhotoUrl,
         originalPhotoPath: finalPhotoUrl,
-        capturedPhoto: capturedPhoto || undefined,
-        photoBase64: capturedPhoto || undefined,
-        photoIntegrityStatus: capturedPhoto ? 'PHOTO_VERIFIED' : 'NO_PHOTO',
+        capturedPhoto: capturedPhoto,
+        photoBase64: capturedPhoto,
+        photoIntegrityStatus: 'PHOTO_VERIFIED',
         // QR Code token strictly formatted as {"id":"...","name":"...","roll":"","grade":"..."}
         qrCodeData: generateStudentQrToken({
           studentId: studentId.trim(),
@@ -280,48 +281,35 @@ export const StudentRegistrationPage: React.FC = () => {
         ]
       };
 
-      // 1. Submit to Cloudflare Edge Worker API (Handles R2 upload & Supabase PostgreSQL write)
-      let persistedStudent = studentPayload;
-      let serverConfirmed = false;
+      // 2. Strict Delivery Verification to Cloudflare Edge Worker API (Guarantees receiver receipt)
+      setSubmitStatusText('Step 2/2: Confirming student record delivery to Receiver Desk...');
+      const res = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(studentPayload)
+      });
 
-      try {
-        const res = await fetch('/api/students', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-          body: JSON.stringify(studentPayload)
-        });
-
-        if (res.ok) {
-          const cloudSaved = await res.json();
-          if (cloudSaved && cloudSaved.studentId) {
-            persistedStudent = cloudSaved;
-            serverConfirmed = true;
-          }
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          if (res.status === 409 || errData.error === 'DUPLICATE_ID') {
-            setIsIdTaken(true);
-            throw new Error('Student ID is already taken in the authoritative database.');
-          }
-          throw new Error(errData.message || errData.error || `Server returned error (${res.status})`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        if (res.status === 409 || errData.error === 'DUPLICATE_ID') {
+          setIsIdTaken(true);
+          throw new Error('Student ID is already taken in the authoritative database.');
         }
-      } catch (networkErr: any) {
-        if (networkErr.message?.includes('already taken')) {
-          throw networkErr;
-        }
-
-        console.warn('Direct server sync failed, queuing into IndexedDB offline queue:', networkErr);
-        // Queue into IndexedDB for durable offline resilience
-        await queueOfflineOperation('CREATE_STUDENT', studentPayload).catch(() => {});
-        persistedStudent = studentPayload;
+        throw new Error(errData.message || errData.error || `Receiver server returned error (${res.status}). Record could not be delivered.`);
       }
 
-      // 2. Persist in local store & notify Receiver Station immediately
-      addStudent(persistedStudent);
-      setSubmittedStudent(persistedStudent);
+      const cloudSaved = await res.json();
+      if (!cloudSaved || !cloudSaved.studentId) {
+        throw new Error('Receiver server response invalid. Student delivery could not be verified.');
+      }
+
+      // 3. Delivery Confirmed: Persist in local store & notify Receiver Station immediately
+      addStudent(cloudSaved);
+      setSubmittedStudent(cloudSaved);
       refreshMetrics();
     } catch (err: any) {
-      setSubmitError(err.message || 'Error occurred during registration.');
+      setSubmitError(err.message || 'Error occurred during registration. Next student registration blocked until upload succeeds.');
+      // Do NOT set submittedStudent; operator cannot advance
     } finally {
       setIsSubmitting(false);
       setSubmitStatusText('');
@@ -509,14 +497,45 @@ export const StudentRegistrationPage: React.FC = () => {
 
 
       {submitError && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-            <span>{submitError}</span>
+        <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 shadow-md space-y-2.5 animate-in fade-in duration-200">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-heading font-black text-sm text-rose-900 uppercase tracking-tight flex items-center gap-2">
+                  <span>Upload Incomplete — Next Student Blocked</span>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 text-[10px] font-black">
+                    Action Required
+                  </span>
+                </div>
+                <p className="text-xs font-bold text-rose-800 mt-1">
+                  {submitError}
+                </p>
+                <p className="text-[11px] text-rose-700 font-medium mt-1">
+                  Per system rules, you cannot proceed to register the next student until this student's full biometric photograph and record are confirmed by the receiver server.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSubmitError(null)}
+              className="text-rose-400 hover:text-rose-700 p-1 cursor-pointer"
+              title="Dismiss warning"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button type="button" onClick={() => setSubmitError(null)} className="text-red-500 hover:text-red-800">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="pt-2 flex items-center gap-2 border-t border-rose-200">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="py-2 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSubmitting ? 'animate-spin' : ''}`} />
+              <span>Retry Transmission Now</span>
+            </button>
+          </div>
         </div>
       )}
 

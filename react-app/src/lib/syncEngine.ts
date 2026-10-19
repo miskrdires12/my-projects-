@@ -20,21 +20,51 @@ export interface SyncPayload {
 
 /**
  * Universal photo URL resolver.
- * Prevents double-prefixing URLs that are already absolute or base64.
+ * Routes all R2 photos through the same-origin Edge Worker API `/api/photos/${key}`.
+ * This guarantees zero-egress, SSL-trusted, globally CDN cached image delivery from any range (even 200,000+ km).
  */
 export function getPhotoUrl(pathOrUrl?: string | null): string | null {
   if (!pathOrUrl || typeof pathOrUrl !== 'string') return null;
   const trimmed = pathOrUrl.trim();
   if (!trimmed) return null;
 
-  // Already a full URL or data URI
-  if (trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+  // Base64 data URI (direct display)
+  if (trimmed.startsWith('data:')) {
     return trimmed;
   }
 
-  // Relative R2 object key (e.g. "9C/SB-2026-10492_Abebe.jpg")
-  const clean = trimmed.replace(/^\/+/, '');
-  return `${R2_PUBLIC_BASE_URL}/${clean}`;
+  let cleanKey = trimmed;
+  // If already pointing to /api/photos/
+  if (cleanKey.startsWith('/api/photos/')) {
+    return cleanKey;
+  }
+
+  // Strip R2 public CDN base URL or r2.dev domain
+  if (cleanKey.includes('r2.dev/')) {
+    cleanKey = cleanKey.split('r2.dev/')[1] || cleanKey;
+  } else if (cleanKey.includes('/api/photos/')) {
+    cleanKey = cleanKey.split('/api/photos/')[1] || cleanKey;
+  } else if (cleanKey.startsWith('http://') || cleanKey.startsWith('https://')) {
+    // If it's an R2 storage URL, extract the bucket key
+    if (cleanKey.includes('r2.cloudflarestorage.com')) {
+      try {
+        const u = new URL(cleanKey);
+        cleanKey = u.pathname.replace(/^\/+/, '');
+        if (cleanKey.startsWith('siliconlabs/')) {
+          cleanKey = cleanKey.replace(/^siliconlabs\//, '');
+        }
+      } catch (e) {}
+    } else {
+      // External non-R2 image URL
+      return cleanKey;
+    }
+  }
+
+  cleanKey = cleanKey.replace(/^\/+/, '');
+  if (!cleanKey) return null;
+
+  // Return same-origin proxy URL
+  return `/api/photos/${encodeURI(cleanKey)}`;
 }
 
 /**
