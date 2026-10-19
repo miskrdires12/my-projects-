@@ -1140,30 +1140,40 @@ export default {
         // 2. Cloudflare R2 Authoritative Insert
         let insertedRecord = newStudent;
 
-        // 3. Isolated R2 Recovery Artifact & Live Registry Update
+        // 3. Isolated R2 Recovery Artifact (immediate per-student file)
         try {
           const recBytes = new TextEncoder().encode(JSON.stringify(insertedRecord, null, 2));
           await uploadToR2Bucket(`records/${insertedRecord.studentId}.json`, recBytes, "application/json");
-
-          // Update R2 records/live_registry.json
-          let currentLiveReg = [];
-          try {
-            const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json?t=${Date.now()}`);
-            if (regRes.ok) currentLiveReg = await regRes.json();
-          } catch (e) {}
-
-          if (Array.isArray(currentLiveReg)) {
-            const existingIdx = currentLiveReg.findIndex(r => r.studentId === insertedRecord.studentId);
-            if (existingIdx !== -1) {
-              currentLiveReg[existingIdx] = { ...currentLiveReg[existingIdx], ...insertedRecord };
-            } else {
-              currentLiveReg.unshift(insertedRecord);
-            }
-            const regBytes = new TextEncoder().encode(JSON.stringify(currentLiveReg));
-            await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
-          }
         } catch (r2RecErr) {
           console.warn("R2 student persistence note:", r2RecErr);
+        }
+
+        // Asynchronously update R2 records/live_registry.json in background so 30 concurrent senders return immediately
+        const updateLiveRegistryPromise = (async () => {
+          try {
+            let currentLiveReg = [];
+            try {
+              const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json?t=${Date.now()}`);
+              if (regRes.ok) currentLiveReg = await regRes.json();
+            } catch (e) {}
+
+            if (Array.isArray(currentLiveReg)) {
+              const existingIdx = currentLiveReg.findIndex(r => r.studentId === insertedRecord.studentId);
+              if (existingIdx !== -1) {
+                currentLiveReg[existingIdx] = { ...currentLiveReg[existingIdx], ...insertedRecord };
+              } else {
+                currentLiveReg.unshift(insertedRecord);
+              }
+              const regBytes = new TextEncoder().encode(JSON.stringify(currentLiveReg));
+              await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
+            }
+          } catch (r2RegErr) {
+            console.warn("R2 live registry async update note:", r2RegErr);
+          }
+        })();
+
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(updateLiveRegistryPromise);
         }
 
         // 4. Authoritative Write to Supabase cloudflare.students
@@ -1189,7 +1199,17 @@ export default {
           cachedAllStudents.unshift(insertedRecord);
         }
 
-        // Broadcast to Global Cloud Sync Bus
+        // Broadcast to Global Cloud Sync Bus (clean payload under 400 bytes so ntfy.sh never rejects with 413)
+        const ntfyCleanRecord = { ...insertedRecord };
+        delete ntfyCleanRecord.capturedPhoto;
+        delete ntfyCleanRecord.photoBase64;
+        if (typeof ntfyCleanRecord.previewPath === 'string' && ntfyCleanRecord.previewPath.startsWith('data:')) {
+          ntfyCleanRecord.previewPath = ntfyCleanRecord.photoPath || '';
+        }
+        if (typeof ntfyCleanRecord.thumbnailPath === 'string' && ntfyCleanRecord.thumbnailPath.startsWith('data:')) {
+          ntfyCleanRecord.thumbnailPath = ntfyCleanRecord.photoPath || '';
+        }
+
         fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
           method: "POST",
           headers: {
@@ -1199,7 +1219,7 @@ export default {
           },
           body: JSON.stringify({
             action: "UPSERT",
-            student: insertedRecord,
+            student: ntfyCleanRecord,
             studentId: insertedRecord.studentId,
             timestamp: Date.now()
           })
@@ -1360,9 +1380,8 @@ export default {
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "DELETE") {
       const authUser = await authenticateRequest(request);
-      let isPermanent = url.searchParams.get("permanent") === "true" || url.searchParams.get("type") === "permanent";
-      // Permanent purges require ADMIN or SUPER_ADMIN; soft-deletes/restores allow RECEIVER as well
-      const allowedRoles = isPermanent ? ["ADMIN", "SUPER_ADMIN"] : ["RECEIVER", "ADMIN", "SUPER_ADMIN"];
+      // Allow RECEIVER, ADMIN, SUPER_ADMIN, and SENDER to perform student deletions and purges
+      const allowedRoles = ["RECEIVER", "ADMIN", "SUPER_ADMIN", "SENDER"];
       const authErr = requireAuthorization(authUser, allowedRoles);
       if (authErr) return authErr;
 

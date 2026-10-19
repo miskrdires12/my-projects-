@@ -236,8 +236,16 @@ export const ReceiverStudentsPage: React.FC = () => {
       }
       setSendersList(getAllSendersMetrics());
     };
+    const handleSoftDelete = (e: any) => {
+      const sid = e?.detail;
+      if (sid) {
+        setStudents(prev => prev.map(s => (s.studentId === sid || s.id === sid) ? { ...s, receiverHidden: true, hiddenAt: new Date().toISOString() } : s));
+      }
+      handleDataChange();
+    };
     window.addEventListener('studentbridge_datachange', handleDataChange);
     window.addEventListener('studentbridge_userchange', handleDataChange);
+    window.addEventListener('studentbridge_softdelete', handleSoftDelete);
 
     const unsubscribe = subscribeToStudentSync(
       (incoming) => {
@@ -259,6 +267,7 @@ export const ReceiverStudentsPage: React.FC = () => {
     return () => {
       window.removeEventListener('studentbridge_datachange', handleDataChange);
       window.removeEventListener('studentbridge_userchange', handleDataChange);
+      window.removeEventListener('studentbridge_softdelete', handleSoftDelete);
       unsubscribe();
     };
   }, []);
@@ -317,7 +326,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       const st = (s.status || 'Active').toUpperCase();
       const isAccepted = st === 'ACCEPTED' || st === 'ACTIVE' || st === 'VERIFIED';
       const matchStatus =
-        statusFilter === 'ALL' ||
+        (statusFilter === 'ALL' && !s.receiverHidden) ||
         (statusFilter === 'Active' && isAccepted && !s.receiverHidden) ||
         (statusFilter === 'Hidden' && s.receiverHidden === true);
 
@@ -605,7 +614,8 @@ export const ReceiverStudentsPage: React.FC = () => {
   const handleSaveStudentData = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDataStudent) return;
-    const targetSid = editingDataStudent.studentId;
+    const targetSid = editingDataStudent.studentId || editingDataStudent.id;
+    const targetDbId = editingDataStudent.id || editingDataStudent.studentId;
 
     const parsedG = parseGradeAndSection(editGrade.trim(), editSection.trim());
     const resolvedSection = (editSection.trim() || parsedG.cleanSection || '').toUpperCase();
@@ -631,10 +641,18 @@ export const ReceiverStudentsPage: React.FC = () => {
     };
 
     updateStudent(targetSid, updates);
+    if (targetDbId && targetDbId !== targetSid) {
+      updateStudent(targetDbId, updates);
+    }
 
-    setStudents(prev => prev.map(s => s.studentId === targetSid ? { ...s, ...updates } : s));
+    setStudents(prev => prev.map(s => {
+      if (s.studentId === targetSid || s.id === targetDbId || s.id === targetSid || s.studentId === targetDbId) {
+        return { ...s, ...updates };
+      }
+      return s;
+    }));
 
-    if (detailStudent?.studentId === targetSid) {
+    if (detailStudent && (detailStudent.studentId === targetSid || detailStudent.id === targetDbId || detailStudent.id === targetSid)) {
       setDetailStudent(prev => prev ? { ...prev, ...updates } : null);
     }
 

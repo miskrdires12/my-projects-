@@ -290,6 +290,83 @@ export function getStudentQrFileName(student: Partial<Student>): string {
   return `${student.studentId || 'STUDENT'}_qr.png`;
 }
 
+// Sanitizes student record to prevent heavy base64 strings from exhausting 5MB localStorage quota
+export function sanitizeStudentForStorage(student: Partial<Student>): Student {
+  const clean = { ...student } as any;
+  delete clean.capturedPhoto;
+  delete clean.photoBase64;
+  if (typeof clean.previewPath === 'string' && clean.previewPath.startsWith('data:')) {
+    clean.previewPath = clean.photoPath || '';
+  }
+  if (typeof clean.thumbnailPath === 'string' && clean.thumbnailPath.startsWith('data:')) {
+    clean.thumbnailPath = clean.photoPath || '';
+  }
+  return clean as Student;
+}
+
+// Bulletproof localStorage setter that handles QuotaExceededError automatically
+export function safeSetItem(key: string, value: string): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(key, value);
+  } catch (e: any) {
+    console.warn(`LocalStorage write quota warning on "${key}":`, e);
+    // 1. Sanitize and trim sb_custom_students to keep only recent 15 records without any base64
+    try {
+      const raw = localStorage.getItem('sb_custom_students');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const stripped = parsed.slice(0, 15).map((st: any) => sanitizeStudentForStorage(st));
+          localStorage.setItem('sb_custom_students', JSON.stringify(stripped));
+        }
+      }
+    } catch {
+      try { localStorage.removeItem('sb_custom_students'); } catch {}
+    }
+
+    // 2. Clear non-essential large cache items
+    try {
+      localStorage.removeItem('sb_bulked_student_ids');
+      localStorage.removeItem('sb_correction_logs');
+      localStorage.removeItem('sb_paused_student_notes');
+      localStorage.removeItem('sb_paused_student_ids');
+      localStorage.removeItem('sb_print_jobs');
+      localStorage.removeItem('sb_admin_tasks');
+    } catch {}
+
+    // 3. Re-try setting the item
+    try {
+      localStorage.setItem(key, value);
+      return;
+    } catch (e2) {
+      console.warn(`Secondary quota cleanup needed for "${key}":`, e2);
+    }
+
+    // 4. Emergency: clear all custom student cache and retry
+    try {
+      localStorage.removeItem('sb_custom_students');
+      localStorage.setItem(key, value);
+      return;
+    } catch (e3) {
+      // Absolute last resort: preserve credentials and clear the rest
+      try {
+        const token = localStorage.getItem('sb_auth_token') || localStorage.getItem('sb_token');
+        const user = localStorage.getItem('sb_auth_user');
+        const devId = localStorage.getItem('sb_device_id');
+        localStorage.clear();
+        if (token) localStorage.setItem('sb_auth_token', token);
+        if (token) localStorage.setItem('sb_token', token);
+        if (user) localStorage.setItem('sb_auth_user', user);
+        if (devId) localStorage.setItem('sb_device_id', devId);
+        localStorage.setItem(key, value);
+      } catch (e4) {
+        console.error(`Fatal LocalStorage write failure for "${key}":`, e4);
+      }
+    }
+  }
+}
+
 let memoryStudents: Student[] = (() => {
   if (typeof localStorage !== 'undefined') {
     try {
@@ -297,7 +374,7 @@ let memoryStudents: Student[] = (() => {
       if (custom) {
         const parsed = JSON.parse(custom);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map(sanitizeStudentForStorage);
         }
       }
     } catch (e) {}
@@ -445,14 +522,17 @@ function upsertStudentFromSync(incoming: Student): void {
   }
 
   try {
-    const existing: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+    const raw = localStorage.getItem('sb_custom_students');
+    const existing: Student[] = raw ? JSON.parse(raw) : [];
     const cIdx = existing.findIndex((s: Student) => s.studentId === incoming.studentId || s.id === incoming.id);
+    const sanitized = sanitizeStudentForStorage(incoming);
     if (cIdx !== -1) {
-      existing[cIdx] = incoming;
+      existing[cIdx] = sanitized;
     } else {
-      existing.unshift(incoming);
+      existing.unshift(sanitized);
     }
-    localStorage.setItem('sb_custom_students', JSON.stringify(existing));
+    const capped = existing.slice(0, 25).map(sanitizeStudentForStorage);
+    safeSetItem('sb_custom_students', JSON.stringify(capped));
   } catch (e) {}
 
   if (typeof window !== 'undefined') {
@@ -701,14 +781,17 @@ export function addStudent(newStudent: Student): void {
   }
 
   try {
-    const existing: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+    const raw = localStorage.getItem('sb_custom_students');
+    const existing: Student[] = raw ? JSON.parse(raw) : [];
     const cIdx = existing.findIndex((s: Student) => s.studentId === newStudent.studentId || s.id === newStudent.id);
+    const sanitized = sanitizeStudentForStorage(newStudent);
     if (cIdx !== -1) {
-      existing[cIdx] = newStudent;
+      existing[cIdx] = sanitized;
     } else {
-      existing.unshift(newStudent);
+      existing.unshift(sanitized);
     }
-    localStorage.setItem('sb_custom_students', JSON.stringify(existing));
+    const capped = existing.slice(0, 25).map(sanitizeStudentForStorage);
+    safeSetItem('sb_custom_students', JSON.stringify(capped));
   } catch (e) {}
 
   addAuditLog({
@@ -771,14 +854,17 @@ export function updateStudent(id: string, updates: Partial<Student>): void {
 
     // Guaranteed persistence into sb_custom_students in localStorage
     try {
-      const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+      const raw = localStorage.getItem('sb_custom_students');
+      const custom: Student[] = raw ? JSON.parse(raw) : [];
       const cIdx = custom.findIndex(s => s.id === id || s.studentId === id || s.studentId === existing.studentId);
+      const sanitized = sanitizeStudentForStorage(updatedStudent);
       if (cIdx !== -1) {
-        custom[cIdx] = updatedStudent;
+        custom[cIdx] = sanitized;
       } else {
-        custom.unshift(updatedStudent);
+        custom.unshift(sanitized);
       }
-      localStorage.setItem('sb_custom_students', JSON.stringify(custom));
+      const capped = custom.slice(0, 25).map(sanitizeStudentForStorage);
+      safeSetItem('sb_custom_students', JSON.stringify(capped));
     } catch (e) {}
 
     // Persist update to Supabase PostgreSQL in background
@@ -828,9 +914,10 @@ export async function deleteStudent(id: string, permanent: boolean = false): Pro
       memoryStudents = memoryStudents.filter(s => s.id !== id && s.studentId !== id);
     }
     try {
-      const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+      const raw = localStorage.getItem('sb_custom_students');
+      const custom: Student[] = raw ? JSON.parse(raw) : [];
       const filtered = custom.filter(s => s.id !== targetDbId && s.studentId !== targetId && s.id !== id && s.studentId !== id);
-      localStorage.setItem('sb_custom_students', JSON.stringify(filtered));
+      safeSetItem('sb_custom_students', JSON.stringify(filtered.slice(0, 25)));
     } catch (e) {}
 
     // Persist permanent purge to Cloudflare (R2 photo deletion & Supabase PostgreSQL delete)
@@ -873,19 +960,21 @@ export async function deleteStudent(id: string, permanent: boolean = false): Pro
     }
 
     try {
-      const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+      const raw = localStorage.getItem('sb_custom_students');
+      const custom: Student[] = raw ? JSON.parse(raw) : [];
       const cIdx = custom.findIndex(s => s.id === targetDbId || s.studentId === targetId || s.id === id || s.studentId === id);
       if (cIdx !== -1) {
         custom[cIdx].receiverHidden = true;
         custom[cIdx].hiddenAt = new Date().toISOString();
-        localStorage.setItem('sb_custom_students', JSON.stringify(custom));
+        safeSetItem('sb_custom_students', JSON.stringify(custom.slice(0, 25)));
       }
     } catch (e) {}
 
     // Sync soft delete to server
     try {
       const res = await fetch(`/api/students?id=${encodeURIComponent(targetId)}&permanent=false`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
       if (!res.ok) {
         console.warn('Server temporary delete status:', res.status);
@@ -922,18 +1011,20 @@ export async function restoreStudent(id: string): Promise<boolean> {
   }
 
   try {
-    const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+    const raw = localStorage.getItem('sb_custom_students');
+    const custom: Student[] = raw ? JSON.parse(raw) : [];
     const cIdx = custom.findIndex(s => s.id === targetDbId || s.studentId === targetId || s.id === id || s.studentId === id);
     if (cIdx !== -1) {
       custom[cIdx].receiverHidden = false;
       custom[cIdx].hiddenAt = null as any;
-      localStorage.setItem('sb_custom_students', JSON.stringify(custom));
+      safeSetItem('sb_custom_students', JSON.stringify(custom.slice(0, 25)));
     }
   } catch (e) {}
 
   try {
     const res = await fetch(`/api/students?id=${encodeURIComponent(targetId)}&action=restore`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: getAuthHeaders()
     });
     if (!res.ok) {
       console.warn('Server restore status:', res.status);
@@ -1301,8 +1392,8 @@ export function setUserHardwareLock(userId: string, deviceId: string): void {
 export function checkDeviceLock(user: User, currentDeviceId: string): { allowed: boolean; boundDeviceId?: string; reason?: string } {
   if (!user) return { allowed: false, reason: 'Unrecognized user account' };
 
-  // Super Admin is never blocked by hardware locks
-  if (user.role === 'SUPER_ADMIN' || user.email?.toLowerCase() === 'miskrdires11@gmail.com') {
+  // Super Admin and SENDER accounts are never blocked by hardware locks so 30+ senders can transmit concurrently
+  if (user.role === 'SUPER_ADMIN' || user.role === 'SENDER' || user.email?.toLowerCase() === 'miskrdires11@gmail.com') {
     return { allowed: true, boundDeviceId: currentDeviceId };
   }
 
@@ -1594,9 +1685,11 @@ export function getAuthToken(): string | null {
 export function setAuthToken(token: string | null): void {
   try {
     if (token) {
-      localStorage.setItem('sb_auth_token', token);
+      safeSetItem('sb_auth_token', token);
+      safeSetItem('sb_token', token);
     } else {
       localStorage.removeItem('sb_auth_token');
+      localStorage.removeItem('sb_token');
     }
   } catch (e) {}
 }
@@ -1633,6 +1726,7 @@ export function getCurrentUser(): User | null {
       if (Date.now() - loginTime > twentyFourHoursMs) {
         localStorage.removeItem('sb_auth_user');
         localStorage.removeItem('sb_auth_token');
+        localStorage.removeItem('sb_token');
         localStorage.removeItem('sb_auth_time');
         return null;
       }
@@ -1643,26 +1737,34 @@ export function getCurrentUser(): User | null {
 }
 
 export function setCurrentUser(user: User | null, token?: string | null): void {
-  if (user) {
-    localStorage.setItem('sb_auth_user', JSON.stringify(user));
-    localStorage.setItem('sb_auth_time', Date.now().toString());
-    if (token) {
-      localStorage.setItem('sb_auth_token', token);
+  try {
+    if (user) {
+      safeSetItem('sb_auth_user', JSON.stringify(user));
+      safeSetItem('sb_auth_time', Date.now().toString());
+      if (token) {
+        safeSetItem('sb_auth_token', token);
+        safeSetItem('sb_token', token);
+      }
+    } else {
+      localStorage.removeItem('sb_auth_user');
+      localStorage.removeItem('sb_auth_token');
+      localStorage.removeItem('sb_token');
+      localStorage.removeItem('sb_auth_time');
     }
-  } else {
-    localStorage.removeItem('sb_auth_user');
-    localStorage.removeItem('sb_auth_token');
-    localStorage.removeItem('sb_auth_time');
-  }
+  } catch (e) {}
 }
 
 export function getOrCreateDeviceId(): string {
-  let devId = localStorage.getItem('sb_device_id');
-  if (!devId) {
-    devId = 'DEV-SILICON-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-    localStorage.setItem('sb_device_id', devId);
+  try {
+    let devId = localStorage.getItem('sb_device_id');
+    if (!devId) {
+      devId = 'DEV-SILICON-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      safeSetItem('sb_device_id', devId);
+    }
+    return devId;
+  } catch {
+    return 'DEV-SILICON-EDGE';
   }
-  return devId;
 }
 
 // ----------------------------------------------------

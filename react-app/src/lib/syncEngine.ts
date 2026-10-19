@@ -59,6 +59,20 @@ if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
   }
 }
 
+export function cleanStudentForSync(student?: Student): Student | undefined {
+  if (!student) return undefined;
+  const clean = { ...student } as any;
+  delete clean.capturedPhoto;
+  delete clean.photoBase64;
+  if (typeof clean.previewPath === 'string' && clean.previewPath.startsWith('data:')) {
+    clean.previewPath = clean.photoPath || '';
+  }
+  if (typeof clean.thumbnailPath === 'string' && clean.thumbnailPath.startsWith('data:')) {
+    clean.thumbnailPath = clean.photoPath || '';
+  }
+  return clean as Student;
+}
+
 /**
  * Publishes an upsert or deletion event to both local cross-tab bus and global cloud sync bus.
  */
@@ -67,7 +81,8 @@ export async function publishStudentSync(
   studentOrId: Student | string
 ): Promise<boolean> {
   try {
-    const student = typeof studentOrId !== 'string' ? studentOrId : undefined;
+    const rawStudent = typeof studentOrId !== 'string' ? studentOrId : undefined;
+    const student = cleanStudentForSync(rawStudent);
     const studentId = typeof studentOrId === 'string' ? studentOrId : studentOrId.studentId;
 
     const payload: SyncPayload = {
@@ -91,7 +106,7 @@ export async function publishStudentSync(
       window.dispatchEvent(new CustomEvent('studentbridge_datachange', { detail: payload }));
     }
 
-    // 3. Broadcast to Global Cloud Sync Bus (cross-device: phone -> PC Receiver)
+    // 3. Broadcast to Global Cloud Sync Bus (cross-device: phone -> PC Receiver worldwide)
     fetch(SYNC_BASE_URL, {
       method: 'POST',
       headers: {
