@@ -14,13 +14,13 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   onClose,
   onCapture,
   studentId = 'STUDENT',
-  defaultFacingMode = 'user',
+  defaultFacingMode = 'environment',
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [isStreamReady, setIsStreamReady] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>(defaultFacingMode);
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>(defaultFacingMode || 'environment');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [flashEffect, setFlashEffect] = useState(false);
@@ -28,16 +28,20 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   // Stop camera stream safely
   const stopCameraStream = useCallback(() => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      try {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      } catch {}
       streamRef.current = null;
     }
     if (videoRef.current) {
-      videoRef.current.srcObject = null;
+      try {
+        videoRef.current.srcObject = null;
+      } catch {}
     }
     setIsStreamReady(false);
   }, []);
 
-  // Start camera with chosen facing mode
+  // Start camera with chosen facing mode (back camera default)
   const startCameraStream = useCallback(
     async (facing: 'user' | 'environment') => {
       stopCameraStream();
@@ -49,67 +53,92 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
         return;
       }
 
+      // Progressive camera acquisition for maximum mobile phone compatibility
+      let stream: MediaStream | null = null;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: facing },
-            width: { ideal: 1280 },
-            height: { ideal: 960 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           },
           audio: false,
         });
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.muted = true;
-          await videoRef.current.play().catch(() => {});
-          setIsStreamReady(true);
-        }
-      } catch (err: any) {
-        console.warn('Camera stream failed for facing mode, retrying basic video:', err);
+      } catch (highResErr) {
+        console.warn('High-res camera stream constraint failed, falling back to simple facing mode:', highResErr);
         try {
-          const fallbackStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: facing },
+            },
             audio: false,
           });
-          streamRef.current = fallbackStream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = fallbackStream;
-            videoRef.current.muted = true;
-            await videoRef.current.play().catch(() => {});
-            setIsStreamReady(true);
+        } catch (facingErr) {
+          console.warn('Ideal facing mode failed, falling back to string facingMode:', facingErr);
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: facing,
+              },
+              audio: false,
+            });
+          } catch (strFacingErr) {
+            console.warn('String facingMode failed, falling back to basic video device:', strFacingErr);
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false,
+              });
+            } catch (basicErr: any) {
+              setCameraError(
+                basicErr?.name === 'NotAllowedError'
+                  ? 'Camera permission was denied. Please allow camera access in your mobile browser settings.'
+                  : 'Unable to connect to camera device. Please ensure camera is not in use by another app.'
+              );
+              return;
+            }
           }
-        } catch (fallbackErr: any) {
-          setCameraError(
-            fallbackErr?.name === 'NotAllowedError'
-              ? 'Camera permission was denied. Please allow camera access in your browser settings.'
-              : 'Unable to connect to camera device. Please check hardware connection.'
-          );
+        }
+      }
+
+      if (stream) {
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = stream;
+          video.muted = true;
+          video.setAttribute('playsinline', 'true');
+          video.setAttribute('webkit-playsinline', 'true');
+          video.onloadedmetadata = () => {
+            video.play().catch(() => {});
+            setIsStreamReady(true);
+          };
+          try {
+            await video.play();
+          } catch {}
+          setIsStreamReady(true);
         }
       }
     },
     [stopCameraStream]
   );
 
-  // When modal opens/closes
+  // Single unified lifecycle effect: starts stream when open, stops and resets to back camera when closed
   useEffect(() => {
-    if (isOpen) {
-      startCameraStream(cameraFacing);
-    } else {
+    if (!isOpen) {
       stopCameraStream();
+      setCameraFacing(defaultFacingMode || 'environment');
+    } else {
+      startCameraStream(cameraFacing);
     }
     return () => {
       stopCameraStream();
     };
-  }, [isOpen, cameraFacing, startCameraStream, stopCameraStream]);
+  }, [isOpen, cameraFacing, defaultFacingMode, startCameraStream, stopCameraStream]);
 
-  // Toggle front/back camera
+  // Toggle front/back camera (state update triggers the single effect without race conditions)
   const handleToggleFacing = () => {
-    const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
-    setCameraFacing(nextFacing);
-    startCameraStream(nextFacing);
+    setCameraFacing((prev) => (prev === 'user' ? 'environment' : 'user'));
   };
 
   // Capture snapshot to Data URL

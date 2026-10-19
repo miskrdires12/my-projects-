@@ -290,7 +290,20 @@ export function getStudentQrFileName(student: Partial<Student>): string {
   return `${student.studentId || 'STUDENT'}_qr.png`;
 }
 
-let memoryStudents: Student[] = [];
+let memoryStudents: Student[] = (() => {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const custom = localStorage.getItem('sb_custom_students');
+      if (custom) {
+        const parsed = JSON.parse(custom);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+  }
+  return [];
+})();
 let memoryUsers: (User & { password?: string })[] = (() => {
   let deletedList: string[] = [];
   try {
@@ -459,7 +472,20 @@ export async function initStore(): Promise<void> {
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.students) && data.students.length > 0) {
-        memoryStudents = data.students;
+        try {
+          const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+          const customMap = new Map(custom.map(cs => [cs.studentId, cs]));
+          const merged = data.students.map(ds => customMap.get(ds.studentId) || ds);
+          const existingIds = new Set(data.students.map(ds => ds.studentId));
+          custom.forEach(cs => {
+            if (!existingIds.has(cs.studentId)) {
+              merged.unshift(cs);
+            }
+          });
+          memoryStudents = merged;
+        } catch (e) {
+          memoryStudents = data.students;
+        }
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('studentbridge_datachange'));
         }
@@ -711,36 +737,62 @@ export function updateStudent(id: string, updates: Partial<Student>): void {
       notes: updates.grade ? `Updated grade to ${updates.grade}` : 'Updated student record fields'
     });
 
-    memoryStudents[index] = {
+    const updatedFullName = updates.fullName !== undefined ? updates.fullName : existing.fullName;
+    const updatedGrade = updates.grade !== undefined ? updates.grade : existing.grade;
+    const updatedSchool = updates.school !== undefined ? updates.school : existing.school;
+    const updatedBranch = updates.branch || updates.location || (updatedSchool ? getBranchForSchool(updatedSchool) : existing.branch || existing.location);
+
+    // Synchronize section and department from grade if needed
+    const parsedG = parseGradeAndSection(updatedGrade, updates.department || (updates as any).section || existing.department);
+    const resolvedSection = updates.department || (updates as any).section || parsedG.cleanSection || existing.department || '';
+
+    const newQr = generateStudentQrToken({
+      studentId: existing.studentId,
+      fullName: updatedFullName,
+      rollNumber: '',
+      grade: parsedG.displayString || updatedGrade
+    });
+
+    const updatedStudent: Student = {
       ...existing,
       ...updates,
+      fullName: updatedFullName,
+      grade: parsedG.displayString || updatedGrade,
+      department: resolvedSection,
+      section: resolvedSection,
+      branch: updatedBranch,
+      location: updatedBranch,
+      qrCodeData: newQr,
       recordHistory: history,
       updatedAt: new Date().toISOString()
     };
 
-    // Update in localStorage as well
+    memoryStudents[index] = updatedStudent;
+
+    // Guaranteed persistence into sb_custom_students in localStorage
     try {
       const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
-      const cIdx = custom.findIndex(s => s.id === id || s.studentId === id);
+      const cIdx = custom.findIndex(s => s.id === id || s.studentId === id || s.studentId === existing.studentId);
       if (cIdx !== -1) {
-        custom[cIdx] = memoryStudents[index];
-        localStorage.setItem('sb_custom_students', JSON.stringify(custom));
+        custom[cIdx] = updatedStudent;
+      } else {
+        custom.unshift(updatedStudent);
       }
+      localStorage.setItem('sb_custom_students', JSON.stringify(custom));
     } catch (e) {}
 
     // Persist update to Supabase PostgreSQL in background
     fetch('/api/students', {
       method: 'PATCH',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        id: memoryStudents[index].id,
-        studentId: memoryStudents[index].studentId,
-        ...updates
-      })
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify(updatedStudent)
     }).catch(err => {
       console.warn('Could not sync update to server, queued offline:', err);
       import('@/lib/offlineQueue').then(({ queueOfflineOperation }) => {
-        queueOfflineOperation('UPDATE_STUDENT', { id: memoryStudents[index].id, ...updates });
+        queueOfflineOperation('UPDATE_STUDENT', updatedStudent);
       });
     });
 
@@ -1654,6 +1706,7 @@ interface SenderLiveTelemetry {
   week: number;
   month: number;
   total: number;
+  todayDateStr?: string;
   sessionStart: number;
   lastCapture: number | null;
   totalActiveTimeSecs: number;
@@ -1662,11 +1715,13 @@ interface SenderLiveTelemetry {
 
 function getStoredSenderTelemetry(norm: string): SenderLiveTelemetry {
   const now = Date.now();
+  const todayStr = new Date().toISOString().substring(0, 10);
   const defaultTelemetry: SenderLiveTelemetry = {
     today: 0,
     week: 0,
     month: 0,
     total: 0,
+    todayDateStr: todayStr,
     sessionStart: now,
     lastCapture: null,
     totalActiveTimeSecs: 0,
@@ -1679,6 +1734,10 @@ function getStoredSenderTelemetry(norm: string): SenderLiveTelemetry {
     const raw = localStorage.getItem(`sb_sender_telemetry_${norm}`);
     if (raw) {
       const parsed = JSON.parse(raw);
+      if (parsed.todayDateStr && parsed.todayDateStr !== todayStr) {
+        parsed.today = 0;
+        parsed.todayDateStr = todayStr;
+      }
       return { ...defaultTelemetry, ...parsed };
     }
   } catch (e) {}
@@ -1699,8 +1758,14 @@ export function incrementSenderLiveCaptures(senderIdentifier: string): void {
   if (!senderIdentifier) return;
   const norm = senderIdentifier.toLowerCase().trim();
   const now = Date.now();
+  const todayStr = new Date().toISOString().substring(0, 10);
   if (!liveSenderSessionCaptures[norm]) {
     liveSenderSessionCaptures[norm] = getStoredSenderTelemetry(norm);
+  }
+
+  if (liveSenderSessionCaptures[norm].todayDateStr !== todayStr) {
+    liveSenderSessionCaptures[norm].today = 0;
+    liveSenderSessionCaptures[norm].todayDateStr = todayStr;
   }
 
   const prev = liveSenderSessionCaptures[norm].lastCapture;
@@ -1710,6 +1775,7 @@ export function incrementSenderLiveCaptures(senderIdentifier: string): void {
   liveSenderSessionCaptures[norm].week += 1;
   liveSenderSessionCaptures[norm].month += 1;
   liveSenderSessionCaptures[norm].total += 1;
+  liveSenderSessionCaptures[norm].todayDateStr = todayStr;
   liveSenderSessionCaptures[norm].lastCapture = now;
   liveSenderSessionCaptures[norm].totalActiveTimeSecs += interval;
   liveSenderSessionCaptures[norm].recentIntervalsSecs.push(interval);
@@ -1722,6 +1788,7 @@ export function incrementSenderLiveCaptures(senderIdentifier: string): void {
 
 export function resetSenderLiveCaptures(senderIdentifier?: string): void {
   const now = Date.now();
+  const todayStr = new Date().toISOString().substring(0, 10);
   if (senderIdentifier) {
     const norm = senderIdentifier.toLowerCase().trim();
     liveSenderSessionCaptures[norm] = {
@@ -1729,6 +1796,7 @@ export function resetSenderLiveCaptures(senderIdentifier?: string): void {
       week: 0,
       month: 0,
       total: 0,
+      todayDateStr: todayStr,
       sessionStart: now,
       lastCapture: null,
       totalActiveTimeSecs: 0,
@@ -1742,6 +1810,7 @@ export function resetSenderLiveCaptures(senderIdentifier?: string): void {
         week: 0,
         month: 0,
         total: 0,
+        todayDateStr: todayStr,
         sessionStart: now,
         lastCapture: null,
         totalActiveTimeSecs: 0,
@@ -1754,41 +1823,62 @@ export function resetSenderLiveCaptures(senderIdentifier?: string): void {
 
 export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   const norm = (senderIdentifier || '').toLowerCase().trim();
+  const curUser = getCurrentUser();
   const user = memoryUsers.find(
-    u => u.username.toLowerCase() === norm || u.email.toLowerCase() === norm
-  );
+    u => u.username.toLowerCase() === norm || u.email.toLowerCase() === norm || (curUser && curUser.id === u.id)
+  ) || curUser;
 
+  const todayStr = new Date().toISOString().substring(0, 10);
   if (!liveSenderSessionCaptures[norm]) {
     liveSenderSessionCaptures[norm] = getStoredSenderTelemetry(norm);
   }
   const live = liveSenderSessionCaptures[norm];
+  if (live.todayDateStr !== todayStr) {
+    live.today = 0;
+    live.todayDateStr = todayStr;
+  }
 
-  // REAL and ACTUAL calculation from authoritative memoryStudents dataset:
+  // Authoritative calendar boundary calculation
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30).getTime();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  const weekStart = todayStart - 7 * 86400000;
+  const monthStart = todayStart - 30 * 86400000;
 
   let realTotal = 0;
   let realToday = 0;
   let realWeek = 0;
   let realMonth = 0;
 
-  memoryStudents.forEach(s => {
+  const uName = (user?.username || '').toLowerCase().trim();
+  const uEmail = (user?.email || '').toLowerCase().trim();
+  const uId = (user?.id || '').toLowerCase().trim();
+
+  // Combine memoryStudents and any custom students from localStorage to guarantee no drops
+  let allStudentsToCheck = memoryStudents;
+  try {
+    const custom: Student[] = JSON.parse(localStorage.getItem('sb_custom_students') || '[]');
+    if (custom.length > 0) {
+      const existingMap = new Map(allStudentsToCheck.map(s => [s.studentId, s]));
+      custom.forEach(cs => {
+        if (!existingMap.has(cs.studentId)) {
+          existingMap.set(cs.studentId, cs);
+        }
+      });
+      allStudentsToCheck = Array.from(existingMap.values());
+    }
+  } catch (e) {}
+
+  allStudentsToCheck.forEach(s => {
     const sn = (s.senderName || '').toLowerCase().trim();
     const sid = (s.senderId || '').toLowerCase().trim();
     const match =
-      sn === norm ||
-      sid === norm ||
-      (user && (
-        (user.id && sid === user.id.toLowerCase()) ||
-        (user.username && sn === user.username.toLowerCase()) ||
-        (user.email && sn === user.email.toLowerCase())
-      ));
+      (sn && (sn === norm || sn === uName || sn === uEmail)) ||
+      (sid && (sid === norm || sid === uId || sid === uName)) ||
+      (!sn && !sid && (norm === 'field operator' || norm === 'sender'));
 
     if (match) {
       realTotal++;
-      const sTime = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+      const sTime = s.createdAt ? new Date(s.createdAt).getTime() : Date.now();
       if (sTime >= todayStart) realToday++;
       if (sTime >= weekStart) realWeek++;
       if (sTime >= monthStart) realMonth++;
@@ -1805,6 +1895,7 @@ export function getSenderMetrics(senderIdentifier: string): SenderMetrics {
   live.week = week;
   live.month = month;
   live.total = total;
+  live.todayDateStr = todayStr;
   saveStoredSenderTelemetry(norm, live);
 
   const mistakesCount = 0;

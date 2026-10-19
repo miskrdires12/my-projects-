@@ -775,7 +775,7 @@ export const TelemetricVelocityPage: React.FC = () => {
                 <span>Regional Cohort Completion Horizon &amp; Operating Days Matrix</span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Authoritative campus enrollment quotas vs. actual field registrations, real daily pace, and mathematically computed operating days to completion
+                Authoritative campus enrollment targets vs. actual field registrations, real daily pace, and mathematically computed operating days to completion
               </p>
             </div>
             <span className="text-[11px] text-[#256002] dark:text-[#8fe617] font-bold px-2.5 py-1 rounded-xl bg-[#85E510]/15 border border-[#85E510]/30 shrink-0">

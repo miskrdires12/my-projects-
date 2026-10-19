@@ -32,7 +32,8 @@ import {
   getCleanSection,
   getGradeDisplay,
   getStudentBranch,
-  getBranchForSchool
+  getBranchForSchool,
+  parseGradeAndSection
 } from '@/lib/gradeUtils';
 
 export const ReceiverStudentsPage: React.FC = () => {
@@ -606,12 +607,17 @@ export const ReceiverStudentsPage: React.FC = () => {
     if (!editingDataStudent) return;
     const targetSid = editingDataStudent.studentId;
 
+    const parsedG = parseGradeAndSection(editGrade.trim(), editSection.trim());
+    const resolvedSection = (editSection.trim() || parsedG.cleanSection || '').toUpperCase();
+    const cleanG = parsedG.cleanGrade || editGrade.trim();
+    const fullGrade = resolvedSection ? `${cleanG}${resolvedSection}` : cleanG;
+
     const updates: Partial<Student> = {
       fullName: editFullName.trim(),
       sex: editSex,
-      grade: editGrade.trim(),
-      department: editSection.trim(),
-      section: editSection.trim(),
+      grade: fullGrade,
+      department: resolvedSection,
+      section: resolvedSection,
       location: editBranch,
       branch: editBranch,
       address: editBranch,
@@ -2120,14 +2126,25 @@ export const ReceiverStudentsPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="font-bold text-[#0B1118] block mb-1">Grade (with Section)</label>
+                  <label className="font-bold text-[#0B1118] block mb-1">Grade</label>
                   <input
                     type="text"
                     required
                     value={editGrade}
                     onChange={(e) => setEditGrade(e.target.value)}
-                    placeholder="e.g. 10A or Grade 9B"
+                    placeholder="e.g. 10 or 9"
                     className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#0B1118] block mb-1">Section / Department</label>
+                  <input
+                    type="text"
+                    value={editSection}
+                    onChange={(e) => setEditSection(e.target.value)}
+                    placeholder="e.g. A, B, C or Natural"
+                    className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-3 py-2 font-bold text-xs uppercase"
                   />
                 </div>
 

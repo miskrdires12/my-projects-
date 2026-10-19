@@ -726,8 +726,8 @@ export default {
           dbSizeLimitMB: 500.0,
           dbSizePercent: 22.1,
           dbEgressStatus: "Shielded by Cloudflare Global CDN",
-          threatLevel: "ZERO_RISK",
-          quotaLockoutRisk: "0%",
+          threatLevel: "100% NOMINAL",
+          quotaLockoutRisk: "0% (UNRESTRICTED)",
           dualEdgePersistence: "Active (PostgreSQL + Cloudflare R2)",
           offlineVault: "IndexedDB Active"
         },
@@ -1222,7 +1222,7 @@ export default {
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "PATCH") {
       const authUser = await authenticateRequest(request);
-      const authErr = requireAuthorization(authUser, ["RECEIVER", "ADMIN", "SUPER_ADMIN"]);
+      const authErr = requireAuthorization(authUser, ["RECEIVER", "ADMIN", "SUPER_ADMIN", "SENDER"]);
       if (authErr) return authErr;
 
       try {
@@ -1280,8 +1280,6 @@ export default {
           }
         }
 
-// Cloudflare R2 update
-
         let mergedStudent = updates;
         if (cachedAllStudents) {
           const sIdx = cachedAllStudents.findIndex(s => s.studentId === studentId || s.id === studentId);
@@ -1313,6 +1311,40 @@ export default {
           await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
         } catch (r2Err) {
           console.warn("R2 update in PATCH notice:", r2Err);
+        }
+
+        // Authoritative write to Supabase cloudflare.students
+        try {
+          const supabasePayload = {};
+          const SUPABASE_ALLOWED_UPDATE_COLS = new Set([
+            "fullName", "sex", "grade", "department", "section", "school", "branch",
+            "location", "address", "cityRegion", "phone", "bloodType", "dateOfBirth",
+            "nationality", "academicYear", "photoPath", "thumbnailPath", "previewPath",
+            "originalPhotoPath", "qrCodeData", "senderName", "senderId", "photoIntegrityStatus",
+            "status", "idProductionStatus", "receiverHidden", "hasMistake", "updatedAt"
+          ]);
+
+          for (const [k, v] of Object.entries(updates)) {
+            if (SUPABASE_ALLOWED_UPDATE_COLS.has(k) && v !== undefined) {
+              supabasePayload[k] = v;
+            }
+          }
+
+          if (Object.keys(supabasePayload).length > 0) {
+            await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(studentId)},id.eq.${encodeURIComponent(studentId)})`, {
+              method: "PATCH",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                "Content-Profile": "cloudflare",
+                "Accept-Profile": "cloudflare"
+              },
+              body: JSON.stringify(supabasePayload)
+            });
+          }
+        } catch (sbErr) {
+          console.warn("Supabase student PATCH notice:", sbErr);
         }
 
         return new Response(JSON.stringify(mergedStudent || updates), {

@@ -1382,7 +1382,7 @@ export function DatabaseClient({
             }`}
           >
             <HardDrive className="w-4 h-4" />
-            <span>Storage Quotas, Zero-Egress &amp; Predictive Capacity Command</span>
+            <span>Storage Capacity, Zero-Egress &amp; Predictive Horizons</span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 font-bold ml-1">
               FORECAST
             </span>

@@ -66,9 +66,10 @@ export const StudentRegistrationPage: React.FC = () => {
   const [zoom, setZoom] = useState(1);
 
   // Sender Transmission Metrics (Daily, Weekly, Monthly, Total)
-  const [senderMetrics, setSenderMetrics] = useState<SenderMetrics>(() =>
-    getSenderMetrics(user?.username || '')
-  );
+  const [senderMetrics, setSenderMetrics] = useState<SenderMetrics>(() => {
+    const cur = getCurrentUser() || user;
+    return getSenderMetrics(cur?.username || cur?.email || '');
+  });
 
   // Submission States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,15 +81,16 @@ export const StudentRegistrationPage: React.FC = () => {
 
   // Refresh Sender Metrics dynamically on mount, after submission, or data changes
   const refreshMetrics = useCallback(() => {
-    if (user?.username) {
-      setSenderMetrics(getSenderMetrics(user.username));
-    }
+    const cur = getCurrentUser() || user;
+    const identifier = cur?.username || cur?.email || '';
+    setSenderMetrics(getSenderMetrics(identifier));
   }, [user]);
 
   useEffect(() => {
     refreshMetrics();
     const loadCorrections = () => {
-      setCorrectionNotices(getCorrectionLogs(user?.username));
+      const cur = getCurrentUser() || user;
+      setCorrectionNotices(getCorrectionLogs(cur?.username || cur?.email));
     };
     loadCorrections();
 
@@ -98,9 +100,13 @@ export const StudentRegistrationPage: React.FC = () => {
     };
     window.addEventListener('studentbridge_datachange', handleDataChange);
     window.addEventListener('studentbridge_correction_event', loadCorrections);
+    window.addEventListener('studentbridge_sync', handleDataChange);
+    window.addEventListener('storage', handleDataChange);
     return () => {
       window.removeEventListener('studentbridge_datachange', handleDataChange);
       window.removeEventListener('studentbridge_correction_event', loadCorrections);
+      window.removeEventListener('studentbridge_sync', handleDataChange);
+      window.removeEventListener('storage', handleDataChange);
     };
   }, [refreshMetrics, submittedStudent, user]);
 
@@ -997,11 +1003,12 @@ export const StudentRegistrationPage: React.FC = () => {
         </div>
       </form>
 
-      {/* Biometric Camera Capture Modal Popup */}
+      {/* Biometric Camera Capture Modal Popup (Back Camera Default) */}
       <CameraCaptureModal
         isOpen={isCameraModalOpen}
         onClose={() => setIsCameraModalOpen(false)}
         studentId={studentId}
+        defaultFacingMode="environment"
         onCapture={(dataUrl) => {
           setCapturedPhoto(dataUrl);
           setIsCameraModalOpen(false);

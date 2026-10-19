@@ -71,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { to: '/super-admin/users', label: 'Provision Operators & RBAC', icon: Shield, iconColor: 'text-amber-500' },
         { to: '/super-admin/database', label: 'Database & Audit Logs', icon: Database, iconColor: 'text-blue-500' },
-        { to: '/super-admin/storage', label: 'Storage Quotas & Zero-Egress Command', icon: HardDrive, iconColor: 'text-cyan-500' },
+        { to: '/super-admin/storage', label: 'Storage Capacity & Zero-Egress Command', icon: HardDrive, iconColor: 'text-cyan-500' },
         { to: '/super-admin/settings', label: 'Admin System Settings', icon: Settings, iconColor: 'text-emerald-500' },
       ]
     }
@@ -99,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { to: '/receiver/telemetric-velocity', label: 'Telemetric Velocity & Fleet', icon: Activity, iconColor: 'text-[#85E510]' },
         { to: '/receiver/review', label: '8-Up Print Engine', icon: Printer, iconColor: 'text-slate-500' },
         { to: '/receiver/id-production', label: 'Badge Designer Studio', icon: CreditCard, iconColor: 'text-slate-500' },
-        { to: '/receiver/storage', label: 'Storage Quotas & Zero-Egress Command', icon: HardDrive, iconColor: 'text-cyan-500' },
+        { to: '/receiver/storage', label: 'Storage Capacity & Zero-Egress Command', icon: HardDrive, iconColor: 'text-cyan-500' },
         { to: '/receiver/database', label: 'Database & PostgreSQL Ledger', icon: Database, iconColor: 'text-blue-500' },
       ]
     },
@@ -118,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { to: '/admin/dashboard', label: 'Live Dashboard & Metrics', icon: LayoutGrid, iconColor: 'text-slate-500' },
         { to: '/admin/telemetric-velocity', label: 'Telemetric Velocity & Fleet', icon: Activity, iconColor: 'text-[#85E510]' },
         { to: '/admin/senders', label: 'Provision Operators & RBAC', icon: Shield, iconColor: 'text-amber-500' },
-        { to: '/admin/storage', label: 'Storage Quotas & Zero-Egress Command', icon: HardDrive, iconColor: 'text-cyan-500' },
+        { to: '/admin/storage', label: 'Storage Capacity & Zero-Egress Command', icon: HardDrive, iconColor: 'text-cyan-500' },
         { to: '/admin/database', label: 'Database & PostgreSQL Ledger', icon: Database, iconColor: 'text-blue-500' },
         { to: '/admin/quality-control', label: 'Data Quality & Correction', icon: AlertTriangle, iconColor: 'text-rose-500' },
         { to: '/admin/tasks', label: 'Task Management', icon: CheckSquare, iconColor: 'text-slate-500' },

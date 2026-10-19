@@ -30,7 +30,7 @@ export const SenderPerformancePage: React.FC = () => {
         </div>
 
         <div className="bg-[#101612] border border-[#1e2c22] rounded-2xl p-5">
-          <span className="text-xs font-semibold text-[#9eb2a6] uppercase tracking-wider">Daily Quota Pace</span>
+          <span className="text-xs font-semibold text-[#9eb2a6] uppercase tracking-wider">Daily Transmission Cadence</span>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-heading font-black text-white">128</span>
             <span className="text-xs text-blue-400 font-bold">Students / Shift</span>

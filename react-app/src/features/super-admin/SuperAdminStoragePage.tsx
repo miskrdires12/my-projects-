@@ -281,7 +281,7 @@ export const SuperAdminStoragePage: React.FC = () => {
                 Storage, Zero-Egress Telemetry &amp; Predictive Capacity Command
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Authoritative quota telemetry, global $0.00 zero-egress data transfer, Class A/B cryptographic mutations, and deterministic capacity horizon forecasting
+                Authoritative capacity telemetry, global $0.00 zero-egress data transfer, Class A/B cryptographic mutations, and deterministic capacity horizon forecasting
               </p>
             </div>
           </div>
@@ -321,7 +321,7 @@ export const SuperAdminStoragePage: React.FC = () => {
               <span className="text-2xl font-black text-[#0B1118] dark:text-white">
                 {currentPhotoStorageMB} MB
               </span>
-              <span className="text-xs text-slate-400 font-bold">/ 10.00 GB Tier Limit</span>
+              <span className="text-xs text-slate-400 font-bold">/ 10.00 GB Tier Capacity</span>
             </div>
             <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
               {remainingStorageGB} GB Provisioned Headroom Available
@@ -439,7 +439,7 @@ export const SuperAdminStoragePage: React.FC = () => {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────── */}
-      {/* 2. PREDICTIVE BURN-RATE & LIMIT EXHAUSTION FORECASTER               */}
+      {/* 2. PREDICTIVE CAPACITY & RUNWAY FORECASTER                         */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       <div className="rounded-3xl border border-slate-200 dark:border-[#223126] bg-white dark:bg-[#111613] p-5.5 shadow-xs space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -451,7 +451,7 @@ export const SuperAdminStoragePage: React.FC = () => {
               </h2>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-              Deterministic statistical projection of operating days and calendar horizons remaining prior to quota saturation across Cloudflare R2 and Supabase managed infrastructure
+              Deterministic statistical projection of operating days and calendar horizons remaining prior to capacity scaling across Cloudflare R2 and Supabase managed infrastructure
             </p>
           </div>
 
@@ -506,11 +506,11 @@ export const SuperAdminStoragePage: React.FC = () => {
               {predictions.classAMonthlyUsagePercent}% Max
             </div>
             <div className="text-xs text-blue-800 dark:text-blue-300 font-medium">
-              Projected {predictions.monthlyClassAFromPace.toLocaleString()} operations/month. Quota resets dynamically every 30 operating days.
+              Projected {predictions.monthlyClassAFromPace.toLocaleString()} operations/month. Capacity resets dynamically every 30 operating days.
             </div>
           </div>
 
-          {/* Prediction 3: 500 MB Supabase PostgreSQL Limit */}
+          {/* Prediction 3: 500 MB Supabase PostgreSQL Horizon */}
           <div className="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/40 space-y-2">
             <div className="flex items-center justify-between text-xs text-purple-800 dark:text-purple-400 font-bold uppercase">
               <span>Supabase 500.00 MB PostgreSQL Volume</span>
@@ -581,10 +581,10 @@ export const SuperAdminStoragePage: React.FC = () => {
           <div>
             <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
               <Layers className="w-4 h-4 text-[#85E510]" />
-              <span>Enterprise Cloud Quota Compliance &amp; Zero-Egress Economics Ledger</span>
+              <span>Enterprise Cloud Capacity Compliance &amp; Zero-Egress Economics Ledger</span>
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Comprehensive telemetry accounting for storage quotas, cryptographic mutation limits, and bandwidth cost avoidance
+              Comprehensive telemetry accounting for storage capacity allocation, cryptographic mutation throughput, and bandwidth cost avoidance
             </p>
           </div>
           <span className="text-[11px] text-[#256002] dark:text-[#8fe617] font-bold px-2.5 py-1 rounded-xl bg-[#85E510]/15 border border-[#85E510]/30 shrink-0">

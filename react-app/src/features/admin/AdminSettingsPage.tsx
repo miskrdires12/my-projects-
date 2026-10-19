@@ -167,7 +167,7 @@ export const AdminSettingsPage: React.FC = () => {
             Station &amp; Production Settings
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Manage workstation quotas, storage directories, intake parameters, regional branch directories, and cloud infrastructure
+            Manage workstation allocation, storage directories, intake parameters, regional branch directories, and cloud infrastructure
           </p>
         </div>
 

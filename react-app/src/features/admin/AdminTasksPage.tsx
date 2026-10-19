@@ -563,7 +563,7 @@ export const AdminTasksPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">Target Student Quota</label>
+                <label className="block text-slate-700 font-bold mb-1">Target Student Volume / Goal</label>
                 <input
                   type="number"
                   value={quotaTarget}

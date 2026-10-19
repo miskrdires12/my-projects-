@@ -275,15 +275,15 @@ export const CloudflareStatusModal: React.FC<{
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-heading font-black text-base text-white tracking-tight">
-                  Infrastructure & Quota Sentinel
+                  Cloud Infrastructure &amp; Storage Sentinel
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Threat Level: 0%
+                  Status: 100% Nominal
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Real-time storage status, zero-egress protection & anti-disconnection monitor
+                Real-time storage status, zero-egress protection &amp; anti-disconnection monitor
               </p>
             </div>
           </div>
@@ -309,13 +309,13 @@ export const CloudflareStatusModal: React.FC<{
                 100% Fail-Safe Guarantee Active
               </span>
               <p className="text-emerald-800/90 mt-0.5 leading-relaxed text-[11px]">
-                Both Database (22% used) and Cloudflare R2 (36% used) are operating safely under free-tier limits.
+                Both Database ({telemetry.dbPercent}% used) and Cloudflare R2 ({telemetry.r2StoragePercent}% used) are operating safely under nominal capacity thresholds.
                 Cloudflare Edge Shield blocks bulk egress to prevent 402 lockouts, while dual-edge saves guarantee zero data loss.
               </p>
             </div>
           </div>
 
-          {/* Quota Progress Gauges Grid */}
+          {/* Capacity Allocation Gauges Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Supabase Database Capacity Gauge */}
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
@@ -337,7 +337,7 @@ export const CloudflareStatusModal: React.FC<{
               </div>
               <div className="flex justify-between text-[10px] text-slate-500 font-mono">
                 <span>{telemetry.dbSizeMB} MB used</span>
-                <span>Limit: {telemetry.dbSizeLimitMB} MB (Safe)</span>
+                <span>Capacity: {telemetry.dbSizeLimitMB} MB (Safe)</span>
               </div>
             </div>
 
@@ -361,7 +361,7 @@ export const CloudflareStatusModal: React.FC<{
               </div>
               <div className="flex justify-between text-[10px] text-slate-500 font-mono">
                 <span>{telemetry.r2StorageGB} GB used</span>
-                <span>Limit: {telemetry.r2StorageLimitGB} GB (Safe)</span>
+                <span>Capacity: {telemetry.r2StorageLimitGB} GB (Safe)</span>
               </div>
             </div>
           </div>
@@ -374,7 +374,7 @@ export const CloudflareStatusModal: React.FC<{
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span className="font-bold text-xs text-slate-900">
-                    Egress (Data Out) Threat Status
+                    Egress (Data Out) Allocation &amp; Cost Status
                   </span>
                 </div>
                 <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
@@ -388,7 +388,7 @@ export const CloudflareStatusModal: React.FC<{
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Database Egress Shield:</span>
-                  <span className="text-slate-800 font-semibold">Active (Protected from 402 lockout)</span>
+                  <span className="text-slate-800 font-semibold">Active (High availability protected)</span>
                 </div>
               </div>
             </div>
