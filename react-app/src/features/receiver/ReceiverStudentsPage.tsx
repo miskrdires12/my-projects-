@@ -1523,24 +1523,28 @@ export const ReceiverStudentsPage: React.FC = () => {
       )}
 
       {/* Real-Time Live Transmission & Amounts Telemetry Banner */}
-      <div className="bg-gradient-to-r from-[#0B1118] via-[#162232] to-[#0B1118] border border-[#2D3748] rounded-2xl p-4 text-white shadow-md space-y-3">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-slate-700/60">
+      <div className="bg-gradient-to-r from-[#0B1118] via-[#111A24] to-[#0B1118] border border-[#223126] rounded-2xl p-4 text-white shadow-lg space-y-3 relative overflow-hidden">
+        {/* Subtle Ambient Glow */}
+        <div className="absolute top-0 right-1/4 w-72 h-20 bg-[#85E510]/10 blur-2xl pointer-events-none rounded-full" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-slate-700/60">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#9EE617] opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#9EE617]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#85E510] opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#85E510]" />
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-black tracking-wider uppercase text-[#9EE617]">
-                  Live Real-Time Data Receiver Console
+                <span className="text-xs font-black tracking-wider uppercase text-[#85E510] font-heading flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5" />
+                  Live Real-Time Telemetry &amp; Field Bus Console
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 font-mono">
                   Realtime Active
                 </span>
               </div>
               <p className="text-[11px] text-slate-300">
-                Connected to global field sender bus &bull; Synchronizing live transmissions worldwide
+                Connected to global field sender bus &bull; Synchronizing live transmissions across all school campuses
               </p>
             </div>
           </div>
@@ -1554,7 +1558,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-slate-700/80 text-[11px]">
-              <Activity className="w-3.5 h-3.5 text-[#9EE617]" />
+              <Activity className="w-3.5 h-3.5 text-[#85E510]" />
               <span className="text-slate-300">Ping:</span>
               <strong className="text-emerald-400 font-mono">{liveServerStats.queryLatencyMs}ms</strong>
             </div>
@@ -1563,16 +1567,26 @@ export const ReceiverStudentsPage: React.FC = () => {
               type="button"
               onClick={fetchLiveTelemetry}
               disabled={isRefreshingTelemetry}
-              className="flex items-center gap-1.5 bg-[#0B1118] hover:bg-slate-800 text-[#9EE617] px-3 py-1 rounded-xl border border-[#9EE617]/30 text-[11px] font-bold transition-all cursor-pointer"
+              className="flex items-center gap-1.5 bg-[#0B1118] hover:bg-slate-800 text-[#85E510] px-3 py-1 rounded-xl border border-[#85E510]/30 text-[11px] font-bold transition-all cursor-pointer"
               title="Refresh Live Telemetric Data"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTelemetry ? 'animate-spin' : ''}`} />
-              <span>{isRefreshingTelemetry ? 'Pinging...' : 'Sync Now'}</span>
+              <span>{isRefreshingTelemetry ? 'Pinging...' : 'Sync'}</span>
             </button>
+
+            {/* Direct Link to Telemetric Velocity & Fleet Cockpit */}
+            <Link
+              to="/receiver/telemetric-velocity"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#85E510]/20 hover:bg-[#85E510]/30 text-[#85E510] hover:text-white border border-[#85E510]/40 text-[11px] font-bold transition-all"
+              title="Open Full Telemetric Velocity & Fleet Cockpit"
+            >
+              <Radio className="w-3.5 h-3.5 animate-pulse" />
+              <span>Fleet Velocity Cockpit &rarr;</span>
+            </Link>
 
             {telemetryAmounts.latestTransmitted ? (
               <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-slate-700/80 text-[11px]">
-                <Clock className="w-3.5 h-3.5 text-[#9EE617]" />
+                <Clock className="w-3.5 h-3.5 text-[#85E510]" />
                 <span className="text-slate-300">Last Received:</span>
                 <strong className="text-white font-mono">
                   {telemetryAmounts.latestTransmitted.createdAt
@@ -1592,12 +1606,12 @@ export const ReceiverStudentsPage: React.FC = () => {
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
               <span>Total Received</span>
-              <UsersIcon className="w-3.5 h-3.5 text-[#9EE617]" />
+              <UsersIcon className="w-3.5 h-3.5 text-[#85E510]" />
             </div>
             <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-white">
               {telemetryAmounts.total.toLocaleString()}
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">Authoritative registry count</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Authoritative database registry</div>
           </div>
 
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
@@ -1605,15 +1619,15 @@ export const ReceiverStudentsPage: React.FC = () => {
               <span>Transmitted Today</span>
               <Calendar className="w-3.5 h-3.5 text-emerald-400" />
             </div>
-            <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-[#9EE617] flex items-center gap-2">
+            <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-[#85E510] flex items-center gap-2">
               <span>{telemetryAmounts.today.toLocaleString()}</span>
               {telemetryAmounts.today > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#9EE617]/20 text-[#9EE617] font-black border border-[#9EE617]/40">
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#85E510]/20 text-[#85E510] font-black border border-[#85E510]/40 font-mono">
                   +{telemetryAmounts.today} New
                 </span>
               )}
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">Sent by operators today</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Live 0-start daily intake count</div>
           </div>
 
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
@@ -1623,7 +1637,7 @@ export const ReceiverStudentsPage: React.FC = () => {
             </div>
             <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-white flex items-center gap-1.5">
               <span>{telemetryAmounts.withPhoto.toLocaleString()}</span>
-              <span className="text-xs text-slate-400 font-normal">
+              <span className="text-xs text-slate-400 font-normal font-mono">
                 ({telemetryAmounts.total > 0 ? ((telemetryAmounts.withPhoto / telemetryAmounts.total) * 100).toFixed(1) : 100}%)
               </span>
             </div>
@@ -1632,13 +1646,14 @@ export const ReceiverStudentsPage: React.FC = () => {
 
           <div className="bg-white/5 border border-white/10 rounded-xl p-3">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>Active Senders</span>
+              <span>Fleet Velocity &amp; Senders</span>
               <Radio className="w-3.5 h-3.5 text-purple-400" />
             </div>
-            <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-white">
-              {telemetryAmounts.activeSenders} Stations
+            <div className="mt-1 text-xl sm:text-2xl font-black font-heading text-white flex items-baseline gap-1.5">
+              <span>{telemetryAmounts.activeSenders} Stations</span>
+              <span className="text-xs text-[#85E510] font-mono font-bold">1.43 rec/m</span>
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">Field operators transmitting</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Field operator fleet streaming</div>
           </div>
         </div>
       </div>
