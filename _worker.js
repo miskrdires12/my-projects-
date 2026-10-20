@@ -1501,12 +1501,8 @@ export default {
           } catch (dupErr) {}
         }
 
-        if (isDuplicate) {
-          return new Response(JSON.stringify({ error: "DUPLICATE_ID", message: "Student ID is already taken in authoritative database." }), {
-            status: 409,
-            headers: { "Content-Type": "application/json", ...corsHeaders }
-          });
-        }
+        // In resilient APK and field mode, allow seamless upsert so existing records get updated rather than rejected with 409
+        let isExistingStudent = isDuplicate;
         edgeDeletedStudents.delete(studentId.trim().toLowerCase());
         edgeHiddenStudents.delete(studentId.trim().toLowerCase());
 
@@ -1690,7 +1686,7 @@ export default {
 
         // 4. Authoritative Write to Supabase cloudflare.students
         try {
-          await fetch(`${SUPABASE_URL}/rest/v1/students`, {
+          await fetch(`${SUPABASE_URL}/rest/v1/students?on_conflict=studentId`, {
             method: "POST",
             headers: {
               "apikey": SUPABASE_KEY,
@@ -1706,9 +1702,20 @@ export default {
           console.warn("Supabase student sync notice:", sbInsertErr);
         }
 
-        customStudents.unshift(insertedRecord);
+        const sidMatchLower = (insertedRecord.studentId || "").trim().toLowerCase();
+        const existingIdx = customStudents.findIndex(s => s.studentId && s.studentId.trim().toLowerCase() === sidMatchLower);
+        if (existingIdx !== -1) {
+          customStudents[existingIdx] = { ...customStudents[existingIdx], ...insertedRecord };
+        } else {
+          customStudents.unshift(insertedRecord);
+        }
         if (cachedAllStudents) {
-          cachedAllStudents.unshift(insertedRecord);
+          const cachedIdx = cachedAllStudents.findIndex(s => s.studentId && s.studentId.trim().toLowerCase() === sidMatchLower);
+          if (cachedIdx !== -1) {
+            cachedAllStudents[cachedIdx] = { ...cachedAllStudents[cachedIdx], ...insertedRecord };
+          } else {
+            cachedAllStudents.unshift(insertedRecord);
+          }
         }
 
         // Broadcast to Global Cloud Sync Bus (clean payload under 400 bytes so ntfy.sh never rejects with 413)
