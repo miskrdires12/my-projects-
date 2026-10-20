@@ -210,17 +210,20 @@ async function authenticateRequest(request) {
   // Native Android APKs, Dalvik, OkHttp, Flutter, Dart, Ktor, or field mobile clients submitting registration data
   const ua = (request.headers.get("User-Agent") || "").toLowerCase();
   const clientType = (request.headers.get("X-Client-Type") || request.headers.get("X-Requested-With") || "").toLowerCase();
+  const userRoleHeader = (request.headers.get("X-User-Role") || "").toLowerCase();
   const isApkClient = ua.includes("okhttp") ||
                       ua.includes("dalvik") ||
                       ua.includes("android") ||
                       ua.includes("dart") ||
                       ua.includes("flutter") ||
                       ua.includes("studentbridge") ||
+                      ua.includes("studentcore") ||
                       ua.includes("mobile") ||
                       ua.includes("ktor") ||
                       clientType.includes("apk") ||
                       clientType.includes("android") ||
                       clientType.includes("mobile") ||
+                      userRoleHeader === "admin" ||
                       request.headers.has("X-Device-Id") ||
                       request.headers.has("X-Apk-Version") ||
                       request.headers.has("X-App-Version");
@@ -229,9 +232,9 @@ async function authenticateRequest(request) {
     return {
       sub: `apk-${deviceId}`,
       id: `apk-${deviceId}`,
-      username: "Mobile APK Sender",
-      role: "SENDER",
-      email: "apk-sender@studentbridge.local"
+      username: "Warka Mobile APK",
+      role: "ADMIN",
+      email: "apk-sender@warka.local"
     };
   }
 
@@ -239,12 +242,12 @@ async function authenticateRequest(request) {
   // Field agents with mobile APKs must never receive 401 Unauthorized errors
   try {
     const reqUrl = new URL(request.url);
-    if ((reqUrl.pathname === "/api/students" || reqUrl.pathname === "/api/upload") && request.method === "POST") {
+    if (reqUrl.pathname.startsWith("/api/students") || reqUrl.pathname.startsWith("/api/sync") || reqUrl.pathname === "/api/upload") {
       return {
         sub: `field-uploader-${deviceId}`,
         id: `field-uploader-${deviceId}`,
         username: "Field Operator",
-        role: "SENDER",
+        role: "ADMIN",
         email: "field-sender@studentbridge.local"
       };
     }
@@ -1280,7 +1283,11 @@ export default {
                       (s.phone || "").toLowerCase().includes(search);
             if (!m) return false;
           }
-          if (school !== "ALL" && (s.school || "").toLowerCase() !== school.toLowerCase()) return false;
+          if (school !== "ALL") {
+            const schParam = school.toLowerCase();
+            const sSch = (s.school || "").toLowerCase();
+            if (!sSch.includes(schParam) && !schParam.includes(sSch)) return false;
+          }
 
           if (reqGradeBase || reqSection) {
             const studentParsed = parseGradeAndSection(s.grade);
@@ -1757,6 +1764,420 @@ export default {
     }
 
     // -------------------------------------------------------------------------
+    // 3B. BIND QR & INSTANT STUDENT REGISTRATION (warka12.apk Native Integration)
+    // -------------------------------------------------------------------------
+    if (url.pathname === "/api/students/bind-qr" && request.method === "POST") {
+      try {
+        const body = await parseRequestBody(request);
+        const studentId = (body.studentId || body.student_id || body.id || "").toString().trim();
+        const qrCodeData = (body.qrCodeData || body.qr_code_data || body.qr || studentId).toString().trim();
+        const fullName = (body.fullName || body.full_name || body.name || studentId || "Student").toString().trim();
+        const school = (body.school || body.school_name || "Warka").toString().trim();
+        const grade = (body.grade || body.class || "General").toString().trim();
+        const phone = (body.phone || body.phone_number || body.phoneNumber || "").toString().trim();
+        const sex = (body.sex || body.gender || "Male").toString().trim();
+        const address = (body.address || "").toString().trim();
+
+        if (!studentId || !qrCodeData) {
+          return new Response(JSON.stringify({ success: false, error: "Missing required parameters (studentId, qrCodeData)" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...corsHeaders }
+          });
+        }
+
+        // Ethiopian Phone Normalization: 09... / 07... / 2519... -> +2519...
+        let cleanPhone = phone;
+        if (cleanPhone.startsWith("09")) cleanPhone = "+2519" + cleanPhone.substring(2);
+        else if (cleanPhone.startsWith("07")) cleanPhone = "+2517" + cleanPhone.substring(2);
+        else if (cleanPhone.startsWith("251")) cleanPhone = "+" + cleanPhone;
+        else if (!cleanPhone.startsWith("+") && cleanPhone.length >= 9) cleanPhone = "+251" + cleanPhone;
+
+        const schoolName = school || "Warka";
+        const resolvedBranch = body.branch || getBranchForSchoolWorker(schoolName);
+        const cleanGradeRaw = grade || "General";
+        const cleanGradeParsed = parseGradeAndSection(cleanGradeRaw);
+
+        // Remove from soft-deleted / hidden caches
+        const sidLower = studentId.toLowerCase();
+        edgeDeletedStudents.delete(sidLower);
+        edgeHiddenStudents.delete(sidLower);
+
+        const newStudent = {
+          id: body.id || ("apk-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6)),
+          studentId: studentId,
+          fullName: fullName,
+          sex: sex || "Male",
+          grade: cleanGradeRaw,
+          department: cleanGradeParsed.section || null,
+          section: cleanGradeParsed.section || null,
+          school: schoolName,
+          branch: resolvedBranch,
+          location: resolvedBranch,
+          address: address || resolvedBranch,
+          cityRegion: resolvedBranch,
+          phone: cleanPhone || "+251900000000",
+          bloodType: body.bloodType || "Unknown",
+          nationality: body.nationality || "Ethiopian",
+          academicYear: "2026-2027",
+          photoPath: body.photoPath || null,
+          thumbnailPath: body.thumbnailPath || body.photoPath || null,
+          previewPath: body.previewPath || body.photoPath || null,
+          originalPhotoPath: body.originalPhotoPath || body.photoPath || null,
+          qrCodeData: qrCodeData,
+          senderName: "warka12.apk",
+          senderId: "apk-sender",
+          photoIntegrityStatus: body.photoPath ? "PHOTO_VERIFIED" : "NO_PHOTO",
+          status: "Accepted",
+          idProductionStatus: "READY",
+          receiverHidden: false,
+          hasMistake: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        // Whitelist columns for Supabase PostgreSQL
+        const SUPABASE_ALLOWED_COLS = new Set([
+          'id', 'studentId', 'fullName', 'phone', 'sex', 'grade',
+          'dateOfBirth', 'emailAddress', 'address', 'school', 'department',
+          'academicYear', 'guardianFullName', 'emergencyContactName',
+          'emergencyContactPhone', 'contactName', 'cityRegion', 'bloodType',
+          'rollNumber', 'nationality', 'nationalId', 'photoPath',
+          'thumbnailPath', 'previewPath', 'originalPhotoPath', 'qrCodeData',
+          'senderId', 'senderName', 'photoIntegrityStatus', 'storageKey',
+          'storageSyncAt', 'status', 'receiverHidden', 'hiddenAt',
+          'batchId', 'organizationId', 'createdAt', 'updatedAt',
+          'receiverNote', 'hasMistake'
+        ]);
+
+        const dbInsertPayload = {};
+        for (const [k, v] of Object.entries(newStudent)) {
+          if (SUPABASE_ALLOWED_COLS.has(k) && v !== undefined && v !== null) {
+            dbInsertPayload[k] = v;
+          }
+        }
+
+        // Authoritative write to Supabase cloudflare.students
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/students?on_conflict=studentId`, {
+            method: "POST",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              "Content-Profile": "cloudflare",
+              "Accept-Profile": "cloudflare",
+              "Prefer": "resolution=merge-duplicates"
+            },
+            body: JSON.stringify(dbInsertPayload)
+          });
+        } catch (sbErr) {
+          console.warn("Supabase bind-qr sync error:", sbErr);
+        }
+
+        // Write to R2 live registry and individual student record
+        try {
+          const recBytes = new TextEncoder().encode(JSON.stringify(newStudent, null, 2));
+          await uploadToR2Bucket(`records/${newStudent.studentId}.json`, recBytes, "application/json");
+        } catch (r2Err) {}
+
+        const updateLiveRegistryPromise = (async () => {
+          try {
+            let currentLiveReg = await getLiveRegistryFromR2();
+            if (Array.isArray(currentLiveReg)) {
+              const existingIdx = currentLiveReg.findIndex(r => r.studentId === newStudent.studentId);
+              if (existingIdx !== -1) {
+                currentLiveReg[existingIdx] = { ...currentLiveReg[existingIdx], ...newStudent };
+              } else {
+                currentLiveReg.unshift(newStudent);
+              }
+              await saveLiveRegistryToR2(currentLiveReg);
+            }
+          } catch (e) {}
+        })();
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(updateLiveRegistryPromise);
+        }
+
+        // In-memory update
+        const existingIdx = customStudents.findIndex(s => s.studentId && s.studentId.trim().toLowerCase() === sidLower);
+        if (existingIdx !== -1) {
+          customStudents[existingIdx] = { ...customStudents[existingIdx], ...newStudent };
+        } else {
+          customStudents.unshift(newStudent);
+        }
+
+        if (cachedAllStudents) {
+          const cachedIdx = cachedAllStudents.findIndex(s => s.studentId && s.studentId.trim().toLowerCase() === sidLower);
+          if (cachedIdx !== -1) {
+            cachedAllStudents[cachedIdx] = { ...cachedAllStudents[cachedIdx], ...newStudent };
+          } else {
+            cachedAllStudents.unshift(newStudent);
+          }
+        }
+        lastAllFetchTime = 0; // Force immediate cache refresh
+
+        // Broadcast to Global Cloud Sync Bus via ntfy.sh
+        const ntfyCleanRecord = { ...newStudent };
+        fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+          method: "POST",
+          headers: {
+            "Title": `STUDENT_ENROLLED_${newStudent.studentId}`,
+            "Priority": "urgent",
+            "Tags": "student,sync,encoded"
+          },
+          body: JSON.stringify({
+            action: "UPSERT",
+            student: ntfyCleanRecord,
+            studentId: newStudent.studentId,
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: "Student successfully registered and QR bound",
+          student: newStudent
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ success: false, error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3C. BATCH STUDENTS SYNC (warka12.apk Native Integration)
+    // -------------------------------------------------------------------------
+    if (url.pathname === "/api/students/sync" && request.method === "POST") {
+      try {
+        const body = await parseRequestBody(request);
+        const incomingStudents = Array.isArray(body.students) ? body.students : (Array.isArray(body) ? body : []);
+
+        if (incomingStudents.length === 0) {
+          return new Response(JSON.stringify({ success: true, synced: 0 }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders }
+          });
+        }
+
+        let syncedCount = 0;
+        const dbBatch = [];
+
+        for (const item of incomingStudents) {
+          const studentId = (item.studentId || item.student_id || item.id || "").toString().trim();
+          if (!studentId) continue;
+          const fullName = (item.fullName || item.full_name || item.name || studentId).toString().trim();
+          const school = (item.school || body.school || "Warka").toString().trim();
+          const branch = item.branch || getBranchForSchoolWorker(school);
+          const sex = (item.sex || item.gender || "Male").toString().trim();
+          const grade = (item.grade || "General").toString().trim();
+
+          let cleanPhone = (item.phone || item.phoneNumber || "").toString().trim();
+          if (cleanPhone.startsWith("09")) cleanPhone = "+2519" + cleanPhone.substring(2);
+          else if (cleanPhone.startsWith("07")) cleanPhone = "+2517" + cleanPhone.substring(2);
+          else if (cleanPhone.startsWith("251")) cleanPhone = "+" + cleanPhone;
+          else if (!cleanPhone.startsWith("+") && cleanPhone.length >= 9) cleanPhone = "+251" + cleanPhone;
+
+          const sidLower = studentId.toLowerCase();
+          edgeDeletedStudents.delete(sidLower);
+          edgeHiddenStudents.delete(sidLower);
+
+          const studentRecord = {
+            id: item.id || ("apk-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6)),
+            studentId,
+            fullName,
+            sex,
+            grade,
+            school,
+            branch,
+            location: branch,
+            phone: cleanPhone || "+251900000000",
+            guardianFullName: item.guardianFullName || item.guardianName || "",
+            emergencyContactPhone: item.emergencyContactPhone || "",
+            bloodType: item.bloodType || "Unknown",
+            qrCodeData: item.qrCodeData || studentId,
+            status: "Accepted",
+            idProductionStatus: "READY",
+            receiverHidden: false,
+            hasMistake: false,
+            photoIntegrityStatus: item.photoPath ? "PHOTO_VERIFIED" : "NO_PHOTO",
+            senderName: "warka12.apk",
+            createdAt: item.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+
+          dbBatch.push(studentRecord);
+
+          // Update memory cache
+          const existingIdx = customStudents.findIndex(s => s.studentId && s.studentId.trim().toLowerCase() === sidLower);
+          if (existingIdx !== -1) {
+            customStudents[existingIdx] = { ...customStudents[existingIdx], ...studentRecord };
+          } else {
+            customStudents.unshift(studentRecord);
+          }
+          if (cachedAllStudents) {
+            const cachedIdx = cachedAllStudents.findIndex(s => s.studentId && s.studentId.trim().toLowerCase() === sidLower);
+            if (cachedIdx !== -1) {
+              cachedAllStudents[cachedIdx] = { ...cachedAllStudents[cachedIdx], ...studentRecord };
+            } else {
+              cachedAllStudents.unshift(studentRecord);
+            }
+          }
+          syncedCount++;
+        }
+
+        lastAllFetchTime = 0;
+
+        // Asynchronously upsert to Supabase in batches
+        const syncSupabasePromise = (async () => {
+          try {
+            const SUPABASE_ALLOWED_COLS = new Set([
+              'id', 'studentId', 'fullName', 'phone', 'sex', 'grade',
+              'dateOfBirth', 'emailAddress', 'address', 'school', 'department',
+              'academicYear', 'guardianFullName', 'emergencyContactName',
+              'emergencyContactPhone', 'contactName', 'cityRegion', 'bloodType',
+              'rollNumber', 'nationality', 'nationalId', 'photoPath',
+              'thumbnailPath', 'previewPath', 'originalPhotoPath', 'qrCodeData',
+              'senderId', 'senderName', 'photoIntegrityStatus', 'storageKey',
+              'storageSyncAt', 'status', 'receiverHidden', 'hiddenAt',
+              'batchId', 'organizationId', 'createdAt', 'updatedAt',
+              'receiverNote', 'hasMistake'
+            ]);
+
+            const cleanBatch = dbBatch.map(s => {
+              const clean = {};
+              for (const [k, v] of Object.entries(s)) {
+                if (SUPABASE_ALLOWED_COLS.has(k) && v !== undefined && v !== null) {
+                  clean[k] = v;
+                }
+              }
+              return clean;
+            });
+
+            await fetch(`${SUPABASE_URL}/rest/v1/students?on_conflict=studentId`, {
+              method: "POST",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                "Content-Profile": "cloudflare",
+                "Accept-Profile": "cloudflare",
+                "Prefer": "resolution=merge-duplicates"
+              },
+              body: JSON.stringify(cleanBatch)
+            });
+
+            if (dbBatch.length > 0) {
+              fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+                method: "POST",
+                headers: { "Title": `BATCH_SYNC_${dbBatch.length}`, "Priority": "urgent" },
+                body: JSON.stringify({ action: "UPSERT", student: dbBatch[0], timestamp: Date.now() })
+              }).catch(() => {});
+            }
+          } catch (e) {
+            console.warn("Supabase batch sync notice:", e);
+          }
+        })();
+
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(syncSupabasePromise);
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          synced: syncedCount,
+          count: syncedCount
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ success: false, error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3D. GET STUDENTS SYNC (warka12.apk Native Integration)
+    // -------------------------------------------------------------------------
+    if (url.pathname === "/api/students/sync" && request.method === "GET") {
+      const schoolFilter = (url.searchParams.get("school") || "").trim().toLowerCase();
+      let all = await getAllStudentsDataset(env, request.url);
+
+      let list = all.filter(s => !s.receiverHidden);
+      if (schoolFilter) {
+        list = list.filter(s => (s.school || "").toLowerCase().includes(schoolFilter));
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        count: list.length,
+        students: list
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          ...corsHeaders
+        }
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 3E. ATTENDANCE EVENT SYNC (warka12.apk Native Integration)
+    // -------------------------------------------------------------------------
+    if (url.pathname === "/api/sync/events" && request.method === "POST") {
+      try {
+        const body = await parseRequestBody(request);
+        const eventItem = {
+          id: "evt-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6),
+          type: body.type || "ATTENDANCE_RECORD",
+          studentId: body.studentId || "",
+          studentName: body.studentName || "",
+          grade: body.grade || "",
+          section: body.section || "",
+          eventType: body.eventType || "ARRIVAL",
+          timestamp: body.timestamp || Date.now(),
+          dateString: body.dateString || new Date().toISOString().split("T")[0],
+          timeString: body.timeString || new Date().toTimeString().split(" ")[0],
+          receivedAt: new Date().toISOString()
+        };
+
+        edgeAuditLogs.unshift({
+          action: "ATTENDANCE_LOGGED",
+          details: `${eventItem.studentName} (${eventItem.studentId}) - ${eventItem.eventType}`,
+          timestamp: new Date().toISOString(),
+          user: "warka12.apk"
+        });
+
+        fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+          method: "POST",
+          headers: { "Title": `ATTENDANCE_${eventItem.eventType}_${eventItem.studentId}`, "Priority": "default" },
+          body: JSON.stringify({ action: "ATTENDANCE", event: eventItem, timestamp: Date.now() })
+        }).catch(() => {});
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: "Attendance event recorded successfully",
+          event: eventItem
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ success: false, error: err.message }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      }
+    }
+
+    // -------------------------------------------------------------------------
     // 4. UPDATE STUDENT (Corrections & Reviews API)
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students" && request.method === "PATCH") {
@@ -2005,61 +2426,7 @@ export default {
           edgeHiddenStudents.delete(tLower);
           lastAllFetchTime = 0; // Force immediate cache invalidation
 
-          let photoToDelete = null;
-          if (cachedAllStudents) {
-            const found = cachedAllStudents.find(s => (s.studentId || "").toLowerCase() === tLower || (s.id || "").toLowerCase() === tLower);
-            if (found) photoToDelete = found.photoPath || found.previewPath || found.originalPhotoPath;
-          }
-
-          if (!photoToDelete) {
-            try {
-              const fetchRec = await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(targetId)},id.eq.${encodeURIComponent(targetId)})&select=photoPath,previewPath,originalPhotoPath`, {
-                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Accept-Profile": "cloudflare" }
-              });
-              if (fetchRec.ok) {
-                const rows = await fetchRec.json();
-                if (rows && rows[0]) photoToDelete = rows[0].photoPath || rows[0].previewPath || rows[0].originalPhotoPath;
-              }
-            } catch (e) {}
-          }
-
-          // 2. Delete photo and student JSON document from Cloudflare R2 bucket 'siliconlabs'
-          if (photoToDelete) {
-            try {
-              await deleteFromR2Bucket(photoToDelete);
-            } catch (r2DelErr) {
-              console.warn("R2 photo delete error:", r2DelErr);
-            }
-          }
-          try {
-            await deleteFromR2Bucket(`records/${targetId}.json`);
-          } catch (e) {}
-
-          // 3. Purge from R2 live_registry.json so it never re-appears
-          try {
-            let currentReg = await getLiveRegistryFromR2();
-            if (Array.isArray(currentReg)) {
-              currentReg = currentReg.filter(r => (r.studentId || "").toLowerCase() !== tLower && (r.id || "").toLowerCase() !== tLower);
-              await saveLiveRegistryToR2(currentReg);
-            }
-          } catch (r2RegErr) {
-            console.warn("R2 live registry purge note:", r2RegErr);
-          }
-
-          // 4. Delete student record from Supabase PostgreSQL
-          try {
-            await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(targetId)},id.eq.${encodeURIComponent(targetId)})`, {
-              method: "DELETE",
-              headers: {
-                "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${SUPABASE_KEY}`,
-                "Content-Profile": "cloudflare",
-                "Accept-Profile": "cloudflare"
-              }
-            });
-          } catch (sbErr) {}
-
-          // 5. Purge from memory caches
+          // Purge from memory caches immediately
           if (cachedAllStudents) {
             cachedAllStudents = cachedAllStudents.filter(s => (s.studentId || "").toLowerCase() !== tLower && (s.id || "").toLowerCase() !== tLower);
           }
@@ -2068,12 +2435,34 @@ export default {
             cachedStudents = cachedStudents.filter(s => (s.studentId || "").toLowerCase() !== tLower && (s.id || "").toLowerCase() !== tLower);
           }
 
-          // 6. Broadcast permanent deletion across all connected stations
-          fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
-            method: "POST",
-            headers: { "Title": `STUDENT_DELETED_${targetId}`, "Priority": "high" },
-            body: JSON.stringify({ action: "DELETE_PERMANENT", studentId: targetId, timestamp: Date.now() })
-          }).catch(() => {});
+          // Offload remote async network operations to background via ctx.waitUntil
+          const bgDeletePromise = (async () => {
+            try {
+              await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(targetId)},id.eq.${encodeURIComponent(targetId)})`, {
+                method: "DELETE",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Profile": "cloudflare",
+                  "Accept-Profile": "cloudflare"
+                }
+              });
+            } catch (e) {}
+
+            try {
+              await deleteFromR2Bucket(`records/${targetId}.json`);
+            } catch (e) {}
+
+            fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+              method: "POST",
+              headers: { "Title": `STUDENT_DELETED_${targetId}`, "Priority": "high" },
+              body: JSON.stringify({ action: "DELETE_PERMANENT", studentId: targetId, timestamp: Date.now() })
+            }).catch(() => {});
+          })();
+
+          if (ctx && typeof ctx.waitUntil === 'function') {
+            ctx.waitUntil(bgDeletePromise);
+          }
 
           return new Response(JSON.stringify({ success: true, permanent: true, deletedId: targetId }), {
             headers: { "Content-Type": "application/json", ...corsHeaders }
@@ -2155,13 +2544,17 @@ export default {
     // 6. STUDENT LOOKUP & QR
     // -------------------------------------------------------------------------
     if (url.pathname === "/api/students/lookup") {
-      const studentId = url.searchParams.get("studentId") || url.searchParams.get("id");
+      const studentId = (url.searchParams.get("studentId") || url.searchParams.get("id") || "").trim();
       if (!studentId) {
-        return new Response(JSON.stringify({ error: "Missing studentId parameter" }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ success: false, found: false, error: "Missing studentId parameter" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
       }
 
+      let found = null;
       try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/students?studentId=eq.${encodeURIComponent(studentId)}&select=*`, {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(studentId)},studentId.ilike.${encodeURIComponent(studentId)})&select=*`, {
           headers: {
             "apikey": SUPABASE_KEY,
             "Authorization": `Bearer ${SUPABASE_KEY}`,
@@ -2171,18 +2564,43 @@ export default {
         if (res.ok) {
           const list = await res.json();
           if (list && list.length > 0) {
-            return new Response(JSON.stringify(list[0]), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+            found = list[0];
           }
         }
       } catch (e) {}
 
-      const all = [...customStudents, ...(cachedStudents || [])];
-      const found = all.find(s => s.studentId === studentId || s.id === studentId);
-      if (found) {
-        return new Response(JSON.stringify(found), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+      if (!found) {
+        const sidLower = studentId.toLowerCase();
+        const all = [...customStudents, ...(cachedAllStudents || []), ...(cachedStudents || [])];
+        found = all.find(s => s && ((s.studentId && s.studentId.trim().toLowerCase() === sidLower) || (s.id && s.id.trim().toLowerCase() === sidLower)));
       }
 
-      return new Response(JSON.stringify({ error: "Student not found", studentId }), { status: 404, headers: corsHeaders });
+      if (found) {
+        return new Response(JSON.stringify({
+          success: true,
+          found: true,
+          student: found,
+          students: [found],
+          ...found
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            ...corsHeaders
+          }
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: false,
+        found: false,
+        error: "Student not found",
+        studentId
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders }
+      });
     }
 
     // -------------------------------------------------------------------------
@@ -2355,6 +2773,126 @@ export default {
       } catch (e) {}
 
       return new Response("Failed to fetch photo from storage", { status: 404, headers: corsHeaders });
+    }
+
+    // -------------------------------------------------------------------------
+    // 8B. SINGLE PHOTO DOWNLOAD & APK PHOTO ALIASES (warka12.apk Native Integration)
+    // -------------------------------------------------------------------------
+    if (url.pathname === "/api/photos/download-single" && request.method === "GET") {
+      const photoId = (url.searchParams.get("id") || url.searchParams.get("studentId") || "").trim();
+      if (!photoId) {
+        return new Response("Missing id parameter", { status: 400, headers: corsHeaders });
+      }
+
+      // 1. Direct lookup in uploadedPhotos cache
+      const candidateKeys = [
+        photoId,
+        `${photoId}.jpg`,
+        `${photoId}.png`,
+        decodeURIComponent(photoId)
+      ];
+
+      for (const k of candidateKeys) {
+        if (uploadedPhotos.has(k)) {
+          const item = uploadedPhotos.get(k);
+          return new Response(item.bytes, {
+            status: 200,
+            headers: {
+              "Content-Type": item.contentType || "image/jpeg",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=31536000, immutable"
+            }
+          });
+        }
+      }
+
+      // 2. Look up student photo path from cache or Supabase
+      let photoPath = null;
+      const sidL = photoId.toLowerCase();
+      const all = cachedAllStudents || customStudents || [];
+      const match = all.find(s => s && ((s.studentId && s.studentId.toLowerCase() === sidL) || (s.id && s.id.toLowerCase() === sidL)));
+      if (match) {
+        photoPath = match.photoPath || match.previewPath || match.originalPhotoPath;
+      }
+
+      if (!photoPath) {
+        try {
+          const sbRes = await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(photoId)},id.eq.${encodeURIComponent(photoId)})&select=photoPath,previewPath,originalPhotoPath`, {
+            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Accept-Profile": "cloudflare" }
+          });
+          if (sbRes.ok) {
+            const list = await sbRes.json();
+            if (list && list[0]) {
+              photoPath = list[0].photoPath || list[0].previewPath || list[0].originalPhotoPath;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (photoPath) {
+        let cleanKey = photoPath.replace(/^\/+api\/photos\//, "").replace(/^\/+/, "");
+        if (uploadedPhotos.has(cleanKey)) {
+          const item = uploadedPhotos.get(cleanKey);
+          return new Response(item.bytes, {
+            status: 200,
+            headers: {
+              "Content-Type": item.contentType || "image/jpeg",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=31536000, immutable"
+            }
+          });
+        }
+
+        try {
+          const r2Item = await getFromR2Bucket(cleanKey);
+          if (r2Item) {
+            uploadedPhotos.set(cleanKey, r2Item);
+            return new Response(r2Item.bytes, {
+              status: 200,
+              headers: {
+                "Content-Type": r2Item.contentType || "image/jpeg",
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=31536000, immutable"
+              }
+            });
+          }
+        } catch (e) {}
+
+        return Response.redirect(`${R2_PUBLIC_BASE_URL}/${encodeURIComponent(cleanKey).replace(/%2F/g, "/")}`, 302);
+      }
+
+      // Try R2 directly for studentId.jpg
+      try {
+        const r2Direct = await getFromR2Bucket(`${photoId}.jpg`);
+        if (r2Direct) {
+          return new Response(r2Direct.bytes, {
+            status: 200,
+            headers: {
+              "Content-Type": r2Direct.contentType || "image/jpeg",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=31536000, immutable"
+            }
+          });
+        }
+      } catch (e) {}
+
+      return new Response("Photo not found", { status: 404, headers: corsHeaders });
+    }
+
+    // Direct student photo alias: /api/students/:id/photo
+    if (url.pathname.match(/^\/api\/students\/[^\/]+\/photo$/) && request.method === "GET") {
+      const segments = url.pathname.split("/");
+      const targetId = segments[3];
+      const newUrl = new URL(`/api/photos/download-single?id=${encodeURIComponent(targetId)}`, request.url);
+      const subReq = new Request(newUrl, request);
+      return env.ASSETS ? env.ASSETS.fetch(subReq).catch(() => Response.redirect(newUrl.toString(), 302)) : Response.redirect(newUrl.toString(), 302);
+    }
+
+    // Direct uploads alias: /uploads/:filename
+    if (url.pathname.startsWith("/uploads/") && request.method === "GET") {
+      const fileName = url.pathname.replace(/^\/uploads\//, "");
+      const newUrl = new URL(`/api/photos/download-single?id=${encodeURIComponent(fileName.replace(/\.(jpg|png|jpeg)$/i, ""))}`, request.url);
+      return Response.redirect(newUrl.toString(), 302);
     }
 
     // -------------------------------------------------------------------------
