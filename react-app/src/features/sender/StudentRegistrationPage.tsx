@@ -302,14 +302,12 @@ export const StudentRegistrationPage: React.FC = () => {
       };
 
       // 1. SHORT-RANGE TRANSMISSION: Instantly commit to local memory, localStorage & broadcast to local tabs (0ms)
+      // Note: addStudent already increments the sender live captures exactly once (+1 single count).
       addStudent(localStudentPayload);
-      const senderIdent = user?.username || user?.email || 'Field Operator';
-      incrementSenderLiveCaptures(senderIdent);
-      setSubmittedStudent(localStudentPayload);
       refreshMetrics();
 
-      // 2. LONG-RANGE STAGE 1: Fast delivery to Supabase database with lightweight thumbnail (~10KB, completes in <100ms)
-      setSubmitStatusText('Stage 1 Delivered! Registering record & uploading original HD photo to Cloudflare R2...');
+      // 2. LONG-RANGE TRANSMISSION: Send to Supabase PostgreSQL + Cloudflare R2
+      setSubmitStatusText('Delivering record & photo to cloud repository...');
       const cloudPayload = {
         ...localStudentPayload,
         previewPath: thumbnailPreview,
@@ -334,7 +332,9 @@ export const StudentRegistrationPage: React.FC = () => {
             photoBase64: capturedPhoto
           };
           updateStudent(localStudentPayload.id, confirmedStudent);
+          // Success message appears strictly when verified and delivered!
           setSubmittedStudent(confirmedStudent);
+          setSubmitStatusText('✓ 100% Delivered! Record & biometric photo secured.');
         } else {
           const errData = await res.json().catch(() => ({}));
           if (res.status === 409 || errData.error === 'DUPLICATE_ID') {
@@ -342,11 +342,13 @@ export const StudentRegistrationPage: React.FC = () => {
             setSubmitError('Notice: Student ID was already recorded in database. Local student kept.');
           } else {
             await queueOfflineOperation('CREATE_STUDENT', cloudPayload).catch(() => {});
+            setSubmitStatusText('Queued for offline delivery. Will sync when server is reachable.');
           }
         }
       } catch (netErr) {
         // Offline or slow cloud connection: automatically queued for background sync
         await queueOfflineOperation('CREATE_STUDENT', cloudPayload).catch(() => {});
+        setSubmitStatusText('Queued for offline delivery. Will sync when server is reachable.');
       }
 
       // Operator UI instantly unlocks so they can immediately proceed!
@@ -1207,66 +1209,6 @@ export const StudentRegistrationPage: React.FC = () => {
           setIsEditorOpen(false);
         }}
       />
-
-
-      {/* Success Receipt Modal */}
-      {submittedStudent && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E2E8F0] rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-[#4D8A07]">
-              <div className="w-10 h-10 rounded-full bg-[#85E510]/20 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6 text-[#4D8A07]" />
-              </div>
-              <div>
-                <h3 className="font-heading font-black text-lg text-[#202833]">Student Registered!</h3>
-                <p className="text-xs text-[#64748B]">Transmitted to Supabase PostgreSQL repository</p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-[#F8FAF9] rounded-xl border border-[#E2E8F0] space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-[#E2E8F0]">
-                <span className="text-[#64748B]">Student ID:</span>
-                <span className="font-mono font-bold text-[#202833]">{submittedStudent.studentId}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#E2E8F0]">
-                <span className="text-[#64748B]">Full Name:</span>
-                <span className="font-bold text-[#202833]">{submittedStudent.fullName}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#E2E8F0]">
-                <span className="text-[#64748B]">School & Grade:</span>
-                <span className="font-semibold text-[#202833]">{submittedStudent.school} &bull; Grade {submittedStudent.grade}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#E2E8F0]">
-                <span className="text-[#64748B]">Phone:</span>
-                <span className="font-mono text-[#202833]">{submittedStudent.phone}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-[#64748B]">Biometric Photo:</span>
-                <span className="font-bold text-[#4D8A07]">Stored in Cloudflare R2</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="py-2.5 px-3 rounded-xl bg-white border border-[#CBD5E1] text-[#202833] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-[#F8FAF9] cursor-pointer"
-              >
-                <Printer className="w-4 h-4 text-[#64748B]" />
-                <span>Print Receipt</span>
-              </button>
-              <button
-                type="button"
-                onClick={resetFormForNext}
-                className="py-2.5 px-3 rounded-xl bg-[#85E510] hover:bg-[#76CF0C] text-[#062404] font-black text-xs flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <span>Register Next</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
