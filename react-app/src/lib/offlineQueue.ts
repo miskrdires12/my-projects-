@@ -13,7 +13,7 @@ const STORE_NAME = 'pending_operations';
 
 export interface PendingOperation {
   id: string;
-  type: 'CREATE_STUDENT' | 'UPDATE_STUDENT' | 'DELETE_STUDENT';
+  type: 'CREATE_STUDENT' | 'UPDATE_STUDENT' | 'DELETE_STUDENT' | 'UPLOAD_PHOTO';
   timestamp: string;
   payload: any;
   retryCount: number;
@@ -161,6 +161,18 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
         } else {
           failed++;
         }
+      } else if (op.type === 'UPLOAD_PHOTO') {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify(op.payload)
+        });
+        if (res.ok) {
+          await removePendingOperation(op.id);
+          synced++;
+        } else {
+          failed++;
+        }
       }
     } catch (err) {
       failed++;
@@ -174,9 +186,15 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
   return { synced, failed };
 }
 
-// Auto-sync listener when browser reconnects
+// Auto-sync listener when browser reconnects and background periodic check
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     syncOfflineQueue().catch(() => {});
   });
+  // Periodic background check every 15 seconds
+  setInterval(() => {
+    if (navigator.onLine) {
+      syncOfflineQueue().catch(() => {});
+    }
+  }, 15000);
 }

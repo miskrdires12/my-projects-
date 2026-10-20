@@ -42,12 +42,14 @@ function applyEnvSecrets(env) {
 // BRANCH AND SCHOOL MAPPING (Canonical)
 // -----------------------------------------------------------------------------
 const BRANCH_SCHOOL_MAP = {
-  "Addis Ababa": ["YMS 1", "YMS 2", "YMS 3", "YMS 4", "YMS 5", "YMS 6", "YMS 7", "YMS 8", "YMS 9", "YMS 10", "YMS 11", "YMS 12", "YMS 13", "YMS 14", "YMS 15", "YMS 16", "YMS 17", "YMS 18", "YMS 19"],
-  "Adama": ["Sena Yerosen"],
+  "Addis Ababa": ["YMS 1", "YMS 2", "YMS 3", "YMS 4", "YMS 5", "YMS 6", "YMS 7", "YMS 8", "YMS 9", "YMS 10", "YMS 11", "YMS 12", "YMS 13", "YMS 14", "YMS 15", "YMS 16", "YMS 17", "YMS 18", "YMS 19", "School of America 1", "School of America 2", "School of America 3", "School of America 4", "Adika Youth", "Warka", "Ferway", "YMS", "School of America"],
+  "Adama": ["Sena Yerosen", "1234", "Yacine", "Debebech"],
   "Hawassa": ["Hawassa Campus 1", "Hawassa Campus 2"],
   "Dire Dawa": ["Dire Dawa Academy"],
   "Bahir Dar": ["Bahir Dar Academy"],
-  "Mekelle": ["Mekelle Center"]
+  "Mekelle": ["Mekelle Center"],
+  "Mojo": ["Mojo"],
+  "Harar": ["High Tech 1", "High Tech 2", "High Tech 3", "High Tech 4", "High Tech"]
 };
 
 const SCHOOL_TO_BRANCH_MAP = new Map();
@@ -62,11 +64,13 @@ function getBranchForSchoolWorker(school) {
   const s = String(school).trim().toLowerCase();
   const found = SCHOOL_TO_BRANCH_MAP.get(s);
   if (found) return found;
-  if (s.includes("sena") || s.includes("yerosen") || s.includes("adama")) return "Adama";
+  if (s.includes("sena") || s.includes("yerosen") || s.includes("1234") || s.includes("adama") || s.includes("yacine") || s.includes("debebech")) return "Adama";
   if (s.includes("hawassa")) return "Hawassa";
   if (s.includes("dire dawa")) return "Dire Dawa";
   if (s.includes("bahir dar")) return "Bahir Dar";
   if (s.includes("mekelle")) return "Mekelle";
+  if (s.includes("mojo")) return "Mojo";
+  if (s.includes("harar") || s.includes("high tech")) return "Harar";
   return "Addis Ababa";
 }
 
@@ -261,6 +265,7 @@ let edgeSchools = [
   { id: "sch_ferway", name: "Ferway", location: "Addis Ababa", status: "Active", studentsCount: 542 },
   { id: "sch_warka", name: "Warka", location: "Addis Ababa", status: "Active", studentsCount: 398 },
   { id: "sch_senayerosen", name: "Sena Yerosen", location: "Adama", status: "Active", studentsCount: 940 },
+  { id: "sch_1234", name: "1234", location: "Adama", status: "Active", studentsCount: 0 },
   { id: "sch_yacine", name: "Yacine", location: "Adama", status: "Active", studentsCount: 420 },
   { id: "sch_debebech", name: "Debebech", location: "Adama", status: "Active", studentsCount: 510 },
   { id: "sch_hightech", name: "High Tech", location: "Harar", status: "Active", studentsCount: 380 }
@@ -1253,6 +1258,55 @@ export default {
           } catch (e) {}
         } catch (r2Err) {
           console.warn("R2 write note in /api/upload:", r2Err);
+        }
+
+        if (studentId) {
+          const photoUrl = `/api/photos/${photoKey}`;
+          try {
+            await fetch(`${SUPABASE_URL}/rest/v1/students?or=(studentId.eq.${encodeURIComponent(studentId)},id.eq.${encodeURIComponent(studentId)})`, {
+              method: "PATCH",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                "Content-Profile": "cloudflare",
+                "Accept-Profile": "cloudflare"
+              },
+              body: JSON.stringify({
+                photoPath: photoUrl,
+                originalPhotoPath: r2Url,
+                previewPath: photoUrl,
+                thumbnailPath: photoUrl,
+                photoIntegrityStatus: "PHOTO_VERIFIED",
+                updatedAt: new Date().toISOString()
+              })
+            });
+
+            if (cachedAllStudents) {
+              const sIdx = cachedAllStudents.findIndex(s => s.studentId === studentId || s.id === studentId);
+              if (sIdx !== -1) {
+                cachedAllStudents[sIdx].photoPath = photoUrl;
+                cachedAllStudents[sIdx].previewPath = photoUrl;
+                cachedAllStudents[sIdx].thumbnailPath = photoUrl;
+                cachedAllStudents[sIdx].originalPhotoPath = r2Url;
+                cachedAllStudents[sIdx].photoIntegrityStatus = "PHOTO_VERIFIED";
+              }
+            }
+
+            fetch("https://ntfy.sh/sb_prod_sync_cloudflare_r2_v1", {
+              method: "POST",
+              headers: { "Title": `STUDENT_PHOTO_HD_${studentId}`, "Priority": "default" },
+              body: JSON.stringify({
+                action: "PHOTO_HD_READY",
+                studentId,
+                photoPath: photoUrl,
+                r2Url,
+                timestamp: Date.now()
+              })
+            }).catch(() => {});
+          } catch (e) {
+            console.warn("Notice updating student record with HD photo:", e);
+          }
         }
 
         return new Response(JSON.stringify({

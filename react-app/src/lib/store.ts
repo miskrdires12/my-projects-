@@ -9,10 +9,10 @@ export const BRANCH_SCHOOL_MAP: Record<string, string[]> = {
   'Addis Ababa': [
     'YMS 1', 'YMS 2', 'YMS 3', 'YMS 4',
     'School of America 1', 'School of America 2', 'School of America 3', 'School of America 4',
-    'Adika Youth', 'Warka', 'Ferway', 'Sena Yerosen',
+    'Adika Youth', 'Warka', 'Ferway',
     'YMS', 'School of America'
   ],
-  'Adama': ['Yacine', 'Debebech'],
+  'Adama': ['Sena Yerosen', '1234', 'Yacine', 'Debebech'],
   'Mojo': ['Mojo'],
   'Harar': [
     'High Tech 1', 'High Tech 2', 'High Tech 3', 'High Tech 4',
@@ -37,9 +37,10 @@ export const DEFAULT_SCHOOLS: School[] = [
   { id: "sch_adika", name: "Adika Youth", location: "Addis Ababa", status: "Active", studentsCount: 982 },
   { id: "sch_warka", name: "Warka", location: "Addis Ababa", status: "Active", studentsCount: 398 },
   { id: "sch_ferway", name: "Ferway", location: "Addis Ababa", status: "Active", studentsCount: 542 },
-  { id: "sch_senayerosen", name: "Sena Yerosen", location: "Addis Ababa", status: "Active", studentsCount: 940 },
-  { id: "sch_yacine", name: "Yacine", location: "Adama", status: "Active", studentsCount: 420 },
-  { id: "sch_debebech", name: "Debebech", location: "Adama", status: "Active", studentsCount: 510 },
+  { id: "sch_senayerosen", name: "Sena Yerosen", location: "Adama", status: "Active", studentsCount: 414 },
+  { id: "sch_1234", name: "1234", location: "Adama", status: "Active", studentsCount: 0 },
+  { id: "sch_yacine", name: "Yacine", location: "Adama", status: "Active", studentsCount: 185 },
+  { id: "sch_debebech", name: "Debebech", location: "Adama", status: "Active", studentsCount: 671 },
   { id: "sch_mojo", name: "Mojo", location: "Mojo", status: "Active", studentsCount: 360 },
   { id: "sch_hightech1", name: "High Tech 1", location: "Harar", status: "Active", studentsCount: 120 },
   { id: "sch_hightech2", name: "High Tech 2", location: "Harar", status: "Active", studentsCount: 110 },
