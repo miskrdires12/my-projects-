@@ -45,6 +45,8 @@ export interface Student {
   bulkedStatus?: 'BULKED' | 'UNBULKED' | string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
+  parentPhone?: string;
+  guardianPhone?: string;
   schoolBusUsage?: string;
   busUser?: string;
   dateOfBirth?: string;

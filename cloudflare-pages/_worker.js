@@ -75,6 +75,60 @@ function getBranchForSchoolWorker(school) {
 }
 
 // -----------------------------------------------------------------------------
+// PHONE NUMBER EXTRACTION, NORMALIZATION & BI-DIRECTIONAL APK SYNCHRONIZATION
+// -----------------------------------------------------------------------------
+function extractValidPhone(...candidates) {
+  for (const raw of candidates) {
+    if (!raw || typeof raw !== "string") continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const upper = trimmed.toUpperCase();
+    if (upper === "N/A" || upper === "NA" || upper === "NULL" || upper === "UNDEFINED" || upper === "NONE" || upper === "-") continue;
+    if (trimmed === "+251900000000" || trimmed === "0900000000" || trimmed === "0000000000" || trimmed === "000000000") continue;
+    
+    // Strip common non-digit chars except leading plus
+    let clean = trimmed.replace(/[\s\-\(\)\.]/g, "");
+    if (clean.length < 8) continue;
+    if (clean.startsWith("09")) clean = "+2519" + clean.substring(2);
+    else if (clean.startsWith("07")) clean = "+2517" + clean.substring(2);
+    else if (clean.startsWith("251")) clean = "+" + clean;
+    else if (clean.startsWith("9") && clean.length === 9) clean = "+2519" + clean.substring(1);
+    else if (clean.startsWith("7") && clean.length === 9) clean = "+2517" + clean.substring(1);
+    else if (!clean.startsWith("+") && clean.length >= 9) clean = "+251" + clean;
+    return clean;
+  }
+  return null;
+}
+
+function normalizeStudentPhoneFields(s) {
+  if (!s || typeof s !== "object") return s;
+  const validPhone = extractValidPhone(
+    s.emergencyContactPhone,
+    s.phone,
+    s.parentPhone,
+    s.guardianPhone,
+    s.emergency_contact_phone,
+    s.phoneNumber,
+    s.mobile
+  );
+
+  if (validPhone) {
+    s.phone = validPhone;
+    s.parentPhone = validPhone;
+    s.emergencyContactPhone = validPhone;
+    s.emergency_contact_phone = validPhone;
+    s.guardianPhone = validPhone;
+  } else {
+    s.phone = "N/A";
+    s.parentPhone = "";
+    s.emergencyContactPhone = "";
+    s.emergency_contact_phone = "";
+    s.guardianPhone = "";
+  }
+  return s;
+}
+
+// -----------------------------------------------------------------------------
 // SERVER-SIDE CRYPTOGRAPHIC JWT SESSION & RBAC SYSTEM (Web Crypto API)
 // -----------------------------------------------------------------------------
 function base64UrlEncode(bytes) {
@@ -620,6 +674,10 @@ async function getLiveRegistryFromR2() {
   try {
     const r2Item = await getFromR2Bucket("records/live_registry.json");
     if (r2Item && r2Item.bytes) {
+      // Guard against worker memory exhaustion (128MB worker limit)
+      if (r2Item.bytes.length > 2 * 1024 * 1024) {
+        return [];
+      }
       const text = new TextDecoder().decode(r2Item.bytes);
       const parsed = JSON.parse(text);
       if (Array.isArray(parsed)) return parsed;
@@ -629,6 +687,10 @@ async function getLiveRegistryFromR2() {
   try {
     const regRes = await fetch(`${R2_PUBLIC_BASE_URL}/records/live_registry.json?t=${Date.now()}`, { cache: "no-store" });
     if (regRes.ok) {
+      const cl = parseInt(regRes.headers.get("content-length") || "0", 10);
+      if (cl > 2 * 1024 * 1024) {
+        return [];
+      }
       const parsed = await regRes.json();
       if (Array.isArray(parsed)) return parsed;
     }
@@ -641,9 +703,11 @@ async function getLiveRegistryFromR2() {
  * Authoritative atomic write of records/live_registry.json directly to Cloudflare R2.
  */
 async function saveLiveRegistryToR2(registry) {
-  if (!Array.isArray(registry)) return;
-  const regBytes = new TextEncoder().encode(JSON.stringify(registry));
-  await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
+  if (!Array.isArray(registry) || registry.length === 0 || registry.length > 5000) return;
+  try {
+    const regBytes = new TextEncoder().encode(JSON.stringify(registry));
+    await uploadToR2Bucket("records/live_registry.json", regBytes, "application/json");
+  } catch (e) {}
 }
 
 function formatCleanGrade(rawGrade) {
@@ -781,6 +845,7 @@ async function getAllStudentsDataset(env, originUrl) {
     if (sbRes.ok) {
       const data = await sbRes.json();
       if (Array.isArray(data) && data.length > 0) {
+        data.forEach(normalizeStudentPhoneFields);
         cachedAllStudents = data;
         lastAllFetchTime = Date.now();
         return cachedAllStudents;
@@ -842,13 +907,13 @@ async function getAllStudentsDataset(env, originUrl) {
     }
 
     const resolvedBranch = s.branch || s.location || s.address || getBranchForSchoolWorker(s.school);
-    return {
+    return normalizeStudentPhoneFields({
       ...s,
       receiverHidden: isHidden,
       hiddenAt: hiddenAt,
       branch: resolvedBranch,
       location: resolvedBranch
-    };
+    });
   });
   lastAllFetchTime = Date.now();
   return cachedAllStudents;
@@ -1217,6 +1282,7 @@ export default {
           }
           let sbStudents = await sbRes.json();
           if (Array.isArray(sbStudents)) {
+            sbStudents.forEach(normalizeStudentPhoneFields);
             // Merge in-memory customStudents if any exist
             if (customStudents.length > 0) {
               const existingSids = new Set(sbStudents.map(s => s.studentId));
@@ -1478,10 +1544,16 @@ export default {
           });
         }
 
-        // Ethiopian Phone Normalization
-        let cleanPhone = (phone || "").trim();
-        if (cleanPhone.startsWith("09")) cleanPhone = "+2519" + cleanPhone.substring(2);
-        else if (cleanPhone.startsWith("07")) cleanPhone = "+2517" + cleanPhone.substring(2);
+        // Phone Normalization via extractValidPhone
+        let cleanPhone = extractValidPhone(
+          body.phone,
+          body.emergencyContactPhone,
+          body.parentPhone,
+          body.guardianPhone,
+          body.phone_number,
+          body.phoneNumber,
+          body.mobile
+        ) || "+251900000000";
 
         // 1. Authoritative Duplicate Check via Fast Supabase Query & In-Memory Cache
         let isDuplicate = false;
@@ -1608,6 +1680,12 @@ export default {
           address: body.address || resolvedBranch,
           cityRegion: body.cityRegion || resolvedBranch,
           phone: cleanPhone || "+251900000000",
+          emergencyContactPhone: cleanPhone || "+251900000000",
+          parentPhone: cleanPhone || "+251900000000",
+          guardianPhone: cleanPhone || "+251900000000",
+          emergency_contact_phone: cleanPhone || "+251900000000",
+          guardianFullName: (body.guardianFullName || body.guardianName || "").trim(),
+          emergencyContactName: (body.emergencyContactName || body.guardianFullName || body.guardianName || "").trim(),
           bloodType: body.bloodType || "Unknown",
           nationality: body.nationality || "Ethiopian",
           academicYear: "2026-2027",
@@ -1785,12 +1863,30 @@ export default {
           });
         }
 
-        // Ethiopian Phone Normalization: 09... / 07... / 2519... -> +2519...
-        let cleanPhone = phone;
-        if (cleanPhone.startsWith("09")) cleanPhone = "+2519" + cleanPhone.substring(2);
-        else if (cleanPhone.startsWith("07")) cleanPhone = "+2517" + cleanPhone.substring(2);
-        else if (cleanPhone.startsWith("251")) cleanPhone = "+" + cleanPhone;
-        else if (!cleanPhone.startsWith("+") && cleanPhone.length >= 9) cleanPhone = "+251" + cleanPhone;
+        const sidLower = studentId.toLowerCase();
+        const existingStudent = (customStudents && customStudents.find(s => s && s.studentId && s.studentId.trim().toLowerCase() === sidLower)) ||
+          (cachedAllStudents && cachedAllStudents.find(s => s && s.studentId && s.studentId.trim().toLowerCase() === sidLower)) ||
+          null;
+
+        const incomingValidPhone = extractValidPhone(
+          body.emergencyContactPhone,
+          body.phone,
+          body.parentPhone,
+          body.guardianPhone,
+          body.phoneNumber,
+          body.phone_number
+        );
+
+        let finalPhone = incomingValidPhone;
+        if (!finalPhone && existingStudent) {
+          finalPhone = extractValidPhone(
+            existingStudent.phone,
+            existingStudent.emergencyContactPhone,
+            existingStudent.parentPhone,
+            existingStudent.guardianPhone
+          );
+        }
+        finalPhone = finalPhone || "+251900000000";
 
         const schoolName = school || "Warka";
         const resolvedBranch = body.branch || getBranchForSchoolWorker(schoolName);
@@ -1798,12 +1894,11 @@ export default {
         const cleanGradeParsed = parseGradeAndSection(cleanGradeRaw);
 
         // Remove from soft-deleted / hidden caches
-        const sidLower = studentId.toLowerCase();
         edgeDeletedStudents.delete(sidLower);
         edgeHiddenStudents.delete(sidLower);
 
         const newStudent = {
-          id: body.id || ("apk-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6)),
+          id: body.id || (existingStudent && existingStudent.id) || ("apk-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6)),
           studentId: studentId,
           fullName: fullName,
           sex: sex || "Male",
@@ -1815,7 +1910,13 @@ export default {
           location: resolvedBranch,
           address: address || resolvedBranch,
           cityRegion: resolvedBranch,
-          phone: cleanPhone || "+251900000000",
+          phone: finalPhone,
+          emergencyContactPhone: finalPhone,
+          parentPhone: finalPhone,
+          guardianPhone: finalPhone,
+          emergency_contact_phone: finalPhone,
+          guardianFullName: body.guardianFullName || body.guardianName || (existingStudent && existingStudent.guardianFullName) || "",
+          emergencyContactName: body.emergencyContactName || body.guardianFullName || (existingStudent && existingStudent.emergencyContactName) || "",
           bloodType: body.bloodType || "Unknown",
           nationality: body.nationality || "Ethiopian",
           academicYear: "2026-2027",
@@ -1975,18 +2076,40 @@ export default {
           const sex = (item.sex || item.gender || "Male").toString().trim();
           const grade = (item.grade || "General").toString().trim();
 
-          let cleanPhone = (item.phone || item.phoneNumber || "").toString().trim();
-          if (cleanPhone.startsWith("09")) cleanPhone = "+2519" + cleanPhone.substring(2);
-          else if (cleanPhone.startsWith("07")) cleanPhone = "+2517" + cleanPhone.substring(2);
-          else if (cleanPhone.startsWith("251")) cleanPhone = "+" + cleanPhone;
-          else if (!cleanPhone.startsWith("+") && cleanPhone.length >= 9) cleanPhone = "+251" + cleanPhone;
-
           const sidLower = studentId.toLowerCase();
+
+          // Check if student already exists in cache to preserve existing phone if incoming is empty/NA
+          const existingStudent = (customStudents && customStudents.find(s => s && s.studentId && s.studentId.trim().toLowerCase() === sidLower)) ||
+            (cachedAllStudents && cachedAllStudents.find(s => s && s.studentId && s.studentId.trim().toLowerCase() === sidLower)) ||
+            null;
+
+          // APK sends phone in emergencyContactPhone or phone or guardianPhone
+          const incomingValidPhone = extractValidPhone(
+            item.emergencyContactPhone,
+            item.phone,
+            item.parentPhone,
+            item.guardianPhone,
+            item.phoneNumber,
+            item.emergency_contact_phone,
+            item.mobile
+          );
+
+          let finalPhone = incomingValidPhone;
+          if (!finalPhone && existingStudent) {
+            finalPhone = extractValidPhone(
+              existingStudent.phone,
+              existingStudent.emergencyContactPhone,
+              existingStudent.parentPhone,
+              existingStudent.guardianPhone
+            );
+          }
+          finalPhone = finalPhone || "+251900000000";
+
           edgeDeletedStudents.delete(sidLower);
           edgeHiddenStudents.delete(sidLower);
 
           const studentRecord = {
-            id: item.id || ("apk-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6)),
+            id: item.id || (existingStudent && existingStudent.id) || ("apk-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6)),
             studentId,
             fullName,
             sex,
@@ -1994,18 +2117,23 @@ export default {
             school,
             branch,
             location: branch,
-            phone: cleanPhone || "+251900000000",
-            guardianFullName: item.guardianFullName || item.guardianName || "",
-            emergencyContactPhone: item.emergencyContactPhone || "",
-            bloodType: item.bloodType || "Unknown",
-            qrCodeData: item.qrCodeData || studentId,
+            phone: finalPhone,
+            emergencyContactPhone: finalPhone,
+            parentPhone: finalPhone,
+            guardianPhone: finalPhone,
+            emergency_contact_phone: finalPhone,
+            guardianFullName: item.guardianFullName || item.guardianName || (existingStudent && existingStudent.guardianFullName) || "",
+            emergencyContactName: item.emergencyContactName || item.guardianFullName || item.guardianName || (existingStudent && existingStudent.emergencyContactName) || "",
+            bloodType: item.bloodType || (existingStudent && existingStudent.bloodType) || "Unknown",
+            qrCodeData: item.qrCodeData || (existingStudent && existingStudent.qrCodeData) || studentId,
             status: "Accepted",
             idProductionStatus: "READY",
             receiverHidden: false,
             hasMistake: false,
-            photoIntegrityStatus: item.photoPath ? "PHOTO_VERIFIED" : "NO_PHOTO",
-            senderName: "warka12.apk",
-            createdAt: item.createdAt || new Date().toISOString(),
+            photoIntegrityStatus: item.photoPath ? "PHOTO_VERIFIED" : ((existingStudent && existingStudent.photoIntegrityStatus) || "NO_PHOTO"),
+            photoPath: item.photoPath || (existingStudent && existingStudent.photoPath) || null,
+            senderName: item.senderName || (existingStudent && existingStudent.senderName) || "warka12.apk",
+            createdAt: item.createdAt || (existingStudent && existingStudent.createdAt) || new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
 
@@ -2113,6 +2241,7 @@ export default {
       if (schoolFilter) {
         list = list.filter(s => (s.school || "").toLowerCase().includes(schoolFilter));
       }
+      list.forEach(normalizeStudentPhoneFields);
 
       return new Response(JSON.stringify({
         success: true,
@@ -2240,6 +2369,23 @@ export default {
           }
         }
 
+        // Synchronize and normalize phone updates for warka12.apk bi-directional parity
+        if (updates.phone || updates.emergencyContactPhone || updates.parentPhone || updates.guardianPhone) {
+          const validPhone = extractValidPhone(
+            updates.emergencyContactPhone,
+            updates.phone,
+            updates.parentPhone,
+            updates.guardianPhone
+          );
+          if (validPhone) {
+            updates.phone = validPhone;
+            updates.emergencyContactPhone = validPhone;
+            updates.parentPhone = validPhone;
+            updates.guardianPhone = validPhone;
+            updates.emergency_contact_phone = validPhone;
+          }
+        }
+
         let mergedStudent = updates;
         if (cachedAllStudents) {
           const sIdx = cachedAllStudents.findIndex(s => s.studentId === studentId || s.id === studentId);
@@ -2255,6 +2401,7 @@ export default {
             mergedStudent = { ...customStudents[cIdx], ...mergedStudent };
           }
         }
+        normalizeStudentPhoneFields(mergedStudent);
         lastAllFetchTime = 0; // Invalidate cache so edits show instantly
 
         // Durable Cloudflare R2 persistence for updates
@@ -2262,15 +2409,6 @@ export default {
           const finalSid = mergedStudent.studentId || studentId;
           const recBytes = new TextEncoder().encode(JSON.stringify(mergedStudent, null, 2));
           await uploadToR2Bucket(`records/${finalSid}.json`, recBytes, "application/json");
-
-          let currentLiveReg = await getLiveRegistryFromR2();
-          const existingIdx = currentLiveReg.findIndex(r => r.studentId === finalSid || r.id === finalSid);
-          if (existingIdx !== -1) {
-            currentLiveReg[existingIdx] = { ...currentLiveReg[existingIdx], ...mergedStudent };
-          } else {
-            currentLiveReg.unshift(mergedStudent);
-          }
-          await saveLiveRegistryToR2(currentLiveReg);
         } catch (r2Err) {
           console.warn("R2 update in PATCH notice:", r2Err);
         }
@@ -2283,7 +2421,8 @@ export default {
             "location", "address", "cityRegion", "phone", "bloodType", "dateOfBirth",
             "nationality", "academicYear", "photoPath", "thumbnailPath", "previewPath",
             "originalPhotoPath", "qrCodeData", "senderName", "senderId", "photoIntegrityStatus",
-            "status", "idProductionStatus", "receiverHidden", "hasMistake", "updatedAt"
+            "status", "idProductionStatus", "receiverHidden", "hasMistake", "updatedAt",
+            "emergencyContactPhone", "emergencyContactName", "guardianFullName", "contactName"
           ]);
 
           for (const [k, v] of Object.entries(updates)) {
@@ -2576,12 +2715,18 @@ export default {
       }
 
       if (found) {
+        normalizeStudentPhoneFields(found);
         return new Response(JSON.stringify({
           success: true,
           found: true,
           student: found,
           students: [found],
-          ...found
+          ...found,
+          phone: found.phone,
+          parentPhone: found.parentPhone,
+          emergencyContactPhone: found.emergencyContactPhone,
+          emergency_contact_phone: found.emergency_contact_phone,
+          guardianPhone: found.guardianPhone
         }), {
           status: 200,
           headers: {

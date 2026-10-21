@@ -9,7 +9,7 @@ import {
   MapPin, Clock, ExternalLink, RefreshCw, FileSpreadsheet,
   Archive, ArrowUpDown, ArrowUp, ArrowDown, Filter, Sparkles, Crop, Cloud,
   Radio, Award, Activity, TrendingUp, ArrowRight, Link2, Upload,
-  Folder, FolderOpen
+  Folder, FolderOpen, Layers
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import JSZip from 'jszip';
@@ -35,7 +35,8 @@ import {
   getGradeDisplay,
   getStudentBranch,
   getBranchForSchool,
-  parseGradeAndSection
+  parseGradeAndSection,
+  CANONICAL_GRADE_ORDER
 } from '@/lib/gradeUtils';
 
 export const ReceiverStudentsPage: React.FC = () => {
@@ -101,6 +102,7 @@ export const ReceiverStudentsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'table' | 'folders'>('table');
   const [selectedSchoolFolder, setSelectedSchoolFolder] = useState<string | null>(null);
   const [folderGradeTab, setFolderGradeTab] = useState<string>('ALL');
+  const [folderSectionTab, setFolderSectionTab] = useState<string>('ALL');
   const [folderSearchQuery, setFolderSearchQuery] = useState<string>('');
   const [folderBranchFilter, setFolderBranchFilter] = useState<string>('ALL');
   const [isRefreshingTelemetry, setIsRefreshingTelemetry] = useState(false);
@@ -328,6 +330,74 @@ export const ReceiverStudentsPage: React.FC = () => {
   const distinctSections = useMemo(() => {
     return getDistinctSectionOptions(students, gradeFilter);
   }, [students, gradeFilter]);
+
+  interface GradeHierarchyItem {
+    baseGrade: string;        // e.g. '1', '2', '10', 'LKG'
+    displayLabel: string;     // e.g. 'Grade 1', 'Grade 2', 'Grade 10', 'LKG'
+    totalCount: number;       // total students in this grade
+    sections: {
+      section: string;        // e.g. 'A', 'B', 'C', 'D'
+      label: string;          // e.g. '1A', '1B', 'Section A'
+      count: number;
+    }[];
+    noSectionCount: number;   // students with no section letter
+  }
+
+  const gradeHierarchy = useMemo<GradeHierarchyItem[]>(() => {
+    const gradeMap = new Map<string, { total: number; secMap: Map<string, number>; noSec: number }>();
+
+    students.forEach(s => {
+      if (!s || s.receiverHidden) return;
+      const parsed = parseGradeAndSection(s.grade, s.department || (s as any).section);
+      const bg = parsed.cleanGrade || 'General';
+      const sec = parsed.cleanSection;
+
+      if (!gradeMap.has(bg)) {
+        gradeMap.set(bg, { total: 0, secMap: new Map(), noSec: 0 });
+      }
+      const item = gradeMap.get(bg)!;
+      item.total++;
+      if (sec) {
+        item.secMap.set(sec, (item.secMap.get(sec) || 0) + 1);
+      } else {
+        item.noSec++;
+      }
+    });
+
+    const items: GradeHierarchyItem[] = [];
+    gradeMap.forEach((val, bg) => {
+      const sections = Array.from(val.secMap.entries())
+        .map(([section, count]) => ({
+          section,
+          label: /^\d+$/.test(bg) ? `${bg}${section}` : `Section ${section}`,
+          count
+        }))
+        .sort((a, b) => a.section.localeCompare(b.section));
+
+      const displayLabel = /^\d+$/.test(bg) ? `Grade ${bg}` : bg;
+      items.push({
+        baseGrade: bg,
+        displayLabel,
+        totalCount: val.total,
+        sections,
+        noSectionCount: val.noSec
+      });
+    });
+
+    return items.sort((a, b) => {
+      const idxA = CANONICAL_GRADE_ORDER.indexOf(a.baseGrade);
+      const idxB = CANONICAL_GRADE_ORDER.indexOf(b.baseGrade);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.baseGrade.localeCompare(b.baseGrade, undefined, { numeric: true });
+    });
+  }, [students]);
+
+  const activeGradeItem = useMemo(() => {
+    if (gradeFilter === 'ALL') return null;
+    return gradeHierarchy.find(g => g.baseGrade.toLowerCase() === gradeFilter.toLowerCase()) || null;
+  }, [gradeHierarchy, gradeFilter]);
 
   // Filtered dataset
   const filtered = useMemo(() => {
@@ -572,11 +642,71 @@ export const ReceiverStudentsPage: React.FC = () => {
     return schoolFolders.find(f => f.schoolName.toLowerCase() === selectedSchoolFolder.toLowerCase()) || null;
   }, [schoolFolders, selectedSchoolFolder]);
 
+  const currentSchoolGradeHierarchy = useMemo<GradeHierarchyItem[]>(() => {
+    if (!currentSchoolFolder) return [];
+    const gradeMap = new Map<string, { total: number; secMap: Map<string, number>; noSec: number }>();
+
+    currentSchoolFolder.students.forEach(s => {
+      if (!s || s.receiverHidden) return;
+      const parsed = parseGradeAndSection(s.grade, s.department || (s as any).section);
+      const bg = parsed.cleanGrade || 'General';
+      const sec = parsed.cleanSection;
+
+      if (!gradeMap.has(bg)) {
+        gradeMap.set(bg, { total: 0, secMap: new Map(), noSec: 0 });
+      }
+      const item = gradeMap.get(bg)!;
+      item.total++;
+      if (sec) {
+        item.secMap.set(sec, (item.secMap.get(sec) || 0) + 1);
+      } else {
+        item.noSec++;
+      }
+    });
+
+    const items: GradeHierarchyItem[] = [];
+    gradeMap.forEach((val, bg) => {
+      const sections = Array.from(val.secMap.entries())
+        .map(([section, count]) => ({
+          section,
+          label: /^\d+$/.test(bg) ? `${bg}${section}` : `Section ${section}`,
+          count
+        }))
+        .sort((a, b) => a.section.localeCompare(b.section));
+
+      const displayLabel = /^\d+$/.test(bg) ? `Grade ${bg}` : bg;
+      items.push({
+        baseGrade: bg,
+        displayLabel,
+        totalCount: val.total,
+        sections,
+        noSectionCount: val.noSec
+      });
+    });
+
+    return items.sort((a, b) => {
+      const idxA = CANONICAL_GRADE_ORDER.indexOf(a.baseGrade);
+      const idxB = CANONICAL_GRADE_ORDER.indexOf(b.baseGrade);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.baseGrade.localeCompare(b.baseGrade, undefined, { numeric: true });
+    });
+  }, [currentSchoolFolder]);
+
+  const currentFolderActiveGrade = useMemo(() => {
+    if (folderGradeTab === 'ALL') return null;
+    return currentSchoolGradeHierarchy.find(g => g.baseGrade.toLowerCase() === folderGradeTab.toLowerCase()) || null;
+  }, [currentSchoolGradeHierarchy, folderGradeTab]);
+
   const currentFolderStudents = useMemo(() => {
     if (!currentSchoolFolder) return [];
     let list = currentSchoolFolder.students;
     if (folderGradeTab !== 'ALL') {
-      list = list.filter(s => (s.grade || '').trim() === folderGradeTab);
+      list = list.filter(s => matchesGradeFilter(s, folderGradeTab));
+    }
+    if (folderSectionTab !== 'ALL') {
+      list = list.filter(s => matchesSectionFilter(s, folderSectionTab));
     }
     if (folderSearchQuery.trim()) {
       const q = folderSearchQuery.toLowerCase().trim();
@@ -587,7 +717,7 @@ export const ReceiverStudentsPage: React.FC = () => {
       );
     }
     return list;
-  }, [currentSchoolFolder, folderGradeTab, folderSearchQuery]);
+  }, [currentSchoolFolder, folderGradeTab, folderSectionTab, folderSearchQuery]);
 
   // Dynamically computed registry anomalies for the Mistake Analyzer pop-up
   const mistakeItems = useMemo(() => {
@@ -856,6 +986,9 @@ export const ReceiverStudentsPage: React.FC = () => {
     const cleanG = parsedG.cleanGrade || editGrade.trim();
     const fullGrade = resolvedSection ? `${cleanG}${resolvedSection}` : cleanG;
 
+    const formattedPhone = formatPhoneNumber(editPhone);
+    const formattedEmergency = formatPhoneNumber(editEmergencyPhone) || formattedPhone;
+
     const updates: Partial<Student> = {
       fullName: editFullName.trim(),
       sex: editSex,
@@ -866,11 +999,13 @@ export const ReceiverStudentsPage: React.FC = () => {
       branch: editBranch,
       address: editBranch,
       school: editSchool,
-      phone: formatPhoneNumber(editPhone),
+      phone: formattedPhone,
+      emergencyContactPhone: formattedEmergency,
+      parentPhone: formattedPhone,
+      guardianPhone: formattedPhone,
       dateOfBirth: editDob,
       bloodType: editBloodType,
       guardianFullName: editGuardianName.trim(),
-      emergencyContactPhone: formatPhoneNumber(editEmergencyPhone),
       schoolBusUsage: editBusUsage
     };
 
@@ -1820,20 +1955,139 @@ export const ReceiverStudentsPage: React.FC = () => {
             </select>
           </div>
 
-          {/* Grade Filter */}
+          {/* Grade & Sub-Section Filter */}
           <div>
             <select
-              value={gradeFilter}
-              onChange={(e) => { setGradeFilter(e.target.value); setPage(1); }}
+              value={gradeFilter === 'ALL' ? 'ALL' : (sectionFilter !== 'ALL' ? `${gradeFilter}:${sectionFilter}` : gradeFilter)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'ALL') {
+                  setGradeFilter('ALL');
+                  setSectionFilter('ALL');
+                } else if (val.includes(':')) {
+                  const [g, sec] = val.split(':');
+                  setGradeFilter(g);
+                  setSectionFilter(sec);
+                } else {
+                  setGradeFilter(val);
+                  setSectionFilter('ALL');
+                }
+                setPage(1);
+              }}
               className="w-full bg-[#F8FAF9] border border-[#CBD5E1] rounded-xl px-2.5 py-2 text-xs font-bold text-[#0B1118] focus:border-[#9EE617]"
             >
-              <option value="ALL">All Grades</option>
-              {distinctGrades.map(g => (
-                <option key={g} value={g}>{g}</option>
+              <option value="ALL">All Grades & Sections</option>
+              {gradeHierarchy.map(g => (
+                <optgroup key={g.baseGrade} label={`${g.displayLabel} (${g.totalCount} Students)`}>
+                  <option value={g.baseGrade}>
+                    All {g.displayLabel} ({g.totalCount})
+                  </option>
+                  {g.sections.map(sec => (
+                    <option key={`${g.baseGrade}:${sec.section}`} value={`${g.baseGrade}:${sec.section}`}>
+                      ↳ {g.displayLabel} — Section {sec.section} ({sec.label}) — {sec.count}
+                    </option>
+                  ))}
+                  {g.noSectionCount > 0 && (
+                    <option value={`${g.baseGrade}:NONE`}>
+                      ↳ {g.displayLabel} — General / Unassigned ({g.noSectionCount})
+                    </option>
+                  )}
+                </optgroup>
               ))}
             </select>
           </div>
         </div>
+
+        {/* Dynamic Grade & Sub-Sections Navigation Bar */}
+        {activeGradeItem ? (
+          <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-emerald-50/90 via-emerald-50/40 to-slate-50 border border-emerald-200/90 rounded-2xl shadow-xs">
+            <div className="flex items-center gap-1.5 text-xs font-black text-emerald-950 mr-1">
+              <Layers className="w-4 h-4 text-emerald-700" />
+              <span>{activeGradeItem.displayLabel} Sub-Sections:</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setSectionFilter('ALL'); setPage(1); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                sectionFilter === 'ALL'
+                  ? 'bg-[#0B1118] text-[#9EE617] shadow-sm ring-1 ring-[#9EE617]/50'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-emerald-100/50 hover:border-emerald-300'
+              }`}
+            >
+              All {activeGradeItem.displayLabel} ({activeGradeItem.totalCount})
+            </button>
+            {activeGradeItem.sections.map(sec => (
+              <button
+                key={sec.section}
+                type="button"
+                onClick={() => { setSectionFilter(sec.section); setPage(1); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  sectionFilter === sec.section
+                    ? 'bg-[#256002] text-white shadow-sm ring-2 ring-[#9EE617]/60'
+                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-emerald-100/50 hover:border-emerald-300'
+                }`}
+              >
+                <span>Section {sec.section}</span>
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                  sectionFilter === sec.section ? 'bg-[#9EE617] text-[#0B1118]' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {sec.count}
+                </span>
+              </button>
+            ))}
+            {activeGradeItem.noSectionCount > 0 && (
+              <button
+                type="button"
+                onClick={() => { setSectionFilter('NONE'); setPage(1); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  sectionFilter === 'NONE'
+                    ? 'bg-[#256002] text-white shadow-sm ring-2 ring-[#9EE617]/60'
+                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-emerald-100/50 hover:border-emerald-300'
+                }`}
+              >
+                <span>General / Unassigned</span>
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                  sectionFilter === 'NONE' ? 'bg-[#9EE617] text-[#0B1118]' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {activeGradeItem.noSectionCount}
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setGradeFilter('ALL'); setSectionFilter('ALL'); setPage(1); }}
+              className="ml-auto text-xs font-bold text-slate-500 hover:text-slate-800 underline cursor-pointer"
+            >
+              Clear Grade Filter
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 custom-scrollbar">
+            <span className="text-[11px] font-black text-slate-500 whitespace-nowrap flex items-center gap-1 mr-1">
+              <Layers className="w-3.5 h-3.5 text-emerald-600" />
+              Quick Grade & Sub-Sections:
+            </span>
+            {gradeHierarchy.map(g => (
+              <button
+                key={g.baseGrade}
+                type="button"
+                onClick={() => { setGradeFilter(g.baseGrade); setSectionFilter('ALL'); setPage(1); }}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 text-slate-700 whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer"
+                title={`${g.displayLabel}: ${g.totalCount} students across ${g.sections.length} sections`}
+              >
+                <span>{g.displayLabel}</span>
+                <span className="text-[10px] text-slate-600 bg-slate-100 px-1 py-0.2 rounded font-mono">
+                  {g.totalCount}
+                </span>
+                {g.sections.length > 0 && (
+                  <span className="text-[9px] font-black text-emerald-800 bg-emerald-100/80 px-1 py-0.2 rounded">
+                    {g.sections.map(s => s.section).join(',')}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Everyday Calendar Data Viewer */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#E2E8F0]">
@@ -2602,7 +2856,7 @@ export const ReceiverStudentsPage: React.FC = () => {
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 custom-scrollbar">
                     <button
                       type="button"
-                      onClick={() => setFolderGradeTab('ALL')}
+                      onClick={() => { setFolderGradeTab('ALL'); setFolderSectionTab('ALL'); }}
                       className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
                         folderGradeTab === 'ALL'
                           ? 'bg-[#0B1118] text-[#9EE617]'
@@ -2612,21 +2866,79 @@ export const ReceiverStudentsPage: React.FC = () => {
                       All Grades ({currentSchoolFolder.totalStudents})
                     </button>
 
-                    {currentSchoolFolder.grades.map(g => (
+                    {currentSchoolGradeHierarchy.map(g => (
                       <button
-                        key={g.grade}
+                        key={g.baseGrade}
                         type="button"
-                        onClick={() => setFolderGradeTab(g.grade)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
-                          folderGradeTab === g.grade
+                        onClick={() => { setFolderGradeTab(g.baseGrade); setFolderSectionTab('ALL'); }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                          folderGradeTab === g.baseGrade
                             ? 'bg-[#0B1118] text-[#9EE617]'
                             : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                         }`}
                       >
-                        {g.grade} ({g.count})
+                        <span>{g.displayLabel}</span>
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
+                          folderGradeTab === g.baseGrade ? 'bg-[#9EE617] text-[#0B1118]' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {g.totalCount}
+                        </span>
                       </button>
                     ))}
                   </div>
+
+                  {/* Sub-Section Chips inside School Folder */}
+                  {currentFolderActiveGrade && (
+                    <div className="flex flex-wrap items-center gap-2 p-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl">
+                      <span className="text-xs font-black text-emerald-950 flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-emerald-700" />
+                        {currentFolderActiveGrade.displayLabel} Sections:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFolderSectionTab('ALL')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          folderSectionTab === 'ALL'
+                            ? 'bg-[#0B1118] text-[#9EE617]'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-emerald-100/50'
+                        }`}
+                      >
+                        All {currentFolderActiveGrade.displayLabel} ({currentFolderActiveGrade.totalCount})
+                      </button>
+                      {currentFolderActiveGrade.sections.map(sec => (
+                        <button
+                          key={sec.section}
+                          type="button"
+                          onClick={() => setFolderSectionTab(sec.section)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                            folderSectionTab === sec.section
+                              ? 'bg-[#256002] text-white shadow-xs'
+                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-emerald-100/50'
+                          }`}
+                        >
+                          <span>Section {sec.section}</span>
+                          <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
+                            folderSectionTab === sec.section ? 'bg-[#9EE617] text-[#0B1118]' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {sec.count}
+                          </span>
+                        </button>
+                      ))}
+                      {currentFolderActiveGrade.noSectionCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setFolderSectionTab('NONE')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                            folderSectionTab === 'NONE'
+                              ? 'bg-[#256002] text-white shadow-xs'
+                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-emerald-100/50'
+                          }`}
+                        >
+                          <span>General ({currentFolderActiveGrade.noSectionCount})</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Search inside folder */}
                   <div className="relative pt-1">

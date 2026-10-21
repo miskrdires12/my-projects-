@@ -7,7 +7,7 @@ export interface ParsedGradeInfo {
   rawGrade: string;
 }
 
-const CANONICAL_GRADE_ORDER = [
+export const CANONICAL_GRADE_ORDER = [
   'Nursery',
   'Pre-KG',
   'LKG',
@@ -221,6 +221,10 @@ export function matchesSectionFilter(student: Partial<Student>, filterValue: str
 
   const cleanFilterSec = filterValue.replace(/^Section\s+/i, '').trim().toUpperCase();
   const studentSec = getCleanSection(student);
+
+  if (cleanFilterSec === 'NONE' || cleanFilterSec === 'NO SECTION' || cleanFilterSec === '(NO SECTION)' || cleanFilterSec === 'UNASSIGNED') {
+    return !studentSec;
+  }
 
   return studentSec === cleanFilterSec;
 }

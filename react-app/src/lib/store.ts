@@ -922,9 +922,18 @@ export function updateStudent(id: string, updates: Partial<Student>): void {
       grade: parsedG.displayString || updatedGrade
     });
 
+    const updatedPhone = updates.phone !== undefined ? updates.phone : existing.phone;
+    const updatedEmergency = updates.emergencyContactPhone !== undefined
+      ? updates.emergencyContactPhone
+      : (updates.phone ? updates.phone : (existing.emergencyContactPhone || existing.phone || ''));
+
     const updatedStudent: Student = {
       ...existing,
       ...updates,
+      phone: updatedPhone,
+      emergencyContactPhone: updatedEmergency,
+      parentPhone: (updates as any).parentPhone || updatedPhone,
+      guardianPhone: (updates as any).guardianPhone || updatedPhone,
       fullName: updatedFullName,
       grade: parsedG.displayString || updatedGrade,
       department: resolvedSection,
